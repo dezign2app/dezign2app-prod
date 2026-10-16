@@ -1,3 +1,8 @@
+import type {
+  PipelineStep,
+  PipelineStepInputBinding,
+} from "../pipeline";
+
 export type LangGraphRouterBranchOperator =
   | "eq"
   | "neq"
@@ -33,6 +38,8 @@ export type LangGraphStepConfig = {
     | "evaluator"
     | "summarizer"
     | "custom_code"
+    | "transformer"
+    | "transform"
     | "human_gate"
     | "interrupt"
     | "vector_search"
@@ -74,10 +81,21 @@ export type LangGraphStepConfig = {
   };
   routerConfig?: LangGraphRouterConfig;
   tools?: string[];
+  transformers?: string[];
   retryPolicy?: {
     maxAttempts: number;
     backoffFactor: number;
   };
+  transformerNodeId?: string;
+  transformerRef?: string;
+  functionRef?: {
+    name: string;
+    importPath?: string;
+  };
+  inputBindings?: PipelineStepInputBinding[];
+  outputVariable?: string;
+  outputSchema?: Array<{ name: string; type: string; required?: boolean }>;
+  pipelineSteps?: PipelineStep[];
   stateUpdates?: {
     channelKey: string;
     value?: string;

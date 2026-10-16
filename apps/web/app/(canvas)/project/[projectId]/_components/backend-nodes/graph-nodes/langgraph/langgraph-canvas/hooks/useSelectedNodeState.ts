@@ -19,6 +19,9 @@ import {
   MemoryNode,
   OutputNode,
   StartNode,
+  TransformerCanvasNode,
+  TransformerRefCanvasNode,
+  TransformerCanvasNodeData,
   getStepData,
 } from "@workspace/canvas";
 import {
@@ -31,6 +34,8 @@ import {
   LANGGRAPH_CANVAS_NODE_MEMORY,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
   LANGGRAPH_CANVAS_NODE_START,
+  LANGGRAPH_CANVAS_NODE_TRANSFORMER,
+  LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
 } from "../constants";
 
 interface UseSelectedNodeStateProps {
@@ -110,6 +115,35 @@ export function useSelectedNodeState({
     );
     return found ? found.data : null;
   }, [nodes, selectedNodeId]);
+
+  const selectedTransformerData = useMemo((): TransformerCanvasNodeData | null => {
+    const found = nodes.find(
+      (n): n is TransformerCanvasNode =>
+        n.id === selectedNodeId && n.type === LANGGRAPH_CANVAS_NODE_TRANSFORMER,
+    );
+    return found ? found.data : null;
+  }, [nodes, selectedNodeId]);
+
+  const selectedTransformerRefData = useMemo((): TransformerCanvasNodeData | null => {
+    const found = nodes.find(
+      (n): n is TransformerRefCanvasNode =>
+        n.id === selectedNodeId && n.type === LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
+    );
+    return found ? found.data : null;
+  }, [nodes, selectedNodeId]);
+
+  const updateSelectedTransformer = (changes: Partial<TransformerCanvasNodeData>) => {
+    if (!selectedNodeId) return;
+    setNodes((nds) =>
+      nds.map((n) =>
+        n.id === selectedNodeId &&
+        (n.type === LANGGRAPH_CANVAS_NODE_TRANSFORMER ||
+          n.type === LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF)
+          ? { ...n, data: { ...n.data, ...changes } }
+          : n,
+      ),
+    );
+  };
 
   const updateSelectedMiddleware = (changes: Partial<MiddlewareNodeData>) => {
     if (!selectedNodeId) return;
@@ -233,6 +267,8 @@ export function useSelectedNodeState({
     selectedMemoryData,
     selectedOutputData,
     selectedStartData,
+    selectedTransformerData,
+    selectedTransformerRefData,
     updateSelectedStep,
     updateSelectedLLM,
     updateSelectedTool,
@@ -240,5 +276,6 @@ export function useSelectedNodeState({
     updateSelectedAgent,
     updateSelectedMemory,
     updateSelectedOutput,
+    updateSelectedTransformer,
   };
 }

@@ -208,6 +208,9 @@ export const langgraphDataSchema = baseNodeDataSchema
       )
       .optional()
       .default([]),
+    customTransformerNodes: z.array(z.any()).optional().default([]),
+    customTransformerRefNodes: z.array(z.any()).optional().default([]),
+    transformerDefinitions: z.array(z.any()).optional().default([]),
     startNodePosition: z.object({ x: z.number(), y: z.number() }).optional(),
     stateNodePosition: z.object({ x: z.number(), y: z.number() }).optional(),
     checkpointerNodePosition: z

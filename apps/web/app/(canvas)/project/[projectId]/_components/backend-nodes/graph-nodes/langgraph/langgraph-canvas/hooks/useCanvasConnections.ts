@@ -32,6 +32,8 @@ import {
   LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
+  LANGGRAPH_CANVAS_NODE_TRANSFORMER,
+  LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
   HANDLE_LLM_IN,
   HANDLE_LLM_OUT,
   HANDLE_TOOL_IN,
@@ -42,6 +44,8 @@ import {
   HANDLE_MEMORY_OUT,
   HANDLE_STATE_IN,
   HANDLE_STATE_OUT,
+  HANDLE_TRANSFORMER_IN,
+  HANDLE_TRANSFORMER_OUT,
   DEFAULT_LLM_PROVIDER,
   DEFAULT_LLM_MODEL,
 } from "../constants";
@@ -360,6 +364,18 @@ export function useCanvasConnections({
       if (isStateReducerSource && !isStateReducerTarget) return false;
       if (isStateReducerTarget && !isStateReducerSource) return false;
 
+      const isTransformerSource =
+        connection.sourceHandle === HANDLE_TRANSFORMER_OUT ||
+        sourceNode?.type === LANGGRAPH_CANVAS_NODE_TRANSFORMER ||
+        sourceNode?.type === LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF ||
+        connection.source?.startsWith("transformer_") ||
+        connection.source?.startsWith("transformer_ref_");
+      const isTransformerTarget =
+        connection.targetHandle === HANDLE_TRANSFORMER_IN;
+
+      if (isTransformerSource && !isTransformerTarget) return false;
+      if (isTransformerTarget && !isTransformerSource) return false;
+
       return true;
     },
     [nodes, edges],
@@ -436,6 +452,13 @@ export function useCanvasConnections({
             params.source?.startsWith("state_ref_") ||
             params.source?.startsWith("reducer_ref_"),
           );
+        const isTransformer =
+          params.sourceHandle === HANDLE_TRANSFORMER_OUT ||
+          params.targetHandle === HANDLE_TRANSFORMER_IN ||
+          Boolean(
+            params.source?.startsWith("transformer_") ||
+            params.source?.startsWith("transformer_ref_"),
+          );
 
         const sourceNode = nodes.find(
           (n): n is StepNode =>
@@ -455,7 +478,9 @@ export function useCanvasConnections({
                 ? HANDLE_MEMORY_OUT
                 : isStateReducer
                   ? HANDLE_STATE_OUT
-                  : params.sourceHandle;
+                  : isTransformer
+                    ? HANDLE_TRANSFORMER_OUT
+                    : params.sourceHandle;
         const targetHandle = isLLM
           ? HANDLE_LLM_IN
           : isTool
@@ -466,7 +491,9 @@ export function useCanvasConnections({
                 ? HANDLE_MEMORY_IN
                 : isStateReducer
                   ? HANDLE_STATE_IN
-                  : params.targetHandle;
+                  : isTransformer
+                    ? HANDLE_TRANSFORMER_IN
+                    : params.targetHandle;
 
         const fieldStr = routerBranch?.field
           ? routerBranch.field.startsWith("state.")
@@ -486,13 +513,15 @@ export function useCanvasConnections({
             ? { stroke: "#10b981", strokeWidth: 2, strokeDasharray: "4 4" }
             : isMiddleware
               ? { stroke: "#a855f7", strokeWidth: 2, strokeDasharray: "4 4" }
-              : isMemory
-                ? { stroke: "#f59e0b", strokeWidth: 2, strokeDasharray: "4 4" }
-                : isStateReducer
+              : isTransformer
+                ? { stroke: "#a855f7", strokeWidth: 2, strokeDasharray: "4 4" }
+                : isMemory
                   ? { stroke: "#f59e0b", strokeWidth: 2, strokeDasharray: "4 4" }
-                  : routerBranch
-                    ? { stroke: "#38bdf8", strokeWidth: 2 }
-                    : { stroke: "#a1a1aa", strokeWidth: 2 };
+                  : isStateReducer
+                    ? { stroke: "#f59e0b", strokeWidth: 2, strokeDasharray: "4 4" }
+                    : routerBranch
+                      ? { stroke: "#38bdf8", strokeWidth: 2 }
+                      : { stroke: "#a1a1aa", strokeWidth: 2 };
 
         const labelStyle = routerBranch
           ? { fill: "#bae6fd", fontSize: 10, fontWeight: "bold" }

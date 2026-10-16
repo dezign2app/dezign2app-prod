@@ -17,6 +17,8 @@ import type {
   OutputNode,
   StepNode,
   LangGraphStateReducerRefNode,
+  TransformerCanvasNode,
+  TransformerRefCanvasNode,
   LangGraphCanvasNodeAddType,
   LangGraphStateChannel,
 } from "@workspace/canvas";
@@ -37,6 +39,8 @@ import {
   LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
   LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF,
+  LANGGRAPH_CANVAS_NODE_TRANSFORMER,
+  LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
   DEFAULT_MIDDLEWARE_TYPE,
   LLM_PROVIDERS,
   LLM_PROVIDER_PRESETS,
@@ -75,6 +79,8 @@ function getNodeDimensions(type: LangGraphCanvasNodeAddType): {
     case LANGGRAPH_CANVAS_NODE_AGENT_REF:
     case LANGGRAPH_CANVAS_NODE_NODE_REF:
     case LANGGRAPH_CANVAS_NODE_OUTPUT:
+    case LANGGRAPH_CANVAS_NODE_TRANSFORMER:
+    case LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF:
       return { width: 280, height: 140 };
     case LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF:
       return { width: 260, height: 160 };
@@ -637,6 +643,86 @@ export function useNodeFactory({
           };
           return [...nds, newStateReducerRefNode];
         });
+        setSelectedNodeId(refId);
+        return;
+      }
+
+      if (type === LANGGRAPH_CANVAS_NODE_TRANSFORMER) {
+        const transformerId = `transformer_${Date.now().toString(36).slice(-4)}`;
+        setNodes((nds) => {
+          const position = getCenterPosition(type, nds);
+          const newTransformerNode: TransformerCanvasNode = {
+            id: transformerId,
+            type: LANGGRAPH_CANVAS_NODE_TRANSFORMER,
+            position,
+            data: {
+              label: label || "Transformer",
+              functionName: "transformData",
+              scope: "global",
+              isGlobal: true,
+              code: "// TypeScript transformer logic: (inputs, state, clone) => any\nreturn {\n  ...inputs\n};\n",
+              inputSchema: [],
+              returnSchema: [],
+              onDeleteTransformer: () => {
+                setNodes((nodes) => nodes.filter((node) => node.id !== transformerId));
+                setEdges((edges) =>
+                  edges.filter(
+                    (edge) => edge.source !== transformerId && edge.target !== transformerId,
+                  ),
+                );
+                setSelectedNodeId((curr) => (curr === transformerId ? null : curr));
+              },
+            },
+          };
+          return [...nds, newTransformerNode];
+        });
+        setSelectedNodeId(transformerId);
+        setActiveSideTab("inspector");
+        return;
+      }
+
+      if (type === LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF) {
+        const refId = `transformer_ref_${Date.now().toString(36).slice(-4)}`;
+        let preselectedMasterId: string | undefined = undefined;
+        let preselectedMasterLabel = "Transformer";
+
+        setNodes((nds) => {
+          const master = nds.find(
+            (n): n is TransformerCanvasNode =>
+              n.type === LANGGRAPH_CANVAS_NODE_TRANSFORMER,
+          );
+          if (master) {
+            preselectedMasterId = master.id;
+            preselectedMasterLabel =
+              master.data.label ||
+              master.data.functionName ||
+              "Transformer";
+          }
+          const position = getCenterPosition(type, nds);
+
+          const newTransformerRefNode: TransformerRefCanvasNode = {
+            id: refId,
+            type: LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
+            position,
+            data: {
+              label: label || `↩ ${preselectedMasterLabel} (Ref)`,
+              transformerRef: preselectedMasterId,
+              refId,
+              onDeleteTransformerRef: () => {
+                setNodes((nodes) => nodes.filter((node) => node.id !== refId));
+                setEdges((edges) =>
+                  edges.filter(
+                    (edge) => edge.source !== refId && edge.target !== refId,
+                  ),
+                );
+                setSelectedNodeId((curr) => (curr === refId ? null : curr));
+              },
+            },
+          };
+
+          return [...nds, newTransformerRefNode];
+        });
+
         setSelectedNodeId(refId);
         return;
       }

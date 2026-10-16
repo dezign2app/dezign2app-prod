@@ -1,9 +1,9 @@
 import Groq from "groq-sdk";
 import type { LangGraphAgentResponseFormatConfig } from "@workspace/canvas";
-import type { ServerLLMResult, ServerLLMStreamBatch } from "./types";
+import type { ServerLLMProvider, ServerLLMResult, ServerLLMStreamBatch } from "./types";
 
 export interface CallServerLLMParams {
-  provider: "openai" | "groq" | "anthropic" | "custom";
+  provider: ServerLLMProvider;
   apiKey?: string;
   modelName: string;
   systemPrompt: string;

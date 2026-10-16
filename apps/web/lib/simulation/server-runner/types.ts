@@ -4,12 +4,58 @@ import type {
   LangGraphStateChannel,
   LangGraphInputChannel,
   LangGraphMemoryConfig,
+  BackendNode,
+  TransformerCanvasNode,
+  TransformerRefCanvasNode,
+  PipelineStepInputBinding,
+  PipelineStepInputSource,
 } from "@workspace/canvas";
 import type {
   SimulationTraceEntry,
   SimulationStepLogEntry,
   SimulationStepLogLevel,
 } from "../types";
+
+export type ServerLLMProvider = "groq" | "openai" | "anthropic" | "custom";
+
+export type StepStateValue =
+  | string
+  | number
+  | boolean
+  | object
+  | null
+  | undefined;
+
+export type StepStateRecord = Record<string, StepStateValue>;
+
+export type StepExecutionNode = LangGraphCanvasNode | BackendNode;
+
+export type TransformerCapableNode =
+  | TransformerCanvasNode
+  | TransformerRefCanvasNode
+  | BackendNode;
+
+export interface TransformerExecutionConfig {
+  id?: string;
+  stepId?: string;
+  name?: string;
+  label?: string;
+  code?: string;
+  transformerNodeId?: string;
+  transformerRef?: string;
+  functionRef?: {
+    name?: string;
+    importPath?: string;
+  };
+  customCode?: { body?: string } | string;
+  inputBindings?: PipelineStepInputBinding[];
+  outputVariable?: string;
+  stateUpdates?: Array<{ channelKey: string; value?: string | number | boolean }>;
+}
+
+export type StepExecutionInputSource =
+  | PipelineStepInputSource
+  | { kind: "state"; field?: string; stepId?: string; value?: string | number | boolean };
 
 export interface CheckpointerConnectionConfig {
   host?: string;
@@ -31,7 +77,7 @@ export interface ServerExecutionParams {
   checkpointerConnection?: CheckpointerConnectionConfig;
   inputValues: Record<string, unknown>;
   threadId: string;
-  provider?: "groq" | "openai" | "anthropic" | "custom";
+  provider?: ServerLLMProvider;
   apiKey?: string;
   modelName?: string;
 }

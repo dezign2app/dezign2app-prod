@@ -19,7 +19,14 @@ import {
   LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
   LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF,
+  LANGGRAPH_CANVAS_NODE_TRANSFORMER,
+  LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
 } from "../../constants";
+import type { BaseNodeData } from "../nodes";
+import type {
+  CanvasTransformerNodeData,
+  CanvasTransformerRefNodeData,
+} from "../services";
 import type {
   LangGraphLLMNodeData,
   LangGraphLLMRefNodeData,
@@ -141,6 +148,26 @@ export type LangGraphStateReducerRefNode = Node<
 > &
   BaseCanvasNodeProps;
 
+export type TransformerCanvasNodeData = BaseNodeData &
+  CanvasTransformerNodeData &
+  CanvasTransformerRefNodeData & {
+    onDeleteTransformer?: () => void;
+    onDeleteTransformerRef?: () => void;
+  } &
+  Record<string, unknown>;
+
+export type TransformerCanvasNode = Node<
+  TransformerCanvasNodeData,
+  typeof LANGGRAPH_CANVAS_NODE_TRANSFORMER
+> &
+  BaseCanvasNodeProps;
+
+export type TransformerRefCanvasNode = Node<
+  TransformerCanvasNodeData,
+  typeof LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF
+> &
+  BaseCanvasNodeProps;
+
 export type LangGraphCanvasEdge = Edge & {
   selected?: boolean;
 };
@@ -162,12 +189,30 @@ export type LangGraphCanvasNodeUnion =
   | MemoryNode
   | LangGraphMemoryRefNode
   | OutputNode
-  | LangGraphStateReducerRefNode;
+  | LangGraphStateReducerRefNode
+  | TransformerCanvasNode
+  | TransformerRefCanvasNode;
 
 export type LangGraphCanvasNode = LangGraphCanvasNodeUnion;
 
+export function isStepNode(node: LangGraphCanvasNode): node is StepNode {
+  return node.type === LANGGRAPH_CANVAS_NODE_STEP;
+}
+
+export function isTransformerCanvasNode(
+  node: LangGraphCanvasNode,
+): node is TransformerCanvasNode {
+  return node.type === LANGGRAPH_CANVAS_NODE_TRANSFORMER;
+}
+
+export function isTransformerRefCanvasNode(
+  node: LangGraphCanvasNode,
+): node is TransformerRefCanvasNode {
+  return node.type === LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF;
+}
+
 export function getStepData(node: LangGraphCanvasNode): StepNodeData | null {
-  if (node.type === LANGGRAPH_CANVAS_NODE_STEP) return node.data;
+  if (isStepNode(node)) return node.data;
   return null;
 }
 
@@ -187,4 +232,6 @@ export type LangGraphCanvasNodeAddType =
   | typeof LANGGRAPH_CANVAS_NODE_MEMORY_REF
   | typeof LANGGRAPH_CANVAS_NODE_END
   | typeof LANGGRAPH_CANVAS_NODE_OUTPUT
-  | typeof LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF;
+  | typeof LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF
+  | typeof LANGGRAPH_CANVAS_NODE_TRANSFORMER
+  | typeof LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF;

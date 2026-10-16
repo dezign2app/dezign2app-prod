@@ -50,6 +50,8 @@ export const graphStepSchema = z.object({
     "evaluator",
     "summarizer",
     "custom_code",
+    "transformer",
+    "transform",
     "human_gate",
     "interrupt",
     "vector_search",
@@ -136,7 +138,7 @@ export const graphStepSchema = z.object({
     )
     .optional(),
   position: z.object({ x: z.number(), y: z.number() }).optional(),
-});
+}).passthrough();
 export type GraphStep = z.infer<typeof graphStepSchema>;
 
 export const outputChannelSchema = z.object({

@@ -23,7 +23,15 @@ import type {
   ConnectedToolInfo,
   ConnectedMiddlewareInfo,
   AppliedStateUpdate,
+  StepStateRecord,
+  StepStateValue,
 } from "./types";
+import {
+  findTransformerNode,
+  runTransformer,
+  resolveInputValue,
+} from "./stepExecutor";
+import type { LangGraphNodePipelineStep } from "@workspace/canvas";
 
 export interface ExecuteAgentNodeParams {
   node: LangGraphCanvasNode;
@@ -396,6 +404,109 @@ export async function executeAgentNode(
       outputDelta.streamBatches = formattedBatches;
       outputDelta.streamBatchCount = formattedBatches.length;
     }
+
+    const llmOut = (outputDelta.structuredResponse || responseText) as StepStateValue;
+    stepOutputs.set("response", responseText);
+    stepOutputs.set("message", responseText);
+    stepOutputs.set("content", responseText);
+    if (outputDelta.structuredResponse) {
+      stepOutputs.set("structuredResponse", outputDelta.structuredResponse as StepStateValue);
+    }
+    stepOutputs.set(node.id, llmOut);
+  };
+
+  // Track step outputs across pipeline execution (Step N can map inputs from Step 1..N-1)
+  const stepOutputs = new Map<string, StepStateValue>();
+
+  const runTransformerStep = async (
+    step: LangGraphNodePipelineStep,
+    stepLabel: string,
+  ) => {
+    const trDef = findTransformerNode(node.id, step, nodes, edges);
+    const code =
+      trDef?.code ||
+      step.customCode?.body ||
+      "";
+    const trName =
+      trDef?.name ||
+      step.label ||
+      stepLabel;
+
+    if (!code.trim()) {
+      throw new Error(`Transformer "${trName}" has an empty function body.`);
+    }
+
+    const inputs: StepStateRecord = {};
+    if (step.inputBindings && step.inputBindings.length > 0) {
+      for (const b of step.inputBindings) {
+        if (b && b.argName) {
+          inputs[b.argName] = resolveInputValue(b.source, {
+            state,
+            stepOutputs,
+          });
+        }
+      }
+    } else if (trDef?.inputSchema && trDef.inputSchema.length > 0) {
+      for (const param of trDef.inputSchema) {
+        if (!param || !param.name) continue;
+        if (stepOutputs.has(param.name)) {
+          inputs[param.name] = stepOutputs.get(param.name);
+        } else if (state[param.name] !== undefined) {
+          inputs[param.name] = state[param.name] as StepStateValue;
+        }
+      }
+    }
+
+    if (Object.keys(inputs).length === 0 && Object.keys(state).length > 0) {
+      for (const [k, v] of Object.entries(state)) {
+        inputs[k] = v as StepStateValue;
+      }
+    }
+
+    addLog(
+      "info",
+      `Executing step "${stepLabel}" (Transformer: ${trName}) (${Object.keys(inputs).length} input(s) mapped)`,
+      { inputs },
+    );
+
+    try {
+      const res = await runTransformer({
+        code,
+        name: trName,
+        inputs,
+        state,
+        cloneFn: clone,
+      });
+
+      const resValue: StepStateValue =
+        typeof res === "object" ||
+        typeof res === "string" ||
+        typeof res === "number" ||
+        typeof res === "boolean" ||
+        res === null
+          ? (res as StepStateValue)
+          : undefined;
+
+      stepOutputs.set(step.id, resValue);
+      if (step.outputVariable) {
+        stepOutputs.set(step.outputVariable, resValue);
+        outputDelta[step.outputVariable] = resValue;
+      }
+
+      if (res && typeof res === "object") {
+        Object.assign(outputDelta, res);
+        Object.assign(state, res);
+      }
+
+      addLog("info", `Completed step "${stepLabel}" (Transformer: ${trName})`, {
+        outputVariable: step.outputVariable,
+        result: resValue,
+      });
+    } catch (err) {
+      const errStr = err instanceof Error ? err.message : String(err);
+      addLog("error", `Error executing transformer step "${stepLabel}": ${errStr}`);
+      throw new Error(`Transformer step "${stepLabel}" failed: ${errStr}`);
+    }
   };
 
   const runCustomCodeStep = async (codeBody?: string, stepLabel = "Custom Code") => {
@@ -418,10 +529,22 @@ export async function executeAgentNode(
   // Execute pipeline steps in user-configured sequence
   if (agentData.pipelineSteps && agentData.pipelineSteps.length > 0) {
     for (const step of agentData.pipelineSteps) {
-      if (step.type === "custom_code") {
+      if (step.type === "transformer" || step.type === "transform") {
+        await runTransformerStep(step, step.label || "Transformer");
+      } else if (step.type === "custom_code") {
         await runCustomCodeStep(step.customCode?.body, step.label || "Custom Code");
+        if (step.outputVariable && outputDelta[step.outputVariable]) {
+          stepOutputs.set(step.outputVariable, outputDelta[step.outputVariable] as StepStateValue);
+        }
+        stepOutputs.set(step.id, outputDelta as StepStateValue);
       } else if (step.type === "llm_call") {
         await runLlmStep();
+        const llmOut = (outputDelta.structuredResponse || latestAssistantResponse) as StepStateValue;
+        stepOutputs.set(step.id, llmOut);
+        if (step.outputVariable) {
+          stepOutputs.set(step.outputVariable, llmOut);
+          outputDelta[step.outputVariable] = llmOut;
+        }
       }
     }
   } else {

@@ -302,6 +302,16 @@ export interface StepNodeData extends Record<string, unknown> {
   humanGateConfig?: LangGraphStepConfig["humanGateConfig"];
   customCode?: LangGraphStepConfig["customCode"];
   routerConfig?: LangGraphStepConfig["routerConfig"];
+  transformerNodeId?: string;
+  transformerRef?: string;
+  functionRef?: {
+    name: string;
+    importPath?: string;
+  };
+  inputBindings?: LangGraphStepConfig["inputBindings"];
+  outputVariable?: string;
+  outputSchema?: LangGraphStepConfig["outputSchema"];
+  pipelineSteps?: LangGraphStepConfig["pipelineSteps"];
   stateUpdates?: LangGraphStepConfig["stateUpdates"];
   availableStateChannels?: LangGraphStateChannel[];
   activeBranchId?: string;

@@ -17,6 +17,9 @@ import type {
   LangGraphMiddlewareRefNode,
   LangGraphMemoryRefNode,
   LangGraphAgentRefNode,
+  TransformerCanvasNode,
+  TransformerRefCanvasNode,
+  Parameter,
 } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_STEP,
@@ -35,6 +38,8 @@ import {
   LANGGRAPH_CANVAS_NODE_MEMORY,
   LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
+  LANGGRAPH_CANVAS_NODE_TRANSFORMER,
+  LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
   HANDLE_LLM_IN,
   HANDLE_LLM_OUT,
   HANDLE_TOOL_IN,
@@ -43,6 +48,8 @@ import {
   HANDLE_MIDDLEWARE_OUT,
   HANDLE_MEMORY_IN,
   HANDLE_MEMORY_OUT,
+  HANDLE_TRANSFORMER_IN,
+  HANDLE_TRANSFORMER_OUT,
   NODE_ID_START,
   NODE_ID_END,
   NODE_ID_STATE_GLOBAL,
@@ -285,6 +292,9 @@ export function buildInitialNodes(
         responseFormat: agDef.responseFormat,
         memoryConfig: agDef.memoryConfig,
         stateUpdates: agDef.stateUpdates || [],
+        pipelineSteps: agDef.pipelineSteps,
+        nodeSteps: agDef.nodeSteps,
+        customCode: agDef.customCode,
         availableStateChannels: data.stateChannels || [
           {
             key: "messages",
@@ -295,6 +305,7 @@ export function buildInitialNodes(
         ],
         tools: agDef.tools || [],
         middleware: agDef.middleware || [],
+        transformers: agDef.transformers || [],
         memory: agDef.memory || [],
       },
     };
@@ -317,6 +328,12 @@ export function buildInitialNodes(
         humanGateConfig: step.humanGateConfig,
         customCode: step.customCode,
         routerConfig: step.routerConfig,
+        pipelineSteps: step.pipelineSteps,
+        inputBindings: step.inputBindings,
+        outputVariable: step.outputVariable,
+        transformerNodeId: step.transformerNodeId,
+        transformerRef: step.transformerRef,
+        functionRef: step.functionRef,
         stateUpdates: step.stateUpdates || [],
         availableStateChannels: data.stateChannels || [
           {
@@ -329,6 +346,95 @@ export function buildInitialNodes(
       },
     };
     result.push(stepNode);
+  });
+
+  interface InitializerTransformerDef {
+    id?: string;
+    label?: string;
+    name?: string;
+    functionName?: string;
+    code?: string;
+    scope?: "global" | "local";
+    isGlobal?: boolean;
+    position?: { x: number; y: number };
+    inputSchema?: Array<{ id?: string; name?: string; type?: string; required?: boolean; description?: string }>;
+    returnSchema?: Array<{ id?: string; name?: string; type?: string; required?: boolean; description?: string }>;
+  }
+
+  function isInitializerTransformerDef(val: unknown): val is InitializerTransformerDef {
+    return typeof val === "object" && val !== null;
+  }
+
+  interface InitializerTransformerRefDef {
+    id?: string;
+    label?: string;
+    transformerRef?: string;
+    position?: { x: number; y: number };
+  }
+
+  function isInitializerTransformerRefDef(val: unknown): val is InitializerTransformerRefDef {
+    return typeof val === "object" && val !== null;
+  }
+
+  const rawTransformers: unknown[] = Array.isArray(data.transformerDefinitions)
+    ? data.transformerDefinitions
+    : Array.isArray(data.customTransformerNodes)
+      ? data.customTransformerNodes
+      : [];
+
+  rawTransformers.forEach((item: unknown, trIdx: number) => {
+    if (!isInitializerTransformerDef(item)) return;
+    const trId = item.id || `transformer_${Date.now()}_${trIdx}`;
+    const mappedInputSchema: Parameter[] | undefined = item.inputSchema?.map((p, pIdx) => ({
+      id: p.id || `param_in_${pIdx}`,
+      name: p.name || "",
+      type: p.type || "string",
+      required: Boolean(p.required),
+      description: p.description,
+    }));
+    const mappedReturnSchema: Parameter[] | undefined = item.returnSchema?.map((p, pIdx) => ({
+      id: p.id || `param_${pIdx}`,
+      name: p.name || "",
+      type: p.type || "string",
+      required: Boolean(p.required),
+      description: p.description,
+    }));
+
+    const trNode: TransformerCanvasNode = {
+      id: trId,
+      type: LANGGRAPH_CANVAS_NODE_TRANSFORMER,
+      position: item.position || { x: 340, y: 280 + trIdx * 60 },
+      data: {
+        label: item.label || item.functionName || item.name || "Transformer",
+        functionName: item.functionName || item.name || "transformData",
+        scope: item.scope || "global",
+        isGlobal: item.isGlobal ?? true,
+        code: item.code,
+        inputSchema: mappedInputSchema,
+        returnSchema: mappedReturnSchema,
+      },
+    };
+    result.push(trNode);
+  });
+
+  const rawTransformerRefs: unknown[] = Array.isArray(data.customTransformerRefNodes)
+    ? data.customTransformerRefNodes
+    : [];
+
+  rawTransformerRefs.forEach((item: unknown, rIdx: number) => {
+    if (!isInitializerTransformerRefDef(item)) return;
+    const refId = item.id || `transformer_ref_${Date.now()}_${rIdx}`;
+    const trRefNode: TransformerRefCanvasNode = {
+      id: refId,
+      type: LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
+      position: item.position || { x: 340, y: 340 + rIdx * 60 },
+      data: {
+        label: item.label || "Transformer Ref",
+        transformerRef: item.transformerRef,
+        refId,
+      },
+    };
+    result.push(trRefNode);
   });
 
   const savedEndNodes = data.endNodes || [];
@@ -594,6 +700,19 @@ export function buildInitialEdges(
         style: { stroke: "#38bdf8", strokeWidth: 2, strokeDasharray: "4 4" },
       });
     }
+
+    (ag.transformers || []).forEach((trId) => {
+      if (!initialNodeIds.has(trId)) return;
+      resourceEdges.push({
+        id: `edge_${trId}_${agId}`,
+        source: trId,
+        target: agId,
+        sourceHandle: HANDLE_TRANSFORMER_OUT,
+        targetHandle: HANDLE_TRANSFORMER_IN,
+        animated: true,
+        style: { stroke: "#a855f7", strokeWidth: 2, strokeDasharray: "4 4" },
+      });
+    });
   });
 
   steps.forEach((step) => {
@@ -607,6 +726,19 @@ export function buildInitialEdges(
         targetHandle: HANDLE_TOOL_IN,
         animated: true,
         style: { stroke: "#10b981", strokeWidth: 2, strokeDasharray: "4 4" },
+      });
+    });
+
+    (step.transformers || []).forEach((trId) => {
+      if (!initialNodeIds.has(trId)) return;
+      resourceEdges.push({
+        id: `edge_${trId}_${step.id}`,
+        source: trId,
+        target: step.id,
+        sourceHandle: HANDLE_TRANSFORMER_OUT,
+        targetHandle: HANDLE_TRANSFORMER_IN,
+        animated: true,
+        style: { stroke: "#a855f7", strokeWidth: 2, strokeDasharray: "4 4" },
       });
     });
   });

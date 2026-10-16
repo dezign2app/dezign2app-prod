@@ -33,6 +33,8 @@ import type {
   LangGraphMiddlewareRefNode,
   LangGraphMemoryRefNode,
   LangGraphAgentRefNode,
+  TransformerCanvasNode,
+  TransformerRefCanvasNode,
 } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_STEP,
@@ -50,10 +52,14 @@ import {
   LANGGRAPH_CANVAS_NODE_MEMORY,
   LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
+  LANGGRAPH_CANVAS_NODE_TRANSFORMER,
+  LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
   HANDLE_LLM_IN,
   HANDLE_TOOL_IN,
   HANDLE_MIDDLEWARE_IN,
   HANDLE_MEMORY_IN,
+  HANDLE_TRANSFORMER_IN,
+  HANDLE_TRANSFORMER_OUT,
   NODE_ID_START,
   NODE_ID_END,
   NODE_ID_STATE_GLOBAL,
@@ -162,6 +168,35 @@ export function buildGraphData({
       label: n.data.label,
       agentRef: n.data.agentRef || n.data.nodeRef,
       nodeRef: n.data.agentRef || n.data.nodeRef,
+      position: n.position,
+    }));
+
+  const customTransformerNodes = nodes
+    .filter(
+      (n): n is TransformerCanvasNode =>
+        n.type === LANGGRAPH_CANVAS_NODE_TRANSFORMER,
+    )
+    .map((n) => ({
+      id: n.id,
+      label: n.data.label || n.data.functionName || "Transformer",
+      functionName: n.data.functionName || "transformData",
+      scope: n.data.scope || "global",
+      isGlobal: n.data.isGlobal ?? true,
+      code: n.data.code,
+      inputSchema: n.data.inputSchema,
+      returnSchema: n.data.returnSchema,
+      position: n.position,
+    }));
+
+  const customTransformerRefNodes = nodes
+    .filter(
+      (n): n is TransformerRefCanvasNode =>
+        n.type === LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
+    )
+    .map((n) => ({
+      id: n.id,
+      label: n.data.label,
+      transformerRef: n.data.transformerRef,
       position: n.position,
     }));
 
@@ -296,12 +331,23 @@ export function buildGraphData({
         responseFormat: n.data.responseFormat,
         memoryConfig: n.data.memoryConfig,
         stateUpdates: n.data.stateUpdates,
+        pipelineSteps: n.data.pipelineSteps,
+        nodeSteps: n.data.nodeSteps,
+        customCode: n.data.customCode,
         tools: edges
           .filter((e) => e.target === n.id && e.targetHandle === HANDLE_TOOL_IN)
           .map((e) => e.source),
         middleware: edges
           .filter(
             (e) => e.target === n.id && e.targetHandle === HANDLE_MIDDLEWARE_IN,
+          )
+          .map((e) => e.source),
+        transformers: edges
+          .filter(
+            (e) =>
+              e.target === n.id &&
+              (e.targetHandle === HANDLE_TRANSFORMER_IN ||
+                e.sourceHandle === HANDLE_TRANSFORMER_OUT),
           )
           .map((e) => e.source),
         memory: edges
@@ -354,10 +400,24 @@ export function buildGraphData({
           ? { humanGateConfig: n.data.humanGateConfig }
           : {}),
         ...(n.data.customCode ? { customCode: n.data.customCode } : {}),
+        ...(n.data.pipelineSteps ? { pipelineSteps: n.data.pipelineSteps } : {}),
+        ...(n.data.inputBindings ? { inputBindings: n.data.inputBindings } : {}),
+        ...(n.data.outputVariable ? { outputVariable: n.data.outputVariable } : {}),
+        ...(n.data.transformerNodeId ? { transformerNodeId: n.data.transformerNodeId } : {}),
+        ...(n.data.transformerRef ? { transformerRef: n.data.transformerRef } : {}),
+        ...(n.data.functionRef ? { functionRef: n.data.functionRef } : {}),
         ...(routerConfig ? { routerConfig } : {}),
         ...(n.data.stateUpdates ? { stateUpdates: n.data.stateUpdates } : {}),
         tools: edges
           .filter((e) => e.target === n.id && e.targetHandle === HANDLE_TOOL_IN)
+          .map((e) => e.source),
+        transformers: edges
+          .filter(
+            (e) =>
+              e.target === n.id &&
+              (e.targetHandle === HANDLE_TRANSFORMER_IN ||
+                e.sourceHandle === HANDLE_TRANSFORMER_OUT),
+          )
           .map((e) => e.source),
         position: n.position,
       };
@@ -410,7 +470,12 @@ export function buildGraphData({
         e.source.startsWith("db_");
       const isOutput =
         outputNodeIds.has(e.target) || e.target.startsWith("output_");
-      return !isTool && !isLLM && !isMiddleware && !isMemory && !isOutput;
+      const isTransformer =
+        e.targetHandle === HANDLE_TRANSFORMER_IN ||
+        e.sourceHandle === HANDLE_TRANSFORMER_OUT ||
+        e.source.startsWith("transformer_") ||
+        e.source.startsWith("transformer_ref_");
+      return !isTool && !isLLM && !isMiddleware && !isMemory && !isOutput && !isTransformer;
     })
     .map((e) => {
       const isEndTarget =
@@ -492,6 +557,9 @@ export function buildGraphData({
     customMiddlewareRefNodes,
     customMemoryRefNodes,
     customAgentRefNodes,
+    customTransformerNodes,
+    customTransformerRefNodes,
+    transformerDefinitions: customTransformerNodes,
     toolDefinitions,
     middlewareDefinitions,
     memoryDefinitions,

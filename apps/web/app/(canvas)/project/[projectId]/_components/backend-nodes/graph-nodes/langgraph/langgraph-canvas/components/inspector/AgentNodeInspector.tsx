@@ -22,6 +22,7 @@ import {
   GripVertical,
   ArrowUp,
   ArrowDown,
+  Shuffle,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
@@ -52,6 +53,7 @@ import {
 } from "./agent-inspector/AgentStructuredOutputSection";
 import { AgentEventStreamingSection } from "./agent-inspector/AgentEventStreamingSection";
 import { AgentStateUpdatesSection } from "./agent-inspector/AgentStateUpdatesSection";
+import { AgentTransformerStepSection } from "./agent-inspector/AgentTransformerStepSection";
 import {
   DEFAULT_SELECTED_STREAM_EVENTS,
   DEFAULT_STREAM_ENVELOPE,
@@ -137,6 +139,24 @@ export const LANGGRAPH_STEP_META: Record<LangGraphNodeStepType, LangGraphStepMet
     badgeBg: "bg-purple-500/10 text-purple-300 border-purple-500/25",
     description: "Guardrails, Human-in-the-Loop approvals, and rate limiting",
   },
+  transformer: {
+    type: "transformer",
+    label: "Transformer",
+    icon: Shuffle,
+    color: "text-purple-400",
+    borderColor: "border-purple-500/40",
+    badgeBg: "bg-purple-500/10 text-purple-300 border-purple-500/25",
+    description: "Compute node for data transformation & custom TypeScript logic",
+  },
+  transform: {
+    type: "transform",
+    label: "Transformer",
+    icon: Shuffle,
+    color: "text-purple-400",
+    borderColor: "border-purple-500/40",
+    badgeBg: "bg-purple-500/10 text-purple-300 border-purple-500/25",
+    description: "Compute node for data transformation & custom TypeScript logic",
+  },
 };
 
 /**
@@ -146,7 +166,7 @@ export const LANGGRAPH_STEP_META: Record<LangGraphNodeStepType, LangGraphStepMet
  */
 export const ADDABLE_LANGGRAPH_STEP_TYPES: readonly LangGraphNodeStepType[] = [
   "llm_call",
-  "custom_code",
+  "transformer",
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -171,7 +191,19 @@ function deriveInitialPipelineSteps(
     let llmIndex = 0;
     for (let i = 0; i < data.nodeSteps.length; i++) {
       const s = data.nodeSteps[i];
-      if (s === "custom_code") {
+      if (s === "transformer" || s === "transform") {
+        codeIndex++;
+        steps.push({
+          id: `step_trans_${codeIndex}`,
+          type: "transformer",
+          label: `Transformer ${codeIndex}`,
+          outputVariable: `transformedData_${codeIndex}`,
+          inputBindings: [],
+          customCode: data.customCode || {
+            body: "// TypeScript logic: (inputs, state, clone) => transformed\nreturn {\n  // mutate or compute\n};\n",
+          },
+        });
+      } else if (s === "custom_code") {
         codeIndex++;
         steps.push({
           id: `step_code_${codeIndex}`,
@@ -429,10 +461,28 @@ export function AgentNodeInspector({
 
   const handleAddStep = useCallback(
     (type: LangGraphNodeStepType) => {
-      const newStepId = `${type === "custom_code" ? "code" : "llm"}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const prefix =
+        type === "transformer" || type === "transform"
+          ? "trans"
+          : type === "custom_code"
+            ? "code"
+            : "llm";
+      const newStepId = `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
-      let defaultLabel = type === "custom_code" ? "Custom Code" : "LLM Agent";
-      if (type === "custom_code") {
+      let defaultLabel = "Step";
+      if (type === "transformer" || type === "transform") {
+        const hasLLM = activePipelineSteps.some((s) => s.type === "llm_call");
+        const existingTransCount = activePipelineSteps.filter(
+          (s) => s.type === "transformer" || s.type === "transform",
+        ).length;
+        if (!hasLLM && existingTransCount === 0) {
+          defaultLabel = "Data Preparation";
+        } else if (hasLLM && existingTransCount === 0) {
+          defaultLabel = "Response Transform";
+        } else {
+          defaultLabel = `Transformer ${existingTransCount + 1}`;
+        }
+      } else if (type === "custom_code") {
         const hasLLM = activePipelineSteps.some((s) => s.type === "llm_call");
         const existingCodeCount = activePipelineSteps.filter(
           (s) => s.type === "custom_code",
@@ -450,6 +500,8 @@ export function AgentNodeInspector({
         ).length;
         if (existingLlmCount > 0) {
           defaultLabel = `LLM Agent ${existingLlmCount + 1}`;
+        } else {
+          defaultLabel = "LLM Agent";
         }
       }
 
@@ -457,15 +509,23 @@ export function AgentNodeInspector({
         id: newStepId,
         type,
         label: defaultLabel,
-        ...(type === "custom_code"
+        ...(type === "transformer" || type === "transform"
           ? {
+              outputVariable: `transformedData_${activePipelineSteps.length + 1}`,
+              inputBindings: [],
               customCode: {
-                body: "// TypeScript logic: (state, clone) => Partial<State>\nreturn {\n  // mutate channels\n};\n",
+                body: "// TypeScript logic: (inputs, state, clone) => transformed\nreturn {\n  // return transformed fields\n};\n",
               },
             }
-          : {
-              llmConfig: { enabled: true },
-            }),
+          : type === "custom_code"
+            ? {
+                customCode: {
+                  body: "// TypeScript logic: (state, clone) => Partial<State>\nreturn {\n  // mutate channels\n};\n",
+                },
+              }
+            : {
+                llmConfig: { enabled: true },
+              }),
       };
 
       const nextSteps = [...activePipelineSteps, newStep];
@@ -659,6 +719,22 @@ export function AgentNodeInspector({
             {body
               ? `${body.slice(0, 36).replace(/[\r\n]+/g, " ")}...`
               : "(state, clone) => Partial<State>"}
+          </span>
+        );
+      }
+      case "transformer":
+      case "transform": {
+        const name =
+          step.functionRef?.name ||
+          step.transformerRef ||
+          step.label ||
+          "Transformer";
+        const outVar = step.outputVariable ? ` &rarr; ${step.outputVariable}` : "";
+        const bindingsCount = step.inputBindings?.length || 0;
+        return (
+          <span className="text-purple-300/90 font-mono truncate">
+            {name}
+            {outVar} {bindingsCount > 0 ? `(${bindingsCount} in)` : ""}
           </span>
         );
       }
@@ -949,6 +1025,36 @@ export function AgentNodeInspector({
             </p>
           </div>
         );
+
+      case "transformer":
+      case "transform": {
+        const currentStepIndex = activePipelineSteps.findIndex(
+          (s) => s.id === step.id,
+        );
+        const priorSteps =
+          currentStepIndex > 0
+            ? activePipelineSteps.slice(0, currentStepIndex)
+            : [];
+
+        return (
+          <AgentTransformerStepSection
+            step={step}
+            priorSteps={priorSteps}
+            stateChannels={stateChannels}
+            nodes={nodes}
+            onUpdateStep={(updatedStep) => {
+              const next = activePipelineSteps.map((s) =>
+                s.id === step.id ? updatedStep : s,
+              );
+              setActivePipelineSteps(next);
+              onUpdateAgent({
+                pipelineSteps: next,
+                nodeSteps: next.map((st) => st.type),
+              });
+            }}
+          />
+        );
+      }
 
       case "streaming":
         return (

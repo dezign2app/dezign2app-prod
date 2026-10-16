@@ -11,6 +11,8 @@ import {
   HANDLE_MEMORY_OUT,
   HANDLE_STATE_IN,
   HANDLE_STATE_OUT,
+  HANDLE_TRANSFORMER_IN,
+  HANDLE_TRANSFORMER_OUT,
 } from "../../constants";
 
 export const NodeHandles: React.FC = () => {
@@ -54,12 +56,27 @@ export const NodeHandles: React.FC = () => {
         title="Connect Middleware (middleware_out)"
       />
 
+      {/* Target Handle for Transformer / Transformer Ref */}
+      <Handle
+        type="target"
+        position={Position.Bottom}
+        id={HANDLE_TRANSFORMER_IN}
+        style={{ left: "30%" }}
+        isValidConnection={(connection: Connection) =>
+          connection.sourceHandle === HANDLE_TRANSFORMER_OUT ||
+          Boolean(connection.source?.startsWith("transformer_")) ||
+          Boolean(connection.source?.startsWith("transformer_ref_"))
+        }
+        className="!bg-purple-500 !w-3.5 !h-3.5 !border-2 !border-background hover:!scale-125 transition-transform !-bottom-[7px]"
+        title="Connect Transformer Node (transformer_in)"
+      />
+
       {/* Target Handle for State Reducer Ref (mutations) */}
       <Handle
         type="target"
         position={Position.Bottom}
         id={HANDLE_STATE_IN}
-        style={{ left: "50%" }}
+        style={{ left: "70%" }}
         isValidConnection={(connection: Connection) =>
           connection.sourceHandle === HANDLE_STATE_OUT ||
           Boolean(connection.source?.startsWith("state_ref_")) ||

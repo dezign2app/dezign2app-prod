@@ -12,6 +12,7 @@ import {
   Link2,
   GitMerge,
   RotateCcw,
+  Shuffle,
 } from "lucide-react";
 import type { LangGraphCanvasNodeAddType } from "@workspace/canvas";
 import {
@@ -28,6 +29,8 @@ import {
   LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
   LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF,
+  LANGGRAPH_CANVAS_NODE_TRANSFORMER,
+  LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
   STEP_TYPE_ROUTER,
 } from "../constants";
 
@@ -85,6 +88,18 @@ export const TOOL_PALETTE_ITEMS: ToolPaletteItem[] = [
     type: LANGGRAPH_CANVAS_NODE_TOOL_REF,
     label: "Tool Ref",
     desc: "Reference an existing Tool configuration across nodes",
+    icon: Link2,
+  },
+  {
+    type: LANGGRAPH_CANVAS_NODE_TRANSFORMER,
+    label: "Transformer",
+    desc: "Compute node for data transformation & custom TypeScript logic",
+    icon: Shuffle,
+  },
+  {
+    type: LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
+    label: "Transformer Ref",
+    desc: "Reference an existing Transformer across multiple agent nodes",
     icon: Link2,
   },
   {
