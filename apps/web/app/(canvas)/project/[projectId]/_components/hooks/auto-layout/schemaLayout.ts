@@ -85,7 +85,7 @@ function layoutIsolatedCluster(
 
   // Group container padding and gaps
   const GROUP_PAD_X = 36;
-  const GROUP_HEADER_TOP = 64; // Header tab space at top-left
+  const GROUP_HEADER_TOP = 120; // Header tab space at top-left to provide generous gap between group label and tables
   const GROUP_PAD_BOTTOM = 36;
   const GROUP_GAP_X = 90; // Side-by-side gap between groups
   const STORAGE_TO_GROUPS_GAP_Y = 130; // Vertical gap between DB node and groups
