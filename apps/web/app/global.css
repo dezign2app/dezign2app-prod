@@ -26,6 +26,11 @@
   color: var(--color-foreground) !important;
 }
 
+/* Ensure schema group containers render behind edges, and regular nodes render in front */
+.react-flow__node-group {
+  z-index: -1 !important;
+}
+
 /* Custom styling for React Flow Controls to match the theme */
 .react-flow__controls {
   background-color: var(--card) !important;

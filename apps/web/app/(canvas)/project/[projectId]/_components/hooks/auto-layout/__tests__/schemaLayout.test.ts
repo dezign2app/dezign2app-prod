@@ -572,4 +572,161 @@ describe("schemaLayout - Isolated Multi-Cluster Auto-Layout for N Databases & M 
     expect(transChange.sourcePosition).toBe(Position.Right);
     expect(transChange.targetPosition).toBe(Position.Left);
   });
+
+  it("groups Auth, LangGraph, and Application tables into distinct side-by-side SchemaGroupNode containers under the database", () => {
+    const dbId = "postgres-main";
+    const dbNode: LayoutNode = {
+      id: dbId,
+      type: "database",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Primary PostgreSQL DB",
+        dbEngine: "postgres",
+        dbType: "relational",
+        isDefault: true,
+      },
+    };
+
+    // Auth tables
+    const authTableNames = ["user", "session", "account", "verification", "twoFactor", "organization", "member"];
+    // LangGraph tables
+    const langgraphTableNames = ["checkpoints", "checkpoint_blobs", "checkpoint_writes", "checkpoint_migrations"];
+    // Application domain tables
+    const appTableNames = ["conversations", "messages"];
+
+    const nodes: LayoutNode[] = [
+      dbNode,
+      ...authTableNames.map((name) => ({
+        id: `table-${name}`,
+        type: "entity" as const,
+        position: { x: 0, y: 0 },
+        data: {
+          label: name,
+          tableName: name,
+          databaseId: dbId,
+          columns: [{ name: "id", type: "UUID", isPrimaryKey: true }],
+        },
+      })),
+      ...langgraphTableNames.map((name) => ({
+        id: `table-${name}`,
+        type: "entity" as const,
+        position: { x: 0, y: 0 },
+        data: {
+          label: name,
+          tableName: name,
+          databaseId: dbId,
+          systemBadge: "langgraph",
+          columns: [{ name: "thread_id", type: "TEXT", isPrimaryKey: true }],
+        },
+      })),
+      ...appTableNames.map((name) => ({
+        id: `table-${name}`,
+        type: "entity" as const,
+        position: { x: 0, y: 0 },
+        data: {
+          label: name,
+          tableName: name,
+          databaseId: dbId,
+          columns: [{ name: "id", type: "UUID", isPrimaryKey: true }],
+        },
+      })),
+    ];
+
+    const edges: LayoutEdge[] = [
+      // DB connection edges
+      ...nodes.filter((n) => n.id !== dbId).map((t) => ({
+        id: `db-edge-${t.id}`,
+        source: dbId,
+        target: t.id,
+        type: "database-connection",
+      })),
+      // Auth FK: session -> user
+      {
+        id: "fk-session-user",
+        source: "table-user",
+        target: "table-session",
+        type: "foreign-key",
+      },
+      // LangGraph FK: checkpoint_blobs -> checkpoints
+      {
+        id: "fk-blobs-checkpoints",
+        source: "table-checkpoints",
+        target: "table-checkpoint_blobs",
+        type: "foreign-key",
+      },
+      // Application FK: messages -> conversations
+      {
+        id: "fk-messages-conversations",
+        source: "table-conversations",
+        target: "table-messages",
+        type: "foreign-key",
+      },
+    ];
+
+    const recordedChanges: PositionNodeChange[] = [];
+    const onNodesChange = (changes: PositionNodeChange[]) => {
+      recordedChanges.push(...changes);
+    };
+
+    performSchemaLayout({
+      nodes,
+      edges,
+      onNodesChange,
+      fitView: vi.fn(),
+    });
+
+    const posMap = new Map<string, { x: number; y: number }>();
+    recordedChanges.forEach((c) => posMap.set(c.id, c.position));
+
+    // Verify all tables and DB node received positions
+    const dbPos = posMap.get(dbId);
+    expect(dbPos).toBeDefined();
+
+    const authPos = posMap.get("table-user");
+    const langgraphPos = posMap.get("table-checkpoints");
+    const appPos = posMap.get("table-conversations");
+
+    expect(authPos).toBeDefined();
+    expect(langgraphPos).toBeDefined();
+    expect(appPos).toBeDefined();
+
+    if (!authPos || !langgraphPos || !appPos || !dbPos) {
+      throw new Error("Expected all nodes to have positions");
+    }
+
+    // Side-by-side ordering: Authentication (left) < Application (center) < LangGraph (right)
+    expect(authPos.x).toBeLessThan(appPos.x);
+    expect(appPos.x).toBeLessThan(langgraphPos.x);
+
+    // Database node is above all entity tables
+    expect(authPos.y).toBeGreaterThan(dbPos.y + 100);
+    expect(appPos.y).toBeGreaterThan(dbPos.y + 100);
+    expect(langgraphPos.y).toBeGreaterThan(dbPos.y + 100);
+
+    // Group containers were created in recorded changes
+    const groupChanges = recordedChanges.filter((c) => c.id.startsWith("group-"));
+    expect(groupChanges.length).toBeGreaterThanOrEqual(3);
+
+    const authGroupChange = groupChanges.find((c) => c.id.includes("auth"));
+    const appGroupChange = groupChanges.find((c) => c.id.includes("app"));
+    const langgraphGroupChange = groupChanges.find((c) => c.id.includes("langgraph"));
+
+    expect(authGroupChange).toBeDefined();
+    expect(appGroupChange).toBeDefined();
+    expect(langgraphGroupChange).toBeDefined();
+
+    if (!authGroupChange || !appGroupChange || !langgraphGroupChange) {
+      throw new Error("Expected all group containers to be present");
+    }
+
+    // Group containers are arranged side-by-side left-to-right
+    expect(authGroupChange.position.x).toBeLessThan(appGroupChange.position.x);
+    expect(appGroupChange.position.x).toBeLessThan(langgraphGroupChange.position.x);
+
+    // DB node is centered above all groups
+    const leftMostX = authGroupChange.position.x;
+    const rightMostX = langgraphGroupChange.position.x;
+    expect(dbPos.x).toBeGreaterThan(leftMostX);
+    expect(dbPos.x).toBeLessThan(rightMostX);
+  });
 });

@@ -6,6 +6,7 @@ import {
   backendNodeDataValidator,
   backendDatabaseDataValidator,
   backendEntityDataValidator,
+  backendGroupDataValidator,
   backendEdgeDataValidator,
   stateStoreConvexDataValidator,
   pageSectionConvexValidator,
@@ -17,6 +18,7 @@ import {
   stateStoreNodeDataSchema,
   databaseDataSchema,
   entityDataSchema,
+  simpleDataSchema,
 } from "@workspace/canvas/schemas";
 
 describe("Convex canvasValidators exact schema", () => {
@@ -1023,6 +1025,58 @@ describe("Convex canvasValidators exact schema", () => {
     expect(backendEntityDataValidator.fields.systemBadge).toBeDefined();
     expect(backendEntityDataValidator.fields.readOnly).toBeDefined();
     expect(backendEntityDataValidator.fields.isReadOnly).toBeDefined();
+  });
+
+  it("validates entity and group nodes with groupId, group, badge, and description in Convex & Zod schemas", () => {
+    const entityPayload = {
+      columns: [
+        { isForeignKey: false, isNotNull: true, isPrimaryKey: true, isUnique: true, name: "id", type: "UUID" },
+        { isNotNull: true, name: "name", type: "TEXT" },
+        { isNotNull: true, isPrimaryKey: false, isUnique: true, name: "email", type: "TEXT" },
+        { isNotNull: true, name: "emailVerified", type: "BOOLEAN" },
+        { name: "image", type: "TEXT" },
+        { isNotNull: true, name: "createdAt", type: "TEXT" },
+        { isNotNull: true, name: "updatedAt", type: "TEXT" },
+        { name: "role", type: "TEXT" },
+        { banned: true, name: "banned", type: "BOOLEAN" },
+        { name: "banReason", type: "TEXT" },
+        { name: "banExpires", type: "TEXT" },
+        { name: "plan", type: "TEXT" },
+        { name: "creemCustomerId", type: "TEXT" },
+        { name: "twoFactorEnabled", type: "BOOLEAN" },
+      ],
+      databaseId: "fcac98b3-79bf-49b4-a170-76c0e88c651e",
+      description: "Core user accounts, emails, display names, and verification flags.",
+      group: "Authentication",
+      groupId: "group-auth-fcac98b3-79bf-49b4-a170-76c0e88c651e",
+      indexes: [{ columns: "email", isUnique: true, name: "idx_user_email" }],
+      label: "user",
+      position: { x: 546.0, y: 1955.4285714285716 },
+    };
+
+    const parsedEntity = entityDataSchema.safeParse(entityPayload);
+    expect(parsedEntity.success).toBe(true);
+
+    expect(backendEntityDataValidator.fields.groupId).toBeDefined();
+    expect(backendEntityDataValidator.fields.group).toBeDefined();
+    expect(backendEntityDataValidator.fields.badge).toBeDefined();
+    expect(backendEntityDataValidator.fields.description).toBeDefined();
+
+    const groupPayload = {
+      label: "Authentication",
+      group: "auth",
+      badge: "Authentication",
+      description: "User authentication, sessions, accounts, and security tables",
+      color: "indigo",
+    };
+
+    const parsedGroup = simpleDataSchema.safeParse(groupPayload);
+    expect(parsedGroup.success).toBe(true);
+
+    expect(backendGroupDataValidator.fields.groupId).toBeDefined();
+    expect(backendGroupDataValidator.fields.group).toBeDefined();
+    expect(backendGroupDataValidator.fields.badge).toBeDefined();
+    expect(backendGroupDataValidator.fields.description).toBeDefined();
   });
 
   it("validates LangGraph checkpointer redis_schema node with systemBadge and readOnly", () => {

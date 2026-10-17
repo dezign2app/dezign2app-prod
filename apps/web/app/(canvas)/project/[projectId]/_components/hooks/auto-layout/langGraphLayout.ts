@@ -1,12 +1,15 @@
 import { Position } from "@xyflow/react";
 import dagre from "@dagrejs/dagre";
-import type { LayoutNode, LayoutEdge, PositionNodeChange } from "./types";
+import type { PositionNodeChange, LayoutNodeLike, LayoutEdgeLike } from "./types";
 import { getNodeDimensions } from "./nodeDimensions";
 import { layoutHeadNodes } from "./headNodeLayout";
 
-export interface PerformLangGraphLayoutOptions {
-  nodes: LayoutNode[];
-  edges: LayoutEdge[];
+export interface PerformLangGraphLayoutOptions<
+  TNode extends LayoutNodeLike = LayoutNodeLike,
+  TEdge extends LayoutEdgeLike = LayoutEdgeLike
+> {
+  nodes: TNode[];
+  edges: TEdge[];
   onNodesChange?: (changes: PositionNodeChange[]) => void;
   fitView: (options?: { duration?: number; padding?: number; maxZoom?: number; nodes?: { id: string }[] }) => void;
   direction?: string;
@@ -30,7 +33,7 @@ const LANGGRAPH_HEAD_HANDLES = new Set([
 // Subsequent columns are ordered: Tool | LLM | Middleware
 export type DefColumnId = "state" | "tool" | "llm" | "middleware";
 
-export function isStateStoreNode(node: LayoutNode): boolean {
+export function isStateStoreNode(node: { id: string; type?: string }): boolean {
   const type = node.type || "";
   const id   = node.id   || "";
   return (
@@ -42,7 +45,7 @@ export function isStateStoreNode(node: LayoutNode): boolean {
   );
 }
 
-export function isMemoryNode(node: LayoutNode): boolean {
+export function isMemoryNode(node: { id: string; type?: string }): boolean {
   const type = node.type || "";
   const id   = node.id   || "";
   return (
@@ -54,7 +57,7 @@ export function isMemoryNode(node: LayoutNode): boolean {
   );
 }
 
-export function getDefColumn(node: LayoutNode): DefColumnId | null {
+export function getDefColumn(node: { id: string; type?: string }): DefColumnId | null {
   const type = node.type || "";
 
   if (isStateStoreNode(node) || isMemoryNode(node))
@@ -69,45 +72,56 @@ export function getDefColumn(node: LayoutNode): DefColumnId | null {
   return null; // not a definition node → belongs in topology
 }
 
-export function isLangGraphDefinitionNode(node: LayoutNode): boolean {
+export function isLangGraphDefinitionNode(node: { id: string; type?: string }): boolean {
   return getDefColumn(node) !== null;
 }
 
 // Ordered column list (left → right)
 export const DEF_COLUMN_ORDER: DefColumnId[] = ["state", "tool", "llm", "middleware"];
 
-export function isStartNode(node: LayoutNode): boolean {
+export function isStartNode(node: { id: string; type?: string; data?: object }): boolean {
   const type = node.type || "";
   const id = node.id || "";
-  return (
-    id === "START" ||
-    type === "start" ||
-    type === "START" ||
-    (node.data as Record<string, unknown> | undefined)?.stepType === "start"
-  );
+  if (id === "START" || type === "start" || type === "START") {
+    return true;
+  }
+  const data = node.data;
+  if (data && "stepType" in data && data.stepType === "start") {
+    return true;
+  }
+  return false;
 }
 
-export function isEndNode(node: LayoutNode): boolean {
+export function isEndNode(node: { id: string; type?: string; data?: object }): boolean {
   const type = node.type || "";
   const id = node.id || "";
-  return (
+  if (
     id === "END" ||
     id.startsWith("end_") ||
     id.startsWith("END_") ||
     type === "end" ||
-    type === "END" ||
-    (node.data as Record<string, unknown> | undefined)?.stepType === "end"
-  );
+    type === "END"
+  ) {
+    return true;
+  }
+  const data = node.data;
+  if (data && "stepType" in data && data.stepType === "end") {
+    return true;
+  }
+  return false;
 }
 
 /**
  * Extracts only the flow nodes from the START node to the END node in LangGraph.
  * Ignores definition nodes (state, tools, llm, middleware) and any disconnected nodes.
  */
-export function getLangGraphFlowNodes(
-  nodes: LayoutNode[],
-  edges: LayoutEdge[] = [],
-): LayoutNode[] {
+export function getLangGraphFlowNodes<
+  TNode extends { id: string; type?: string; data?: object },
+  TEdge extends { source: string; target: string; type?: string; targetHandle?: string | null }
+>(
+  nodes: TNode[],
+  edges: TEdge[] = [],
+): TNode[] {
   if (nodes.length === 0) return [];
 
   // Exclude definition nodes (state, memory, tool, llm, middleware)
@@ -217,28 +231,26 @@ export function getLangGraphFlowNodes(
   startIds.forEach((id) => selectedNodeIds.add(id));
   endIds.forEach((id) => selectedNodeIds.add(id));
 
-  const resultNodes: LayoutNode[] = [];
-  candidateNodes.forEach((n) => {
-    if (selectedNodeIds.has(n.id)) {
-      resultNodes.push(n);
-    }
-  });
+  const resultNodes = candidateNodes.filter((n) => selectedNodeIds.has(n.id));
 
   return resultNodes.length > 0 ? resultNodes : candidateNodes;
 }
 
-export function performLangGraphLayout({
+export function performLangGraphLayout<
+  TNode extends LayoutNodeLike = LayoutNodeLike,
+  TEdge extends LayoutEdgeLike = LayoutEdgeLike
+>({
   nodes,
   edges,
   onNodesChange,
   fitView,
   direction = "LR",
-}: PerformLangGraphLayoutOptions) {
+}: PerformLangGraphLayoutOptions<TNode, TEdge>) {
   if (nodes.length === 0) return;
   const isHorizontal = direction === "LR";
 
   // ── 1. Bucket definition nodes into per-type columns ──────────────────────
-  const columnBuckets: Record<DefColumnId, LayoutNode[]> = {
+  const columnBuckets: Record<DefColumnId, TNode[]> = {
     state:      [],
     tool:       [],
     llm:        [],
@@ -315,7 +327,7 @@ export function performLangGraphLayout({
   if (topologyNodes.length > 0) {
     // Head edges connect Ref nodes to topology steps
     const headEdges = edges.filter(
-      (e: LayoutEdge) =>
+      (e) =>
         LANGGRAPH_HEAD_HANDLES.has(e.targetHandle ?? "") &&
         e.type !== "langgraph-reference" &&
         !defNodeIdSet.has(e.source) &&
@@ -334,7 +346,7 @@ export function performLangGraphLayout({
 
     // Flow edges: connect main topology nodes (START → Node → END)
     const flowEdges = edges.filter(
-      (e: LayoutEdge) =>
+      (e) =>
         !LANGGRAPH_HEAD_HANDLES.has(e.targetHandle ?? "") &&
         e.type !== "langgraph-reference" &&
         !defNodeIdSet.has(e.source) &&
@@ -353,19 +365,19 @@ export function performLangGraphLayout({
       nodesep: 50,
     });
 
-    mainFlowNodes.forEach((node: LayoutNode) => {
+    mainFlowNodes.forEach((node) => {
       const { width, height } = getNodeDimensions(node);
       dagreGraph.setNode(node.id, { width, height });
     });
 
-    flowEdges.forEach((edge: LayoutEdge) => {
+    flowEdges.forEach((edge) => {
       dagreGraph.setEdge(edge.source, edge.target);
     });
 
     dagre.layout(dagreGraph);
 
     // 5. Extract positions from Dagre
-    mainFlowNodes.forEach((node: LayoutNode) => {
+    mainFlowNodes.forEach((node) => {
       const nodeWithPosition = dagreGraph.node(node.id);
       const { width, height } = getNodeDimensions(node);
       if (nodeWithPosition) {
@@ -417,7 +429,7 @@ export function performLangGraphLayout({
   }
 
   // ── 8. Emit node position changes ─────────────────────────────────────────
-  const nodeChanges: PositionNodeChange[] = nodes.map((node: LayoutNode) => {
+  const nodeChanges: PositionNodeChange[] = nodes.map((node) => {
     const pos = positionsMap.get(node.id) ?? {
       x: node.position.x,
       y: node.position.y,

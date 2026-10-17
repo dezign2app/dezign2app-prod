@@ -1,6 +1,6 @@
-import type { LayoutNode, NodeHandleData } from "./types";
+import type { LayoutNode, LayoutNodeLike, NodeHandleData } from "./types";
 
-function getEntityColumns(node: LayoutNode) {
+function getEntityColumns(node: LayoutNodeLike) {
   if (
     node.data &&
     typeof node.data === "object" &&
@@ -12,7 +12,7 @@ function getEntityColumns(node: LayoutNode) {
   return [];
 }
 
-function getEntityIndexes(node: LayoutNode) {
+function getEntityIndexes(node: LayoutNodeLike) {
   if (
     node.data &&
     typeof node.data === "object" &&
@@ -24,7 +24,7 @@ function getEntityIndexes(node: LayoutNode) {
   return [];
 }
 
-function getEntityDbType(node: LayoutNode): string | undefined {
+function getEntityDbType(node: LayoutNodeLike): string | undefined {
   if (
     node.data &&
     typeof node.data === "object" &&
@@ -36,7 +36,7 @@ function getEntityDbType(node: LayoutNode): string | undefined {
   return undefined;
 }
 
-function getRedisDataStructure(node: LayoutNode): string | undefined {
+function getRedisDataStructure(node: LayoutNodeLike): string | undefined {
   if (
     node.data &&
     typeof node.data === "object" &&
@@ -48,7 +48,7 @@ function getRedisDataStructure(node: LayoutNode): string | undefined {
   return undefined;
 }
 
-export function getLayoutNodeData(node: LayoutNode): NodeHandleData | undefined {
+export function getLayoutNodeData(node: LayoutNodeLike): NodeHandleData | undefined {
   if (!node.data || typeof node.data !== "object") {
     return undefined;
   }
@@ -75,11 +75,11 @@ export function getLayoutNodeData(node: LayoutNode): NodeHandleData | undefined 
       : undefined;
   const zones =
     "zones" in node.data && Array.isArray(node.data.zones)
-      ? (node.data.zones as NodeHandleData["zones"])
+      ? node.data.zones
       : undefined;
   const sections =
     "sections" in node.data && Array.isArray(node.data.sections)
-      ? (node.data.sections as NodeHandleData["sections"])
+      ? node.data.sections
       : undefined;
   const fields =
     "fields" in node.data && Array.isArray(node.data.fields)
@@ -103,7 +103,7 @@ export function getLayoutNodeData(node: LayoutNode): NodeHandleData | undefined 
   };
 }
 
-export function getNodeDimensions(node: LayoutNode): {
+export function getNodeDimensions(node: LayoutNodeLike): {
   width: number;
   height: number;
 } {
@@ -174,14 +174,24 @@ export function getNodeDimensions(node: LayoutNode): {
     case "storage_bucket_ref":
     case "StorageBucketRefNode":
     case "StorageOperationRefNode": {
-      const ops = Array.isArray(node.data?.storageOperations)
-        ? node.data.storageOperations
-        : [];
+      const ops =
+        node.data &&
+        typeof node.data === "object" &&
+        "storageOperations" in node.data &&
+        Array.isArray(node.data.storageOperations)
+          ? node.data.storageOperations
+          : [];
       const estHeight = Math.max(80, 70 + ops.length * 40);
       return { width: 280, height: estHeight };
     }
     case "storage": {
-      const buckets = Array.isArray(node.data?.buckets) ? node.data.buckets : [];
+      const buckets =
+        node.data &&
+        typeof node.data === "object" &&
+        "buckets" in node.data &&
+        Array.isArray(node.data.buckets)
+          ? node.data.buckets
+          : [];
       const estHeight = Math.max(160, 140 + buckets.length * 36);
       return { width: 300, height: estHeight };
     }
@@ -319,13 +329,14 @@ export function getNodeDimensions(node: LayoutNode): {
     }
 
     case "group": {
-      const data = getLayoutNodeData(node);
-      const count =
-        (Array.isArray(data?.endpoints) ? data.endpoints.length : 0) +
-        (Array.isArray(data?.events) ? data.events.length : 0) +
-        (Array.isArray(data?.topics) ? data.topics.length : 0);
-      const estHeight = Math.max(180, 140 + count * 40);
-      return { width: 320, height: estHeight };
+      const styleWidth = typeof node.style?.width === "number" ? node.style.width : undefined;
+      const styleHeight = typeof node.style?.height === "number" ? node.style.height : undefined;
+      const explicitW = typeof node.width === "number" ? node.width : styleWidth;
+      const explicitH = typeof node.height === "number" ? node.height : styleHeight;
+      if (typeof explicitW === "number" && typeof explicitH === "number") {
+        return { width: explicitW, height: explicitH };
+      }
+      return { width: explicitW ?? 450, height: explicitH ?? 300 };
     }
     case "entity": {
       const dbType = getEntityDbType(node);

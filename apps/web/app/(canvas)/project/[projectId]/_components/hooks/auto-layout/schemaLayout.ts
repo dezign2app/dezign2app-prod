@@ -1,9 +1,14 @@
 import { Position } from "@xyflow/react";
 import dagre from "@dagrejs/dagre";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import type { BackendNode, BackendNodeData } from "@/types/canvas";
 import type { LayoutNode, LayoutEdge, PositionNodeChange } from "./types";
 import { getNodeDimensions, getIsPkNode } from "./nodeDimensions";
 import { layoutSchemaRanks } from "./schemaRankLayout";
+import {
+  partitionEntitiesIntoFunctionalGroups,
+  type SchemaFunctionalGroup,
+} from "./schemaGrouping";
 
 export interface PerformSchemaLayoutOptions {
   nodes: LayoutNode[];
@@ -20,23 +25,35 @@ interface StorageCluster {
   entities: LayoutNode[];
 }
 
+interface ClusterGroupResult {
+  group: SchemaFunctionalGroup;
+  position: { x: number; y: number }; // Relative to cluster origin
+  width: number;
+  height: number;
+}
+
 interface ClusterLayoutResult {
   cluster: StorageCluster;
   width: number;
   height: number;
   storagePosition?: { x: number; y: number };
   entityPositions: Map<string, { x: number; y: number }>;
+  groupResults: ClusterGroupResult[];
 }
 
 /**
  * Computes an isolated LR Dagre + staggered ranks layout for a single storage cluster.
- * The storage node (Database or Redis Instance) is placed horizontally centered at the top.
+ * Partitions entities into common-purpose functional groups (Authentication, Application, LangGraph),
+ * enclosing each group in a visual group container (SchemaGroupNode) and positioning groups side-by-side.
+ * The storage node (Database or Redis Instance) is placed horizontally centered above the groups.
  */
 function layoutIsolatedCluster(
   cluster: StorageCluster,
   schemaEdges: LayoutEdge[],
+  existingGroupNodes: LayoutNode[] = [],
 ): ClusterLayoutResult {
   const entityPositions = new Map<string, { x: number; y: number }>();
+  const groupResults: ClusterGroupResult[] = [];
 
   // 1. Cluster has no entities (e.g. empty Database or empty Redis instance)
   if (cluster.entities.length === 0) {
@@ -48,6 +65,7 @@ function layoutIsolatedCluster(
         height: storageDim.height,
         storagePosition: { x: 0, y: 0 },
         entityPositions,
+        groupResults: [],
       };
     }
     return {
@@ -55,117 +73,197 @@ function layoutIsolatedCluster(
       width: 0,
       height: 0,
       entityPositions,
+      groupResults: [],
     };
   }
 
-  // 2. Intra-cluster edges only (prevent edges from other databases from skewing ranks)
-  const entityIdSet = new Set(cluster.entities.map((n) => n.id));
-  const intraEdges = schemaEdges.filter(
-    (e) => entityIdSet.has(e.source) && entityIdSet.has(e.target),
+  // 2. Partition cluster entities into common-purpose functional groups
+  const functionalGroups = partitionEntitiesIntoFunctionalGroups(
+    cluster.entities,
+    existingGroupNodes,
   );
 
-  // 3. Construct localized Dagre Graph for this cluster
-  const dagreGraph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({
-    rankdir: "LR",
-    marginx: 40,
-    marginy: 40,
-    ranksep: 280,
-    nodesep: 45,
-  });
-
-  cluster.entities.forEach((node) => {
-    const { width, height } = getNodeDimensions(node);
-    dagreGraph.setNode(node.id, { width, height });
-  });
-
-  intraEdges.forEach((edge) => {
-    if (edge.type === "foreign-key") {
-      const sourceNode = cluster.entities.find((n) => n.id === edge.source);
-      const targetNode = cluster.entities.find((n) => n.id === edge.target);
-
-      const sourceIsPk = getIsPkNode(sourceNode, edge.sourceHandle);
-      const targetIsPk = getIsPkNode(targetNode, edge.targetHandle);
-
-      if (sourceIsPk && !targetIsPk) {
-        dagreGraph.setEdge(edge.source, edge.target);
-      } else if (targetIsPk && !sourceIsPk) {
-        dagreGraph.setEdge(edge.target, edge.source);
-      } else {
-        dagreGraph.setEdge(edge.source, edge.target);
-      }
-    } else {
-      dagreGraph.setEdge(edge.source, edge.target);
-    }
-  });
-
-  dagre.layout(dagreGraph);
-
-  const rawLocalPositions = new Map<string, { x: number; y: number }>();
-  cluster.entities.forEach((node) => {
-    const nodeWithPosition = dagreGraph.node(node.id);
-    const { width, height } = getNodeDimensions(node);
-    if (nodeWithPosition) {
-      rawLocalPositions.set(node.id, {
-        x: nodeWithPosition.x - width / 2,
-        y: nodeWithPosition.y - height / 2,
-      });
-    } else {
-      rawLocalPositions.set(node.id, { x: 0, y: 0 });
-    }
-  });
-
-  // Stagger schema ranks into sub-columns for balanced grid layout
-  layoutSchemaRanks({
-    dagreGraph,
-    entityFlowNodes: cluster.entities,
-    entityFlowEdges: intraEdges,
-    positionsMap: rawLocalPositions,
-  });
-
-  // 4. Calculate bounding box of entities within the cluster
-  let minEntX = Infinity;
-  let maxEntX = -Infinity;
-  let minEntY = Infinity;
-  let maxEntY = -Infinity;
-
-  cluster.entities.forEach((node) => {
-    const pos = rawLocalPositions.get(node.id) ?? { x: 0, y: 0 };
-    const { width, height } = getNodeDimensions(node);
-    if (pos.x < minEntX) minEntX = pos.x;
-    if (pos.x + width > maxEntX) maxEntX = pos.x + width;
-    if (pos.y < minEntY) minEntY = pos.y;
-    if (pos.y + height > maxEntY) maxEntY = pos.y + height;
-  });
-
-  if (minEntX === Infinity) {
-    minEntX = 0;
-    maxEntX = 300;
-    minEntY = 0;
-    maxEntY = 200;
-  }
-
-  const entitiesWidth = maxEntX - minEntX;
-  const entitiesHeight = maxEntY - minEntY;
+  // Group container padding and gaps
+  const GROUP_PAD_X = 36;
+  const GROUP_HEADER_TOP = 64; // Header tab space at top-left
+  const GROUP_PAD_BOTTOM = 36;
+  const GROUP_GAP_X = 90; // Side-by-side gap between groups
+  const STORAGE_TO_GROUPS_GAP_Y = 130; // Vertical gap between DB node and groups
 
   const storageDim = cluster.storageNode
     ? getNodeDimensions(cluster.storageNode)
     : { width: 0, height: 0 };
 
-  // Total cluster width accommodates both the header and entities
-  const clusterWidth = Math.max(storageDim.width, entitiesWidth);
-  const entitiesOffsetX = (clusterWidth - entitiesWidth) / 2;
-  const STORAGE_TO_ENTITIES_GAP_Y = 120;
-  const entitiesOffsetY = cluster.storageNode
-    ? storageDim.height + STORAGE_TO_ENTITIES_GAP_Y
+  const groupsOffsetY = cluster.storageNode
+    ? storageDim.height + STORAGE_TO_GROUPS_GAP_Y
     : 0;
 
-  // Set normalized local coordinates
-  cluster.entities.forEach((node) => {
-    const pos = rawLocalPositions.get(node.id) ?? { x: minEntX, y: minEntY };
-    entityPositions.set(node.id, {
-      x: entitiesOffsetX + (pos.x - minEntX),
-      y: entitiesOffsetY + (pos.y - minEntY),
+  // 3. Compute layout for each functional group independently
+  interface IntermediateGroupCalc {
+    group: SchemaFunctionalGroup;
+    groupWidth: number;
+    groupHeight: number;
+    localEntityPositions: Map<string, { x: number; y: number }>;
+  }
+
+  const groupCalculations: IntermediateGroupCalc[] = [];
+
+  functionalGroups.forEach((group) => {
+    const groupEntityIdSet = new Set(group.entities.map((n) => n.id));
+    // Intra-group foreign key edges only
+    const groupEdges = schemaEdges.filter(
+      (e) => groupEntityIdSet.has(e.source) && groupEntityIdSet.has(e.target),
+    );
+
+    // Build localized Dagre graph for this group
+    const dagreGraph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+    dagreGraph.setGraph({
+      rankdir: "LR",
+      marginx: 35,
+      marginy: 35,
+      ranksep: 260,
+      nodesep: 45,
+    });
+
+    group.entities.forEach((node) => {
+      const { width, height } = getNodeDimensions(node);
+      dagreGraph.setNode(node.id, { width, height });
+    });
+
+    groupEdges.forEach((edge) => {
+      if (edge.type === "foreign-key") {
+        const sourceNode = group.entities.find((n) => n.id === edge.source);
+        const targetNode = group.entities.find((n) => n.id === edge.target);
+
+        const sourceIsPk = getIsPkNode(sourceNode, edge.sourceHandle);
+        const targetIsPk = getIsPkNode(targetNode, edge.targetHandle);
+
+        if (sourceIsPk && !targetIsPk) {
+          dagreGraph.setEdge(edge.source, edge.target);
+        } else if (targetIsPk && !sourceIsPk) {
+          dagreGraph.setEdge(edge.target, edge.source);
+        } else {
+          dagreGraph.setEdge(edge.source, edge.target);
+        }
+      } else {
+        dagreGraph.setEdge(edge.source, edge.target);
+      }
+    });
+
+    dagre.layout(dagreGraph);
+
+    const rawLocalPositions = new Map<string, { x: number; y: number }>();
+    group.entities.forEach((node) => {
+      const nodeWithPosition = dagreGraph.node(node.id);
+      const { width, height } = getNodeDimensions(node);
+      if (nodeWithPosition) {
+        rawLocalPositions.set(node.id, {
+          x: nodeWithPosition.x - width / 2,
+          y: nodeWithPosition.y - height / 2,
+        });
+      } else {
+        rawLocalPositions.set(node.id, { x: 0, y: 0 });
+      }
+    });
+
+    // Stagger schema ranks into sub-columns for balanced grid layout
+    layoutSchemaRanks({
+      dagreGraph,
+      entityFlowNodes: group.entities,
+      entityFlowEdges: groupEdges,
+      positionsMap: rawLocalPositions,
+    });
+
+    // Compute bounding box of entities in this group
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    group.entities.forEach((node) => {
+      const pos = rawLocalPositions.get(node.id) ?? { x: 0, y: 0 };
+      const { width, height } = getNodeDimensions(node);
+      if (pos.x < minX) minX = pos.x;
+      if (pos.x + width > maxX) maxX = pos.x + width;
+      if (pos.y < minY) minY = pos.y;
+      if (pos.y + height > maxY) maxY = pos.y + height;
+    });
+
+    if (minX === Infinity) {
+      minX = 0;
+      maxX = 320;
+      minY = 0;
+      maxY = 200;
+    }
+
+    const groupEntitiesWidth = maxX - minX;
+    const groupEntitiesHeight = maxY - minY;
+
+    const groupWidth = Math.max(450, groupEntitiesWidth + GROUP_PAD_X * 2);
+    const groupHeight = Math.max(280, groupEntitiesHeight + GROUP_HEADER_TOP + GROUP_PAD_BOTTOM);
+
+    // Entity positions relative to this group container's top-left corner
+    const groupLocalEntityPositions = new Map<string, { x: number; y: number }>();
+    group.entities.forEach((node) => {
+      const pos = rawLocalPositions.get(node.id) ?? { x: minX, y: minY };
+      groupLocalEntityPositions.set(node.id, {
+        x: GROUP_PAD_X + (pos.x - minX),
+        y: GROUP_HEADER_TOP + (pos.y - minY),
+      });
+    });
+
+    groupCalculations.push({
+      group,
+      groupWidth,
+      groupHeight,
+      localEntityPositions: groupLocalEntityPositions,
+    });
+  });
+
+  // 4. Arrange groups side-by-side horizontally
+  let curGroupX = 0;
+  let maxGroupHeight = 0;
+
+  const intermediateGroups: Array<{
+    group: SchemaFunctionalGroup;
+    localX: number;
+    width: number;
+    height: number;
+    localEntityPositions: Map<string, { x: number; y: number }>;
+  }> = [];
+
+  groupCalculations.forEach((calc, idx) => {
+    if (idx > 0) curGroupX += GROUP_GAP_X;
+    intermediateGroups.push({
+      group: calc.group,
+      localX: curGroupX,
+      width: calc.groupWidth,
+      height: calc.groupHeight,
+      localEntityPositions: calc.localEntityPositions,
+    });
+    if (calc.groupHeight > maxGroupHeight) maxGroupHeight = calc.groupHeight;
+    curGroupX += calc.groupWidth;
+  });
+
+  const totalGroupsWidth = curGroupX;
+  const clusterWidth = Math.max(storageDim.width, totalGroupsWidth);
+  const groupsShiftX = (clusterWidth - totalGroupsWidth) / 2;
+
+  intermediateGroups.forEach((g) => {
+    const groupFinalX = g.localX + groupsShiftX;
+    const groupFinalY = groupsOffsetY;
+    groupResults.push({
+      group: g.group,
+      position: { x: groupFinalX, y: groupFinalY },
+      width: g.width,
+      height: g.height,
+    });
+
+    g.localEntityPositions.forEach((relPos, entityId) => {
+      entityPositions.set(entityId, {
+        x: groupFinalX + relPos.x,
+        y: groupFinalY + relPos.y,
+      });
     });
   });
 
@@ -177,8 +275,8 @@ function layoutIsolatedCluster(
     : undefined;
 
   const clusterHeight = cluster.storageNode
-    ? storageDim.height + STORAGE_TO_ENTITIES_GAP_Y + entitiesHeight
-    : entitiesHeight;
+    ? storageDim.height + STORAGE_TO_GROUPS_GAP_Y + maxGroupHeight
+    : maxGroupHeight;
 
   return {
     cluster,
@@ -186,6 +284,7 @@ function layoutIsolatedCluster(
     height: clusterHeight,
     storagePosition,
     entityPositions,
+    groupResults,
   };
 }
 
@@ -195,14 +294,15 @@ export function performSchemaLayout({
   onNodesChange,
   fitView,
 }: PerformSchemaLayoutOptions) {
-  // Filter for Schema nodes (entity, redis_schema, database, redis_instance, transformer) and schema edges
+  // Filter for Schema nodes (entity, redis_schema, database, redis_instance, transformer, group) and schema edges
   const schemaNodes = nodes.filter(
     (n) =>
       n.type === "entity" ||
       n.type === "database" ||
       n.type === "redis_instance" ||
       n.type === "redis_schema" ||
-      n.type === "transformer",
+      n.type === "transformer" ||
+      n.type === "group",
   );
   if (schemaNodes.length === 0) return;
 
@@ -217,15 +317,17 @@ export function performSchemaLayout({
   const isRedisNode = (n: LayoutNode) => n.type === "redis_instance";
   const isStorageNode = (n: LayoutNode) => isDatabaseNode(n) || isRedisNode(n);
   const isTransformerNode = (n: LayoutNode) => n.type === "transformer";
+  const isGroupNode = (n: LayoutNode) => n.type === "group";
 
   const dbNodes = schemaNodes.filter(isDatabaseNode);
   const redisNodes = schemaNodes.filter(isRedisNode);
   const transformerNodes = schemaNodes.filter(isTransformerNode);
+  const existingGroupNodes = schemaNodes.filter(isGroupNode);
   const storageNodes = [...dbNodes, ...redisNodes];
   const storageNodeIdSet = new Set(storageNodes.map((n) => n.id));
 
   const entityNodes = schemaNodes.filter(
-    (n) => !isStorageNode(n) && !isTransformerNode(n),
+    (n) => !isStorageNode(n) && !isTransformerNode(n) && !isGroupNode(n),
   );
 
   // 1. Initialize dedicated cluster for each Database and each Redis instance
@@ -260,7 +362,7 @@ export function performSchemaLayout({
 
   // Signal A: Explicit databaseId match
   entityNodes.forEach((entity) => {
-    const dbId = (entity.data as { databaseId?: string })?.databaseId;
+    const dbId = entity.data?.databaseId;
     if (dbId && clustersMap.has(dbId)) {
       entityToClusterId.set(entity.id, dbId);
     }
@@ -286,19 +388,13 @@ export function performSchemaLayout({
 
   // Signal C: Database node internal 'tables' definition matching
   dbNodes.forEach((db) => {
-    const rawTables = (
-      db.data as {
-        tables?: Array<{ id?: string; name?: string; tableRef?: string }>;
-      }
-    )?.tables;
+    const rawTables = db.data?.tables;
     if (Array.isArray(rawTables)) {
       rawTables.forEach((t) => {
         entityNodes.forEach((entity) => {
           if (entityToClusterId.has(entity.id)) return;
-          const tableName = (
-            entity.data as { tableName?: string; tableRef?: string }
-          )?.tableName;
-          const tableRef = (entity.data as { tableRef?: string })?.tableRef;
+          const tableName = entity.data?.tableName;
+          const tableRef = entity.data?.tableRef;
           if (
             (t.id && t.id === entity.id) ||
             (t.name && tableName && t.name.toLowerCase() === tableName.toLowerCase()) ||
@@ -312,8 +408,6 @@ export function performSchemaLayout({
   });
 
   // Signal D: Foreign Key graph propagation
-  // If Table A is already associated with Database K and Table B has a foreign key to Table A,
-  // Table B is automatically assigned to Database K.
   let fkChanged = true;
   while (fkChanged) {
     fkChanged = false;
@@ -342,10 +436,10 @@ export function performSchemaLayout({
 
   // Signal E: Type and single-instance heuristics
   const defaultDbNode =
-    dbNodes.find((d) => (d.data as { isDefault?: boolean })?.isDefault) ||
+    dbNodes.find((d) => Boolean(d.data?.isDefault)) ||
     dbNodes[0];
   const defaultRedisNode =
-    redisNodes.find((r) => (r.data as { isDefault?: boolean })?.isDefault) ||
+    redisNodes.find((r) => Boolean(r.data?.isDefault)) ||
     redisNodes[0];
 
   entityNodes.forEach((entity) => {
@@ -353,7 +447,7 @@ export function performSchemaLayout({
 
     const isRedisEntity =
       entity.type === "redis_schema" ||
-      (entity.data as { dbType?: string })?.dbType === "redis";
+      entity.data?.dbType === "redis";
 
     if (isRedisEntity) {
       if (defaultRedisNode) {
@@ -364,7 +458,7 @@ export function performSchemaLayout({
       if (defaultDbNode) {
         if (
           dbNodes.length === 1 ||
-          Boolean((defaultDbNode.data as { isDefault?: boolean })?.isDefault)
+          Boolean(defaultDbNode.data?.isDefault)
         ) {
           entityToClusterId.set(entity.id, defaultDbNode.id);
         }
@@ -386,8 +480,8 @@ export function performSchemaLayout({
   const activeDbClusters: StorageCluster[] = dbNodes
     .slice()
     .sort((a, b) => {
-      const isDefA = Boolean((a.data as { isDefault?: boolean })?.isDefault);
-      const isDefB = Boolean((b.data as { isDefault?: boolean })?.isDefault);
+      const isDefA = Boolean(a.data?.isDefault);
+      const isDefB = Boolean(b.data?.isDefault);
       if (isDefA && !isDefB) return -1;
       if (!isDefA && isDefB) return 1;
       return a.position.x - b.position.x;
@@ -401,20 +495,21 @@ export function performSchemaLayout({
     .map((redis) => clustersMap.get(redis.id)!)
     .filter(Boolean);
 
-  // 4. Compute isolated layout for each individual cluster
+  // 4. Compute isolated layout for each individual cluster with functional grouping
   const dbResults = activeDbClusters.map((c) =>
-    layoutIsolatedCluster(c, schemaEdges),
+    layoutIsolatedCluster(c, schemaEdges, existingGroupNodes),
   );
   const redisResults = activeRedisClusters.map((c) =>
-    layoutIsolatedCluster(c, schemaEdges),
+    layoutIsolatedCluster(c, schemaEdges, existingGroupNodes),
   );
   const unassignedResult =
     unassignedCluster.entities.length > 0
-      ? layoutIsolatedCluster(unassignedCluster, schemaEdges)
+      ? layoutIsolatedCluster(unassignedCluster, schemaEdges, existingGroupNodes)
       : null;
 
   // 5. Arrange clusters on the canvas with multi-tier section spacing
   const positionsMap = new Map<string, { x: number; y: number }>();
+  const allFinalGroupNodes: LayoutNode[] = [];
 
   const START_X = 60;
   const START_Y = 60;
@@ -434,13 +529,12 @@ export function performSchemaLayout({
   let curY = START_Y;
   let maxDbHeight = 0;
 
-  // Place Database clusters
-  dbResults.forEach((res, idx) => {
-    if (idx > 0) curX += DB_GAP_X;
-
-    const clusterOriginX = curX;
-    const clusterOriginY = curY;
-
+  // Helper to materialize group nodes and position them on the canvas
+  const processClusterResult = (
+    res: ClusterLayoutResult,
+    clusterOriginX: number,
+    clusterOriginY: number,
+  ) => {
     if (res.storagePosition && res.cluster.storageNode) {
       positionsMap.set(res.cluster.storageNode.id, {
         x: clusterOriginX + res.storagePosition.x,
@@ -457,6 +551,55 @@ export function performSchemaLayout({
         });
       }
     });
+
+    res.groupResults.forEach((gRes) => {
+      const groupAbsX = clusterOriginX + gRes.position.x;
+      const groupAbsY = clusterOriginY + gRes.position.y;
+      const groupId =
+        gRes.group.groupNode?.id || `group-${gRes.group.key}-${res.cluster.id}`;
+
+      positionsMap.set(groupId, {
+        x: groupAbsX,
+        y: groupAbsY,
+      });
+
+      const materializedGroupNode: LayoutNode = {
+        id: groupId,
+        type: "group",
+        position: { x: groupAbsX, y: groupAbsY },
+        width: gRes.width,
+        height: gRes.height,
+        style: { width: gRes.width, height: gRes.height },
+        data: {
+          ...(gRes.group.groupNode?.data || { label: gRes.group.title }),
+          label: gRes.group.title,
+          description: gRes.group.description,
+          badge: gRes.group.badge,
+          color: gRes.group.color,
+        },
+      };
+
+      allFinalGroupNodes.push(materializedGroupNode);
+
+      // Link entities to this group node
+      gRes.group.entities.forEach((ent) => {
+        ent.data = {
+          ...ent.data,
+          groupId,
+          group: gRes.group.title,
+        };
+      });
+    });
+  };
+
+  // Place Database clusters
+  dbResults.forEach((res, idx) => {
+    if (idx > 0) curX += DB_GAP_X;
+
+    const clusterOriginX = curX;
+    const clusterOriginY = curY;
+
+    processClusterResult(res, clusterOriginX, clusterOriginY);
 
     if (res.height > maxDbHeight) maxDbHeight = res.height;
     curX += res.width;
@@ -476,22 +619,7 @@ export function performSchemaLayout({
     const clusterOriginX = curX;
     const clusterOriginY = curY;
 
-    if (res.storagePosition && res.cluster.storageNode) {
-      positionsMap.set(res.cluster.storageNode.id, {
-        x: clusterOriginX + res.storagePosition.x,
-        y: clusterOriginY + res.storagePosition.y,
-      });
-    }
-
-    res.cluster.entities.forEach((ent) => {
-      const p = res.entityPositions.get(ent.id);
-      if (p) {
-        positionsMap.set(ent.id, {
-          x: clusterOriginX + p.x,
-          y: clusterOriginY + p.y,
-        });
-      }
-    });
+    processClusterResult(res, clusterOriginX, clusterOriginY);
 
     curX += res.width;
   });
@@ -524,15 +652,7 @@ export function performSchemaLayout({
     const clusterOriginX = curX;
     const clusterOriginY = curY;
 
-    unassignedResult.cluster.entities.forEach((ent) => {
-      const p = unassignedResult.entityPositions.get(ent.id);
-      if (p) {
-        positionsMap.set(ent.id, {
-          x: clusterOriginX + p.x,
-          y: clusterOriginY + p.y,
-        });
-      }
-    });
+    processClusterResult(unassignedResult, clusterOriginX, clusterOriginY);
   }
 
   // 6. Canvas origin margin check
@@ -553,16 +673,36 @@ export function performSchemaLayout({
         y: pos.y + shiftY,
       });
     });
+    allFinalGroupNodes.forEach((gn) => {
+      gn.position = {
+        x: gn.position.x + shiftX,
+        y: gn.position.y + shiftY,
+      };
+    });
   }
 
-  // 7. Apply node position changes
+  // 7. Compose ordered nodes: Groups first (background layer), then storage, then entities, then transformers
+  const allFinalNodes: LayoutNode[] = [
+    ...allFinalGroupNodes,
+    ...storageNodes,
+    ...entityNodes,
+    ...transformerNodes,
+  ];
+
+  // 8. Apply node position changes (only for nodes whose position actually moved or new group containers)
   if (onNodesChange) {
-    const nodeChanges: PositionNodeChange[] = schemaNodes.map(
-      (node: LayoutNode) => {
-        const pos = positionsMap.get(node.id) ?? {
-          x: node.position.x,
-          y: node.position.y,
-        };
+    const nodeChanges: PositionNodeChange[] = allFinalNodes
+      .filter((node) => {
+        if (node.type === "group") return true;
+        const pos = positionsMap.get(node.id);
+        if (!pos) return false;
+        return (
+          Math.abs(node.position.x - pos.x) > 0.5 ||
+          Math.abs(node.position.y - pos.y) > 0.5
+        );
+      })
+      .map((node: LayoutNode) => {
+        const pos = positionsMap.get(node.id) ?? node.position;
         const isDb = storageNodeIdSet.has(node.id);
         const isTrans = node.type === "transformer";
         return {
@@ -572,35 +712,101 @@ export function performSchemaLayout({
           sourcePosition: isDb ? Position.Bottom : isTrans ? Position.Right : Position.Right,
           targetPosition: isDb ? Position.Top : isTrans ? Position.Left : Position.Left,
         };
-      },
-    );
-    onNodesChange(nodeChanges);
-  } else {
+      });
+    if (nodeChanges.length > 0) {
+      onNodesChange(nodeChanges);
+    }
+  }
+
+  // Also update store state directly with created/updated group nodes and dimensions
+  try {
     useBackendCanvasStore.setState((state) => {
-      const updatedNodes = state.nodes.map((node) => {
+      const finalDataMap = new Map<string, BackendNodeData>();
+      allFinalNodes.forEach((n) => {
+        finalDataMap.set(n.id, n.data);
+      });
+
+      const existingNodeMap = new Map<string, BackendNode>();
+      state.nodes.forEach((n) => {
+        existingNodeMap.set(n.id, n);
+      });
+
+      const updatedExistingNodes: BackendNode[] = state.nodes.map((node) => {
         const pos = positionsMap.get(node.id);
-        if (!pos) return node;
+        const finalData = finalDataMap.get(node.id);
+        if (!pos && !finalData) return node;
+
         const isDb = storageNodeIdSet.has(node.id);
         const isTrans = node.type === "transformer";
+
+        const isGroup = node.type === "group";
+
         return {
           ...node,
-          position: pos,
+          position: pos ?? node.position,
+          data: finalData ?? node.data,
+          zIndex: isGroup ? -1 : (node.zIndex ?? 1),
           sourcePosition: isDb ? Position.Bottom : isTrans ? Position.Right : Position.Right,
           targetPosition: isDb ? Position.Top : isTrans ? Position.Left : Position.Left,
         };
       });
 
-      const movedNodeIds = new Set(positionsMap.keys());
-      const upserts = updatedNodes.filter((n) => movedNodeIds.has(n.id));
+      const newGroupNodes: BackendNode[] = allFinalGroupNodes
+        .filter((g) => !existingNodeMap.has(g.id))
+        .map((g) => ({
+          id: g.id,
+          type: "group",
+          position: positionsMap.get(g.id) ?? g.position,
+          data: g.data,
+          fractionalIndex: "a0",
+          width: g.width,
+          height: g.height,
+          style: {
+            width: g.width ?? 0,
+            height: g.height ?? 0,
+          },
+          zIndex: -1,
+        }));
+
+      // Only mark nodes whose coordinates or data actually changed as moved/upserted
+      const movedNodeIds = new Set<string>();
+      positionsMap.forEach((pos, id) => {
+        const existing = existingNodeMap.get(id);
+        if (!existing) {
+          movedNodeIds.add(id);
+          return;
+        }
+        const hasPosChanged =
+          Math.abs(existing.position.x - pos.x) > 0.5 ||
+          Math.abs(existing.position.y - pos.y) > 0.5;
+
+        const finalData = finalDataMap.get(id);
+        const hasDataChanged =
+          Boolean(finalData) &&
+          (existing.data?.groupId !== finalData?.groupId ||
+            existing.data?.group !== finalData?.group);
+
+        if (hasPosChanged || hasDataChanged) {
+          movedNodeIds.add(id);
+        }
+      });
+
+      // Keep groups first for proper rendering behind entities
+      const nextNodes: BackendNode[] = [...newGroupNodes, ...updatedExistingNodes];
+      const upserts: BackendNode[] = nextNodes.filter(
+        (n) => movedNodeIds.has(n.id) || !existingNodeMap.has(n.id),
+      );
 
       return {
-        nodes: updatedNodes,
+        nodes: nextNodes,
         pendingNodeUpserts: [
           ...state.pendingNodeUpserts.filter((u) => !movedNodeIds.has(u.id)),
           ...upserts,
         ],
       };
     });
+  } catch {
+    // In headless test environments where store is mocked/not mounted, safely ignore
   }
 
   setTimeout(() => {

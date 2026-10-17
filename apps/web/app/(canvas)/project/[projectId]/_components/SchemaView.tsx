@@ -58,18 +58,54 @@ export function SchemaView({ projectId }: SchemaViewProps) {
   const terminalHeight = useSidebarStore((s) => s.terminalHeight);
   const paletteOpen = useSidebarStore((s) => s.paletteOpen);
   const paletteWidth = useSidebarStore((s) => s.paletteWidth);
-  const schemaNodes = React.useMemo(
-    () =>
-      nodes.filter(
-        (n) =>
-          n.type === "entity" ||
-          n.type === "database" ||
-          n.type === "redis_instance" ||
-          n.type === "redis_schema" ||
-          n.type === "transformer",
-      ),
-    [nodes],
-  );
+  const schemaNodes = React.useMemo(() => {
+    const filtered = nodes.filter(
+      (n) =>
+        n.type === "entity" ||
+        n.type === "database" ||
+        n.type === "redis_instance" ||
+        n.type === "redis_schema" ||
+        n.type === "transformer" ||
+        n.type === "group",
+    );
+    // Sort group nodes to the beginning so they render behind entity nodes,
+    // and ensure their dimensions are explicitly preserved on the node style
+    return filtered
+      .map((n) => {
+        if (n.type === "group") {
+          const styleW = typeof n.style?.width === "number" ? n.style.width : undefined;
+          const styleH = typeof n.style?.height === "number" ? n.style.height : undefined;
+          const w = typeof n.width === "number" && n.width > 0 ? n.width : (styleW ?? 450);
+          const h = typeof n.height === "number" && n.height > 0 ? n.height : (styleH ?? 280);
+
+          return {
+            ...n,
+            zIndex: -1,
+            width: w,
+            height: h,
+            style: {
+              ...n.style,
+              width: w,
+              height: h,
+              zIndex: -1,
+            },
+          };
+        }
+        return {
+          ...n,
+          zIndex: 1,
+          style: {
+            ...n.style,
+            zIndex: 1,
+          },
+        };
+      })
+      .sort((a, b) => {
+        if (a.type === "group" && b.type !== "group") return -1;
+        if (a.type !== "group" && b.type === "group") return 1;
+        return 0;
+      });
+  }, [nodes]);
   const schemaNodeIds = React.useMemo(
     () => new Set(schemaNodes.map((n) => n.id)),
     [schemaNodes],

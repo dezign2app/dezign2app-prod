@@ -15,9 +15,13 @@ export const envVarItemSchema = z.object({
 
 export const baseNodeDataSchema = z.object({
   label: z.string().optional(),
+  description: z.string().optional(),
   position: z.object({ x: z.number(), y: z.number() }).optional(),
   graphPosition: z.object({ x: z.number(), y: z.number() }).optional(),
   parentId: z.string().optional(),
+  groupId: z.string().optional(),
+  group: z.string().optional(),
+  badge: z.string().optional(),
   targetServiceId: z.string().optional(),
   serviceNodeId: z.string().optional(),
   style: z

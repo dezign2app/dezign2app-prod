@@ -95,6 +95,9 @@ export interface BaseNodeData {
   color?: string;
   isWebClient?: boolean;
   parentId?: string;
+  groupId?: string;
+  group?: string;
+  badge?: string;
   /** Nested position inside a group node. */
   position?: { x: number; y: number };
   /** Position override used in the graph-view layout. */

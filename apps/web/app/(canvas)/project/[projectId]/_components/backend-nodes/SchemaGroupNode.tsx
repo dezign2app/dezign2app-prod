@@ -2,8 +2,9 @@ import React, { useState, useRef, useEffect } from "react";
 import { NodeProps, NodeResizer } from "@xyflow/react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
-import { Plus, Trash } from "lucide-react";
+import { Plus, Trash, ShieldCheck, Workflow, Table2, Boxes } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
+import { Badge } from "@workspace/ui/components/badge";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 
 export const SchemaGroupNode = ({
@@ -89,7 +90,7 @@ export const SchemaGroupNode = ({
   };
 
   const handleBlur = (e: React.FocusEvent) => {
-    if (containerRef.current?.contains(e.relatedTarget as Node)) {
+    if (e.relatedTarget instanceof Node && containerRef.current?.contains(e.relatedTarget)) {
       return;
     }
     handleRename();
@@ -105,6 +106,30 @@ export const SchemaGroupNode = ({
     if (node) setNodesPendingDeletion([node]);
   };
 
+  const node = nodes.find((n) => n.id === id);
+  const nodeStyleWidth =
+    typeof node?.style?.width === "number" && node.style.width > 0
+      ? node.style.width
+      : undefined;
+  const nodeStyleHeight =
+    typeof node?.style?.height === "number" && node.style.height > 0
+      ? node.style.height
+      : undefined;
+
+  const resolvedWidth =
+    typeof width === "number" && width > 0
+      ? width
+      : typeof node?.width === "number" && node.width > 0
+        ? node.width
+        : (nodeStyleWidth ?? 450);
+
+  const resolvedHeight =
+    typeof height === "number" && height > 0
+      ? height
+      : typeof node?.height === "number" && node.height > 0
+        ? node.height
+        : (nodeStyleHeight ?? 280);
+
   return (
     <>
       <div
@@ -115,8 +140,8 @@ export const SchemaGroupNode = ({
             : "border-border border-dashed",
         )}
         style={{
-          width: "100%",
-          height: "100%",
+          width: `${resolvedWidth}px`,
+          height: `${resolvedHeight}px`,
         }}
       >
         <div
@@ -167,10 +192,13 @@ export const SchemaGroupNode = ({
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     handleRename();
-                  } else if (e.key === "Escape") {
                     if (
                       data.label === "" &&
-                      !nodes.some((n) => n.parentId === id)
+                      !nodes.some(
+                        (n) =>
+                          n.parentId === id ||
+                          n.data?.groupId === id,
+                      )
                     ) {
                       deleteNode(id);
                     } else {
@@ -186,11 +214,31 @@ export const SchemaGroupNode = ({
             </div>
           ) : (
             <div className="flex flex-col">
-              <span className="font-semibold text-sm">
-                {data.label || "Untitled Group"}
-              </span>
+              <div className="flex items-center gap-1.5">
+                {(() => {
+                  const lbl = (data.label || "").toLowerCase();
+                  if (lbl.includes("auth")) {
+                    return <ShieldCheck className="w-3.5 h-3.5 text-sky-400 shrink-0" />;
+                  }
+                  if (lbl.includes("langgraph")) {
+                    return <Workflow className="w-3.5 h-3.5 text-purple-400 shrink-0" />;
+                  }
+                  return <Table2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />;
+                })()}
+                <span className="font-semibold text-xs tracking-tight">
+                  {data.label || "Untitled Group"}
+                </span>
+                {data.badge && (
+                  <Badge
+                    variant="outline"
+                    className="text-[9px] px-1 py-0 font-mono bg-background/50 border-border/60"
+                  >
+                    {data.badge}
+                  </Badge>
+                )}
+              </div>
               {data.description ? (
-                <span className="text-[10px] text-muted-foreground/75 font-normal max-w-[200px] truncate">
+                <span className="text-[10px] text-muted-foreground/75 font-normal max-w-[240px] truncate">
                   {data.description}
                 </span>
               ) : (
