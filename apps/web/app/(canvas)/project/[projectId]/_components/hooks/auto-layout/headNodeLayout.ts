@@ -1,21 +1,27 @@
-import type { LayoutNode, LayoutEdge } from "./types";
+import type { LayoutNode, LayoutEdge, LayoutNodeLike, LayoutEdgeLike } from "./types";
 import { getNodeDimensions } from "./nodeDimensions";
 
-export interface HeadNodeLayoutParams {
+export interface HeadNodeLayoutParams<
+  TNode extends LayoutNodeLike = LayoutNodeLike,
+  TEdge extends LayoutEdgeLike = LayoutEdgeLike
+> {
   targetNodeIds: Set<string>;
-  nodes: LayoutNode[];
+  nodes: TNode[];
   positionsMap: Map<string, { x: number; y: number }>;
-  headEdges: LayoutEdge[];
-  attachedHeadNodes: LayoutNode[];
+  headEdges: TEdge[];
+  attachedHeadNodes: TNode[];
 }
 
-export function layoutHeadNodes({
+export function layoutHeadNodes<
+  TNode extends LayoutNodeLike = LayoutNodeLike,
+  TEdge extends LayoutEdgeLike = LayoutEdgeLike
+>({
   targetNodeIds,
   nodes,
   positionsMap,
   headEdges,
   attachedHeadNodes,
-}: HeadNodeLayoutParams): void {
+}: HeadNodeLayoutParams<TNode, TEdge>): void {
   targetNodeIds.forEach((targetId: string) => {
     const targetNode = nodes.find((n) => n.id === targetId);
     if (!targetNode) return;
@@ -27,17 +33,17 @@ export function layoutHeadNodes({
     const targetCenterX = targetPos.x + targetW / 2;
 
     const edgesForTarget = headEdges.filter(
-      (e: LayoutEdge) => e.target === targetId,
+      (e: TEdge) => e.target === targetId,
     );
-    const headNodesForTarget = attachedHeadNodes.filter((hn: LayoutNode) =>
-      edgesForTarget.some((e: LayoutEdge) => e.source === hn.id),
+    const headNodesForTarget = attachedHeadNodes.filter((hn: TNode) =>
+      edgesForTarget.some((e: TEdge) => e.source === hn.id),
     );
 
     if (headNodesForTarget.length === 0) return;
 
     // Categorize each head node (0: LLM, 1: Tool, 2: Middleware, 3: Memory)
-    const getHeadCategoryIdx = (hn: LayoutNode): number => {
-      const edge = edgesForTarget.find((e: LayoutEdge) => e.source === hn.id);
+    const getHeadCategoryIdx = (hn: TNode): number => {
+      const edge = edgesForTarget.find((e: TEdge) => e.source === hn.id);
       const handle = edge?.targetHandle ?? "";
       if (
         handle === "llm_in" ||
@@ -73,8 +79,8 @@ export function layoutHeadNodes({
     };
 
     // Group into 4 category columns
-    const columns: LayoutNode[][] = [[], [], [], []];
-    headNodesForTarget.forEach((hn: LayoutNode) => {
+    const columns: TNode[][] = [[], [], [], []];
+    headNodesForTarget.forEach((hn: TNode) => {
       const catIdx = getHeadCategoryIdx(hn);
       const col = columns[catIdx];
       if (col) {
@@ -100,14 +106,14 @@ export function layoutHeadNodes({
 
     let currentX = targetCenterX - totalWidth / 2;
 
-    activeColumns.forEach((colNodes: LayoutNode[], colIdx: number) => {
+    activeColumns.forEach((colNodes: TNode[], colIdx: number) => {
       const colW = columnWidths[colIdx] ?? 300;
       const colCenterX = currentX + colW / 2;
 
       // Stack nodes in this column vertically from bottom to top
       let currentBottomY = targetPos.y - initialGapY;
 
-      colNodes.forEach((hn: LayoutNode) => {
+      colNodes.forEach((hn: TNode) => {
         const { width, height } = getNodeDimensions(hn);
         const headX = colCenterX - width / 2;
         const headY = currentBottomY - height;

@@ -9,6 +9,8 @@ import {
   type UseGraphAutoLayoutOptions,
   type UseSchemaAutoLayoutOptions,
   type UseLangGraphAutoLayoutOptions,
+  type LayoutNodeLike,
+  type LayoutEdgeLike,
 } from "./auto-layout/types";
 
 import { performSchemaLayout } from "./auto-layout/schemaLayout";
@@ -25,6 +27,8 @@ export type {
   UseGraphAutoLayoutOptions,
   UseSchemaAutoLayoutOptions,
   UseLangGraphAutoLayoutOptions,
+  LayoutNodeLike,
+  LayoutEdgeLike,
 };
 
 /**
@@ -165,11 +169,14 @@ export function useGraphAutoLayout(options?: UseGraphAutoLayoutOptions) {
 /**
  * Dedicated Auto Layout Hook for LangGraph Studio View
  */
-export function useLangGraphAutoLayout(options?: UseLangGraphAutoLayoutOptions) {
+export function useLangGraphAutoLayout<
+  TNode extends LayoutNodeLike = LayoutNodeLike,
+  TEdge extends LayoutEdgeLike = LayoutEdgeLike,
+>(options?: UseLangGraphAutoLayoutOptions<TNode, TEdge>) {
   const { fitView } = useReactFlow();
 
-  const nodes: LayoutNode[] = options?.nodes ?? [];
-  const edges: LayoutEdge[] = options?.edges ?? [];
+  const nodes: TNode[] = options?.nodes ?? [];
+  const edges: TEdge[] = options?.edges ?? [];
   const onNodesChange = options?.onNodesChange;
 
   const panToFlow = useCallback(

@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import type { Node, Edge } from "@xyflow/react";
-import type { BackendNode, BackendEdge, BackendNodeData, WebAppZone, PageSection } from "@/types/canvas";
+import type { BackendEdge, BackendNodeData, WebAppZone, PageSection } from "@/types/canvas";
 
 export {
   HEAD_TARGET_HANDLES,
@@ -33,9 +33,40 @@ export interface UseAutoLayoutOptions {
   layoutType?: "schema" | "graph" | "langgraph";
 }
 
+export interface LayoutNodeLike {
+  id: string;
+  type?: string;
+  position: { x: number; y: number };
+  data?: object;
+  measured?: { width?: number; height?: number };
+  style?: CSSProperties | Record<string, string | number | boolean | null | undefined>;
+  width?: number;
+  height?: number;
+  fractionalIndex?: string;
+  nodeId?: string;
+  parentId?: string;
+}
+
+export interface LayoutEdgeLike {
+  id?: string;
+  source: string;
+  target: string;
+  type?: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+}
+
 export type UseGraphAutoLayoutOptions = UseAutoLayoutOptions;
 export type UseSchemaAutoLayoutOptions = UseAutoLayoutOptions;
-export type UseLangGraphAutoLayoutOptions = UseAutoLayoutOptions;
+
+export interface UseLangGraphAutoLayoutOptions<
+  TNode extends LayoutNodeLike = LayoutNodeLike,
+  TEdge extends LayoutEdgeLike = LayoutEdgeLike
+> {
+  nodes?: TNode[];
+  edges?: TEdge[];
+  onNodesChange?: (changes: PositionNodeChange[]) => void;
+}
 
 export interface NodeHandleData {
   endpoints?: Array<{ id?: string; _id?: string }>;
