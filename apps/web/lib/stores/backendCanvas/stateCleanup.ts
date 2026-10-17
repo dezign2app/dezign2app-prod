@@ -4,6 +4,7 @@ import {
   PipelineStep,
   KafkaTopic,
   MESSAGING_TYPES,
+  FrontendActionStepDraft,
 } from "@workspace/canvas/types";
 import { PageSection, UIEventItem } from "@/types/canvas";
 import { BackendCanvasState } from "./types";
@@ -910,55 +911,130 @@ export function cleanupDeletedEdgesState(
       }
     }
 
-    // WebPage Action -> StorageRef edge cleanup: remove storageOperationBinding when edge is deleted
-    if (edge.sourceHandle?.startsWith("events-")) {
-      const actionId = edge.sourceHandle.replace(/^events-/, "");
-      const tgtNode = currentState.nodes.find((n) => n.id === edge.target);
-      if (
-        tgtNode &&
-        (tgtNode.type === "storage_operation_ref" ||
-          tgtNode.type === "storage_ref" ||
-          tgtNode.type === "bucket_ref" ||
-          tgtNode.type === "storage_bucket_ref" ||
-          tgtNode.type === "StorageBucketRefNode" ||
-          tgtNode.type === "StorageOperationRefNode")
-      ) {
-        const wpNode = nextNodes.find((n) => n.id === edge.source);
-        if (wpNode && wpNode.type === "webPage" && wpNode.data?.sections) {
-          let wpChanged = false;
-          const nextSections = (wpNode.data.sections as PageSection[]).map(
-            (sec: PageSection) => ({
-              ...sec,
-              actions: (sec.actions || []).map((act: UIEventItem) => {
-                if (act.id === actionId && act.storageOperationBinding) {
-                  wpChanged = true;
-                  const { storageOperationBinding: _, ...rest } = act;
-                  return rest as UIEventItem;
-                }
-                return act;
-              }),
-            }),
-          );
-          if (wpChanged) {
-            nodesChanged = true;
-            const updatedWp = {
-              ...wpNode,
-              data: {
-                ...wpNode.data,
-                sections: nextSections,
-              },
-            };
-            nextNodes = nextNodes.map((n) => (n.id === wpNode.id ? updatedWp : n));
-            pendingNodeUpserts.push(updatedWp);
+    // WebPage Action / Event edge cleanup: remove actionSteps & storageOperationBinding when edge is deleted
+    const isSourceAction = Boolean(
+      edge.sourceHandle?.startsWith("events-") ||
+        edge.sourceHandle?.startsWith("event-in-") ||
+        edge.sourceHandle?.startsWith("pageload-in-") ||
+        edge.sourceHandle?.startsWith("action-in-"),
+    );
+    const isTargetAction = Boolean(
+      edge.targetHandle?.startsWith("events-") ||
+        edge.targetHandle?.startsWith("event-in-") ||
+        edge.targetHandle?.startsWith("pageload-in-") ||
+        edge.targetHandle?.startsWith("action-in-"),
+    );
+
+    if (isSourceAction || isTargetAction) {
+      const isSrc = isSourceAction;
+      const webPageNodeId = isSrc ? edge.source : edge.target;
+      const otherNodeId = isSrc ? edge.target : edge.source;
+      const webHandle = isSrc ? edge.sourceHandle! : edge.targetHandle!;
+      const otherHandle = isSrc ? (edge.targetHandle ?? "") : (edge.sourceHandle ?? "");
+
+      const actionId = webHandle.replace(
+        /^(?:events-|event-in-|pageload-in-|action-in-)/,
+        "",
+      );
+      const otherEpId = otherHandle
+        .replace(/^(?:routeEndpoints|endpoints|endpoint)-(?:in|out)-/, "")
+        .replace(/^func-(?:in-)?/, "");
+
+      const wpNode = nextNodes.find((n) => n.id === webPageNodeId);
+      if (wpNode && wpNode.type === "webPage") {
+        let wpChanged = false;
+
+        const cleanupSteps = (existingSteps: FrontendActionStepDraft[] = []) => {
+          const filtered = existingSteps.filter((s) => {
+            // 1. Direct edgeId match
+            if (s.edgeId && s.edgeId === edge.id) return false;
+
+            // 2. Target service & endpoint match
+            if (
+              s.type === "api_call" &&
+              s.serviceNodeId === otherNodeId &&
+              (s.endpointId === otherEpId ||
+                otherHandle.includes(s.endpointId || "") ||
+                s.endpointId === edge.targetResourceId ||
+                s.endpointId === edge.sourceResourceId)
+            ) {
+              return false;
+            }
+
+            // 3. Storage ref / bucket match
+            if (
+              s.type === "storage_put" &&
+              (s.storageRefNodeId === otherNodeId ||
+                s.storageNodeId === otherNodeId)
+            ) {
+              return false;
+            }
+
+            return true;
+          });
+
+          if (filtered.length !== existingSteps.length) {
+            wpChanged = true;
+            // Renumber remaining steps
+            return filtered.map((s, idx) => ({ ...s, order: idx + 1 }));
           }
+          return existingSteps;
+        };
+
+        let nextSections = wpNode.data?.sections as PageSection[] | undefined;
+        if (nextSections) {
+          nextSections = nextSections.map((sec) => ({
+            ...sec,
+            actions: (sec.actions || []).map((act) => {
+              if (act.id === actionId) {
+                const updatedSteps = cleanupSteps(act.actionSteps);
+                const updatedAct: UIEventItem = { ...act, actionSteps: updatedSteps };
+                if (
+                  act.storageOperationBinding &&
+                  (act.storageOperationBinding.refNodeId === otherNodeId ||
+                    act.storageOperationBinding.storageNodeId === otherNodeId)
+                ) {
+                  wpChanged = true;
+                  delete (updatedAct as { storageOperationBinding?: unknown }).storageOperationBinding;
+                }
+                return updatedAct;
+              }
+              return act;
+            }),
+          }));
+        }
+
+        let nextWpEvents = wpNode.data?.events as UIEventItem[] | undefined;
+        if (nextWpEvents) {
+          nextWpEvents = nextWpEvents.map((evt) => {
+            if (evt.id === actionId) {
+              const updatedSteps = cleanupSteps(evt.actionSteps);
+              return { ...evt, actionSteps: updatedSteps };
+            }
+            return evt;
+          });
+        }
+
+        if (wpChanged) {
+          nodesChanged = true;
+          const updatedWp = {
+            ...wpNode,
+            data: {
+              ...wpNode.data,
+              ...(nextSections ? { sections: nextSections } : {}),
+              ...(nextWpEvents ? { events: nextWpEvents } : {}),
+            },
+          };
+          nextNodes = nextNodes.map((n) => (n.id === wpNode.id ? updatedWp : n));
+          pendingNodeUpserts.push(updatedWp);
         }
       }
 
       // Renumber remaining action edges for this action handle
       const remainingActionEdges = nextEdges.filter(
         (e) =>
-          e.source === edge.source &&
-          e.sourceHandle === edge.sourceHandle &&
+          ((e.source === webPageNodeId && e.sourceHandle === webHandle) ||
+            (e.target === webPageNodeId && e.targetHandle === webHandle)) &&
           !removedSet.has(e.id),
       );
       if (remainingActionEdges.length > 0) {

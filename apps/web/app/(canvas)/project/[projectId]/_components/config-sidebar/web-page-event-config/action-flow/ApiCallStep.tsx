@@ -1,5 +1,19 @@
 import React from "react";
-import { Plus, Trash2, Globe, Server, ArrowRight } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Globe,
+  Server,
+  ArrowRight,
+  Shield,
+  MapPin,
+  SlidersHorizontal,
+  Package,
+  ChevronDown,
+  ChevronRight,
+  RefreshCw,
+  Key,
+} from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
@@ -13,28 +27,568 @@ import {
 } from "@workspace/ui/components/select";
 import type {
   ApiCallStepProps,
+  BindingSlot,
   FrontendRequestFieldBinding,
   FrontendFieldSource,
+  BackendNode,
+  FrontendActionStepDraft,
 } from "./types";
 import { ResponseFieldPicker } from "./ResponseFieldPicker";
 import { ActionFlowCombobox, ComboboxOption } from "./ActionFlowCombobox";
 import { ensureActionServiceConnection, cleanupActionStepEdge } from "./actionStepCanvasSync";
-import { isAuthHeaderName, autoMapAuthBindings } from "./utils";
+import { isAuthHeaderName, buildInitialBindingsFromEndpoint } from "./utils";
 
 type SourceKindOption =
+  | "auth_token"
   | "user_input"
   | "route_param"
   | "query_param"
+  | "session_storage"
+  | "local_storage"
+  | "cookie"
   | "state_var"
   | "literal"
   | "prev_response";
+
+interface BindingSlotRowProps {
+  binding: FrontendRequestFieldBinding;
+  fieldSuggestions: ComboboxOption[];
+  isTargetReadOnly?: boolean;
+  onUpdate: (updater: (prev: FrontendRequestFieldBinding) => FrontendRequestFieldBinding) => void;
+  onDelete: () => void;
+  onKindChange: (newKind: SourceKindOption) => void;
+  priorSteps: FrontendActionStepDraft[];
+  routeParamSuggestions: ComboboxOption[];
+  queryParamSuggestions: ComboboxOption[];
+  stateStores: BackendNode[];
+  sectionStateVars: Array<{ name: string; type?: string; storeName?: string; storeId?: string }>;
+}
+
+const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
+  binding,
+  fieldSuggestions,
+  isTargetReadOnly = false,
+  onUpdate,
+  onDelete,
+  onKindChange,
+  priorSteps,
+  routeParamSuggestions,
+  queryParamSuggestions,
+  stateStores,
+  sectionStateVars,
+}) => {
+  const isAuth = binding.slot === "header" && isAuthHeaderName(binding.targetField);
+
+  return (
+    <div className="p-2.5 rounded-md border border-border/50 bg-card/60 hover:border-border/80 transition-colors space-y-2 text-xs">
+      <div className="flex items-center gap-2">
+        {/* Target Field Name / Pill */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between pb-0.5">
+            <Label className="text-[10px] text-muted-foreground">
+              {binding.slot === "header"
+                ? "Header Name"
+                : binding.slot === "path_param"
+                ? "Path Param"
+                : binding.slot === "query_param"
+                ? "Query Param"
+                : "Field Name"}
+            </Label>
+            {isAuth && (
+              <Badge
+                variant="outline"
+                className="text-[9px] px-1 py-0 h-3.5 font-mono text-amber-500 border-amber-500/30 bg-amber-500/10 flex items-center gap-0.5"
+              >
+                <Key size={8} /> Auth Header
+              </Badge>
+            )}
+          </div>
+
+          {isTargetReadOnly ? (
+            <div className="h-7 px-2 flex items-center bg-muted/40 border border-border/50 rounded text-foreground font-mono font-medium text-xs truncate">
+              {binding.targetField || "(unnamed param)"}
+            </div>
+          ) : (
+            <ActionFlowCombobox
+              value={binding.targetField}
+              onChange={(val) =>
+                onUpdate((prev) => {
+                  const targetIsAuth = isAuthHeaderName(val);
+                  let nextSource = prev.source;
+                  if (
+                    prev.slot === "header" &&
+                    targetIsAuth &&
+                    prev.source.kind === "literal" &&
+                    (!prev.source.value || prev.source.value === "Bearer <token>")
+                  ) {
+                    nextSource = { kind: "auth_token", tokenType: "session" };
+                  }
+                  return { ...prev, targetField: val, source: nextSource };
+                })
+              }
+              placeholder={
+                binding.slot === "header"
+                  ? "e.g. Authorization, X-Api-Key"
+                  : binding.slot === "query_param"
+                  ? "e.g. limit, search, tab"
+                  : "e.g. userId, email, payload"
+              }
+              headerLabel="Available Field Names"
+              options={fieldSuggestions}
+            />
+          )}
+        </div>
+
+        {/* Source Type Selector */}
+        <div className="w-36 shrink-0">
+          <Label className="text-[10px] text-muted-foreground block pb-0.5">
+            Source Type
+          </Label>
+          <Select
+            value={binding.source.kind}
+            onValueChange={(val: SourceKindOption) => onKindChange(val)}
+          >
+            <SelectTrigger className="h-7 text-xs bg-background">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auth_token">
+                <span className="flex items-center gap-1.5 text-amber-500 font-medium">
+                  <Key size={11} />
+                  Auth Session Token
+                </span>
+              </SelectItem>
+              <SelectItem value="cookie">Browser Cookie</SelectItem>
+              <SelectItem value="local_storage">Local Storage</SelectItem>
+              <SelectItem value="session_storage">Session Storage</SelectItem>
+              <SelectItem value="user_input">User Form Input</SelectItem>
+              <SelectItem value="route_param">Page Route Param</SelectItem>
+              <SelectItem value="query_param">Page Query Param</SelectItem>
+              <SelectItem value="state_var">State Variable</SelectItem>
+              <SelectItem value="literal">Static Value</SelectItem>
+              {priorSteps.length > 0 && (
+                <SelectItem value="prev_response">Prior Step Response</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Delete Row Button */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onDelete}
+          className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive self-end shrink-0 cursor-pointer"
+          title="Delete binding"
+        >
+          <Trash2 size={13} />
+        </Button>
+      </div>
+
+      {/* Source Details Editor */}
+      <div className="pt-0.5">
+        {binding.source.kind === "auth_token" && (
+          <div className="p-2.5 rounded border border-amber-500/25 bg-amber-500/5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-amber-500 flex items-center gap-1.5">
+                <Key size={12} />
+                Dynamic Authorization Token
+              </span>
+              <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 font-mono text-amber-500 border-amber-500/30 bg-amber-500/10">
+                Runtime Resolved
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-0.5">
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">Token Provider Source</Label>
+                <Select
+                  value={binding.source.tokenType || "session"}
+                  onValueChange={(val: "session" | "cookie" | "local_storage") =>
+                    onUpdate((prev) => ({
+                      ...prev,
+                      source: { kind: "auth_token", tokenType: val },
+                    }))
+                  }
+                >
+                  <SelectTrigger className="h-7 text-xs bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="session">Auto Active Session (Recommended)</SelectItem>
+                    <SelectItem value="cookie">Browser Cookie (better-auth.session_token)</SelectItem>
+                    <SelectItem value="local_storage">Local Storage (auth_token)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col justify-end text-[10px] text-muted-foreground leading-tight pb-0.5">
+                {binding.source.tokenType === "cookie" ? (
+                  <span>Reads <code className="text-foreground">better-auth.session_token</code> cookie.</span>
+                ) : binding.source.tokenType === "local_storage" ? (
+                  <span>Reads <code className="text-foreground">localStorage["auth_token"]</code>.</span>
+                ) : (
+                  <span>Auto-resolves from Better Auth session, cookies, or storage via <code className="text-foreground">getAuthBearerToken()</code>.</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {binding.source.kind === "literal" && (
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground">
+              Literal Value
+            </Label>
+            <Input
+              value={binding.source.value}
+              onChange={(e) =>
+                onUpdate((prev) => ({
+                  ...prev,
+                  source: { kind: "literal", value: e.target.value },
+                }))
+              }
+              placeholder={isAuth ? "Bearer <token>" : "Static string or JSON value"}
+              className="h-7 text-xs bg-background"
+            />
+          </div>
+        )}
+
+        {binding.source.kind === "user_input" && (
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground">
+              Form Input Field Name
+            </Label>
+            <ActionFlowCombobox
+              value={binding.source.fieldName}
+              onChange={(name) =>
+                onUpdate((prev) => ({
+                  ...prev,
+                  source: { kind: "user_input", fieldName: name },
+                }))
+              }
+              placeholder="e.g. email, password, query"
+              headerLabel="Suggested Form Inputs"
+              options={[
+                { value: "email", type: "string" },
+                { value: "username", type: "string" },
+                { value: "password", type: "string" },
+                { value: "file", type: "file" },
+                { value: "file.name", type: "string" },
+                { value: "file.type", type: "string" },
+                { value: "file.size", type: "number" },
+                { value: "query", type: "string" },
+                { value: "search", type: "string" },
+                ...(binding.targetField ? [{ value: binding.targetField, type: "field" }] : []),
+              ]}
+            />
+          </div>
+        )}
+
+        {binding.source.kind === "route_param" && (
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground">
+              Page Route Parameter Name
+            </Label>
+            <ActionFlowCombobox
+              value={binding.source.paramName}
+              onChange={(name) =>
+                onUpdate((prev) => ({
+                  ...prev,
+                  source: { kind: "route_param", paramName: name },
+                }))
+              }
+              placeholder="e.g. id, slug"
+              headerLabel="Page Route Params"
+              options={routeParamSuggestions}
+            />
+          </div>
+        )}
+
+        {binding.source.kind === "query_param" && (
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground">
+              Page Query Parameter Name
+            </Label>
+            <ActionFlowCombobox
+              value={binding.source.paramName}
+              onChange={(name) =>
+                onUpdate((prev) => ({
+                  ...prev,
+                  source: { kind: "query_param", paramName: name },
+                }))
+              }
+              placeholder="e.g. limit, offset, tab"
+              headerLabel="Page Query Params"
+              options={queryParamSuggestions}
+            />
+          </div>
+        )}
+
+        {binding.source.kind === "session_storage" && (
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground">
+              Session Storage Key (sessionStorage.getItem)
+            </Label>
+            <Input
+              value={binding.source.key}
+              onChange={(e) =>
+                onUpdate((prev) => ({
+                  ...prev,
+                  source: { kind: "session_storage", key: e.target.value },
+                }))
+              }
+              placeholder="e.g. authToken, session_id"
+              className="h-7 text-xs bg-background font-mono"
+            />
+          </div>
+        )}
+
+        {binding.source.kind === "local_storage" && (
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground">
+              Local Storage Key (localStorage.getItem)
+            </Label>
+            <Input
+              value={binding.source.key}
+              onChange={(e) =>
+                onUpdate((prev) => ({
+                  ...prev,
+                  source: { kind: "local_storage", key: e.target.value },
+                }))
+              }
+              placeholder="e.g. token, theme, user_prefs"
+              className="h-7 text-xs bg-background font-mono"
+            />
+          </div>
+        )}
+
+        {binding.source.kind === "cookie" && (
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground">
+              Cookie Name (document.cookie)
+            </Label>
+            <Input
+              value={binding.source.cookieName}
+              onChange={(e) =>
+                onUpdate((prev) => ({
+                  ...prev,
+                  source: { kind: "cookie", cookieName: e.target.value },
+                }))
+              }
+              placeholder="e.g. session_token, csrftoken"
+              className="h-7 text-xs bg-background font-mono"
+            />
+          </div>
+        )}
+
+        {binding.source.kind === "state_var" && (() => {
+          const source = binding.source;
+          if (source.kind !== "state_var") return null;
+
+          const currentStoreId = source.storeNodeId;
+          const selectedStore = stateStores.find((s) => s.id === currentStoreId);
+          const isLocal =
+            source.sourceType === "local" ||
+            (!selectedStore &&
+              !source.storeName &&
+              sectionStateVars.some((v) => v.name === source.stateKey));
+
+          const storeFieldOptions: ComboboxOption[] = selectedStore
+            ? ((selectedStore.data?.fields || []) as any[]).map((f: any) => ({
+                value: f.name,
+                label: `${f.name} (${f.type || "string"})`,
+                type: f.type || "string",
+              }))
+            : isLocal
+            ? sectionStateVars.map((v) => ({
+                value: v.name,
+                label: `${v.name} (${v.type || "state"})`,
+                type: v.type || "string",
+              }))
+            : [
+                ...stateStores.flatMap((s) =>
+                  ((s.data?.fields || []) as any[]).map((f: any) => ({
+                    value: f.name,
+                    label: `${s.data?.label || s.data?.storeName || "Store"}.${f.name}`,
+                    type: f.type || "string",
+                  })),
+                ),
+                ...sectionStateVars.map((v) => ({
+                  value: v.name,
+                  label: `Local: ${v.name}`,
+                  type: v.type || "string",
+                })),
+              ];
+
+          return (
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">
+                  Source Store
+                </Label>
+                <Select
+                  value={
+                    isLocal
+                      ? "__local__"
+                      : selectedStore?.id || (stateStores[0]?.id ?? "__local__")
+                  }
+                  onValueChange={(val) => {
+                    if (val === "__local__") {
+                      const firstLocal = sectionStateVars[0]?.name || "";
+                      onUpdate((prev) => ({
+                        ...prev,
+                        source: {
+                          kind: "state_var",
+                          sourceType: "local",
+                          storeNodeId: undefined,
+                          storeName: undefined,
+                          stateKey:
+                            firstLocal ||
+                            (prev.source.kind === "state_var"
+                              ? prev.source.stateKey
+                              : ""),
+                        },
+                      }));
+                    } else {
+                      const targetStore = stateStores.find((s) => s.id === val);
+                      const storeName =
+                        targetStore?.data?.label ||
+                        targetStore?.data?.storeName ||
+                        "Store";
+                      const firstField = targetStore?.data?.fields?.[0]?.name || "";
+                      onUpdate((prev) => ({
+                        ...prev,
+                        source: {
+                          kind: "state_var",
+                          sourceType: "store",
+                          storeNodeId: targetStore?.id,
+                          storeName,
+                          stateKey:
+                            firstField ||
+                            (prev.source.kind === "state_var"
+                              ? prev.source.stateKey
+                              : ""),
+                        },
+                      }));
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-7 text-xs bg-background">
+                    <SelectValue placeholder="Choose store..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stateStores.map((st) => (
+                      <SelectItem key={st.id} value={st.id}>
+                        ⚡ {st.data?.label || st.data?.storeName || "Store"} (Zustand)
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="__local__">
+                      📄 Page / Section State
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">
+                  Store Field / Property
+                </Label>
+                <ActionFlowCombobox
+                  value={source.stateKey}
+                  onChange={(key) => {
+                    onUpdate((prev) => {
+                      const prevSrc =
+                        prev.source.kind === "state_var"
+                          ? prev.source
+                          : { kind: "state_var", stateKey: key };
+                      return {
+                        ...prev,
+                        source: {
+                          ...prevSrc,
+                          kind: "state_var",
+                          stateKey: key,
+                        },
+                      };
+                    });
+                  }}
+                  placeholder="e.g. keyword, userId"
+                  headerLabel="Available Store Fields"
+                  options={storeFieldOptions}
+                />
+              </div>
+            </div>
+          );
+        })()}
+
+        {binding.source.kind === "prev_response" && (
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">
+                From Step
+              </Label>
+              <Select
+                value={binding.source.stepId}
+                onValueChange={(val) => {
+                  onUpdate((prev) => ({
+                    ...prev,
+                    source: {
+                      kind: "prev_response",
+                      stepId: val,
+                      fieldPath:
+                        prev.source.kind === "prev_response"
+                          ? prev.source.fieldPath
+                          : "",
+                    },
+                  }));
+                }}
+              >
+                <SelectTrigger className="h-7 text-xs bg-background">
+                  <SelectValue placeholder="Select step" />
+                </SelectTrigger>
+                <SelectContent>
+                  {priorSteps.map((pStep, pIdx) => (
+                    <SelectItem key={pStep.id} value={pStep.id}>
+                      Step {pIdx + 1}: {pStep.name || pStep.type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">
+                Response Field Path
+              </Label>
+              <ResponseFieldPicker
+                value={binding.source.fieldPath}
+                onChange={(val) => {
+                  onUpdate((prev) => ({
+                    ...prev,
+                    source: {
+                      kind: "prev_response",
+                      stepId:
+                        prev.source.kind === "prev_response"
+                          ? prev.source.stepId
+                          : priorSteps[0]?.id || "",
+                      fieldPath: val,
+                    },
+                  }));
+                }}
+                placeholder="e.g. data.id or token"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export const ApiCallStep: React.FC<ApiCallStepProps> = ({
   draft,
   canvasStep,
   stepIndex,
   allSteps,
-  allCanvasSteps,
   serviceNodes = [],
   allNodes = [],
   endpoints = [],
@@ -45,6 +599,17 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
 }) => {
   const bindings = draft.requestBindings || [];
   const priorSteps = allSteps.slice(0, stepIndex);
+
+  const [collapsedSlots, setCollapsedSlots] = React.useState<Record<BindingSlot, boolean>>({
+    header: false,
+    path_param: false,
+    query_param: false,
+    body: false,
+  });
+
+  const toggleSlot = (slot: BindingSlot) => {
+    setCollapsedSlots((prev) => ({ ...prev, [slot]: !prev[slot] }));
+  };
 
   // Available services: either passed serviceNodes or filtered from allNodes
   const availableServices =
@@ -69,75 +634,6 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
   const selectedEndpoint =
     serviceEndpoints.find((ep) => ep.id === currentEndpointId) ||
     canvasStep?.endpoint;
-
-  const requestFieldSuggestions: ComboboxOption[] = React.useMemo(() => {
-    const list: ComboboxOption[] = [];
-    const seen = new Set<string>();
-
-    if (isProtected || selectedEndpoint?.requireAuth !== false) {
-      seen.add("Authorization");
-      list.push({ value: "Authorization", label: "Authorization", type: "auth" });
-    }
-
-    if (selectedEndpoint?.headers) {
-      for (const h of selectedEndpoint.headers) {
-        if (h.name && !seen.has(h.name)) {
-          seen.add(h.name);
-          list.push({
-            value: h.name,
-            label: h.name,
-            type: isAuthHeaderName(h.name) ? "auth" : "header",
-          });
-        }
-      }
-    }
-
-    if (selectedEndpoint?.requestBody?.fields) {
-      for (const f of selectedEndpoint.requestBody.fields) {
-        if (f.name && !seen.has(f.name)) {
-          seen.add(f.name);
-          list.push({ value: f.name, label: f.name, type: f.type || "body" });
-        }
-      }
-    }
-
-    if (selectedEndpoint?.pathParams) {
-      for (const p of selectedEndpoint.pathParams) {
-        if (p.name && !seen.has(p.name)) {
-          seen.add(p.name);
-          list.push({ value: p.name, label: p.name, type: "path" });
-        }
-      }
-    }
-
-    if (selectedEndpoint?.queryParams) {
-      for (const q of selectedEndpoint.queryParams) {
-        if (q.name && !seen.has(q.name)) {
-          seen.add(q.name);
-          list.push({ value: q.name, label: q.name, type: "query" });
-        }
-      }
-    }
-
-    const common = [
-      { value: "fileName", type: "string" },
-      { value: "fileType", type: "string" },
-      { value: "fileSize", type: "number" },
-      { value: "fileKey", type: "string" },
-      { value: "userId", type: "string" },
-      { value: "id", type: "string" },
-      { value: "query", type: "string" },
-    ];
-
-    for (const c of common) {
-      if (!seen.has(c.value)) {
-        seen.add(c.value);
-        list.push(c);
-      }
-    }
-
-    return list;
-  }, [selectedEndpoint]);
 
   const currentPageNode = React.useMemo(
     () => allNodes.find((n) => n.id === webPageNodeId),
@@ -185,6 +681,101 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
     return list;
   }, [allNodes, webPageNodeId]);
 
+  // Slot-specific field suggestions
+  const headerSuggestions: ComboboxOption[] = React.useMemo(() => {
+    const list: ComboboxOption[] = [];
+    const seen = new Set<string>();
+
+    if (isProtected || selectedEndpoint?.requireAuth !== false) {
+      seen.add("Authorization");
+      list.push({ value: "Authorization", label: "Authorization", type: "auth" });
+    }
+
+    (selectedEndpoint?.headers || []).forEach((h) => {
+      if (h.name && !seen.has(h.name)) {
+        seen.add(h.name);
+        list.push({
+          value: h.name,
+          label: h.name,
+          type: isAuthHeaderName(h.name) ? "auth" : "header",
+        });
+      }
+    });
+
+    const common = ["Content-Type", "Accept", "X-Api-Key", "X-Requested-With"];
+    common.forEach((c) => {
+      if (!seen.has(c)) {
+        seen.add(c);
+        list.push({ value: c, label: c, type: "header" });
+      }
+    });
+
+    return list;
+  }, [selectedEndpoint, isProtected]);
+
+  const pathParamSuggestions: ComboboxOption[] = React.useMemo(() => {
+    return (selectedEndpoint?.pathParams || []).map((p) => ({
+      value: p.name,
+      label: p.name,
+      type: p.type || "path",
+    }));
+  }, [selectedEndpoint]);
+
+  const epQueryParamSuggestions: ComboboxOption[] = React.useMemo(() => {
+    const list: ComboboxOption[] = [];
+    const seen = new Set<string>();
+
+    (selectedEndpoint?.queryParams || []).forEach((q) => {
+      if (q.name && !seen.has(q.name)) {
+        seen.add(q.name);
+        list.push({ value: q.name, label: q.name, type: q.type || "query" });
+      }
+    });
+
+    const common = ["page", "limit", "offset", "search", "sort", "filter", "tab"];
+    common.forEach((c) => {
+      if (!seen.has(c)) {
+        seen.add(c);
+        list.push({ value: c, label: c, type: "query" });
+      }
+    });
+
+    return list;
+  }, [selectedEndpoint]);
+
+  const bodyFieldSuggestions: ComboboxOption[] = React.useMemo(() => {
+    const list: ComboboxOption[] = [];
+    const seen = new Set<string>();
+
+    (selectedEndpoint?.requestBody?.fields || []).forEach((f) => {
+      if (f.name && !seen.has(f.name)) {
+        seen.add(f.name);
+        list.push({ value: f.name, label: f.name, type: f.type || "body" });
+      }
+    });
+
+    const common = [
+      { value: "id", type: "string" },
+      { value: "userId", type: "string" },
+      { value: "email", type: "string" },
+      { value: "name", type: "string" },
+      { value: "query", type: "string" },
+      { value: "fileName", type: "string" },
+      { value: "fileType", type: "string" },
+      { value: "fileSize", type: "number" },
+      { value: "fileKey", type: "string" },
+    ];
+
+    common.forEach((c) => {
+      if (!seen.has(c.value)) {
+        seen.add(c.value);
+        list.push(c);
+      }
+    });
+
+    return list;
+  }, [selectedEndpoint]);
+
   const handleServiceSelect = (newServiceId: string) => {
     const eps = endpoints.filter((ep) => ep.nodeId === newServiceId);
     const defaultEp = eps[0];
@@ -203,6 +794,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
         serviceNodeId: newServiceId,
         endpointId: "",
         edgeId: undefined,
+        requestBindings: [],
       });
       return;
     }
@@ -219,11 +811,9 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
       });
     }
 
-    const updatedBindings = autoMapAuthBindings(
-      draft.requestBindings || [],
-      defaultEp,
-      isProtected,
-    );
+    const updatedBindings = defaultEp
+      ? buildInitialBindingsFromEndpoint(defaultEp, isProtected)
+      : [];
 
     onChange({
       ...draft,
@@ -248,6 +838,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
         ...draft,
         endpointId: "",
         edgeId: undefined,
+        requestBindings: [],
       });
       return;
     }
@@ -265,11 +856,9 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
     }
 
     const newEndpoint = serviceEndpoints.find((ep) => ep.id === newEndpointId);
-    const updatedBindings = autoMapAuthBindings(
-      draft.requestBindings || [],
-      newEndpoint,
-      isProtected,
-    );
+    const updatedBindings = newEndpoint
+      ? buildInitialBindingsFromEndpoint(newEndpoint, isProtected)
+      : [];
 
     onChange({
       ...draft,
@@ -279,11 +868,40 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
     });
   };
 
-  const handleAddBinding = () => {
+  const handleResetToEndpointDefaults = () => {
+    if (!selectedEndpoint) return;
+    const freshBindings = buildInitialBindingsFromEndpoint(selectedEndpoint, isProtected);
+    onChange({
+      ...draft,
+      requestBindings: freshBindings,
+    });
+  };
+
+  const handleAddBinding = (slot: BindingSlot, defaultTargetField = "") => {
+    let defaultSource: FrontendFieldSource;
+    if (slot === "header") {
+      defaultSource = isAuthHeaderName(defaultTargetField)
+        ? { kind: "auth_token", tokenType: "session" }
+        : { kind: "literal", value: "" };
+    } else if (slot === "path_param") {
+      defaultSource = {
+        kind: "route_param",
+        paramName: defaultTargetField || routeParamSuggestions[0]?.value || "",
+      };
+    } else if (slot === "query_param") {
+      defaultSource = {
+        kind: "query_param",
+        paramName: defaultTargetField || queryParamSuggestions[0]?.value || "",
+      };
+    } else {
+      defaultSource = { kind: "user_input", fieldName: defaultTargetField || "" };
+    }
+
     const newBinding: FrontendRequestFieldBinding = {
-      id: `bind-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      targetField: "",
-      source: { kind: "user_input", fieldName: "" },
+      id: `bind-${slot[0]}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      slot,
+      targetField: defaultTargetField,
+      source: defaultSource,
     };
     onChange({
       ...draft,
@@ -316,7 +934,10 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
   ) => {
     handleUpdateBinding(bindingId, (b) => {
       let nextSource: FrontendFieldSource;
-      if (newKind === "literal") {
+      const isAuth = isAuthHeaderName(b.targetField);
+      if (newKind === "auth_token") {
+        nextSource = { kind: "auth_token", tokenType: "session" };
+      } else if (newKind === "literal") {
         nextSource = { kind: "literal", value: "" };
       } else if (newKind === "state_var") {
         const firstStore = stateStores[0];
@@ -331,12 +952,27 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
       } else if (newKind === "route_param") {
         nextSource = {
           kind: "route_param",
-          paramName: routeParamSuggestions[0]?.value || "",
+          paramName: routeParamSuggestions[0]?.value || b.targetField || "",
         };
       } else if (newKind === "query_param") {
         nextSource = {
           kind: "query_param",
-          paramName: queryParamSuggestions[0]?.value || "",
+          paramName: queryParamSuggestions[0]?.value || b.targetField || "",
+        };
+      } else if (newKind === "session_storage") {
+        nextSource = {
+          kind: "session_storage",
+          key: isAuth ? "auth_token" : (b.targetField || ""),
+        };
+      } else if (newKind === "local_storage") {
+        nextSource = {
+          kind: "local_storage",
+          key: isAuth ? "auth_token" : (b.targetField || ""),
+        };
+      } else if (newKind === "cookie") {
+        nextSource = {
+          kind: "cookie",
+          cookieName: isAuth ? "better-auth.session_token" : (b.targetField || ""),
         };
       } else if (newKind === "prev_response") {
         const firstPrior = priorSteps[0];
@@ -346,11 +982,22 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
           fieldPath: "",
         };
       } else {
-        nextSource = { kind: "user_input", fieldName: "" };
+        nextSource = { kind: "user_input", fieldName: b.targetField || "" };
       }
       return { ...b, source: nextSource };
     });
   };
+
+  // Split bindings into the four request slots
+  const headerBindings = bindings.filter((b) => b.slot === "header");
+  const pathBindings = bindings.filter((b) => b.slot === "path_param");
+  const queryBindings = bindings.filter((b) => b.slot === "query_param");
+  const bodyBindings = bindings.filter((b) => b.slot === "body");
+
+  // Endpoint defined path param names for read-only status
+  const endpointPathParamNames = new Set(
+    (selectedEndpoint?.pathParams || []).map((p) => p.name),
+  );
 
   return (
     <div className="space-y-3 pt-1 text-xs">
@@ -358,460 +1005,338 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
       <div className="p-2.5 rounded-lg border bg-secondary/15 space-y-2">
         <div className="flex items-center gap-1.5 font-medium text-foreground text-[11px]">
           <Server size={13} className="text-primary" />
-          <span>Target Service & Endpoint (Auto-Draws Canvas Edge)</span>
+          <span>Connected Service &amp; Endpoint</span>
         </div>
 
         <div className="grid grid-cols-2 gap-2">
+          {/* Service Picker */}
           <div className="space-y-1">
-            <Label className="text-[10px] text-muted-foreground">
-              Service Node
-            </Label>
+            <Label className="text-[10px] text-muted-foreground">Target Service</Label>
             <Select
               value={currentServiceId}
               onValueChange={handleServiceSelect}
             >
               <SelectTrigger className="h-7 text-xs bg-background">
-                <SelectValue placeholder="Select target service" />
+                <SelectValue placeholder="Select service..." />
               </SelectTrigger>
               <SelectContent>
-                {availableServices.map((sn) => (
-                  <SelectItem key={sn.id} value={sn.id}>
-                    {sn.data?.label || sn.id}
+                {availableServices.length === 0 ? (
+                  <SelectItem value="__none__" disabled>
+                    No backend services found on canvas
                   </SelectItem>
-                ))}
+                ) : (
+                  availableServices.map((node) => (
+                    <SelectItem key={node.id} value={node.id}>
+                      {node.data?.label || node.id} ({node.type})
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </div>
 
+          {/* Endpoint Picker */}
           <div className="space-y-1">
-            <Label className="text-[10px] text-muted-foreground">
-              Endpoint
-            </Label>
+            <Label className="text-[10px] text-muted-foreground">Endpoint / Route</Label>
             <Select
               value={currentEndpointId}
               onValueChange={handleEndpointSelect}
               disabled={!currentServiceId}
             >
               <SelectTrigger className="h-7 text-xs bg-background">
-                <SelectValue placeholder="Select endpoint" />
+                <SelectValue placeholder="Select endpoint..." />
               </SelectTrigger>
               <SelectContent>
-                {serviceEndpoints.map((ep) => (
-                  <SelectItem key={ep.id} value={ep.id}>
-                    [{ep.type || "POST"}] {ep.name || ep.id}
+                {serviceEndpoints.length === 0 ? (
+                  <SelectItem value="__none__" disabled>
+                    No endpoints in selected service
                   </SelectItem>
-                ))}
+                ) : (
+                  serviceEndpoints.map((ep) => (
+                    <SelectItem key={ep.id} value={ep.id}>
+                      <span className="font-semibold text-primary uppercase text-[10px] mr-1">
+                        {ep.type || "POST"}
+                      </span>
+                      <span>{ep.name || "/endpoint"}</span>
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </div>
         </div>
+
+        {selectedEndpoint && (
+          <div className="flex items-center justify-between pt-1 border-t border-border/40 text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-1.5 truncate">
+              <Badge variant="outline" className="text-[9px] uppercase font-mono px-1 py-0 h-4">
+                {selectedEndpoint.type || "POST"}
+              </Badge>
+              <span className="font-mono text-foreground truncate">
+                {selectedEndpoint.name || "/endpoint"}
+              </span>
+            </div>
+            {(selectedEndpoint as any).description && (
+              <span className="truncate max-w-[180px] italic">
+                {(selectedEndpoint as any).description}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Request Field Bindings */}
-      <div className="flex items-center justify-between pt-1">
-        <div>
-          <span className="text-xs font-semibold text-foreground">
-            Request Field Bindings
-          </span>
-          <p className="text-[11px] text-muted-foreground">
-            Map data from user input, state, or previous responses into request
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleAddBinding}
-          className="h-7 text-[11px] px-2 flex items-center gap-1 border-dashed"
-        >
-          <Plus size={12} />
-          Add Field
-        </Button>
-      </div>
+      {/* Slot-Aware Request Field Bindings Accordion */}
+      {selectedEndpoint ? (
+        <div className="space-y-2 pt-1">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-xs font-semibold text-foreground">
+                Request Field Bindings ({bindings.length})
+              </span>
+              <p className="text-[11px] text-muted-foreground">
+                Map page inputs, route params, storage, and state into endpoint slots
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleResetToEndpointDefaults}
+              className="h-6 text-[10px] px-2 flex items-center gap-1 text-muted-foreground hover:text-foreground cursor-pointer"
+              title="Regenerate all bindings fresh from endpoint schema"
+            >
+              <RefreshCw size={10} /> Reset Schema
+            </Button>
+          </div>
 
-      {bindings.length === 0 ? (
-        <div className="p-3 border border-dashed rounded-md bg-muted/20 text-center">
-          <p className="text-xs text-muted-foreground">
-            No field bindings configured. Default payload will be forwarded.
-          </p>
+          {/* 1. HEADERS SLOT */}
+          <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
+            <div
+              onClick={() => toggleSlot("header")}
+              className="flex items-center justify-between p-2 cursor-pointer hover:bg-muted/30 select-none transition-colors border-b border-border/40"
+            >
+              <div className="flex items-center gap-1.5">
+                {collapsedSlots.header ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                <Shield size={13} className="text-amber-500" />
+                <span className="font-semibold text-foreground text-[11px]">HTTP Headers</span>
+                <Badge variant="secondary" className="text-[9px] h-4 px-1.5 font-mono">
+                  {headerBindings.length}
+                </Badge>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAddBinding("header");
+                }}
+                className="h-6 text-[10px] px-2 flex items-center gap-1 border-dashed cursor-pointer"
+              >
+                <Plus size={10} /> Add Header
+              </Button>
+            </div>
+
+            {!collapsedSlots.header && (
+              <div className="p-2 space-y-2">
+                {headerBindings.length === 0 ? (
+                  <div className="text-[11px] text-muted-foreground/80 py-1.5 text-center italic">
+                    No headers configured. Add Authorization or custom HTTP request headers.
+                  </div>
+                ) : (
+                  headerBindings.map((b) => (
+                    <BindingSlotRow
+                      key={b.id}
+                      binding={b}
+                      fieldSuggestions={headerSuggestions}
+                      onUpdate={(updater) => handleUpdateBinding(b.id, updater)}
+                      onDelete={() => handleDeleteBinding(b.id)}
+                      onKindChange={(kind) => handleKindChange(b.id, kind)}
+                      priorSteps={priorSteps}
+                      routeParamSuggestions={routeParamSuggestions}
+                      queryParamSuggestions={queryParamSuggestions}
+                      stateStores={stateStores}
+                      sectionStateVars={sectionStateVars}
+                    />
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 2. PATH PARAMS SLOT */}
+          <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
+            <div
+              onClick={() => toggleSlot("path_param")}
+              className="flex items-center justify-between p-2 cursor-pointer hover:bg-muted/30 select-none transition-colors border-b border-border/40"
+            >
+              <div className="flex items-center gap-1.5">
+                {collapsedSlots.path_param ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                <MapPin size={13} className="text-blue-500" />
+                <span className="font-semibold text-foreground text-[11px]">Path Parameters</span>
+                <Badge variant="secondary" className="text-[9px] h-4 px-1.5 font-mono">
+                  {pathBindings.length}
+                </Badge>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAddBinding("path_param");
+                }}
+                className="h-6 text-[10px] px-2 flex items-center gap-1 border-dashed cursor-pointer"
+              >
+                <Plus size={10} /> Add Param
+              </Button>
+            </div>
+
+            {!collapsedSlots.path_param && (
+              <div className="p-2 space-y-2">
+                {pathBindings.length === 0 ? (
+                  <div className="text-[11px] text-muted-foreground/80 py-1.5 text-center italic">
+                    No path parameters in endpoint URL (e.g. :id or &#123;id&#125;).
+                  </div>
+                ) : (
+                  pathBindings.map((b) => (
+                    <BindingSlotRow
+                      key={b.id}
+                      binding={b}
+                      fieldSuggestions={pathParamSuggestions}
+                      isTargetReadOnly={endpointPathParamNames.has(b.targetField)}
+                      onUpdate={(updater) => handleUpdateBinding(b.id, updater)}
+                      onDelete={() => handleDeleteBinding(b.id)}
+                      onKindChange={(kind) => handleKindChange(b.id, kind)}
+                      priorSteps={priorSteps}
+                      routeParamSuggestions={routeParamSuggestions}
+                      queryParamSuggestions={queryParamSuggestions}
+                      stateStores={stateStores}
+                      sectionStateVars={sectionStateVars}
+                    />
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 3. QUERY PARAMS SLOT */}
+          <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
+            <div
+              onClick={() => toggleSlot("query_param")}
+              className="flex items-center justify-between p-2 cursor-pointer hover:bg-muted/30 select-none transition-colors border-b border-border/40"
+            >
+              <div className="flex items-center gap-1.5">
+                {collapsedSlots.query_param ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                <SlidersHorizontal size={13} className="text-purple-500" />
+                <span className="font-semibold text-foreground text-[11px]">Query Parameters</span>
+                <Badge variant="secondary" className="text-[9px] h-4 px-1.5 font-mono">
+                  {queryBindings.length}
+                </Badge>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAddBinding("query_param");
+                }}
+                className="h-6 text-[10px] px-2 flex items-center gap-1 border-dashed cursor-pointer"
+              >
+                <Plus size={10} /> Add Query
+              </Button>
+            </div>
+
+            {!collapsedSlots.query_param && (
+              <div className="p-2 space-y-2">
+                {queryBindings.length === 0 ? (
+                  <div className="text-[11px] text-muted-foreground/80 py-1.5 text-center italic">
+                    No query parameters configured (e.g. ?search=...&amp;limit=...).
+                  </div>
+                ) : (
+                  queryBindings.map((b) => (
+                    <BindingSlotRow
+                      key={b.id}
+                      binding={b}
+                      fieldSuggestions={epQueryParamSuggestions}
+                      onUpdate={(updater) => handleUpdateBinding(b.id, updater)}
+                      onDelete={() => handleDeleteBinding(b.id)}
+                      onKindChange={(kind) => handleKindChange(b.id, kind)}
+                      priorSteps={priorSteps}
+                      routeParamSuggestions={routeParamSuggestions}
+                      queryParamSuggestions={queryParamSuggestions}
+                      stateStores={stateStores}
+                      sectionStateVars={sectionStateVars}
+                    />
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 4. REQUEST BODY SLOT */}
+          <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
+            <div
+              onClick={() => toggleSlot("body")}
+              className="flex items-center justify-between p-2 cursor-pointer hover:bg-muted/30 select-none transition-colors border-b border-border/40"
+            >
+              <div className="flex items-center gap-1.5">
+                {collapsedSlots.body ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                <Package size={13} className="text-emerald-500" />
+                <span className="font-semibold text-foreground text-[11px]">Request Body</span>
+                <Badge variant="secondary" className="text-[9px] h-4 px-1.5 font-mono">
+                  {bodyBindings.length}
+                </Badge>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAddBinding("body");
+                }}
+                className="h-6 text-[10px] px-2 flex items-center gap-1 border-dashed cursor-pointer"
+              >
+                <Plus size={10} /> Add Field
+              </Button>
+            </div>
+
+            {!collapsedSlots.body && (
+              <div className="p-2 space-y-2">
+                {bodyBindings.length === 0 ? (
+                  <div className="text-[11px] text-muted-foreground/80 py-1.5 text-center italic">
+                    {selectedEndpoint.type === "GET"
+                      ? "GET requests typically do not have a body, but you can configure fields if required."
+                      : "No request body fields configured."}
+                  </div>
+                ) : (
+                  bodyBindings.map((b) => (
+                    <BindingSlotRow
+                      key={b.id}
+                      binding={b}
+                      fieldSuggestions={bodyFieldSuggestions}
+                      onUpdate={(updater) => handleUpdateBinding(b.id, updater)}
+                      onDelete={() => handleDeleteBinding(b.id)}
+                      onKindChange={(kind) => handleKindChange(b.id, kind)}
+                      priorSteps={priorSteps}
+                      routeParamSuggestions={routeParamSuggestions}
+                      queryParamSuggestions={queryParamSuggestions}
+                      stateStores={stateStores}
+                      sectionStateVars={sectionStateVars}
+                    />
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
       ) : (
-        <div className="space-y-2.5">
-          {bindings.map((binding, bIdx) => {
-            const kind = binding.source.kind;
-            return (
-              <div
-                key={binding.id || bIdx}
-                className="p-2.5 rounded-md border bg-card/60 space-y-2 text-xs"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-[10px] text-muted-foreground">
-                        Request Field Name
-                      </Label>
-                      {isAuthHeaderName(binding.targetField) && (
-                        <Badge
-                          variant="outline"
-                          className="text-[9px] px-1 py-0 h-3.5 font-mono text-amber-500 border-amber-500/30 bg-amber-500/10"
-                        >
-                          Auth Header
-                        </Badge>
-                      )}
-                    </div>
-                    <ActionFlowCombobox
-                      value={binding.targetField}
-                      onChange={(val) =>
-                        handleUpdateBinding(binding.id, (prev) => ({
-                          ...prev,
-                          targetField: val,
-                        }))
-                      }
-                      placeholder="e.g. userId, fileKey, query"
-                      headerLabel="Suggested Request Fields"
-                      options={requestFieldSuggestions}
-                    />
-                  </div>
-                  <div className="w-36">
-                    <Label className="text-[10px] text-muted-foreground">
-                      Source Type
-                    </Label>
-                    <Select
-                      value={kind}
-                      onValueChange={(val: SourceKindOption) =>
-                        handleKindChange(binding.id, val)
-                      }
-                    >
-                      <SelectTrigger className="h-7 text-xs bg-background">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="user_input">User Input</SelectItem>
-                        <SelectItem value="route_param">Route Param</SelectItem>
-                        <SelectItem value="query_param">Query Param</SelectItem>
-                        <SelectItem value="state_var">State Var</SelectItem>
-                        <SelectItem value="literal">Static Value</SelectItem>
-                        {priorSteps.length > 0 && (
-                          <SelectItem value="prev_response">
-                            Prior Response
-                          </SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDeleteBinding(binding.id)}
-                    className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive self-end"
-                  >
-                    <Trash2 size={13} />
-                  </Button>
-                </div>
-
-                {/* Source details input */}
-                <div className="pt-1">
-                  {binding.source.kind === "literal" && (
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-[10px] text-muted-foreground">
-                          Literal Value
-                        </Label>
-                        {(isAuthHeaderName(binding.targetField) || binding.source.value.includes("<token>")) && (
-                          <span className="text-[9px] text-amber-500 font-mono">
-                            Auto-injects bearer token at runtime
-                          </span>
-                        )}
-                      </div>
-                      <Input
-                        value={binding.source.value}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          handleUpdateBinding(binding.id, (prev) => ({
-                            ...prev,
-                            source: { kind: "literal", value: val },
-                          }));
-                        }}
-                        placeholder="Static string value"
-                        className="h-7 text-xs bg-background"
-                      />
-                    </div>
-                  )}
-
-                  {binding.source.kind === "route_param" && (
-                    <div className="space-y-1">
-                      <Label className="text-[10px] text-muted-foreground">
-                        Route Parameter Name (e.g. id from /c/[id])
-                      </Label>
-                      <ActionFlowCombobox
-                        value={binding.source.paramName}
-                        onChange={(name) => {
-                          handleUpdateBinding(binding.id, (prev) => ({
-                            ...prev,
-                            source: { kind: "route_param", paramName: name },
-                          }));
-                        }}
-                        placeholder="e.g. id, slug"
-                        headerLabel="Page Route Params"
-                        options={routeParamSuggestions}
-                      />
-                    </div>
-                  )}
-
-                  {binding.source.kind === "query_param" && (
-                    <div className="space-y-1">
-                      <Label className="text-[10px] text-muted-foreground">
-                        Query Parameter Name (e.g. limit from ?limit=10)
-                      </Label>
-                      <ActionFlowCombobox
-                        value={binding.source.paramName}
-                        onChange={(name) => {
-                          handleUpdateBinding(binding.id, (prev) => ({
-                            ...prev,
-                            source: { kind: "query_param", paramName: name },
-                          }));
-                        }}
-                        placeholder="e.g. limit, offset"
-                        headerLabel="Page Query Params"
-                        options={queryParamSuggestions}
-                      />
-                    </div>
-                  )}
-
-                  {binding.source.kind === "state_var" && (() => {
-                    const source = binding.source;
-                    if (source.kind !== "state_var") return null;
-
-                    const currentStoreId = source.storeNodeId;
-                    const selectedStore = stateStores.find((s) => s.id === currentStoreId);
-                    const isLocal =
-                      source.sourceType === "local" ||
-                      (!selectedStore &&
-                        !source.storeName &&
-                        sectionStateVars.some((v) => v.name === source.stateKey));
-
-                    const storeFieldOptions: ComboboxOption[] = selectedStore
-                      ? (selectedStore.data?.fields || []).map((f) => ({
-                          value: f.name,
-                          label: `${f.name} (${f.type || "string"})`,
-                          type: f.type || "string",
-                        }))
-                      : isLocal
-                      ? sectionStateVars.map((v) => ({
-                          value: v.name,
-                          label: `${v.name} (${v.type || "state"})`,
-                          type: v.type || "string",
-                        }))
-                      : [
-                          ...stateStores.flatMap((s) =>
-                            (s.data?.fields || []).map((f) => ({
-                              value: f.name,
-                              label: `${s.data?.label || s.data?.storeName || "Store"}.${f.name}`,
-                              type: f.type || "string",
-                            })),
-                          ),
-                          ...sectionStateVars.map((v) => ({
-                            value: v.name,
-                            label: `Local: ${v.name}`,
-                            type: v.type || "string",
-                          })),
-                        ];
-
-                    return (
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <Label className="text-[10px] text-muted-foreground">
-                            Source Store
-                          </Label>
-                          <Select
-                            value={
-                              isLocal
-                                ? "__local__"
-                                : selectedStore?.id || (stateStores[0]?.id ?? "__local__")
-                            }
-                            onValueChange={(val) => {
-                              if (val === "__local__") {
-                                const firstLocal = sectionStateVars[0]?.name || "";
-                                handleUpdateBinding(binding.id, (prev) => ({
-                                  ...prev,
-                                  source: {
-                                    kind: "state_var",
-                                    sourceType: "local",
-                                    storeNodeId: undefined,
-                                    storeName: undefined,
-                                    stateKey:
-                                      firstLocal ||
-                                      (prev.source.kind === "state_var"
-                                        ? prev.source.stateKey
-                                        : ""),
-                                  },
-                                }));
-                              } else {
-                                const targetStore = stateStores.find((s) => s.id === val);
-                                const storeName =
-                                  targetStore?.data?.label ||
-                                  targetStore?.data?.storeName ||
-                                  "Store";
-                                const firstField = targetStore?.data?.fields?.[0]?.name || "";
-                                handleUpdateBinding(binding.id, (prev) => ({
-                                  ...prev,
-                                  source: {
-                                    kind: "state_var",
-                                    sourceType: "store",
-                                    storeNodeId: targetStore?.id,
-                                    storeName,
-                                    stateKey:
-                                      firstField ||
-                                      (prev.source.kind === "state_var"
-                                        ? prev.source.stateKey
-                                        : ""),
-                                  },
-                                }));
-                              }
-                            }}
-                          >
-                            <SelectTrigger className="h-7 text-xs bg-background">
-                              <SelectValue placeholder="Choose store..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {stateStores.map((st) => (
-                                <SelectItem key={st.id} value={st.id}>
-                                  ⚡ {st.data?.label || st.data?.storeName || "Store"} (Zustand)
-                                </SelectItem>
-                              ))}
-                              <SelectItem value="__local__">
-                                📄 Page / Section State
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-1">
-                          <Label className="text-[10px] text-muted-foreground">
-                            Store Field / Property
-                          </Label>
-                          <ActionFlowCombobox
-                            value={source.stateKey}
-                            onChange={(key) => {
-                              handleUpdateBinding(binding.id, (prev) => {
-                                const prevSrc =
-                                  prev.source.kind === "state_var"
-                                    ? prev.source
-                                    : { kind: "state_var", stateKey: key };
-                                return {
-                                  ...prev,
-                                  source: {
-                                    ...prevSrc,
-                                    kind: "state_var",
-                                    stateKey: key,
-                                  },
-                                };
-                              });
-                            }}
-                            placeholder="e.g. keyword, userId"
-                            headerLabel="Available Store Fields"
-                            options={storeFieldOptions}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {binding.source.kind === "user_input" && (
-                    <div className="space-y-1">
-                      <Label className="text-[10px] text-muted-foreground">
-                        Form Field / Input Name
-                      </Label>
-                      <ActionFlowCombobox
-                        value={binding.source.fieldName}
-                        onChange={(name) => {
-                          handleUpdateBinding(binding.id, (prev) => ({
-                            ...prev,
-                            source: { kind: "user_input", fieldName: name },
-                          }));
-                        }}
-                        placeholder="e.g. email, file, query"
-                        headerLabel="Suggested Form Inputs"
-                        options={[
-                          { value: "file", type: "file" },
-                          { value: "file.name", type: "string" },
-                          { value: "file.type", type: "string" },
-                          { value: "file.size", type: "number" },
-                          { value: "email", type: "string" },
-                          { value: "username", type: "string" },
-                          { value: "password", type: "string" },
-                          { value: "query", type: "string" },
-                          { value: "search", type: "string" },
-                          ...(binding.targetField ? [{ value: binding.targetField, type: "field" }] : []),
-                        ]}
-                      />
-                    </div>
-                  )}
-
-                  {binding.source.kind === "prev_response" && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">
-                          From Step
-                        </Label>
-                        <Select
-                          value={binding.source.stepId}
-                          onValueChange={(val) => {
-                            handleUpdateBinding(binding.id, (prev) => ({
-                              ...prev,
-                              source: {
-                                kind: "prev_response",
-                                stepId: val,
-                                fieldPath:
-                                  prev.source.kind === "prev_response"
-                                    ? prev.source.fieldPath
-                                    : "",
-                              },
-                            }));
-                          }}
-                        >
-                          <SelectTrigger className="h-7 text-xs bg-background">
-                            <SelectValue placeholder="Select step" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {priorSteps.map((pStep, pIdx) => (
-                              <SelectItem key={pStep.id} value={pStep.id}>
-                                Step {pIdx + 1}: {pStep.name || pStep.type}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">
-                          Response Field Path
-                        </Label>
-                        <ResponseFieldPicker
-                          value={binding.source.fieldPath}
-                          onChange={(val) => {
-                            handleUpdateBinding(binding.id, (prev) => ({
-                              ...prev,
-                              source: {
-                                kind: "prev_response",
-                                stepId:
-                                  prev.source.kind === "prev_response"
-                                    ? prev.source.stepId
-                                    : priorSteps[0]?.id || "",
-                                fieldPath: val,
-                              },
-                            }));
-                          }}
-                          placeholder="e.g. data.id or token"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+        <div className="p-4 rounded-lg border border-dashed border-border/60 text-center text-muted-foreground">
+          <Globe size={24} className="mx-auto mb-1.5 opacity-40" />
+          <p className="text-[11px] font-medium text-foreground">No Endpoint Selected</p>
+          <p className="text-[10px]">Select a backend service and endpoint above to configure request slot bindings.</p>
         </div>
       )}
     </div>

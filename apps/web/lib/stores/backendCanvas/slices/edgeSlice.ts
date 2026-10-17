@@ -23,6 +23,7 @@ import {
   handleLangGraphConnect,
   handleRedisCacheConnect,
   handleStorageConnect,
+  handleWebPageActionConnect,
 } from "../edge";
 
 export interface EdgeSlice {
@@ -260,6 +261,9 @@ export const createEdgeSlice = (
       return;
     }
 
+    // 3.5. Handle WebPage Action -> Endpoint / Storage request step auto-configuration
+    handleWebPageActionConnect(context);
+
     // 4. Handle Frontend Hook & Component connections (returns true if intercepted & direct edge removed)
     if (handleFrontendConnect(context)) {
       return;
@@ -353,6 +357,7 @@ export const createEdgeSlice = (
       };
       handleLangGraphConnect(connContext);
       handleRedisCacheConnect(connContext);
+      handleWebPageActionConnect(connContext);
     }
   },
 

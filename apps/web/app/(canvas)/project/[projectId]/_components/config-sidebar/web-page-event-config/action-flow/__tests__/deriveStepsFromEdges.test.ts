@@ -119,6 +119,7 @@ describe("Frontend Action Flow: deriveStepsFromEdges", () => {
   it("should preserve existing saved bindings and custom configurations", () => {
     const existingBinding: FrontendRequestFieldBinding = {
       id: "bind-1",
+      slot: "body",
       targetField: "fileKey",
       source: { kind: "state_var", stateKey: "userFileKey" },
     };
@@ -235,9 +236,9 @@ describe("Frontend Action Flow: deriveStepsFromEdges", () => {
       (b) => b.targetField.toLowerCase() === "authorization",
     );
     expect(authBinding).toBeDefined();
-    expect(authBinding?.source.kind).toBe("literal");
-    if (authBinding?.source.kind === "literal") {
-      expect(authBinding.source.value).toBe("Bearer <token>");
+    expect(authBinding?.source.kind).toBe("auth_token");
+    if (authBinding?.source.kind === "auth_token") {
+      expect(authBinding.source.tokenType).toBe("session");
     }
   });
 
@@ -274,6 +275,7 @@ describe("Frontend Action Flow: deriveStepsFromEdges", () => {
   it("should preserve non-auth bindings when auto-mapping auth headers", () => {
     const customBinding: FrontendRequestFieldBinding = {
       id: "custom-field",
+      slot: "body",
       targetField: "message",
       source: { kind: "user_input", fieldName: "userMsg" },
     };
@@ -294,9 +296,9 @@ describe("Frontend Action Flow: deriveStepsFromEdges", () => {
 
     // Preserves existing message binding
     expect(apiStep?.requestBindings?.some((b) => b.targetField === "message")).toBe(true);
-    // Also injects Authorization header
-    expect(
-      apiStep?.requestBindings?.some((b) => b.targetField.toLowerCase() === "authorization"),
-    ).toBe(true);
+    // Also injects Authorization header with slot: "header"
+    const auth = apiStep?.requestBindings?.find((b) => b.targetField.toLowerCase() === "authorization");
+    expect(auth).toBeDefined();
+    expect(auth?.slot).toBe("header");
   });
 });

@@ -87,10 +87,15 @@ export function useCallerWebPageZone(
   const matchedZone = zones.find((z) => z.handleId === handleId);
 
   if (matchedZone) {
+    const zoneId = (matchedZone as { id?: string }).id;
     const isProtected =
       matchedZone.accessType === "protected" ||
-      // Fallback heuristic for zones that pre-date the accessType field
-      matchedZone.handleId === "private-in";
+      zoneId === "zone-private" ||
+      matchedZone.handleId === "private-in" ||
+      (matchedZone.accessType !== "public" && zoneId !== "zone-public") ||
+      matchedZone.name.toLowerCase().includes("private") ||
+      matchedZone.name.toLowerCase().includes("protect") ||
+      Boolean((webPageNode.data as any)?.requireAuth);
     return { isProtected, zoneName: matchedZone.name };
   }
 

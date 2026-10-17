@@ -125,8 +125,8 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
                       !(
                         (b.targetField?.toLowerCase() === "authorization" ||
                           b.targetField?.toLowerCase() === "auth-bearer-header") &&
-                        b.source.kind === "literal" &&
-                        b.source.value === "Bearer <token>"
+                        (b.source.kind === "auth_token" ||
+                          (b.source.kind === "literal" && b.source.value === "Bearer <token>"))
                       ),
                   );
                   if (filteredBindings.length !== (step.requestBindings || []).length) {

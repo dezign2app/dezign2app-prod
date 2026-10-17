@@ -189,4 +189,93 @@ describe("Multi-step Action Edge Flow (Numbered Topology)", () => {
     expect(edges[0]?.data?.label).toBe("1");
     expect(edges[0]?.data?.sequenceOrder).toBe(1);
   });
+
+  it("configures api_call request step in actionSteps when edge is drawn, and deletes it when edge is deleted", () => {
+    setupTestCanvas();
+    const store = useBackendCanvasStore.getState();
+
+    // 1. Draw edge from WebPage action to Service endpoint
+    store.onConnect({
+      source: "page-1",
+      target: "service-1",
+      sourceHandle: "events-act-upload-1",
+      targetHandle: "endpoint-in-ep-presign",
+    });
+
+    const edge = useBackendCanvasStore.getState().edges[0];
+    expect(edge).toBeDefined();
+
+    // Verify actionSteps was configured with an api_call step
+    let pageNode = useBackendCanvasStore.getState().nodes.find((n) => n.id === "page-1");
+    let action = pageNode?.data?.sections?.[0]?.actions?.[0];
+    expect(action?.actionSteps).toBeDefined();
+    expect(action?.actionSteps).toHaveLength(1);
+
+    const step = action?.actionSteps?.[0];
+    expect(step?.type).toBe("api_call");
+    expect(step?.edgeId).toBe(edge!.id);
+    expect(step?.serviceNodeId).toBe("service-1");
+    expect(step?.endpointId).toBe("ep-presign");
+    expect(step?.order).toBe(1);
+
+    // 2. Delete the edge from canvas
+    store.deleteEdge(edge!.id);
+
+    // Verify request step was automatically deleted
+    pageNode = useBackendCanvasStore.getState().nodes.find((n) => n.id === "page-1");
+    action = pageNode?.data?.sections?.[0]?.actions?.[0];
+    expect(action?.actionSteps).toHaveLength(0);
+  });
+
+  it("automatically configures auth header in requestBindings on protected route when edge is drawn", () => {
+    setupTestCanvas();
+    const store = useBackendCanvasStore.getState();
+
+    // Connect WebApp (Private Section) -> WebPage
+    const webAppNode: BackendNode = {
+      id: "webapp-1",
+      type: "webApp",
+      position: { x: -200, y: 100 },
+      fractionalIndex: "a0",
+      data: {
+        label: "web",
+      },
+    };
+    store.addNode(webAppNode);
+
+    store.addEdge({
+      id: "edge-webapp-private",
+      source: "webapp-1",
+      target: "page-1",
+      sourceHandle: "private-in",
+      targetHandle: "page-in",
+      type: "connection",
+    });
+
+    // Draw edge from WebPage action to Service endpoint
+    store.onConnect({
+      source: "page-1",
+      target: "service-1",
+      sourceHandle: "events-act-upload-1",
+      targetHandle: "endpoint-in-ep-presign",
+    });
+
+    const pageNode = useBackendCanvasStore.getState().nodes.find((n) => n.id === "page-1");
+    const action = pageNode?.data?.sections?.[0]?.actions?.[0];
+    const step = action?.actionSteps?.[0];
+
+    expect(step).toBeDefined();
+    expect(step?.type).toBe("api_call");
+
+    // Verify Authorization header was automatically configured in requestBindings
+    const authBinding = step?.requestBindings?.find(
+      (b) => b.slot === "header" && b.targetField.toLowerCase() === "authorization",
+    );
+    expect(authBinding).toBeDefined();
+    expect(authBinding?.source.kind).toBe("auth_token");
+    if (authBinding?.source.kind === "auth_token") {
+      expect(authBinding.source.tokenType).toBe("session");
+    }
+  });
 });
+

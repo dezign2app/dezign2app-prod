@@ -276,4 +276,126 @@ describe("compileNextjsV16WebClient with Bearer token & headers", () => {
     expect(pageWithoutLoad?.content).not.toContain("setPageLoadData");
     expect(pageWithoutLoad?.content).not.toContain("pageLoadData");
   });
+
+  it("automatically passes the auth header on protected routes without an explicit authNode", () => {
+    const webAppNode: BackendNode = {
+      id: "node-webapp-1",
+      type: "webApp",
+      position: { x: -200, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "web",
+        appSlug: "web",
+        zones: [
+          {
+            id: "zone-public",
+            handleId: "public-in",
+            name: "Public Section",
+            accessType: "public",
+          },
+          {
+            id: "zone-private",
+            handleId: "private-in",
+            name: "Private Section",
+            accessType: "protected",
+          },
+        ],
+      },
+    };
+
+    const webPageNode: BackendNode = {
+      id: "node-page-dashboard",
+      type: "webPage",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "/dashboard",
+        appSlug: "web",
+        sections: [
+          {
+            id: "sec-main",
+            name: "Dashboard Overview",
+            renderMode: "client",
+            actions: [
+              {
+                id: "act-send-message",
+                name: "sendMessage",
+                event: "click",
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "node-service-conv",
+      type: "service",
+      position: { x: 600, y: 0 },
+      fractionalIndex: "a2",
+      data: {
+        label: "Conversations",
+        port: "8080",
+        endpoints: [],
+      },
+    };
+
+    const endpoints: (Endpoint & { nodeId: string })[] = [
+      {
+        id: "ep-send-msg",
+        nodeId: "node-service-conv",
+        name: "/send-message",
+        type: "POST",
+      },
+    ];
+
+    const edges: BackendEdge[] = [
+      // WebApp Private Section -> Dashboard page
+      {
+        id: "edge-webapp-to-page",
+        source: "node-webapp-1",
+        target: "node-page-dashboard",
+        sourceHandle: "private-in",
+        targetHandle: "page-in",
+        type: "connection",
+        fractionalIndex: "a0",
+      },
+      // Action -> Service endpoint
+      {
+        id: "edge-action-to-endpoint",
+        source: "node-page-dashboard",
+        target: "node-service-conv",
+        sourceHandle: "events-act-send-message",
+        targetHandle: "endpoint-in-ep-send-msg",
+        type: "connection",
+        fractionalIndex: "a1",
+      },
+    ];
+
+    const result = compileNextjsV16WebClient(
+      [webPageNode],
+      endpoints,
+      [],
+      [webAppNode, webPageNode, serviceNode],
+      edges,
+      "TestProject",
+    );
+
+    // 1. Verify lib/auth-token.ts was generated automatically because the route is protected
+    const authTokenFile = result.files.find((f: CompiledFile) => f.filename === "lib/auth-token.ts");
+    expect(authTokenFile).toBeDefined();
+    expect(authTokenFile?.content).toContain("export async function getAuthBearerToken()");
+
+    // 2. Verify lib/api-client.ts has auth injection enabled
+    const apiClientFile = result.files.find((f: CompiledFile) => f.filename === "lib/api-client.ts");
+    expect(apiClientFile).toBeDefined();
+    expect(apiClientFile?.content).toContain('import { getAuthBearerToken } from "./auth-token";');
+    expect(apiClientFile?.content).toContain('headers["Authorization"] = token;');
+
+    // 3. Verify action button component passes requireAuth = true
+    const actionFile = result.files.find((f: CompiledFile) => f.filename.endsWith("Action.tsx"));
+    expect(actionFile).toBeDefined();
+    expect(actionFile?.content).toContain("true"); // requireAuth boolean passed to onTrigger
+  });
 });
+

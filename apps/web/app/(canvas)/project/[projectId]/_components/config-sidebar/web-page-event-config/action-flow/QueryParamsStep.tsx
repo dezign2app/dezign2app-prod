@@ -375,6 +375,39 @@ export const QueryParamsStep: React.FC<QueryParamsStepProps> = ({
                                 : "",
                           },
                         });
+                      } else if (val === "session_storage") {
+                        handleUpdateParam(pIdx, {
+                          mode: "set",
+                          valueSource: {
+                            kind: "session_storage",
+                            key:
+                              item.valueSource?.kind === "session_storage"
+                                ? item.valueSource.key
+                                : "",
+                          },
+                        });
+                      } else if (val === "local_storage") {
+                        handleUpdateParam(pIdx, {
+                          mode: "set",
+                          valueSource: {
+                            kind: "local_storage",
+                            key:
+                              item.valueSource?.kind === "local_storage"
+                                ? item.valueSource.key
+                                : "",
+                          },
+                        });
+                      } else if (val === "cookie") {
+                        handleUpdateParam(pIdx, {
+                          mode: "set",
+                          valueSource: {
+                            kind: "cookie",
+                            cookieName:
+                              item.valueSource?.kind === "cookie"
+                                ? item.valueSource.cookieName
+                                : "",
+                          },
+                        });
                       }
                     }}
                   >
@@ -388,6 +421,9 @@ export const QueryParamsStep: React.FC<QueryParamsStepProps> = ({
                         </SelectLabel>
                         <SelectItem value="literal">Static Literal</SelectItem>
                         <SelectItem value="user_input">User Form Input</SelectItem>
+                        <SelectItem value="session_storage">Session Storage</SelectItem>
+                        <SelectItem value="local_storage">Local Storage</SelectItem>
+                        <SelectItem value="cookie">Browser Cookie</SelectItem>
                         <SelectItem value="state_var">State Variable</SelectItem>
                         <SelectItem value="route_param">Route Param</SelectItem>
                         {priorSteps.length > 0 && (
@@ -533,6 +569,54 @@ export const QueryParamsStep: React.FC<QueryParamsStepProps> = ({
                         className="h-7 text-xs bg-background font-mono flex-1 min-w-0"
                       />
                     </div>
+                  )}
+
+                  {currentAction === "session_storage" && (
+                    <Input
+                      value={vSource.kind === "session_storage" ? vSource.key : ""}
+                      onChange={(e) =>
+                        handleUpdateParam(pIdx, {
+                          valueSource: {
+                            kind: "session_storage",
+                            key: e.target.value,
+                          },
+                        })
+                      }
+                      placeholder="Storage key: e.g. token"
+                      className="h-7 text-xs bg-background font-mono"
+                    />
+                  )}
+
+                  {currentAction === "local_storage" && (
+                    <Input
+                      value={vSource.kind === "local_storage" ? vSource.key : ""}
+                      onChange={(e) =>
+                        handleUpdateParam(pIdx, {
+                          valueSource: {
+                            kind: "local_storage",
+                            key: e.target.value,
+                          },
+                        })
+                      }
+                      placeholder="Storage key: e.g. token"
+                      className="h-7 text-xs bg-background font-mono"
+                    />
+                  )}
+
+                  {currentAction === "cookie" && (
+                    <Input
+                      value={vSource.kind === "cookie" ? vSource.cookieName : ""}
+                      onChange={(e) =>
+                        handleUpdateParam(pIdx, {
+                          valueSource: {
+                            kind: "cookie",
+                            cookieName: e.target.value,
+                          },
+                        })
+                      }
+                      placeholder="Cookie name: e.g. session"
+                      className="h-7 text-xs bg-background font-mono"
+                    />
                   )}
                 </div>
 

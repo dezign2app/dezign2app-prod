@@ -70,9 +70,17 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
         const token = await getAuthBearerToken();
         if (token) {
           headers["Authorization"] = token;
+        } else if (customHeaders?.["Authorization"]) {
+          headers["Authorization"] = customHeaders["Authorization"];
         }
-      } catch (_tokenErr) {}
-    }` : ""}
+      } catch (_tokenErr) {
+        if (customHeaders?.["Authorization"]) {
+          headers["Authorization"] = customHeaders["Authorization"];
+        }
+      }
+    }` : ` else if (customHeaders?.["Authorization"]) {
+      headers["Authorization"] = customHeaders["Authorization"];
+    }`}
 
     let targetUrl = url;
     if (queryParams && Object.keys(queryParams).length > 0 && targetUrl && targetUrl !== "#") {

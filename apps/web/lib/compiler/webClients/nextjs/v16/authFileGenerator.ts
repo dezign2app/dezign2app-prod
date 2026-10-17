@@ -433,6 +433,116 @@ export async function getAuthBearerToken(): Promise<string | null> {
 `,
     });
   }
+
+  // Also ensure lib/auth-token.ts is generated when any WebPage is on a protected route or has auth step bindings
+  const hasStepAuthAnywhere = webClientNodes.some((node) => {
+    const rawSections = Array.isArray(node.data?.sections) ? node.data.sections : [];
+    return rawSections.some((sec) => {
+      if (!sec || typeof sec !== "object" || !("actions" in sec) || !Array.isArray(sec.actions)) {
+        return false;
+      }
+      return sec.actions.some((act) => {
+        if (!act || typeof act !== "object" || !("actionSteps" in act) || !Array.isArray(act.actionSteps)) {
+          return false;
+        }
+        return act.actionSteps.some((s) => {
+          if (!s || typeof s !== "object" || !("type" in s) || s.type !== "api_call") {
+            return false;
+          }
+          const bindings = Array.isArray(s.requestBindings) ? s.requestBindings : [];
+          return bindings.some((b) => {
+            if (!b || typeof b !== "object") return false;
+            const targetField = typeof b.targetField === "string" ? b.targetField.toLowerCase() : "";
+            const slot = typeof b.slot === "string" ? b.slot : "";
+            const sourceKind = b.source && typeof b.source === "object" && "kind" in b.source ? b.source.kind : "";
+            return (
+              (slot === "header" || !slot) &&
+              (sourceKind === "auth_token" ||
+                targetField === "authorization" ||
+                targetField === "auth-bearer-header")
+            );
+          });
+        });
+      });
+    });
+  });
+
+  const hasProtectedPage =
+    hasStepAuthAnywhere ||
+    pagesInfo.some((p) => p.accessType !== "public") ||
+    webClientNodes.some(
+      (n) =>
+        n.data?.requireAuth === true ||
+        (n.data?.useZoneDefault === false &&
+          n.data?.protectionOverride?.accessType === "protected"),
+    );
+
+  if (hasProtectedPage && !files.some((f) => f.filename === "lib/auth-token.ts")) {
+    files.push({
+      filename: "lib/auth-token.ts",
+      language: "typescript",
+      content: `/**
+ * Helper to retrieve the Bearer authorization token for client API requests.
+ * Checks active Better Auth session, cookies, localStorage, and sessionStorage.
+ */
+export async function getAuthBearerToken(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+
+  // 1. Check active Better Auth client session
+  try {
+    const { authClient } = await import("@/lib/auth-client");
+    if (authClient && typeof authClient.getSession === "function") {
+      const sessionRes = await authClient.getSession();
+      const rawData = sessionRes?.data;
+      const directToken = rawData && typeof rawData === "object" && "token" in rawData && typeof rawData.token === "string"
+        ? rawData.token
+        : undefined;
+      const token = sessionRes?.data?.session?.token || directToken;
+      if (token) {
+        return token.startsWith("Bearer ") ? token : \`Bearer \${token}\`;
+      }
+    }
+  } catch (_e) {}
+
+  // 2. Check cookies for Better Auth session token (better-auth.session_token)
+  try {
+    const cookies = document.cookie.split(";");
+    for (const c of cookies) {
+      const trimmed = c.trim();
+      if (
+        trimmed.startsWith("better-auth.session_token=") ||
+        trimmed.startsWith("__Secure-better-auth.session_token=")
+      ) {
+        const val = trimmed.split("=")[1];
+        if (val) {
+          const decoded = decodeURIComponent(val);
+          return decoded.startsWith("Bearer ") ? decoded : \`Bearer \${decoded}\`;
+        }
+      }
+    }
+  } catch (_cErr) {}
+
+  // 3. Check browser localStorage & sessionStorage
+  const tokenKeys = [
+    "better-auth.session_token",
+    "auth_token",
+    "access_token",
+    "token",
+    "bearer_token",
+  ];
+
+  for (const k of tokenKeys) {
+    const stored = localStorage.getItem(k) || sessionStorage.getItem(k);
+    if (stored) {
+      return stored.startsWith("Bearer ") ? stored : \`Bearer \${stored}\`;
+    }
+  }
+
+  return null;
+}
+`,
+    });
+  }
 }
 
 /**
