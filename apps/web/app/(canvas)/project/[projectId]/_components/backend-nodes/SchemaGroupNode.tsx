@@ -146,7 +146,7 @@ export const SchemaGroupNode = ({
       >
         <div
           ref={containerRef}
-          className="absolute top-0 left-0 bg-secondary/80 px-4 py-1.5 rounded-br-lg rounded-tl-lg border-r-2 border-b-2 border-border flex flex-col gap-0.5 cursor-text min-w-[150px]"
+          className="absolute top-0 left-0 bg-secondary/85 backdrop-blur-md px-5 py-2.5 rounded-br-xl rounded-tl-lg border-r-2 border-b-2 border-border flex flex-col gap-1 cursor-text min-w-[200px] shadow-sm"
           onDoubleClick={(e) => {
             e.stopPropagation();
             setIsEditing(true);
@@ -180,7 +180,7 @@ export const SchemaGroupNode = ({
                   }
                 }}
                 className={cn(
-                  "bg-transparent border-none outline-none p-0 m-0 w-full focus:ring-0 text-sm font-semibold placeholder:text-muted-foreground/50",
+                  "bg-transparent border-none outline-none p-0 m-0 w-full focus:ring-0 text-base md:text-lg font-bold tracking-tight placeholder:text-muted-foreground/50",
                   isError && "text-red-500",
                 )}
               />
@@ -209,40 +209,40 @@ export const SchemaGroupNode = ({
                     }
                   }
                 }}
-                className="bg-transparent border-none outline-none p-0 m-0 w-full focus:ring-0 text-[10px] text-muted-foreground placeholder:text-muted-foreground/30 font-normal"
+                className="bg-transparent border-none outline-none p-0 m-0 w-full focus:ring-0 text-xs text-muted-foreground placeholder:text-muted-foreground/30 font-normal"
               />
             </div>
           ) : (
             <div className="flex flex-col">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 {(() => {
                   const lbl = (data.label || "").toLowerCase();
                   if (lbl.includes("auth")) {
-                    return <ShieldCheck className="w-3.5 h-3.5 text-sky-400 shrink-0" />;
+                    return <ShieldCheck className="w-5 h-5 text-sky-400 shrink-0" />;
                   }
                   if (lbl.includes("langgraph")) {
-                    return <Workflow className="w-3.5 h-3.5 text-purple-400 shrink-0" />;
+                    return <Workflow className="w-5 h-5 text-purple-400 shrink-0" />;
                   }
-                  return <Table2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />;
+                  return <Table2 className="w-5 h-5 text-amber-400 shrink-0" />;
                 })()}
-                <span className="font-semibold text-xs tracking-tight">
+                <span className="font-bold text-base md:text-lg tracking-tight text-foreground">
                   {data.label || "Untitled Group"}
                 </span>
                 {data.badge && (
                   <Badge
                     variant="outline"
-                    className="text-[9px] px-1 py-0 font-mono bg-background/50 border-border/60"
+                    className="text-[10px] px-1.5 py-0.5 font-mono bg-background/50 border-border/60 font-medium"
                   >
                     {data.badge}
                   </Badge>
                 )}
               </div>
               {data.description ? (
-                <span className="text-[10px] text-muted-foreground/75 font-normal max-w-[240px] truncate">
+                <span className="text-xs text-muted-foreground/80 font-normal max-w-[320px] truncate">
                   {data.description}
                 </span>
               ) : (
-                <span className="text-[10px] text-muted-foreground/30 font-normal italic">
+                <span className="text-xs text-muted-foreground/30 font-normal italic">
                   double-click to describe
                 </span>
               )}
