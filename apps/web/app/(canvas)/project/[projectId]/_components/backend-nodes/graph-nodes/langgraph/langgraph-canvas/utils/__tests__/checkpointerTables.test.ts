@@ -5,8 +5,10 @@ import {
   provisionDatabaseAndCheckpointerTables,
   LANGGRAPH_POSTGRES_TABLE_DEFINITIONS,
   LANGGRAPH_REDIS_SCHEMA_DEFINITIONS,
+  type ProvisionNodeInput,
+  type ProvisionEdgeInput,
 } from "../checkpointerTables";
-import type { BackendNode } from "@/types/canvas";
+import type { BackendNode, BackendEdge } from "@workspace/canvas";
 
 describe("checkpointerTables utilities", () => {
   const mockPostgresDb: BackendNode = {
@@ -138,8 +140,8 @@ describe("checkpointerTables utilities", () => {
 
   describe("provisionCheckpointerTables", () => {
     it("provisions all 4 tables for PostgreSQL with indexes, foreign-key mappings, and connection edges", () => {
-      const addedNodes: BackendNode[] = [];
-      const addedEdges: any[] = [];
+      const addedNodes: ProvisionNodeInput[] = [];
+      const addedEdges: ProvisionEdgeInput[] = [];
 
       const createdCount = provisionCheckpointerTables({
         linkedNodeId: "db-pg-1",
@@ -201,8 +203,8 @@ describe("checkpointerTables utilities", () => {
     });
 
     it("provisions all 3 schemas for Redis and creates connection edges", () => {
-      const addedNodes: BackendNode[] = [];
-      const addedEdges: any[] = [];
+      const addedNodes: ProvisionNodeInput[] = [];
+      const addedEdges: ProvisionEdgeInput[] = [];
 
       const createdCount = provisionCheckpointerTables({
         linkedNodeId: "redis-inst-1",
@@ -238,9 +240,9 @@ describe("checkpointerTables utilities", () => {
         },
       };
 
-      const addedNodes: BackendNode[] = [];
-      const addedEdges: any[] = [];
-      const updatedNodes: { id: string; changes: any }[] = [];
+      const addedNodes: ProvisionNodeInput[] = [];
+      const addedEdges: ProvisionEdgeInput[] = [];
+      const updatedNodes: { id: string; changes: Partial<BackendNode> }[] = [];
 
       const count = provisionCheckpointerTables({
         linkedNodeId: "db-pg-1",
@@ -296,8 +298,8 @@ describe("checkpointerTables utilities", () => {
 
   describe("provisionDatabaseAndCheckpointerTables", () => {
     it("creates a new PostgreSQL DB and all 4 tables when no DB exists in canvas", () => {
-      const addedNodes: BackendNode[] = [];
-      const addedEdges: any[] = [];
+      const addedNodes: ProvisionNodeInput[] = [];
+      const addedEdges: ProvisionEdgeInput[] = [];
 
       const result = provisionDatabaseAndCheckpointerTables({
         nodes: [],
@@ -318,8 +320,8 @@ describe("checkpointerTables utilities", () => {
     });
 
     it("reuses existing PostgreSQL DB and creates missing tables", () => {
-      const addedNodes: BackendNode[] = [];
-      const addedEdges: any[] = [];
+      const addedNodes: ProvisionNodeInput[] = [];
+      const addedEdges: ProvisionEdgeInput[] = [];
 
       const result = provisionDatabaseAndCheckpointerTables({
         nodes: [mockPostgresDb],

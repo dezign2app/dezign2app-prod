@@ -1,4 +1,4 @@
-import type { BackendNode } from "@/types/canvas";
+import type { BackendNode, BackendEdge } from "@workspace/canvas";
 import {
   LANGGRAPH_POSTGRES_TABLE_DEFINITIONS,
   LANGGRAPH_SQLITE_TABLE_DEFINITIONS,
@@ -15,12 +15,15 @@ export {
   type LangGraphRedisSchemaDefinition,
 };
 
+export type ProvisionNodeInput = Omit<BackendNode, "fractionalIndex">;
+export type ProvisionEdgeInput = Omit<BackendEdge, "fractionalIndex">;
+
 /**
  * Returns existing LangGraph checkpointer tables or schemas associated with the given connectionId.
  */
 export function getExistingCheckpointerTables(
   nodes: BackendNode[],
-  edges: any[] = [],
+  edges: BackendEdge[] = [],
   checkpointerType: string,
   connectionId?: string,
 ): BackendNode[] {
@@ -92,7 +95,7 @@ export interface CheckpointerTablesStatus {
  */
 export function checkCheckpointerTablesStatus(
   nodes: BackendNode[],
-  edges: any[] = [],
+  edges: BackendEdge[] = [],
   isEnabled: boolean,
   checkpointerType: string,
   connectionId?: string,
@@ -282,10 +285,10 @@ export function provisionCheckpointerTables({
   linkedNodeId: string;
   checkpointerType: "postgres" | "redis" | string;
   nodes: BackendNode[];
-  edges?: any[];
-  addNode: (node: Omit<BackendNode, "fractionalIndex"> | any) => void;
+  edges?: BackendEdge[];
+  addNode: (node: ProvisionNodeInput) => void;
   updateNode?: (id: string, changes: Partial<BackendNode>) => void;
-  addEdge: (edge: any) => void;
+  addEdge: (edge: ProvisionEdgeInput) => void;
 }): number {
   const linkedNode = nodes.find((n) => n.id === linkedNodeId);
   if (!linkedNode) return 0;
@@ -487,10 +490,10 @@ export function provisionDatabaseAndCheckpointerTables({
   checkpointerType = "postgres",
 }: {
   nodes: BackendNode[];
-  edges?: any[];
-  addNode: (node: Omit<BackendNode, "fractionalIndex"> | any) => void;
+  edges?: BackendEdge[];
+  addNode: (node: ProvisionNodeInput) => void;
   updateNode?: (id: string, changes: Partial<BackendNode>) => void;
-  addEdge: (edge: any) => void;
+  addEdge: (edge: ProvisionEdgeInput) => void;
   checkpointerType?: "postgres" | "redis" | string;
 }): { configuredNodeId: string; createdCount: number } {
   if (checkpointerType === "redis") {
