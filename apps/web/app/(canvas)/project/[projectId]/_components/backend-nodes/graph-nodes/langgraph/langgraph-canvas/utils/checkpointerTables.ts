@@ -369,6 +369,9 @@ export function provisionCheckpointerTables({
 
       if (existingNode) {
         tableIdMap[tableDef.name] = existingNode.id;
+        if (existingNode.data?.label) {
+          tableIdMap[existingNode.data.label] = existingNode.id;
+        }
         if (updateNode) {
           updateNode(existingNode.id, {
             data: {
@@ -415,6 +418,57 @@ export function provisionCheckpointerTables({
 
       createdCount++;
     });
+
+    // Establish foreign-key edges between checkpoints, writes, and blobs
+    const checkpointsId =
+      tableIdMap["checkpoints"] || tableIdMap["langgraph_checkpoints"];
+    const writesId =
+      tableIdMap["checkpoint_writes"] ||
+      tableIdMap["writes"] ||
+      tableIdMap["langgraph_checkpoint_writes"];
+    const blobsId =
+      tableIdMap["checkpoint_blobs"] ||
+      tableIdMap["langgraph_checkpoint_blobs"];
+
+    // 1. checkpoints (checkpoint_id at idx 2) -> checkpoint_writes / writes (checkpoint_id at idx 2)
+    if (checkpointsId && writesId) {
+      const hasWritesFk = edges.some(
+        (e) =>
+          e.type === "foreign-key" &&
+          ((e.source === checkpointsId && e.target === writesId) ||
+            (e.target === checkpointsId && e.source === writesId)),
+      );
+      if (!hasWritesFk) {
+        addEdge({
+          id: `edge-fk-${writesId}-${checkpointsId}-checkpoint_id`,
+          source: checkpointsId,
+          target: writesId,
+          sourceHandle: "source-2",
+          targetHandle: "target-2",
+          type: "foreign-key",
+        });
+      }
+    }
+
+    // 2. checkpoints (thread_id at idx 0) -> checkpoint_blobs (thread_id at idx 0)
+    if (checkpointsId && blobsId) {
+      const hasBlobsFk = edges.some(
+        (e) =>
+          e.type === "foreign-key" &&
+          ((e.source === checkpointsId && e.target === blobsId) ||
+            (e.target === checkpointsId && e.source === blobsId)),
+      );
+      if (!hasBlobsFk) {
+        addEdge({
+          id: `edge-fk-${blobsId}-${checkpointsId}-thread_id`,
+          source: checkpointsId,
+          target: blobsId,
+          sourceHandle: "source-0",
+          targetHandle: "target-0",
+          type: "foreign-key",
+        });
+      }
+    }
   }
 
   return createdCount > 0 ? createdCount : updatedCount;
