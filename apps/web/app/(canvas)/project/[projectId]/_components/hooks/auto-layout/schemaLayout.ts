@@ -689,14 +689,20 @@ export function performSchemaLayout({
     ...transformerNodes,
   ];
 
-  // 8. Apply node position changes
+  // 8. Apply node position changes (only for nodes whose position actually moved or new group containers)
   if (onNodesChange) {
-    const nodeChanges: PositionNodeChange[] = allFinalNodes.map(
-      (node: LayoutNode) => {
-        const pos = positionsMap.get(node.id) ?? {
-          x: node.position.x,
-          y: node.position.y,
-        };
+    const nodeChanges: PositionNodeChange[] = allFinalNodes
+      .filter((node) => {
+        if (node.type === "group") return true;
+        const pos = positionsMap.get(node.id);
+        if (!pos) return false;
+        return (
+          Math.abs(node.position.x - pos.x) > 0.5 ||
+          Math.abs(node.position.y - pos.y) > 0.5
+        );
+      })
+      .map((node: LayoutNode) => {
+        const pos = positionsMap.get(node.id) ?? node.position;
         const isDb = storageNodeIdSet.has(node.id);
         const isTrans = node.type === "transformer";
         return {
@@ -706,9 +712,10 @@ export function performSchemaLayout({
           sourcePosition: isDb ? Position.Bottom : isTrans ? Position.Right : Position.Right,
           targetPosition: isDb ? Position.Top : isTrans ? Position.Left : Position.Left,
         };
-      },
-    );
-    onNodesChange(nodeChanges);
+      });
+    if (nodeChanges.length > 0) {
+      onNodesChange(nodeChanges);
+    }
   }
 
   // Also update store state directly with created/updated group nodes and dimensions
@@ -758,9 +765,31 @@ export function performSchemaLayout({
           zIndex: -1,
         }));
 
+      // Only mark nodes whose coordinates or data actually changed as moved/upserted
+      const movedNodeIds = new Set<string>();
+      positionsMap.forEach((pos, id) => {
+        const existing = existingNodeMap.get(id);
+        if (!existing) {
+          movedNodeIds.add(id);
+          return;
+        }
+        const hasPosChanged =
+          Math.abs(existing.position.x - pos.x) > 0.5 ||
+          Math.abs(existing.position.y - pos.y) > 0.5;
+
+        const finalData = finalDataMap.get(id);
+        const hasDataChanged =
+          Boolean(finalData) &&
+          (existing.data?.groupId !== finalData?.groupId ||
+            existing.data?.group !== finalData?.group);
+
+        if (hasPosChanged || hasDataChanged) {
+          movedNodeIds.add(id);
+        }
+      });
+
       // Keep groups first for proper rendering behind entities
       const nextNodes: BackendNode[] = [...newGroupNodes, ...updatedExistingNodes];
-      const movedNodeIds = new Set(positionsMap.keys());
       const upserts: BackendNode[] = nextNodes.filter(
         (n) => movedNodeIds.has(n.id) || !existingNodeMap.has(n.id),
       );
