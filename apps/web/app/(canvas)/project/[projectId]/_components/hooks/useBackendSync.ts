@@ -93,6 +93,12 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
     const rawNodes: BackendNode[] = (initialElements.nodes ?? []).map(
       (row: Doc<"canvas_backend_nodes">) => {
         let activePosition = row.data?.position ?? row.position;
+        const rowWidth =
+          typeof row.data?.width === "number" ? row.data.width : undefined;
+        const rowHeight =
+          typeof row.data?.height === "number" ? row.data.height : undefined;
+        const rowStyle = row.data?.style;
+
         return {
           id: row.nodeId,
           type: row.type as BackendNode["type"],
@@ -103,6 +109,9 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
           },
           fractionalIndex: row.fractionalIndex,
           parentId: row.data?.parentId,
+          width: rowWidth,
+          height: rowHeight,
+          style: rowStyle,
         } as BackendNode;
       },
     );

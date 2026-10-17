@@ -739,10 +739,13 @@ export function performSchemaLayout({
         const isDb = storageNodeIdSet.has(node.id);
         const isTrans = node.type === "transformer";
 
+        const isGroup = node.type === "group";
+
         return {
           ...node,
           position: pos ?? node.position,
           data: finalData ?? node.data,
+          zIndex: isGroup ? -1 : (node.zIndex ?? 1),
           sourcePosition: isDb ? Position.Bottom : isTrans ? Position.Right : Position.Right,
           targetPosition: isDb ? Position.Top : isTrans ? Position.Left : Position.Left,
         };

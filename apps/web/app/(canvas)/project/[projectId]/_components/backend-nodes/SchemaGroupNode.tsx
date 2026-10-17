@@ -106,6 +106,30 @@ export const SchemaGroupNode = ({
     if (node) setNodesPendingDeletion([node]);
   };
 
+  const node = nodes.find((n) => n.id === id);
+  const nodeStyleWidth =
+    typeof node?.style?.width === "number" && node.style.width > 0
+      ? node.style.width
+      : undefined;
+  const nodeStyleHeight =
+    typeof node?.style?.height === "number" && node.style.height > 0
+      ? node.style.height
+      : undefined;
+
+  const resolvedWidth =
+    typeof width === "number" && width > 0
+      ? width
+      : typeof node?.width === "number" && node.width > 0
+        ? node.width
+        : (nodeStyleWidth ?? 450);
+
+  const resolvedHeight =
+    typeof height === "number" && height > 0
+      ? height
+      : typeof node?.height === "number" && node.height > 0
+        ? node.height
+        : (nodeStyleHeight ?? 280);
+
   return (
     <>
       <div
@@ -116,8 +140,8 @@ export const SchemaGroupNode = ({
             : "border-border border-dashed",
         )}
         style={{
-          width: "100%",
-          height: "100%",
+          width: `${resolvedWidth}px`,
+          height: `${resolvedHeight}px`,
         }}
       >
         <div
