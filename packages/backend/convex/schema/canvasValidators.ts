@@ -1077,6 +1077,10 @@ export const backendNodeDataValidator = v.union(
     label: v.string(),
     color: v.optional(v.string()),
     parentId: v.optional(v.string()),
+    groupId: v.optional(v.string()),
+    group: v.optional(v.string()),
+    badge: v.optional(v.string()),
+    description: v.optional(v.string()),
     targetServiceId: v.optional(v.string()),
     targetWebAppId: v.optional(v.string()),
     serviceNodeId: v.optional(v.string()),
@@ -1132,6 +1136,10 @@ export const backendEventDataValidator = zodToConvex(
 export const backendDatabaseDataValidator = zodToConvex(databaseDataSchema);
 
 export const backendEntityDataValidator = zodToConvex(entityDataSchema);
+
+export const backendSimpleDataValidator = zodToConvex(simpleDataSchema);
+
+export const backendGroupDataValidator = zodToConvex(simpleDataSchema);
 
 export const backendTypesNodeDataValidator = zodToConvex(typesNodeDataSchema);
 

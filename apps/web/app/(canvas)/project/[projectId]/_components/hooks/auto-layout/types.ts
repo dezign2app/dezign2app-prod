@@ -1,5 +1,6 @@
+import type { CSSProperties } from "react";
 import type { Node, Edge } from "@xyflow/react";
-import type { BackendNode, BackendEdge, WebAppZone, PageSection } from "@/types/canvas";
+import type { BackendNode, BackendEdge, BackendNodeData, WebAppZone, PageSection } from "@/types/canvas";
 
 export {
   HEAD_TARGET_HANDLES,
@@ -7,7 +8,14 @@ export {
   TARGET_NODE_TYPES,
 } from "@workspace/canvas";
 
-export type LayoutNode = Node | BackendNode;
+export type LayoutNode = Node<BackendNodeData> & {
+  fractionalIndex?: string;
+  nodeId?: string;
+  parentId?: string;
+  style?: CSSProperties;
+  width?: number;
+  height?: number;
+};
 export type LayoutEdge = Edge | BackendEdge;
 
 export type PositionNodeChange = {

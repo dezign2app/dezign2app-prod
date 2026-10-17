@@ -44,7 +44,8 @@ export function useSchemaAutoLayout(options?: UseSchemaAutoLayoutOptions) {
             n.type === "database" ||
             n.type === "redis_instance" ||
             n.type === "redis_schema" ||
-            n.type === "transformer",
+            n.type === "transformer" ||
+            n.type === "group",
         );
       const edges: LayoutEdge[] =
         options?.edges && options.edges.length > 0
@@ -231,7 +232,8 @@ export function useAutoLayout(options?: UseAutoLayoutOptions) {
               n.type === "database" ||
               n.type === "redis_instance" ||
               n.type === "redis_schema" ||
-              n.type === "transformer",
+              n.type === "transformer" ||
+              n.type === "group",
           ));
 
       const isLangGraphView =

@@ -58,18 +58,23 @@ export function SchemaView({ projectId }: SchemaViewProps) {
   const terminalHeight = useSidebarStore((s) => s.terminalHeight);
   const paletteOpen = useSidebarStore((s) => s.paletteOpen);
   const paletteWidth = useSidebarStore((s) => s.paletteWidth);
-  const schemaNodes = React.useMemo(
-    () =>
-      nodes.filter(
-        (n) =>
-          n.type === "entity" ||
-          n.type === "database" ||
-          n.type === "redis_instance" ||
-          n.type === "redis_schema" ||
-          n.type === "transformer",
-      ),
-    [nodes],
-  );
+  const schemaNodes = React.useMemo(() => {
+    const filtered = nodes.filter(
+      (n) =>
+        n.type === "entity" ||
+        n.type === "database" ||
+        n.type === "redis_instance" ||
+        n.type === "redis_schema" ||
+        n.type === "transformer" ||
+        n.type === "group",
+    );
+    // Sort group nodes to the beginning so they render behind entity nodes
+    return filtered.sort((a, b) => {
+      if (a.type === "group" && b.type !== "group") return -1;
+      if (a.type !== "group" && b.type === "group") return 1;
+      return 0;
+    });
+  }, [nodes]);
   const schemaNodeIds = React.useMemo(
     () => new Set(schemaNodes.map((n) => n.id)),
     [schemaNodes],

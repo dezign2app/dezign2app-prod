@@ -75,11 +75,11 @@ export function getLayoutNodeData(node: LayoutNode): NodeHandleData | undefined 
       : undefined;
   const zones =
     "zones" in node.data && Array.isArray(node.data.zones)
-      ? (node.data.zones as NodeHandleData["zones"])
+      ? node.data.zones
       : undefined;
   const sections =
     "sections" in node.data && Array.isArray(node.data.sections)
-      ? (node.data.sections as NodeHandleData["sections"])
+      ? node.data.sections
       : undefined;
   const fields =
     "fields" in node.data && Array.isArray(node.data.fields)
@@ -319,13 +319,14 @@ export function getNodeDimensions(node: LayoutNode): {
     }
 
     case "group": {
-      const data = getLayoutNodeData(node);
-      const count =
-        (Array.isArray(data?.endpoints) ? data.endpoints.length : 0) +
-        (Array.isArray(data?.events) ? data.events.length : 0) +
-        (Array.isArray(data?.topics) ? data.topics.length : 0);
-      const estHeight = Math.max(180, 140 + count * 40);
-      return { width: 320, height: estHeight };
+      const styleWidth = typeof node.style?.width === "number" ? node.style.width : undefined;
+      const styleHeight = typeof node.style?.height === "number" ? node.style.height : undefined;
+      const explicitW = typeof node.width === "number" ? node.width : styleWidth;
+      const explicitH = typeof node.height === "number" ? node.height : styleHeight;
+      if (typeof explicitW === "number" && typeof explicitH === "number") {
+        return { width: explicitW, height: explicitH };
+      }
+      return { width: explicitW ?? 450, height: explicitH ?? 300 };
     }
     case "entity": {
       const dbType = getEntityDbType(node);

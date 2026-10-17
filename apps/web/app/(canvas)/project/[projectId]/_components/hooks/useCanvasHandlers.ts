@@ -56,6 +56,33 @@ export function useCanvasHandlers(projectId: string, view: BackendCanvasView) {
 
       positionChanges.forEach((change) => {
         const targetNode = store.nodes.find((n) => n.id === change.id);
+
+        // Synchronize dragging for SchemaGroupNode: move all tables belonging to the group container
+        if (targetNode?.type === "group" && targetNode.position) {
+          const dx = change.position.x - targetNode.position.x;
+          const dy = change.position.y - targetNode.position.y;
+          if (dx !== 0 || dy !== 0) {
+            const groupTables = store.nodes.filter(
+              (n) =>
+                (n.type === "entity" || n.type === "redis_schema") &&
+                (n.data?.groupId === targetNode.id || n.parentId === targetNode.id),
+            );
+            groupTables.forEach((table) => {
+              if (!changedIds.has(table.id) && table.position) {
+                additionalChanges.push({
+                  type: "position",
+                  id: table.id,
+                  position: {
+                    x: table.position.x + dx,
+                    y: table.position.y + dy,
+                  },
+                });
+                changedIds.add(table.id);
+              }
+            });
+          }
+        }
+
         if (targetNode?.type === "webPage" && targetNode.position) {
           const dx = change.position.x - targetNode.position.x;
           const dy = change.position.y - targetNode.position.y;
