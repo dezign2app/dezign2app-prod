@@ -258,11 +258,22 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
       ) {
         return edge;
       }
-      const pkIdx = srcNode.data.columns.findIndex((c) => c.isPrimaryKey);
       const fkIdx = tgtNode.data.columns.findIndex(
         (c) =>
-          c.isForeignKey && c.references?.table === srcNode.data.label,
+          c.isForeignKey &&
+          (c.references?.table === srcNode.data.label ||
+            c.references?.table === srcNode.data.tableName),
       );
+      const fkCol = fkIdx !== -1 ? tgtNode.data.columns[fkIdx] : undefined;
+      let pkIdx = -1;
+      if (fkCol?.references?.column) {
+        pkIdx = srcNode.data.columns.findIndex(
+          (c) => c.name === fkCol.references?.column,
+        );
+      }
+      if (pkIdx === -1) {
+        pkIdx = srcNode.data.columns.findIndex((c) => c.isPrimaryKey);
+      }
       return {
         ...edge,
         sourceHandle: edge.sourceHandle ?? (pkIdx !== -1 ? `source-${pkIdx}` : undefined),
@@ -529,10 +540,70 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
       }
     });
 
-    if (newlyCreatedTypesNodes.length > 0) {
+    const newlyCreatedFkEdges: BackendEdge[] = [];
+    entityNodes.forEach((entity) => {
+      (entity.data?.columns || []).forEach((col, colIdx) => {
+        if (col.isForeignKey && col.references?.table && col.references?.column) {
+          const refTableName = col.references.table;
+          const refColName = col.references.column;
+          const refNode = entityNodes.find(
+            (n) =>
+              n.id !== entity.id &&
+              (n.data?.label === refTableName ||
+                n.data?.tableName === refTableName ||
+                (refTableName === "checkpoints" &&
+                  (n.data?.label === "langgraph_checkpoints" ||
+                    n.data?.tableName === "langgraph_checkpoints"))),
+          );
+          if (refNode && refNode.data?.columns) {
+            const refColIdx = refNode.data.columns.findIndex(
+              (c) => c.name === refColName,
+            );
+            if (refColIdx !== -1) {
+              const expectedSourceHandle = `source-${refColIdx}`;
+              const expectedTargetHandle = `target-${colIdx}`;
+              const allEdgesPool = [
+                ...healedEdges,
+                ...newlyCreatedTypesEdges,
+                ...newlyCreatedFkEdges,
+              ];
+              const existingFk = allEdgesPool.some(
+                (e) =>
+                  e.type === "foreign-key" &&
+                  e.source === refNode.id &&
+                  e.target === entity.id &&
+                  (e.sourceHandle === expectedSourceHandle || !e.sourceHandle) &&
+                  (e.targetHandle === expectedTargetHandle || !e.targetHandle),
+              );
+              if (!existingFk) {
+                const lastEdgeIdx = getLastIndex(allEdgesPool);
+                const fractionalIndex = generateKeyBetween(lastEdgeIdx, null);
+                const newFkEdge: BackendEdge = {
+                  id: `edge-fk-${entity.id}-${refNode.id}-${col.name}`,
+                  source: refNode.id,
+                  target: entity.id,
+                  sourceHandle: expectedSourceHandle,
+                  targetHandle: expectedTargetHandle,
+                  type: "foreign-key",
+                  fractionalIndex,
+                };
+                newlyCreatedFkEdges.push(newFkEdge);
+                healedEdges.push(newFkEdge);
+              }
+            }
+          }
+        }
+      });
+    });
+
+    if (newlyCreatedTypesNodes.length > 0 || newlyCreatedFkEdges.length > 0) {
       useBackendCanvasStore.setState((s) => ({
         pendingNodeUpserts: [...s.pendingNodeUpserts, ...newlyCreatedTypesNodes],
-        pendingEdgeUpserts: [...s.pendingEdgeUpserts, ...newlyCreatedTypesEdges],
+        pendingEdgeUpserts: [
+          ...s.pendingEdgeUpserts,
+          ...newlyCreatedTypesEdges,
+          ...newlyCreatedFkEdges,
+        ],
       }));
     }
 
