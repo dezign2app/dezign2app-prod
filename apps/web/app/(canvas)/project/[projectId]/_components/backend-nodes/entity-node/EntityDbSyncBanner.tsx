@@ -15,10 +15,9 @@ import {
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { useDbSyncStore } from "@/lib/stores/dbSyncStore";
 import {
-  checkDbTableSync,
   applyDbTableSync,
-  CheckDbTableSyncResult,
   CanvasForeignKey,
   PrerequisiteTableDefinition,
 } from "@/lib/services/databaseService";
@@ -58,12 +57,14 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
   foreignKeys,
   databaseNode,
 }) => {
-  const [syncStatus, setSyncStatus] = useState<CheckDbTableSyncResult | null>(null);
-  const [isChecking, setIsChecking] = useState(false);
+  const syncState = useDbSyncStore((s) => s.entitySyncStatus[entityId]);
+  const syncStatus = syncState?.status || null;
+  const isChecking = syncState?.isChecking || false;
+  const validateEntity = useDbSyncStore((s) => s.validateEntity);
+
   const [isApplying, setIsApplying] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [justSynced, setJustSynced] = useState(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const dbData = (databaseNode?.data || {}) as NonNullable<BackendNode["data"]>;
   const engine = (dbData.dbEngine || "postgres").toLowerCase();
@@ -140,55 +141,8 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
   }, [databaseNode, derivedForeignKeys, syncStatus?.missingForeignKeys, entityId, schema]);
 
   const performCheck = useCallback(async () => {
-    if (!databaseNode || !isSupportedEngine || !hasConnectionConfig || !tableName) {
-      return;
-    }
-
-    setIsChecking(true);
-    try {
-      const result = await checkDbTableSync({
-        engine,
-        connection: {
-          host: dbData.host,
-          port: dbData.port,
-          database: dbData.database,
-          user: dbData.user || dbData.username,
-          password: dbData.password,
-          connectionString: dbData.connectionString || dbData.connectionStringPooled,
-          connectionStringEnv: dbData.connectionStringEnv,
-          connectionStringPooled: dbData.connectionStringPooled,
-          connectionStringPooledEnv: dbData.connectionStringPooledEnv,
-          sslMode: dbData.sslMode,
-          provider: dbData.provider,
-          dbFilePath: dbData.dbFilePath,
-          dbFilePathEnv: dbData.dbFilePathEnv,
-        },
-        tableName,
-        schema,
-        columns,
-        indexes,
-        foreignKeys: derivedForeignKeys,
-      });
-
-      setSyncStatus(result);
-    } catch {
-      // Keep quiet on unhandled network issues
-    } finally {
-      setIsChecking(false);
-    }
-  }, [databaseNode, isSupportedEngine, hasConnectionConfig, tableName, schema, columns, indexes, derivedForeignKeys, engine, dbData]);
-
-  // Debounced check on entity schema change or DB configuration change
-  useEffect(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      performCheck();
-    }, 500);
-
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [performCheck]);
+    await validateEntity(entityId);
+  }, [validateEntity, entityId]);
 
   const handleApplySync = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -349,6 +303,7 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
     if (extraIdxs.length > 0) pulledParts.push(`${extraIdxs.length} index(es)`);
     if (extraFks.length > 0) pulledParts.push(`${extraFks.length} FK(s)`);
     toast.success(`Imported ${pulledParts.join(" & ")} into canvas!`);
+    void performCheck();
   };
 
   // If no DB node attached, or not a supported engine, or DB is completely unreachable/untested
@@ -356,13 +311,18 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
     return null;
   }
 
+  // If table has not been checked/validated yet, do not render any sync banner
+  if (!syncStatus) {
+    return null;
+  }
+
   // If table is verified and in sync (and not just synced), hide banner to keep canvas clean
-  if (syncStatus?.inSync && !justSynced) {
+  if (syncStatus.inSync && !justSynced) {
     return null;
   }
 
   // If DB server is unreachable, don't show false alarms unless expanded
-  if (syncStatus && !syncStatus.serverReachable && !isExpanded) {
+  if (!syncStatus.serverReachable && !isExpanded) {
     return null;
   }
 

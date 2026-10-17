@@ -1,9 +1,10 @@
 import React, { useRef } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Database, Table2, Trash, Settings, Sparkles, Lock } from "lucide-react";
+import { Database, Table2, Trash, Settings, Sparkles, Lock, CheckCircle2, AlertTriangle, RefreshCw } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { createTypesNodeFromEntity } from "@/lib/stores/backendCanvas/packageTypesSync";
 import { getOutOfSyncDerivedTypesNodes } from "@/lib/stores/backendCanvas/node";
+import { useDbSyncStore } from "@/lib/stores/dbSyncStore";
 import { cn } from "@workspace/ui/lib/utils";
 import { Badge } from "@workspace/ui/components/badge";
 import {
@@ -36,6 +37,17 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const setNodesPendingDeletion = useBackendCanvasStore(
     (s) => s.setNodesPendingDeletion,
   );
+  const syncState = useDbSyncStore((s) => s.entitySyncStatus[id]);
+  const isCheckingThisEntity = syncState?.isChecking || false;
+  const syncStatus = syncState?.status || null;
+  const validateEntity = useDbSyncStore((s) => s.validateEntity);
+  const isOutOfSync = Boolean(
+    syncStatus && syncStatus.serverReachable && !syncStatus.inSync,
+  );
+  const isInSync = Boolean(
+    syncStatus && syncStatus.serverReachable && syncStatus.inSync,
+  );
+
   const nodeRef = useRef<HTMLDivElement>(null);
 
   const columns = data.columns || [];
@@ -328,66 +340,115 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
             <Database size={10} style={{ color: dbThemeColor || (isVector ? "#8b5cf6" : "#f59e0b") }} />
             DB Node:
           </span>
-          <Select
-            value={data.databaseId || "none"}
-            onValueChange={(val: string) => {
-              const selectedDbId = val === "none" ? undefined : val;
-              const store = useBackendCanvasStore.getState();
+          <div className="flex items-center gap-1 min-w-0">
+            <Select
+              value={data.databaseId || "none"}
+              onValueChange={(val: string) => {
+                const selectedDbId = val === "none" ? undefined : val;
+                const store = useBackendCanvasStore.getState();
 
-              // Update node data
-              updateNode(id, {
-                data: {
-                  ...data,
-                  databaseId: selectedDbId,
-                },
-              });
+                // Update node data
+                updateNode(id, {
+                  data: {
+                    ...data,
+                    databaseId: selectedDbId,
+                  },
+                });
 
-              // Clean up existing edge if changed
-              const existingEdge = store.edges.find(
-                (e) => e.target === id && e.type === "database-connection",
-              );
-              if (existingEdge && existingEdge.source !== selectedDbId) {
-                store.deleteEdge(existingEdge.id);
-              }
-
-              // Add new edge if selected
-              if (selectedDbId) {
-                const edgeExists = store.edges.some(
-                  (e) => e.source === selectedDbId && e.target === id,
+                // Clean up existing edge if changed
+                const existingEdge = store.edges.find(
+                  (e) => e.target === id && e.type === "database-connection",
                 );
-                if (!edgeExists) {
-                  store.addEdge({
-                    id: `edge-${selectedDbId}-${id}`,
-                    source: selectedDbId,
-                    target: id,
-                    sourceHandle: "database-source",
-                    targetHandle: "database-entity-target",
-                    type: "database-connection",
-                  });
+                if (existingEdge && existingEdge.source !== selectedDbId) {
+                  store.deleteEdge(existingEdge.id);
                 }
-              }
-            }}
-          >
-            <SelectTrigger
-              disabled={data.readOnly}
-              className={cn(
-                "h-5 text-[10px] font-semibold bg-background/60 hover:bg-background border-border/40 px-1.5 py-0 shadow-none",
-                data.readOnly && "opacity-70 cursor-not-allowed",
-              )}
+
+                // Add new edge if selected
+                if (selectedDbId) {
+                  const edgeExists = store.edges.some(
+                    (e) => e.source === selectedDbId && e.target === id,
+                  );
+                  if (!edgeExists) {
+                    store.addEdge({
+                      id: `edge-${selectedDbId}-${id}`,
+                      source: selectedDbId,
+                      target: id,
+                      sourceHandle: "database-source",
+                      targetHandle: "database-entity-target",
+                      type: "database-connection",
+                    });
+                  }
+                }
+              }}
             >
-              <SelectValue placeholder="Unattached" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none" className="text-xs italic text-muted-foreground">
-                Unattached
-              </SelectItem>
-              {dbNodes.map((db) => (
-                <SelectItem key={db.id} value={db.id} className="text-xs">
-                  {db.data.label || "Database"} ({db.data.dbEngine || "postgres"})
+              <SelectTrigger
+                disabled={data.readOnly}
+                className={cn(
+                  "h-5 text-[10px] font-semibold bg-background/60 hover:bg-background border-border/40 px-1.5 py-0 shadow-none",
+                  data.readOnly && "opacity-70 cursor-not-allowed",
+                )}
+              >
+                <SelectValue placeholder="Unattached" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none" className="text-xs italic text-muted-foreground">
+                  Unattached
                 </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                {dbNodes.map((db) => (
+                  <SelectItem key={db.id} value={db.id} className="text-xs">
+                    {db.data.label || "Database"} ({db.data.dbEngine || "postgres"})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {hasLiveConnection && !isVector && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  validateEntity(id);
+                }}
+                disabled={isCheckingThisEntity}
+                className={cn(
+                  "h-5 px-1.5 rounded text-[9px] font-medium border flex items-center gap-1 cursor-pointer transition-colors shrink-0",
+                  isOutOfSync
+                    ? "bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500/20"
+                    : isInSync
+                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/20"
+                      : "bg-background/60 hover:bg-background border-border/40 text-muted-foreground hover:text-foreground",
+                )}
+                title={
+                  isCheckingThisEntity
+                    ? "Validating table against connected live database..."
+                    : isOutOfSync
+                      ? "Schema out of sync with live database (click to re-validate)"
+                      : isInSync
+                        ? "Schema in sync with live database (click to re-validate)"
+                        : "Validate this table against the connected live database"
+                }
+              >
+                {isCheckingThisEntity ? (
+                  <RefreshCw size={9} className="animate-spin text-primary" />
+                ) : isOutOfSync ? (
+                  <AlertTriangle size={9} className="text-amber-500" />
+                ) : isInSync ? (
+                  <CheckCircle2 size={9} className="text-emerald-500" />
+                ) : (
+                  <Database size={9} />
+                )}
+                <span>
+                  {isCheckingThisEntity
+                    ? "Checking..."
+                    : isInSync
+                      ? "In Sync"
+                      : isOutOfSync
+                        ? "Out of Sync"
+                        : "Validate"}
+                </span>
+              </button>
+            )}
+          </div>
         </div>
 
       {/* Description */}
