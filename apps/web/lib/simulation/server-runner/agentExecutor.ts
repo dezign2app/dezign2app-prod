@@ -334,15 +334,69 @@ export async function executeAgentNode(
     },
   );
 
+  // Track step outputs across pipeline execution (Step N can map inputs from Step 1..N-1)
+  const stepOutputs = new Map<string, StepStateValue>();
+
+  const interpolatePromptTemplate = (prompt: string): string => {
+    if (!prompt || !/\$\{([^}]+)\}/.test(prompt)) return prompt;
+    return prompt.replace(/\$\{([^}]+)\}/g, (match, expr: string) => {
+      const trimmed = expr.trim();
+      if (trimmed.startsWith("state.")) {
+        const field = trimmed.replace(/^state\./, "");
+        const val = resolveInputValue({ kind: "state", field }, { state, stepOutputs });
+        if (val !== undefined && val !== null) {
+          return typeof val === "object" ? JSON.stringify(val) : String(val);
+        }
+        return match;
+      }
+
+      const dotIdx = trimmed.indexOf(".");
+      const rootVar = dotIdx > 0 ? trimmed.substring(0, dotIdx) : trimmed;
+      const subField = dotIdx > 0 ? trimmed.substring(dotIdx + 1) : "";
+
+      if (stepOutputs.has(rootVar)) {
+        const stepVal = stepOutputs.get(rootVar);
+        if (subField && typeof stepVal === "object" && stepVal !== null) {
+          const fieldVal = resolveInputValue(
+            { kind: "step_output", stepId: rootVar, field: subField },
+            { state, stepOutputs },
+          );
+          if (fieldVal !== undefined && fieldVal !== null) {
+            return typeof fieldVal === "object" ? JSON.stringify(fieldVal) : String(fieldVal);
+          }
+        } else if (stepVal !== undefined && stepVal !== null) {
+          return typeof stepVal === "object" ? JSON.stringify(stepVal) : String(stepVal);
+        }
+        return match;
+      }
+
+      if (stepOutputs.has(trimmed)) {
+        const val = stepOutputs.get(trimmed);
+        if (val !== undefined && val !== null) {
+          return typeof val === "object" ? JSON.stringify(val) : String(val);
+        }
+        return match;
+      }
+
+      const fromState = resolveInputValue({ kind: "state", field: trimmed }, { state, stepOutputs });
+      if (fromState !== undefined && fromState !== null) {
+        return typeof fromState === "object" ? JSON.stringify(fromState) : String(fromState);
+      }
+
+      return match;
+    });
+  };
+
   const runLlmStep = async () => {
     if (!isLlmActive) return;
     const streamEnabled = isStreamActive;
+    const effectivePrompt = interpolatePromptTemplate(systemPrompt);
     addLog("llm", `Calling LLM: ${effectiveProvider.toUpperCase()} / ${effectiveModel} (${messages.length} message(s))`);
     const { text: responseText, streamBatches } = await callServerLLM({
       provider: effectiveProvider,
       apiKey: effectiveApiKey,
       modelName: effectiveModel,
-      systemPrompt,
+      systemPrompt: effectivePrompt,
       messages,
       customUrl: llmData?.url || llmData?.baseUrl,
       responseFormat,
@@ -380,7 +434,7 @@ export async function executeAgentNode(
       provider: effectiveProvider,
       model: effectiveModel,
       stream: streamEnabled,
-      systemPrompt,
+      systemPrompt: effectivePrompt,
       messageCount: messages.length,
     };
     nodeLlmRequestMap.set(node.id, outputDelta.llmRequest);
@@ -414,9 +468,6 @@ export async function executeAgentNode(
     }
     stepOutputs.set(node.id, llmOut);
   };
-
-  // Track step outputs across pipeline execution (Step N can map inputs from Step 1..N-1)
-  const stepOutputs = new Map<string, StepStateValue>();
 
   const runTransformerStep = async (
     step: LangGraphNodePipelineStep,
@@ -609,7 +660,12 @@ export async function executeAgentNode(
         }
       }
 
-      if (val === undefined) {
+      const isActionWithoutValue =
+        update.action === "reset" ||
+        update.action === "toggle" ||
+        update.action === "clear";
+
+      if (val === undefined && !isActionWithoutValue) {
         addLog(
           "warn",
           `State update for channel "${update.channelKey}" skipped: field "${cleanFieldKey}" not found in model output`,
@@ -627,34 +683,51 @@ export async function executeAgentNode(
       );
       const channelReducer =
         targetChannel?.reducer ||
+        update.reducer ||
         (update.mode === "append" ? "append" : "replace");
 
       const prevVal = state[update.channelKey];
 
-      if (
-        (update.mode === "append" ||
-          channelReducer === "append" ||
-          channelReducer === "concat_array") &&
-        Array.isArray(state[update.channelKey])
-      ) {
-        state[update.channelKey] = [
-          ...(state[update.channelKey] as unknown[]),
-          ...(Array.isArray(val) ? val : [val]),
-        ];
-      } else if (
-        (channelReducer === "merge_object" ||
-          targetChannel?.type === "object") &&
-        typeof state[update.channelKey] === "object" &&
-        typeof val === "object" &&
-        state[update.channelKey] !== null &&
-        val !== null
-      ) {
-        state[update.channelKey] = {
-          ...(state[update.channelKey] as Record<string, unknown>),
-          ...(val as Record<string, unknown>),
-        };
+      // Form the action payload if action is specified
+      const actionPayload =
+        update.action && update.action !== "default"
+          ? (val !== undefined ? { action: update.action, value: val } : { action: update.action })
+          : val;
+
+      // Execute reducer:
+      if (targetChannel?.customReducerCode) {
+        try {
+          const fn = new Function(
+            "prev",
+            "next",
+            "state",
+            `"use strict";
+            const customFn = (${targetChannel.customReducerCode});
+            if (typeof customFn === "function") {
+              return customFn(prev, next, state);
+            }
+            return customFn;`,
+          );
+          state[update.channelKey] = fn(prevVal, actionPayload, state);
+        } catch {
+          state[update.channelKey] = executeBuiltInAction(
+            update.action,
+            channelReducer,
+            targetChannel?.type,
+            prevVal,
+            val,
+            actionPayload,
+          );
+        }
       } else {
-        state[update.channelKey] = val;
+        state[update.channelKey] = executeBuiltInAction(
+          update.action,
+          channelReducer,
+          targetChannel?.type,
+          prevVal,
+          val,
+          actionPayload,
+        );
       }
 
       const newVal = state[update.channelKey];
@@ -665,6 +738,7 @@ export async function executeAgentNode(
         previousValue: prevVal,
         newValue: newVal,
         reducer: channelReducer,
+        action: update.action,
         source: update.source || "structured_field",
         sourceField: cleanFieldKey,
       };
@@ -672,7 +746,7 @@ export async function executeAgentNode(
 
       addLog(
         "state",
-        `State Channel Mutated: "${update.channelKey}" = ${JSON.stringify(newVal)} (Reducer: ${channelReducer}, was: ${JSON.stringify(prevVal)})`,
+        `State Channel Mutated: "${update.channelKey}" = ${JSON.stringify(newVal)} (Reducer: ${channelReducer}${update.action ? `, Action: ${update.action}` : ""}, was: ${JSON.stringify(prevVal)})`,
         record,
       );
     }
@@ -687,4 +761,69 @@ export async function executeAgentNode(
     stepLogs,
     latestAssistantResponse,
   };
+}
+
+function executeBuiltInAction(
+  action: string | undefined,
+  reducer: string,
+  type: string | undefined,
+  prevVal: unknown,
+  val: unknown,
+  actionPayload: unknown,
+): unknown {
+  if (action && action !== "default") {
+    switch (action) {
+      case "increment": {
+        const current = typeof prevVal === "number" ? prevVal : (Number(prevVal) || 0);
+        const amount = typeof val === "number" ? val : (Number(val) || 1);
+        return current + amount;
+      }
+      case "decrement": {
+        const current = typeof prevVal === "number" ? prevVal : (Number(prevVal) || 0);
+        const amount = typeof val === "number" ? val : (Number(val) || 1);
+        return current - amount;
+      }
+      case "toggle": {
+        return !Boolean(prevVal);
+      }
+      case "reset":
+      case "clear": {
+        if (type === "number") return 0;
+        if (type === "boolean") return false;
+        if (type === "array" || type === "messages") return [];
+        if (type === "object" || type === "json") return {};
+        if (type === "string") return "";
+        return undefined;
+      }
+      case "replace": {
+        return val !== undefined ? val : actionPayload;
+      }
+      case "append": {
+        const arr = Array.isArray(prevVal) ? prevVal : (prevVal != null ? [prevVal] : []);
+        return [...arr, ...(Array.isArray(val) ? val : (val != null ? [val] : []))];
+      }
+      case "merge": {
+        const obj = (prevVal && typeof prevVal === "object" && !Array.isArray(prevVal)) ? prevVal : {};
+        const incoming = (val && typeof val === "object" && !Array.isArray(val)) ? val : {};
+        return { ...obj, ...incoming };
+      }
+      case "concat": {
+        const str = typeof prevVal === "string" ? prevVal : "";
+        const incoming = val != null ? String(val) : "";
+        return str ? `${str}\n${incoming}` : incoming;
+      }
+      default: {
+        return val !== undefined ? val : actionPayload;
+      }
+    }
+  }
+
+  // Standard reducer logic without explicit action
+  if ((reducer === "append" || reducer === "concat_array") && Array.isArray(prevVal)) {
+    return [...prevVal, ...(Array.isArray(val) ? val : (val != null ? [val] : []))];
+  }
+  if ((reducer === "merge_object" || type === "object") && typeof prevVal === "object" && typeof val === "object" && prevVal !== null && val !== null) {
+    return { ...(prevVal as Record<string, unknown>), ...(val as Record<string, unknown>) };
+  }
+  return val;
 }

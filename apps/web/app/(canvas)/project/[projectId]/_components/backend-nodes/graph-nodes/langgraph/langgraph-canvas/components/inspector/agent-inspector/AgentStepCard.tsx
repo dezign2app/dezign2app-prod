@@ -221,6 +221,11 @@ export function AgentStepCard({
       case "llm_call":
         return (
           <AgentLlmStepContent
+            step={step}
+            onUpdateStep={onUpdateStep}
+            priorSteps={priorSteps}
+            allPipelineSteps={selectedAgentData.pipelineSteps}
+            stateChannels={stateChannels}
             selectedAgentData={selectedAgentData}
             onUpdateAgent={onUpdateAgent}
             availableLLMNodes={availableLLMNodes}

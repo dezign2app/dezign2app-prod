@@ -20,6 +20,8 @@ export type StateUpdateSource =
 
 export interface LangGraphStateUpdateItem {
   channelKey: string;
+  reducer?: string;
+  action?: string;
   source?: StateUpdateSource;
   schemaField?: string;
   mode?: StateUpdateMode;

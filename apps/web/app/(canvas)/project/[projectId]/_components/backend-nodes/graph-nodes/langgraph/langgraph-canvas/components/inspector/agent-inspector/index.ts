@@ -12,3 +12,4 @@ export * from "./AgentMiddlewareSection";
 export * from "./AgentStateUpdatesSection";
 export * from "./AgentStructuredOutputSection";
 export * from "./AgentTransformerStepSection";
+export * from "./AgentPromptVariablePicker";

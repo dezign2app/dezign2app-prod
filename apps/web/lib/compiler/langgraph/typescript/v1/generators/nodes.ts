@@ -85,7 +85,18 @@ export function buildAgentNodeFile(
     } else {
       val = su.value ? `${su.value}` : `state.${key}`;
     }
-    returnEntries.push(`    ${key}: ${val},`);
+    if (su.action && su.action !== "default") {
+      const isValueless =
+        (su.action === "reset" || su.action === "toggle" || su.action === "clear") &&
+        (!su.value || (su.source === "literal" && !su.value));
+      if (isValueless) {
+        returnEntries.push(`    ${key}: { action: "${su.action}" },`);
+      } else {
+        returnEntries.push(`    ${key}: { action: "${su.action}", value: ${val} },`);
+      }
+    } else {
+      returnEntries.push(`    ${key}: ${val},`);
+    }
   }
 
   bodyLines.push(`  return {`);

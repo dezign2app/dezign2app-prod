@@ -51,6 +51,206 @@ interface AgentStateUpdatesSectionProps {
   embedded?: boolean;
 }
 
+// Helper to extract action names from custom reducer code
+export function extractActionsFromReducerCode(code?: string): string[] {
+  if (!code || typeof code !== "string") return [];
+  const actions = new Set<string>();
+
+  const eqRegex = /(?:action|\.action)\s*===?\s*["']([^"']+)["']/g;
+  let match: RegExpExecArray | null;
+  while ((match = eqRegex.exec(code)) !== null) {
+    const act = match[1]?.trim();
+    if (act && act !== "default" && act !== "") {
+      actions.add(act);
+    }
+  }
+
+  const caseRegex = /case\s*["']([^"']+)["']\s*:/g;
+  while ((match = caseRegex.exec(code)) !== null) {
+    const act = match[1]?.trim();
+    if (act && act !== "default" && act !== "") {
+      actions.add(act);
+    }
+  }
+
+  return Array.from(actions);
+}
+
+export interface ReducerActionMeta {
+  action: string;
+  label: string;
+  description: string;
+  requiresValue: boolean;
+}
+
+export function getActionsForReducer(
+  channelType?: string,
+  reducerName?: string,
+  customCode?: string,
+): ReducerActionMeta[] {
+  const actions: ReducerActionMeta[] = [];
+  const seen = new Set<string>();
+
+  const addAction = (meta: ReducerActionMeta) => {
+    if (!seen.has(meta.action)) {
+      seen.add(meta.action);
+      actions.push(meta);
+    }
+  };
+
+  // 1. Default update action (passes direct value)
+  addAction({
+    action: "default",
+    label: "default (Direct)",
+    description: "Standard reducer update passing value directly",
+    requiresValue: true,
+  });
+
+  // 2. Extract actions from custom reducer code if present
+  if (customCode) {
+    const parsed = extractActionsFromReducerCode(customCode);
+    for (const act of parsed) {
+      const isValueless = act === "reset" || act === "clear" || act === "toggle";
+      addAction({
+        action: act,
+        label:
+          act === "replace"
+            ? "replace (= Set)"
+            : act === "reset"
+              ? "reset (Clear)"
+              : act === "increment"
+                ? "increment (+ Add)"
+                : act === "decrement"
+                  ? "decrement (- Sub)"
+                  : act === "toggle"
+                    ? "toggle (Flip)"
+                    : act,
+        description: `Dispatches { action: "${act}", value: ... }`,
+        requiresValue: !isValueless,
+      });
+    }
+  }
+
+  // 3. Built-in actions based on channel type
+  if (channelType === "number") {
+    addAction({
+      action: "increment",
+      label: "increment (+ Amount)",
+      description: "Adds amount to counter (default 1)",
+      requiresValue: true,
+    });
+    addAction({
+      action: "decrement",
+      label: "decrement (- Amount)",
+      description: "Subtracts amount from counter (default 1)",
+      requiresValue: true,
+    });
+    addAction({
+      action: "replace",
+      label: "replace (= Overwrite)",
+      description: "Explicitly replaces number with new value",
+      requiresValue: true,
+    });
+    addAction({
+      action: "reset",
+      label: "reset (0)",
+      description: "Resets counter to 0",
+      requiresValue: false,
+    });
+  } else if (channelType === "boolean") {
+    addAction({
+      action: "toggle",
+      label: "toggle (Flip !)",
+      description: "Inverts boolean state (true <-> false)",
+      requiresValue: false,
+    });
+    addAction({
+      action: "replace",
+      label: "replace (= Set)",
+      description: "Explicitly sets boolean value",
+      requiresValue: true,
+    });
+    addAction({
+      action: "reset",
+      label: "reset (False)",
+      description: "Resets boolean to false",
+      requiresValue: false,
+    });
+  } else if (channelType === "array" || channelType === "messages") {
+    addAction({
+      action: "append",
+      label: "append (Push)",
+      description: "Appends items to list",
+      requiresValue: true,
+    });
+    addAction({
+      action: "replace",
+      label: "replace (= Overwrite)",
+      description: "Overwrites entire list with new array",
+      requiresValue: true,
+    });
+    addAction({
+      action: "reset",
+      label: "reset (Empty [])",
+      description: "Empties list",
+      requiresValue: false,
+    });
+  } else if (channelType === "object" || channelType === "json") {
+    addAction({
+      action: "merge",
+      label: "merge ({...})",
+      description: "Shallow merges keys into dictionary",
+      requiresValue: true,
+    });
+    addAction({
+      action: "replace",
+      label: "replace (= Overwrite)",
+      description: "Overwrites entire object",
+      requiresValue: true,
+    });
+    addAction({
+      action: "reset",
+      label: "reset (Empty {})",
+      description: "Empties object",
+      requiresValue: false,
+    });
+  } else if (channelType === "string") {
+    addAction({
+      action: "concat",
+      label: "concat (+ Append)",
+      description: "Appends text to existing string",
+      requiresValue: true,
+    });
+    addAction({
+      action: "replace",
+      label: "replace (= Overwrite)",
+      description: "Overwrites string",
+      requiresValue: true,
+    });
+    addAction({
+      action: "reset",
+      label: "reset (Empty \"\")",
+      description: "Clears string",
+      requiresValue: false,
+    });
+  } else {
+    addAction({
+      action: "replace",
+      label: "replace (= Overwrite)",
+      description: "Replaces state value with new value",
+      requiresValue: true,
+    });
+    addAction({
+      action: "reset",
+      label: "reset (Clear)",
+      description: "Resets channel value",
+      requiresValue: false,
+    });
+  }
+
+  return actions;
+}
+
 export function AgentStateUpdatesSection({
   selectedAgentData,
   onUpdateAgent,
@@ -60,6 +260,10 @@ export function AgentStateUpdatesSection({
 }: AgentStateUpdatesSectionProps) {
   const stateUpdates: LangGraphStateUpdateItem[] =
     selectedAgentData.stateUpdates || [];
+
+  const [customActionIdxs, setCustomActionIdxs] = React.useState<
+    Record<number, boolean>
+  >({});
 
   const isStructured = Boolean(selectedAgentData.responseFormat?.enabled);
   const schemaJson = selectedAgentData.responseFormat?.schemaJson || "";
@@ -87,7 +291,7 @@ export function AgentStateUpdatesSection({
       (channelType === "messages" ? "add_messages" : "replace");
 
     const matchedCustom = customReducers.find(
-      (r) => r.name === reducerName || r.id === reducerName,
+      (r) => r.name === reducerName || r.id === reducerName || r.targetField === channelKey,
     );
 
     return {
@@ -95,7 +299,7 @@ export function AgentStateUpdatesSection({
       type: channelType,
       reducer: reducerName,
       isCustom: Boolean(matchedCustom),
-      customCode: matchedCustom?.code,
+      customCode: matchedCustom?.code || channel?.customReducerCode,
       description: matchedCustom?.description,
     };
   };
@@ -122,7 +326,6 @@ export function AgentStateUpdatesSection({
       if (!f.name?.trim()) continue;
       const cleanFieldName = f.name.trim();
 
-      // Check if already mapped
       const alreadyMapped = nextUpdates.some(
         (su) =>
           su.source === "structured_field" &&
@@ -130,7 +333,6 @@ export function AgentStateUpdatesSection({
       );
       if (alreadyMapped) continue;
 
-      // Find matching state channel
       const matchedChannel = stateChannels.find(
         (c) =>
           c.key.toLowerCase() === cleanFieldName.toLowerCase() ||
@@ -139,12 +341,13 @@ export function AgentStateUpdatesSection({
       );
 
       if (matchedChannel) {
-        // Replace existing update for this channel if present, or append
         const existingIdx = nextUpdates.findIndex(
           (u) => u.channelKey === matchedChannel.key,
         );
         const newItem: LangGraphStateUpdateItem = {
           channelKey: matchedChannel.key,
+          reducer: matchedChannel.reducer || "replace",
+          action: "replace",
           source: "structured_field",
           schemaField: cleanFieldName,
           mode: "set",
@@ -180,7 +383,6 @@ export function AgentStateUpdatesSection({
       );
       if (alreadyMapped) continue;
 
-      // Find best available channel or first unmapped channel
       const targetChannel =
         stateChannels.find((c) => c.key === cleanFieldName) ||
         stateChannels.find(
@@ -191,6 +393,8 @@ export function AgentStateUpdatesSection({
       if (targetChannel) {
         nextUpdates.push({
           channelKey: targetChannel.key,
+          reducer: targetChannel.reducer || "replace",
+          action: "replace",
           source: "structured_field",
           schemaField: cleanFieldName,
           mode: "set",
@@ -214,12 +418,15 @@ export function AgentStateUpdatesSection({
       stateChannels[0];
 
     const defaultKey = matchedChannel?.key || fieldName;
+    const defaultReducer = matchedChannel?.reducer || "replace";
 
     onUpdateAgent({
       stateUpdates: [
         ...stateUpdates,
         {
           channelKey: defaultKey,
+          reducer: defaultReducer,
+          action: "replace",
           source: "structured_field",
           schemaField: fieldName,
           mode: "set",
@@ -253,10 +460,11 @@ export function AgentStateUpdatesSection({
             variant="outline"
             className="h-7 text-xs border-border gap-1 cursor-pointer"
             onClick={() => {
-              const defaultKey =
-                stateChannels.find((c) => c.key !== "messages")?.key ||
-                stateChannels[0]?.key ||
-                "status";
+              const defaultChannel =
+                stateChannels.find((c) => c.key !== "messages") ||
+                stateChannels[0];
+              const defaultKey = defaultChannel?.key || "status";
+              const defaultReducer = defaultChannel?.reducer || "replace";
               const defaultSource: StateUpdateSource =
                 isStructured && schemaFields.length > 0
                   ? "structured_field"
@@ -268,6 +476,8 @@ export function AgentStateUpdatesSection({
                   ...stateUpdates,
                   {
                     channelKey: defaultKey,
+                    reducer: defaultReducer,
+                    action: "default",
                     source: defaultSource,
                     schemaField: defaultField,
                     mode: "set",
@@ -281,7 +491,7 @@ export function AgentStateUpdatesSection({
           </Button>
         </div>
 
-        {/* Structured Output Schema Preview Banner (PipelineStepEditor Pattern) */}
+        {/* Structured Output Schema Preview Banner */}
         {isStructured && (
           <div className="flex flex-col gap-2 rounded-lg border border-purple-500/30 bg-purple-500/10 p-2.5 text-xs">
             <div className="flex items-center justify-between">
@@ -346,13 +556,13 @@ export function AgentStateUpdatesSection({
           </div>
         )}
 
-        {/* Mapping Rows Header */}
+        {/* Mapping Rows Header: Channel & Reducer | Reducer Action | New Value (Source) */}
         {stateUpdates.length > 0 && (
-          <div className="grid grid-cols-[1fr_auto_1fr_auto] gap-2 items-center px-2 text-[9px] font-bold text-muted-foreground uppercase tracking-wider">
-            <span>State Channel (Reducer)</span>
-            <span className="w-4 text-center"></span>
-            <span>Source & Field Mapping</span>
-            <span className="w-6 text-right"></span>
+          <div className="flex items-center justify-between px-2 text-[9px] font-bold text-muted-foreground uppercase tracking-wider">
+            <span className="flex-1 min-w-[130px]">State Channel &amp; Reducer</span>
+            <span className="w-[125px] px-1">Reducer Action</span>
+            <span className="flex-1 min-w-[130px] pl-4">New Value (Source)</span>
+            <span className="w-7 text-right"></span>
           </div>
         )}
 
@@ -385,55 +595,135 @@ export function AgentStateUpdatesSection({
               ),
           );
 
+          // Available actions for this channel and reducer
+          const availableActions = getActionsForReducer(
+            channelMeta.type,
+            channelMeta.reducer,
+            channelMeta.customCode,
+          );
+
+          const isCustomActionActive =
+            Boolean(customActionIdxs[sIdx]) ||
+            (Boolean(su.action) &&
+              su.action !== "default" &&
+              !availableActions.some((a) => a.action === su.action));
+
+          const currentActionMeta = availableActions.find(
+            (a) => a.action === (su.action || "default"),
+          );
+
+          const isValuelessAction =
+            su.action === "reset" ||
+            su.action === "toggle" ||
+            su.action === "clear";
+
+          // Format value description for preview
+          const valueDisplay =
+            currentSource === "structured_field"
+              ? `structuredResponse.${su.schemaField || su.value}`
+              : currentSource === "structured_full"
+                ? `full structuredResponse`
+                : currentSource === "message_content"
+                  ? `response.content`
+                  : currentSource === "message_object"
+                    ? `AIMessage`
+                    : currentSource === "expression"
+                      ? (su.value || "(empty expr)")
+                      : currentSource === "literal"
+                        ? JSON.stringify(su.value || "")
+                        : (su.value || "value");
+
           return (
             <div
               key={sIdx}
               className="flex flex-col gap-2 p-2.5 rounded-lg border bg-background/50 text-xs shadow-xs transition-colors hover:border-border/80"
             >
-              <div className="grid grid-cols-[1fr_auto_1fr_auto] gap-2 items-center">
-                {/* 1. Target Channel & Reducer Badge */}
-                <div className="flex items-center gap-1.5 min-w-0">
+              {/* Top Controls: Channel & Reducer | Action | Arrow | Source | Delete */}
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 min-w-0">
+                {/* 1. Target Channel & Reducer */}
+                <div className="flex-1 min-w-[130px] flex items-center gap-1 min-w-0">
                   <Select
                     value={su.channelKey}
                     onValueChange={(v: string) => {
                       const updated = [...stateUpdates];
                       const current = updated[sIdx];
                       if (current) {
-                        updated[sIdx] = { ...current, channelKey: v };
+                        const chMeta = getChannelMeta(v);
+                        updated[sIdx] = {
+                          ...current,
+                          channelKey: v,
+                          reducer: chMeta.reducer,
+                          action: "default",
+                        };
                         onUpdateAgent({ stateUpdates: updated });
                       }
                     }}
                   >
-                    <SelectTrigger className="h-7 text-xs bg-background font-mono flex-1 min-w-0 px-2">
+                    <SelectTrigger className="h-7 text-xs bg-background font-mono flex-1 min-w-0 px-2" title="Select State Channel & Reducer">
                       <SelectValue placeholder="Select channel" />
                     </SelectTrigger>
                     <SelectContent>
-                      {stateChannels
-                        .filter((ch: LangGraphStateChannel) =>
-                          Boolean(ch.key?.trim()),
-                        )
-                        .map((ch: LangGraphStateChannel) => (
-                          <SelectItem key={ch.key} value={ch.key}>
-                            <div className="flex items-center gap-2">
+                      <SelectGroup>
+                        <SelectLabel className="text-[10px] uppercase font-bold text-muted-foreground">
+                          State Channels &amp; Reducers
+                        </SelectLabel>
+                        {stateChannels
+                          .filter((ch: LangGraphStateChannel) =>
+                            Boolean(ch.key?.trim()),
+                          )
+                          .map((ch: LangGraphStateChannel) => (
+                            <SelectItem key={ch.key} value={ch.key}>
+                              <div className="flex items-center gap-1.5 font-mono">
+                                <span className="font-semibold text-foreground">
+                                  {ch.key}
+                                </span>
+                                <span className="text-[10px] text-sky-400">
+                                  ({ch.reducer || "replace"})
+                                </span>
+                                <span className="text-[9px] text-muted-foreground font-sans">
+                                  [{ch.type}]
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        {!stateChannels.some(
+                          (c: LangGraphStateChannel) => c.key === su.channelKey,
+                        ) &&
+                          su.channelKey && (
+                            <SelectItem value={su.channelKey}>
                               <span className="font-mono font-semibold">
-                                {ch.key}
+                                {su.channelKey}
                               </span>
-                              <span className="text-[10px] text-muted-foreground font-sans">
-                                ({ch.type})
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      {!stateChannels.some(
-                        (c: LangGraphStateChannel) => c.key === su.channelKey,
-                      ) &&
-                        su.channelKey && (
-                          <SelectItem value={su.channelKey}>
-                            <span className="font-mono font-semibold">
-                              {su.channelKey}
-                            </span>
-                          </SelectItem>
-                        )}
+                            </SelectItem>
+                          )}
+                      </SelectGroup>
+
+                      {customReducers.length > 0 && (
+                        <>
+                          <SelectSeparator />
+                          <SelectGroup>
+                            <SelectLabel className="text-[10px] uppercase font-bold text-purple-400">
+                              Custom Reducers (@langgraphstateconfig)
+                            </SelectLabel>
+                            {customReducers.map((cr) => (
+                              <SelectItem
+                                key={cr.id}
+                                value={cr.targetField || cr.name}
+                              >
+                                <div className="flex items-center gap-1.5 font-mono text-purple-300">
+                                  <Code2 className="w-3 h-3 text-purple-400" />
+                                  <span className="font-semibold">{cr.name}</span>
+                                  {cr.targetField && (
+                                    <span className="text-[9px] text-muted-foreground font-sans">
+                                      ➔ {cr.targetField}
+                                    </span>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
 
@@ -490,19 +780,20 @@ export function AgentStateUpdatesSection({
                           Reducer: {channelMeta.reducer}
                         </span>
                         <span className="text-[10px] text-muted-foreground font-sans">
-                          {channelMeta.isCustom
-                            ? "Custom reducer function defined on Global Graph State"
-                            : channelMeta.reducer === "add_messages"
-                              ? "Deduplicates by ID and appends messages"
-                              : channelMeta.reducer === "append" ||
-                                  channelMeta.reducer === "concat_array"
-                                ? "Concatenates array payload to existing channel"
-                                : channelMeta.reducer === "merge_object"
-                                  ? "Merges object properties into existing state"
-                                  : "Replaces channel value with node output"}
+                          {channelMeta.description ||
+                            (channelMeta.isCustom
+                              ? "Custom reducer function defined in @langgraphstateconfig"
+                              : channelMeta.reducer === "add_messages"
+                                ? "Deduplicates by ID and appends messages"
+                                : channelMeta.reducer === "append" ||
+                                    channelMeta.reducer === "concat_array"
+                                  ? "Concatenates array payload to existing channel"
+                                  : channelMeta.reducer === "merge_object"
+                                    ? "Merges object properties into existing state"
+                                    : "Replaces channel value with node output")}
                         </span>
                         {channelMeta.customCode && (
-                          <code className="text-[9px] bg-background/80 p-1 rounded border border-border/50 text-purple-200 whitespace-pre-wrap">
+                          <code className="text-[9px] bg-background/80 p-1 rounded border border-border/50 text-purple-200 whitespace-pre-wrap max-h-24 overflow-y-auto">
                             {channelMeta.customCode}
                           </code>
                         )}
@@ -511,18 +802,103 @@ export function AgentStateUpdatesSection({
                   </Tooltip>
                 </div>
 
-                {/* 2. Arrow Connector */}
-                <div className="flex items-center justify-center text-muted-foreground/60 select-none">
+                {/* 2. Reducer Action Selector */}
+                <div className="w-[125px] shrink-0">
+                  <Select
+                    value={
+                      isCustomActionActive
+                        ? "__custom__"
+                        : (su.action || "default")
+                    }
+                    onValueChange={(val: string) => {
+                      const updated = [...stateUpdates];
+                      const current = updated[sIdx];
+                      if (!current) return;
+
+                      if (val === "__custom__") {
+                        setCustomActionIdxs((prev) => ({
+                          ...prev,
+                          [sIdx]: true,
+                        }));
+                      } else {
+                        setCustomActionIdxs((prev) => {
+                          const next = { ...prev };
+                          delete next[sIdx];
+                          return next;
+                        });
+
+                        let nextValue = current.value;
+                        let nextSource = current.source;
+                        if (val === "increment" || val === "decrement") {
+                          if (!nextValue || nextValue === "response.content") {
+                            nextValue = "1";
+                            nextSource = "expression";
+                          }
+                        }
+
+                        updated[sIdx] = {
+                          ...current,
+                          action: val,
+                          value: nextValue,
+                          source: nextSource,
+                        };
+                        onUpdateAgent({ stateUpdates: updated });
+                      }
+                    }}
+                  >
+                    <SelectTrigger
+                      className="h-7 text-xs bg-background font-mono px-2"
+                      title="Select Action for this Reducer"
+                    >
+                      <SelectValue placeholder="Action" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectLabel className="text-[10px] uppercase font-bold text-amber-400">
+                          Reducer Actions
+                        </SelectLabel>
+                        {availableActions.map((act) => (
+                          <SelectItem
+                            key={act.action}
+                            value={act.action}
+                            className="font-mono text-xs"
+                          >
+                            <span className="font-semibold text-amber-300">
+                              {act.label}
+                            </span>
+                          </SelectItem>
+                        ))}
+                        <SelectSeparator />
+                        <SelectItem
+                          value="__custom__"
+                          className="text-xs italic text-primary font-mono"
+                        >
+                          + Custom action...
+                        </SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Arrow Connector */}
+                <div className="flex items-center justify-center text-muted-foreground/60 select-none px-0.5">
                   <ArrowLeft className="w-3.5 h-3.5" />
                 </div>
 
-                {/* 3. Source & Field Selector */}
-                <div className="flex items-center gap-1.5 min-w-0">
+                {/* 3. Source & Field Selector (New Value) */}
+                <div className="flex-1 min-w-[130px] flex items-center gap-1.5 min-w-0">
                   <Select
                     value={
                       currentSource === "structured_field"
                         ? `field:${su.schemaField || su.value || ""}`
-                        : currentSource === "expression" && su.value && transformerSteps.some((ts) => ts.outputVariable && (su.value === ts.outputVariable || su.value?.startsWith(`${ts.outputVariable}.`)))
+                        : currentSource === "expression" &&
+                            su.value &&
+                            transformerSteps.some(
+                              (ts) =>
+                                ts.outputVariable &&
+                                (su.value === ts.outputVariable ||
+                                  su.value?.startsWith(`${ts.outputVariable}.`)),
+                            )
                           ? `step_var:${su.value}`
                           : currentSource
                     }
@@ -579,7 +955,11 @@ export function AgentStateUpdatesSection({
                           source: "expression",
                           schemaField: undefined,
                           mode: "expression",
-                          value: current.value || "state.count + 1",
+                          value:
+                            current.action === "increment" ||
+                            current.action === "decrement"
+                              ? "1"
+                              : current.value || "state.count + 1",
                         };
                       } else if (val === "literal") {
                         updated[sIdx] = {
@@ -593,7 +973,10 @@ export function AgentStateUpdatesSection({
                       onUpdateAgent({ stateUpdates: updated });
                     }}
                   >
-                    <SelectTrigger className="h-7 text-xs bg-background flex-1 min-w-0 px-2 font-mono">
+                    <SelectTrigger
+                      className="h-7 text-xs bg-background flex-1 min-w-0 px-2 font-mono"
+                      title="Select source for new value"
+                    >
                       <SelectValue placeholder="Select source" />
                     </SelectTrigger>
                     <SelectContent>
@@ -665,21 +1048,33 @@ export function AgentStateUpdatesSection({
                             </SelectLabel>
                             {transformerSteps.map((ts) => {
                               const varName = ts.outputVariable || ts.id;
-                              const returnFields = ts.outputSchema || ts.functionRef?.returnSchema || [];
+                              const returnFields =
+                                ts.outputSchema ||
+                                ts.functionRef?.returnSchema ||
+                                [];
                               return (
                                 <React.Fragment key={ts.id}>
                                   <SelectItem value={`step_var:${varName}`}>
                                     <div className="flex items-center gap-1.5 font-mono text-purple-300">
                                       <Shuffle className="w-3 h-3 text-purple-400" />
                                       <span>{varName}</span>
-                                      <span className="text-[9px] text-muted-foreground">(whole)</span>
+                                      <span className="text-[9px] text-muted-foreground">
+                                        (whole)
+                                      </span>
                                     </div>
                                   </SelectItem>
                                   {returnFields.map((f) => (
-                                    <SelectItem key={`${varName}.${f.name}`} value={`step_var:${varName}.${f.name}`}>
+                                    <SelectItem
+                                      key={`${varName}.${f.name}`}
+                                      value={`step_var:${varName}.${f.name}`}
+                                    >
                                       <div className="flex items-center gap-1.5 font-mono text-purple-300 pl-2">
-                                        <span>{varName}.{f.name}</span>
-                                        <span className="text-[9px] text-muted-foreground">({f.type})</span>
+                                        <span>
+                                          {varName}.{f.name}
+                                        </span>
+                                        <span className="text-[9px] text-muted-foreground">
+                                          ({f.type})
+                                        </span>
                                       </div>
                                     </SelectItem>
                                   ))}
@@ -745,19 +1140,68 @@ export function AgentStateUpdatesSection({
                 </Button>
               </div>
 
-              {/* Expression or Custom Value Input (when source requires manual text) */}
+              {/* Custom Action Name Input (when user selects custom action) */}
+              {isCustomActionActive && (
+                <div className="flex items-center gap-2 pt-1 border-t border-border/30">
+                  <span className="text-[10px] text-amber-400 font-mono shrink-0 font-semibold">
+                    Action Name:
+                  </span>
+                  <LocalInput
+                    className="h-6 text-[11px] bg-background font-mono flex-1 border-amber-500/30"
+                    placeholder="e.g. increment_by_5 or clear_cart"
+                    value={su.action === "default" ? "" : su.action || ""}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      const updated = [...stateUpdates];
+                      const current = updated[sIdx];
+                      if (current) {
+                        updated[sIdx] = { ...current, action: e.target.value };
+                        onUpdateAgent({ stateUpdates: updated });
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomActionIdxs((prev) => {
+                        const next = { ...prev };
+                        delete next[sIdx];
+                        return next;
+                      });
+                      const updated = [...stateUpdates];
+                      if (updated[sIdx]) {
+                        updated[sIdx] = { ...updated[sIdx]!, action: "default" };
+                        onUpdateAgent({ stateUpdates: updated });
+                      }
+                    }}
+                    className="text-[10px] text-muted-foreground hover:text-foreground px-1"
+                    title="Reset to default action"
+                  >
+                    &times;
+                  </button>
+                </div>
+              )}
+
+              {/* Expression or Custom Value Input */}
               {(currentSource === "expression" ||
-                currentSource === "literal") && (
+                currentSource === "literal" ||
+                su.action === "increment" ||
+                su.action === "decrement") && (
                 <div className="flex items-center gap-2 pt-1 border-t border-border/30">
                   <span className="text-[10px] text-muted-foreground font-mono shrink-0">
-                    {currentSource === "expression" ? "Expr:" : "Value:"}
+                    {su.action === "increment" || su.action === "decrement"
+                      ? "Amount:"
+                      : currentSource === "expression"
+                        ? "Expr:"
+                        : "Value:"}
                   </span>
                   <LocalInput
                     className="h-6 text-[11px] bg-background font-mono flex-1"
                     placeholder={
-                      currentSource === "expression"
-                        ? "state.count + 1 or state.user_query"
-                        : "Static literal value"
+                      su.action === "increment" || su.action === "decrement"
+                        ? "1 or state.delta"
+                        : currentSource === "expression"
+                          ? "state.count + 1 or state.user_query"
+                          : "Static literal value"
                     }
                     value={su.value || ""}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
@@ -772,62 +1216,56 @@ export function AgentStateUpdatesSection({
                 </div>
               )}
 
-              {/* Reducer Contract Hint */}
-              <div className="flex items-center justify-between text-[10px] text-muted-foreground/80 px-1 font-mono">
+              {/* Valueless action indicator (e.g. reset/toggle) */}
+              {isValuelessAction && !su.value && (
+                <div className="flex items-center gap-1.5 pt-0.5 text-[10px] text-amber-400/90 font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                  <span>
+                    Action &apos;{su.action}&apos; automatically mutates channel without a new value.
+                  </span>
+                </div>
+              )}
+
+              {/* Feeds / Reducer Contract Hint */}
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground/80 px-1 font-mono pt-0.5">
                 <span className="truncate">
-                  {currentSource === "structured_field" ? (
-                    <>
-                      Feeds:{" "}
-                      <span className="text-purple-300">
-                        structuredResponse.{su.schemaField || su.value}
-                      </span>{" "}
-                      →{" "}
-                      <span className="text-sky-300">
-                        {channelMeta.reducer}
-                      </span>
-                    </>
-                  ) : currentSource === "structured_full" ? (
-                    <>
-                      Feeds:{" "}
-                      <span className="text-purple-300">
-                        full structuredResponse
-                      </span>{" "}
-                      →{" "}
-                      <span className="text-sky-300">
-                        {channelMeta.reducer}
-                      </span>
-                    </>
-                  ) : currentSource === "message_content" ? (
-                    <>
-                      Feeds:{" "}
-                      <span className="text-foreground/90">
-                        response.content
-                      </span>{" "}
-                      →{" "}
-                      <span className="text-sky-300">
-                        {channelMeta.reducer}
-                      </span>
-                    </>
-                  ) : currentSource === "message_object" ? (
-                    <>
-                      Feeds:{" "}
-                      <span className="text-foreground/90">AIMessage</span> →{" "}
-                      <span className="text-purple-300">add_messages</span>
-                    </>
+                  {su.action && su.action !== "default" ? (
+                    isValuelessAction && !su.value ? (
+                      <>
+                        Feeds:{" "}
+                        <span className="text-amber-300 font-bold">
+                          &#123; action: &quot;{su.action}&quot; &#125;
+                        </span>{" "}
+                        →{" "}
+                        <span className="text-sky-300 font-bold">
+                          {channelMeta.reducer}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        Feeds:{" "}
+                        <span className="text-amber-300 font-bold">
+                          &#123; action: &quot;{su.action}&quot;, value:{" "}
+                          <span className="text-purple-300">{valueDisplay}</span>{" "}
+                          &#125;
+                        </span>{" "}
+                        →{" "}
+                        <span className="text-sky-300 font-bold">
+                          {channelMeta.reducer}
+                        </span>
+                      </>
+                    )
                   ) : (
                     <>
                       Feeds:{" "}
-                      <span className="text-amber-300">
-                        {su.value || "(empty)"}
-                      </span>{" "}
-                      →{" "}
-                      <span className="text-sky-300">
+                      <span className="text-purple-300">{valueDisplay}</span> →{" "}
+                      <span className="text-sky-300 font-bold">
                         {channelMeta.reducer}
                       </span>
                     </>
                   )}
                 </span>
-                <span className="text-[9px] text-muted-foreground/60 shrink-0">
+                <span className="text-[9px] text-muted-foreground/60 shrink-0 ml-2">
                   channel: {channelMeta.type}
                 </span>
               </div>
@@ -835,7 +1273,7 @@ export function AgentStateUpdatesSection({
           );
         })}
 
-        {/* Unmapped Schema Fields Quick-Add Pills (PipelineStepEditor Pattern) */}
+        {/* Unmapped Schema Fields Quick-Add Pills */}
         {isStructured && unmappedSchemaFields.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-border/30">
             <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
@@ -868,11 +1306,11 @@ export function AgentStateUpdatesSection({
             <span className="text-[11px] text-muted-foreground">
               This node outputs standard{" "}
               <code className="text-amber-500 font-mono">messages</code> to the
-              graph. Click "+ Add Update"
+              graph. Click &quot;+ Add Update&quot;
               {isStructured && schemaFields.length > 0
                 ? " or an unmapped field pill above "
                 : " "}
-              to mutate additional state channels.
+              to select a reducer and map actions with new values.
             </span>
           </div>
         )}

@@ -105,6 +105,27 @@ function generateId(): string {
   return "cp_" + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
 }
 
+function interpolateBrowserPrompt(prompt: string, state: Record<string, unknown>): string {
+  if (!prompt || !/\$\{([^}]+)\}/.test(prompt)) return prompt;
+  return prompt.replace(/\$\{([^}]+)\}/g, (match, expr: string) => {
+    const trimmed = expr.trim();
+    const fieldPath = trimmed.startsWith("state.") ? trimmed.replace(/^state\./, "") : trimmed;
+    const parts = fieldPath.split(".");
+    let curr: unknown = state;
+    for (const p of parts) {
+      if (curr && typeof curr === "object" && p in (curr as Record<string, unknown>)) {
+        curr = (curr as Record<string, unknown>)[p];
+      } else {
+        return match;
+      }
+    }
+    if (curr !== undefined && curr !== null) {
+      return typeof curr === "object" ? JSON.stringify(curr) : String(curr);
+    }
+    return match;
+  });
+}
+
 /**
  * Execute LangGraph 100% in the browser environment.
  * Zero external servers, zero Next.js API routes, zero mock/fake responses.
@@ -583,7 +604,7 @@ export async function executeBrowserLangGraph(
             provider: effectiveProvider,
             apiKey: effectiveApiKey,
             modelName: effectiveModel,
-            systemPrompt,
+            systemPrompt: interpolateBrowserPrompt(systemPrompt, state),
             messages,
             customUrl: llmData?.url || llmData?.baseUrl,
             responseFormat,
@@ -713,7 +734,12 @@ export async function executeBrowserLangGraph(
             }
           }
 
-          if (val === undefined) {
+          const isActionWithoutValue =
+            update.action === "reset" ||
+            update.action === "toggle" ||
+            update.action === "clear";
+
+          if (val === undefined && !isActionWithoutValue) {
             addLog(
               "warn",
               `State update for channel "${update.channelKey}" skipped: field "${cleanFieldKey}" not found in model output`,
@@ -731,34 +757,51 @@ export async function executeBrowserLangGraph(
           );
           const channelReducer =
             targetChannel?.reducer ||
+            update.reducer ||
             (update.mode === "append" ? "append" : "replace");
 
           const prevVal = state[update.channelKey];
 
-          if (
-            (update.mode === "append" ||
-              channelReducer === "append" ||
-              channelReducer === "concat_array") &&
-            Array.isArray(state[update.channelKey])
-          ) {
-            state[update.channelKey] = [
-              ...(state[update.channelKey] as unknown[]),
-              ...(Array.isArray(val) ? val : [val]),
-            ];
-          } else if (
-            (channelReducer === "merge_object" ||
-              targetChannel?.type === "object") &&
-            typeof state[update.channelKey] === "object" &&
-            typeof val === "object" &&
-            state[update.channelKey] !== null &&
-            val !== null
-          ) {
-            state[update.channelKey] = {
-              ...(state[update.channelKey] as Record<string, unknown>),
-              ...(val as Record<string, unknown>),
-            };
+          // Form the action payload if action is specified
+          const actionPayload =
+            update.action && update.action !== "default"
+              ? (val !== undefined ? { action: update.action, value: val } : { action: update.action })
+              : val;
+
+          // Execute reducer:
+          if (targetChannel?.customReducerCode) {
+            try {
+              const fn = new Function(
+                "prev",
+                "next",
+                "state",
+                `"use strict";
+                const customFn = (${targetChannel.customReducerCode});
+                if (typeof customFn === "function") {
+                  return customFn(prev, next, state);
+                }
+                return customFn;`,
+              );
+              state[update.channelKey] = fn(prevVal, actionPayload, state);
+            } catch {
+              state[update.channelKey] = executeBrowserBuiltInAction(
+                update.action,
+                channelReducer,
+                targetChannel?.type,
+                prevVal,
+                val,
+                actionPayload,
+              );
+            }
           } else {
-            state[update.channelKey] = val;
+            state[update.channelKey] = executeBrowserBuiltInAction(
+              update.action,
+              channelReducer,
+              targetChannel?.type,
+              prevVal,
+              val,
+              actionPayload,
+            );
           }
 
           const newVal = state[update.channelKey];
@@ -769,6 +812,7 @@ export async function executeBrowserLangGraph(
             previousValue: prevVal,
             newValue: newVal,
             reducer: channelReducer,
+            action: update.action,
             source: update.source || "structured_field",
             sourceField: cleanFieldKey,
           };
@@ -776,7 +820,7 @@ export async function executeBrowserLangGraph(
 
           addLog(
             "state",
-            `State Channel Mutated: "${update.channelKey}" = ${JSON.stringify(newVal)} (Reducer: ${channelReducer}, was: ${JSON.stringify(prevVal)})`,
+            `State Channel Mutated: "${update.channelKey}" = ${JSON.stringify(newVal)} (Reducer: ${channelReducer}${update.action ? `, Action: ${update.action}` : ""}, was: ${JSON.stringify(prevVal)})`,
             record
           );
         }
@@ -1690,4 +1734,69 @@ async function callBrowserLLM(args: {
   }
 
   throw new Error(`Unsupported LLM provider: "${provider}". Please choose Groq, OpenAI, or Anthropic.`);
+}
+
+function executeBrowserBuiltInAction(
+  action: string | undefined,
+  reducer: string,
+  type: string | undefined,
+  prevVal: unknown,
+  val: unknown,
+  actionPayload: unknown,
+): unknown {
+  if (action && action !== "default") {
+    switch (action) {
+      case "increment": {
+        const current = typeof prevVal === "number" ? prevVal : (Number(prevVal) || 0);
+        const amount = typeof val === "number" ? val : (Number(val) || 1);
+        return current + amount;
+      }
+      case "decrement": {
+        const current = typeof prevVal === "number" ? prevVal : (Number(prevVal) || 0);
+        const amount = typeof val === "number" ? val : (Number(val) || 1);
+        return current - amount;
+      }
+      case "toggle": {
+        return !Boolean(prevVal);
+      }
+      case "reset":
+      case "clear": {
+        if (type === "number") return 0;
+        if (type === "boolean") return false;
+        if (type === "array" || type === "messages") return [];
+        if (type === "object" || type === "json") return {};
+        if (type === "string") return "";
+        return undefined;
+      }
+      case "replace": {
+        return val !== undefined ? val : actionPayload;
+      }
+      case "append": {
+        const arr = Array.isArray(prevVal) ? prevVal : (prevVal != null ? [prevVal] : []);
+        return [...arr, ...(Array.isArray(val) ? val : (val != null ? [val] : []))];
+      }
+      case "merge": {
+        const obj = (prevVal && typeof prevVal === "object" && !Array.isArray(prevVal)) ? prevVal : {};
+        const incoming = (val && typeof val === "object" && !Array.isArray(val)) ? val : {};
+        return { ...obj, ...incoming };
+      }
+      case "concat": {
+        const str = typeof prevVal === "string" ? prevVal : "";
+        const incoming = val != null ? String(val) : "";
+        return str ? `${str}\n${incoming}` : incoming;
+      }
+      default: {
+        return val !== undefined ? val : actionPayload;
+      }
+    }
+  }
+
+  // Standard reducer logic without explicit action
+  if ((reducer === "append" || reducer === "concat_array") && Array.isArray(prevVal)) {
+    return [...prevVal, ...(Array.isArray(val) ? val : (val != null ? [val] : []))];
+  }
+  if ((reducer === "merge_object" || type === "object") && typeof prevVal === "object" && typeof val === "object" && prevVal !== null && val !== null) {
+    return { ...(prevVal as Record<string, unknown>), ...(val as Record<string, unknown>) };
+  }
+  return val;
 }
