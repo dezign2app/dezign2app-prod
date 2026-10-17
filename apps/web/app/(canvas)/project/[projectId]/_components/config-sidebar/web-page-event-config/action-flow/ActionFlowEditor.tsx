@@ -8,7 +8,12 @@ import {
 } from "lucide-react";
 import { Badge } from "@workspace/ui/components/badge";
 import type { ActionFlowEditorProps, FrontendActionStepDraft, FrontendActionStepType } from "./types";
-import { deriveStepsFromEdges, getActionFlowRuntime, autoMapAuthBindings } from "./utils";
+import {
+  deriveStepsFromEdges,
+  getActionFlowRuntime,
+  autoMapAuthBindings,
+  buildInitialBindingsFromEndpoint,
+} from "./utils";
 import { FrontendAddStepToolbar } from "./FrontendAddStepToolbar";
 import { FrontendStepRow } from "./FrontendStepRow";
 import { createDefaultFrontendStep } from "./frontendStepFactory";
@@ -36,9 +41,12 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
       return item.actionSteps.map((s) => {
         if (s.type === "api_call") {
           const ep = endpoints.find((e) => e.id === s.endpointId);
+          const bindings = s.requestBindings && s.requestBindings.length > 0
+            ? autoMapAuthBindings(s.requestBindings, ep, isProtected)
+            : buildInitialBindingsFromEndpoint(ep, isProtected);
           return {
             ...s,
-            requestBindings: autoMapAuthBindings(s.requestBindings || [], ep, isProtected),
+            requestBindings: bindings,
           };
         }
         return s;
@@ -54,9 +62,12 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
       const mapped = item.actionSteps.map((s) => {
         if (s.type === "api_call") {
           const ep = endpoints.find((e) => e.id === s.endpointId);
+          const bindings = s.requestBindings && s.requestBindings.length > 0
+            ? autoMapAuthBindings(s.requestBindings, ep, isProtected)
+            : buildInitialBindingsFromEndpoint(ep, isProtected);
           return {
             ...s,
-            requestBindings: autoMapAuthBindings(s.requestBindings || [], ep, isProtected),
+            requestBindings: bindings,
           };
         }
         return s;
@@ -65,6 +76,8 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
     } else if (canvasSteps.length > 0) {
       const derived = deriveStepsFromEdges(canvasSteps, item?.actionSteps, isProtected);
       setDrafts(derived);
+    } else {
+      setDrafts([]);
     }
   }, [item?.actionSteps, canvasSteps, isProtected]);
 
@@ -89,7 +102,7 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
           serviceNodeId: firstService.id,
           endpointId: firstEndpoint.id,
           edgeId,
-          requestBindings: autoMapAuthBindings([], firstEndpoint, isProtected),
+          requestBindings: buildInitialBindingsFromEndpoint(firstEndpoint, isProtected),
         };
       }
     }

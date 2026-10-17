@@ -1,0 +1,241 @@
+import React from "react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import type { BackendNode, Endpoint } from "@workspace/canvas";
+import { ApiCallStep } from "../ApiCallStep";
+import { buildInitialBindingsFromEndpoint } from "../utils";
+import type { FrontendActionStepDraft } from "../types";
+
+// Mock @workspace/ui components
+vi.mock("@workspace/ui/components/popover", () => ({
+  Popover: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  PopoverTrigger: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+  PopoverContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock("../ActionFlowCombobox", () => ({
+  ActionFlowCombobox: ({
+    value,
+    onChange,
+    placeholder,
+  }: {
+    value?: string;
+    onChange: (val: string) => void;
+    placeholder?: string;
+  }) => (
+    <input
+      data-testid="mock-combobox"
+      value={value || ""}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+    />
+  ),
+}));
+
+vi.mock("@workspace/ui/components/select", () => ({
+  Select: ({
+    children,
+    value,
+    onValueChange,
+  }: {
+    children?: React.ReactNode;
+    value?: string;
+    onValueChange?: (val: string) => void;
+  }) => (
+    <div data-testid="mock-select" data-value={value}>
+      <button
+        type="button"
+        data-testid="mock-select-change-session"
+        onClick={() => onValueChange?.("session_storage")}
+      />
+      <button
+        type="button"
+        data-testid="mock-select-change-local"
+        onClick={() => onValueChange?.("local_storage")}
+      />
+      <button
+        type="button"
+        data-testid="mock-select-change-cookie"
+        onClick={() => onValueChange?.("cookie")}
+      />
+      {children}
+    </div>
+  ),
+  SelectTrigger: ({ children }: { children?: React.ReactNode }) => (
+    <button type="button">{children}</button>
+  ),
+  SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  SelectItem: ({ children, value }: { children?: React.ReactNode; value?: string }) => (
+    <div data-value={value}>{children}</div>
+  ),
+}));
+
+describe("buildInitialBindingsFromEndpoint", () => {
+  const sampleEndpoint: Endpoint = {
+    id: "ep-users",
+    name: "/api/users/:userId",
+    type: "POST",
+    headers: [
+      { id: "h1", name: "X-Custom-Client", type: "string", required: true },
+    ],
+    pathParams: [
+      { id: "p1", name: "userId", type: "string", required: true },
+    ],
+    queryParams: [
+      { id: "q1", name: "includeDetails", type: "boolean", required: false },
+    ],
+    requestBody: {
+      id: "b1",
+      fields: [
+        { id: "f1", name: "email", type: "string", required: true },
+        { id: "f2", name: "fullName", type: "string", required: false },
+      ],
+    },
+  };
+
+  it("should generate slot-aware bindings for headers, pathParams, queryParams, and body fields", () => {
+    const bindings = buildInitialBindingsFromEndpoint(sampleEndpoint, true);
+
+    // 1. Headers: should include Authorization (since protected) and X-Custom-Client
+    const headerBindings = bindings.filter((b) => b.slot === "header");
+    expect(headerBindings.length).toBe(2);
+    expect(headerBindings.some((b) => b.targetField === "Authorization" && b.source.kind === "auth_token")).toBe(true);
+    expect(headerBindings.some((b) => b.targetField === "X-Custom-Client")).toBe(true);
+
+    // 2. Path Params: should include userId mapped to route_param
+    const pathBindings = bindings.filter((b) => b.slot === "path_param");
+    expect(pathBindings.length).toBe(1);
+    expect(pathBindings[0]?.targetField).toBe("userId");
+    expect(pathBindings[0]?.source).toEqual({ kind: "route_param", paramName: "userId" });
+
+    // 3. Query Params: should include includeDetails mapped to query_param
+    const queryBindings = bindings.filter((b) => b.slot === "query_param");
+    expect(queryBindings.length).toBe(1);
+    expect(queryBindings[0]?.targetField).toBe("includeDetails");
+    expect(queryBindings[0]?.source).toEqual({ kind: "query_param", paramName: "includeDetails" });
+
+    // 4. Body Fields: should include email and fullName mapped to user_input
+    const bodyBindings = bindings.filter((b) => b.slot === "body");
+    expect(bodyBindings.length).toBe(2);
+    expect(bodyBindings.some((b) => b.targetField === "email" && b.source.kind === "user_input")).toBe(true);
+    expect(bodyBindings.some((b) => b.targetField === "fullName" && b.source.kind === "user_input")).toBe(true);
+  });
+
+  it("should not inject auth headers when endpoint explicitly sets requireAuth to false", () => {
+    const unauthEndpoint: Endpoint = {
+      ...sampleEndpoint,
+      requireAuth: false,
+    };
+    const bindings = buildInitialBindingsFromEndpoint(unauthEndpoint, true);
+    const auth = bindings.find((b) => b.targetField.toLowerCase() === "authorization");
+    expect(auth).toBeUndefined();
+  });
+});
+
+describe("ApiCallStep UI component", () => {
+  const serviceNode: BackendNode = {
+    id: "service-1",
+    type: "service",
+    position: { x: 0, y: 0 },
+    fractionalIndex: "a0",
+    data: { label: "User Service" },
+  };
+
+  const endpoint: Endpoint & { nodeId: string } = {
+    id: "ep-1",
+    nodeId: "service-1",
+    name: "/api/users/:id",
+    type: "POST",
+    headers: [{ id: "h1", name: "X-Trace-Id", type: "string", required: true }],
+    pathParams: [{ id: "p1", name: "id", type: "string", required: true }],
+    queryParams: [{ id: "q1", name: "tab", type: "string", required: false }],
+    requestBody: {
+      id: "b1",
+      fields: [{ id: "f1", name: "username", type: "string", required: true }],
+    },
+  };
+
+  const draft: FrontendActionStepDraft = {
+    id: "step-1",
+    order: 1,
+    type: "api_call",
+    serviceNodeId: "service-1",
+    endpointId: "ep-1",
+    requestBindings: [
+      {
+        id: "b-h1",
+        slot: "header",
+        targetField: "Authorization",
+        source: { kind: "literal", value: "Bearer <token>" },
+      },
+      {
+        id: "b-p1",
+        slot: "path_param",
+        targetField: "id",
+        source: { kind: "route_param", paramName: "id" },
+      },
+      {
+        id: "b-q1",
+        slot: "query_param",
+        targetField: "tab",
+        source: { kind: "query_param", paramName: "tab" },
+      },
+      {
+        id: "b-b1",
+        slot: "body",
+        targetField: "username",
+        source: { kind: "user_input", fieldName: "username" },
+      },
+    ],
+  };
+
+  it("should render all four slot sections: HTTP Headers, Path Parameters, Query Parameters, and Request Body", () => {
+    render(
+      <ApiCallStep
+        draft={draft}
+        stepIndex={0}
+        allSteps={[draft]}
+        allCanvasSteps={[]}
+        serviceNodes={[serviceNode]}
+        allNodes={[serviceNode]}
+        endpoints={[endpoint]}
+        isProtected={true}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("HTTP Headers")).toBeDefined();
+    expect(screen.getByText("Path Parameters")).toBeDefined();
+    expect(screen.getByText("Query Parameters")).toBeDefined();
+    expect(screen.getByText("Request Body")).toBeDefined();
+  });
+
+  it("should allow adding a new binding to a specific slot with correct slot tag", () => {
+    const handleChange = vi.fn();
+    render(
+      <ApiCallStep
+        draft={draft}
+        stepIndex={0}
+        allSteps={[draft]}
+        allCanvasSteps={[]}
+        serviceNodes={[serviceNode]}
+        allNodes={[serviceNode]}
+        endpoints={[endpoint]}
+        isProtected={true}
+        onChange={handleChange}
+      />,
+    );
+
+    const addHeaderBtn = screen.getByText("Add Header");
+    fireEvent.click(addHeaderBtn);
+
+    expect(handleChange).toHaveBeenCalled();
+    const firstCall = handleChange.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    const updatedDraft = firstCall?.[0] as FrontendActionStepDraft;
+    const bindings = updatedDraft?.requestBindings || [];
+    const newBinding = bindings[bindings.length - 1];
+    expect(newBinding?.slot).toBe("header");
+  });
+});

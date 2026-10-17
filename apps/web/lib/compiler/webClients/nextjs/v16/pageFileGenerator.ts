@@ -45,10 +45,47 @@ export function generatePageAndComponentFiles({
   const pageFiles: CompiledFile[] = [];
   let hasExplicitRoot = false;
 
+  const hasStepAuthAnywhere = webClientNodes.some((node) => {
+    const rawSections = Array.isArray(node.data?.sections) ? node.data.sections : [];
+    return rawSections.some((sec) => {
+      if (!sec || typeof sec !== "object" || !("actions" in sec) || !Array.isArray(sec.actions)) {
+        return false;
+      }
+      return sec.actions.some((act) => {
+        if (!act || typeof act !== "object" || !("actionSteps" in act) || !Array.isArray(act.actionSteps)) {
+          return false;
+        }
+        return act.actionSteps.some((s) => {
+          if (!s || typeof s !== "object" || !("type" in s) || s.type !== "api_call") {
+            return false;
+          }
+          const bindings = Array.isArray(s.requestBindings) ? s.requestBindings : [];
+          return bindings.some((b) => {
+            if (!b || typeof b !== "object") return false;
+            const targetField = typeof b.targetField === "string" ? b.targetField.toLowerCase() : "";
+            const slot = typeof b.slot === "string" ? b.slot : "";
+            const sourceKind = b.source && typeof b.source === "object" && "kind" in b.source ? b.source.kind : "";
+            return (
+              (slot === "header" || !slot) &&
+              (sourceKind === "auth_token" ||
+                targetField === "authorization" ||
+                targetField === "auth-bearer-header")
+            );
+          });
+        });
+      });
+    });
+  });
+
   const hasGlobalAuth = Boolean(
-    authNode ||
+    hasStepAuthAnywhere ||
+      authNode ||
+      pagesInfo.some((p) => p.accessType !== "public") ||
       webClientNodes.some(
-        (n) => n.data?.authNodeId && allNodes.some((an) => an.id === n.data.authNodeId && an.type === "auth"),
+        (n) =>
+          (n.data?.authNodeId && allNodes.some((an) => an.id === n.data.authNodeId && an.type === "auth")) ||
+          n.data?.requireAuth === true ||
+          (n.data?.useZoneDefault === false && n.data?.protectionOverride?.accessType === "protected"),
       ),
   );
   pageFiles.push(generateApiClientFile(hasGlobalAuth));
@@ -69,6 +106,14 @@ export function generatePageAndComponentFiles({
       (node.data?.authNodeId
         ? allNodes.find((n) => n.id === node.data.authNodeId && n.type === "auth")
         : undefined);
+
+    const isPageProtected =
+      pageMeta.accessType !== "public" ||
+      node.data?.requireAuth === true ||
+      Boolean(
+        node.data?.useZoneDefault === false &&
+          node.data?.protectionOverride?.accessType === "protected",
+      );
 
     const nodeHeaders: Record<string, string> = {};
     (node.data?.headers || [])
@@ -254,7 +299,7 @@ export function generatePageAndComponentFiles({
         }
 
         if (link) {
-          const requireAuth = Boolean(effectiveAuthNode) && link.requireAuth !== false;
+          const requireAuth = (Boolean(effectiveAuthNode) || isPageProtected) && link.requireAuth !== false;
           const headersEntries = Object.entries(nodeHeaders)
             .map(([k, v]) => `"${k}": "${v}",`)
             .join("\n          ");
@@ -468,7 +513,21 @@ export function generatePageAndComponentFiles({
           );
           url = link ? link.fullUrl : "";
           method = link ? link.method : "POST";
-          requireAuth = Boolean(effectiveAuthNode) && (link ? link.requireAuth !== false : true);
+          const hasStepAuth = (evt.actionSteps || []).some(
+            (s) =>
+              s.type === "api_call" &&
+              (s.requestBindings || []).some(
+                (b) =>
+                  (b.slot === "header" || !b.slot) &&
+                  (b.source?.kind === "auth_token" ||
+                    b.targetField?.toLowerCase() === "authorization" ||
+                    b.targetField?.toLowerCase() === "auth-bearer-header"),
+              ),
+          );
+          requireAuth =
+            hasStepAuth ||
+            ((Boolean(effectiveAuthNode) || isPageProtected) &&
+              (link ? link.requireAuth !== false : true));
         }
 
         // Detect storage node connected to this WebPage action via edges or bindings

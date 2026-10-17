@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronRight,
   Sparkles,
+  HardDrive,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
@@ -25,9 +26,9 @@ import { Card } from "@workspace/ui/components/card";
 import { toast } from "sonner";
 import { cn } from "@workspace/ui/lib/utils";
 import type { BackendNode, Endpoint, UIEventItem, JSONValue, JSONObject, FrontendFieldSource } from "@workspace/canvas";
-import type { FrontendActionStepDraft } from "./types";
+import type { FrontendActionStepDraft, FrontendRequestFieldBinding, QueryParamUpdateItem } from "./types";
 import type { ActionStepItem } from "../TargetEndpointSection";
-import { isAuthHeaderName } from "./utils";
+import { isAuthHeaderName, deriveStepsFromEdges } from "./utils";
 
 export interface ActionSimulatorProps {
   item: UIEventItem;
@@ -93,6 +94,11 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
     [allNodes],
   );
 
+  const effectiveSteps = useMemo(() => {
+    if (steps && steps.length > 0) return steps;
+    return deriveStepsFromEdges(canvasSteps, undefined, isProtected);
+  }, [steps, canvasSteps, isProtected]);
+
   // Discover all inputs required across all steps
   const initialContext = useMemo(() => {
     const ctx: {
@@ -101,12 +107,18 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
       inputs: Record<string, JSONValue>;
       routeParams: Record<string, string>;
       queryParams: Record<string, string>;
+      sessionStorage: Record<string, string>;
+      localStorage: Record<string, string>;
+      cookies: Record<string, string>;
     } = {
       stores: {},
       localState: {},
       inputs: {},
       routeParams: {},
       queryParams: {},
+      sessionStorage: {},
+      localStorage: {},
+      cookies: {},
     };
 
     // Initialize stores with their actual node field default values
@@ -137,23 +149,52 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
     });
 
     // Scan steps for specific form inputs or values used
-    steps.forEach((s) => {
-      (s.requestBindings || []).forEach((b) => {
-        if (b.source.kind === "user_input" && b.source.fieldName) {
-          if (!(b.source.fieldName in ctx.inputs)) {
-            ctx.inputs[b.source.fieldName] = `test_${b.source.fieldName}`;
-          }
+    const scanSource = (src?: FrontendFieldSource) => {
+      if (!src) return;
+      if (src.kind === "user_input" && src.fieldName) {
+        if (!(src.fieldName in ctx.inputs)) {
+          ctx.inputs[src.fieldName] = `test_${src.fieldName}`;
         }
-      });
-      if (s.stateValueSource?.kind === "user_input" && s.stateValueSource.fieldName) {
-        if (!(s.stateValueSource.fieldName in ctx.inputs)) {
-          ctx.inputs[s.stateValueSource.fieldName] = `test_${s.stateValueSource.fieldName}`;
+      } else if (src.kind === "session_storage" && src.key) {
+        if (!(src.key in ctx.sessionStorage)) {
+          ctx.sessionStorage[src.key] = `test_${src.key}`;
+        }
+      } else if (src.kind === "local_storage" && src.key) {
+        if (!(src.key in ctx.localStorage)) {
+          ctx.localStorage[src.key] = `test_${src.key}`;
+        }
+      } else if (src.kind === "cookie" && src.cookieName) {
+        if (!(src.cookieName in ctx.cookies)) {
+          ctx.cookies[src.cookieName] = `test_${src.cookieName}`;
+        }
+      } else if (src.kind === "auth_token") {
+        if (!ctx.cookies["better-auth.session_token"]) {
+          ctx.cookies["better-auth.session_token"] = "session_token_simulated_auth";
+        }
+        if (!ctx.localStorage["auth_token"]) {
+          ctx.localStorage["auth_token"] = "Bearer simulated-session-token";
         }
       }
+    };
+
+    effectiveSteps.forEach((s: FrontendActionStepDraft) => {
+      (s.requestBindings || []).forEach((b: FrontendRequestFieldBinding) => scanSource(b.source));
+      scanSource(s.stateValueSource);
+      scanSource(s.queryParamValueSource);
+      (s.queryParamsUpdates || []).forEach((u: QueryParamUpdateItem) => scanSource(u.valueSource));
     });
 
+    if (isProtected) {
+      if (!ctx.cookies["better-auth.session_token"]) {
+        ctx.cookies["better-auth.session_token"] = "session_token_simulated_auth";
+      }
+      if (!ctx.localStorage["auth_token"]) {
+        ctx.localStorage["auth_token"] = "Bearer simulated-session-token";
+      }
+    }
+
     return ctx;
-  }, [stateStores, currentPageNode, steps]);
+  }, [stateStores, currentPageNode, effectiveSteps, isProtected]);
 
   const [testContext, setTestContext] = useState(initialContext);
   const [isRunning, setIsRunning] = useState(false);
@@ -176,6 +217,9 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
       inputs: Record<string, JSONValue>;
       routeParams: Record<string, string>;
       queryParams: Record<string, string>;
+      sessionStorage: Record<string, string>;
+      localStorage: Record<string, string>;
+      cookies: Record<string, string>;
     } = JSON.parse(JSON.stringify(testContext));
     const stepResponses: Record<string, JSONValue> = {};
 
@@ -199,6 +243,42 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
       if (source.kind === "query_param") {
         return runtimeState.queryParams[source.paramName];
       }
+      if (source.kind === "session_storage") {
+        return runtimeState.sessionStorage?.[source.key] ?? `<sessionStorage:${source.key}>`;
+      }
+      if (source.kind === "local_storage") {
+        return runtimeState.localStorage?.[source.key] ?? `<localStorage:${source.key}>`;
+      }
+      if (source.kind === "cookie") {
+        return runtimeState.cookies?.[source.cookieName] ?? `<cookie:${source.cookieName}>`;
+      }
+      if (source.kind === "auth_token") {
+        if (source.tokenType === "cookie") {
+          const cookieVal = runtimeState.cookies?.["better-auth.session_token"];
+          return cookieVal
+            ? (cookieVal.startsWith("Bearer ") ? cookieVal : `Bearer ${cookieVal}`)
+            : "Bearer simulated-cookie-token";
+        }
+        if (source.tokenType === "local_storage") {
+          const localVal = runtimeState.localStorage?.["auth_token"];
+          return localVal
+            ? (localVal.startsWith("Bearer ") ? localVal : `Bearer ${localVal}`)
+            : "Bearer simulated-local-token";
+        }
+        const cookieVal = runtimeState.cookies?.["better-auth.session_token"];
+        const localVal = runtimeState.localStorage?.["auth_token"];
+        const sessionVal = runtimeState.sessionStorage?.["auth_token"];
+        if (cookieVal) {
+          return cookieVal.startsWith("Bearer ") ? cookieVal : `Bearer ${cookieVal}`;
+        }
+        if (localVal) {
+          return localVal.startsWith("Bearer ") ? localVal : `Bearer ${localVal}`;
+        }
+        if (sessionVal) {
+          return sessionVal.startsWith("Bearer ") ? sessionVal : `Bearer ${sessionVal}`;
+        }
+        return "Bearer simulated-session-token";
+      }
       if (source.kind === "prev_response") {
         const resp = stepResponses[source.stepId];
         if (resp === undefined) return undefined;
@@ -219,8 +299,8 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
     };
 
     // Sequential step evaluation
-    for (let idx = 0; idx < steps.length; idx++) {
-      const step = steps[idx]!;
+    for (let idx = 0; idx < effectiveSteps.length; idx++) {
+      const step = effectiveSteps[idx]!;
       const stepName = step.name || `${step.type} (Step ${idx + 1})`;
 
       if (step.type === "api_call") {
@@ -228,27 +308,61 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
         const targetEndpoint = endpoints.find((ep) => ep.id === targetEpId);
 
         const simHeaders: Record<string, string> = { "Content-Type": "application/json" };
-        const payload: Record<string, JSONValue> = {};
+        const simPathParams: Record<string, string> = {};
+        const simQueryParams: Record<string, string> = {};
+        const simBody: Record<string, JSONValue> = {};
 
-        (step.requestBindings || []).forEach((b) => {
-          if (b.targetField) {
-            const resolvedVal = resolveSourceValue(b.source);
+        (step.requestBindings || []).forEach((b: FrontendRequestFieldBinding) => {
+          if (!b.targetField) return;
+          const resolvedVal = resolveSourceValue(b.source);
+
+          if (b.slot === "header") {
             if (isAuthHeaderName(b.targetField)) {
+              const activeToken =
+                runtimeState.cookies["better-auth.session_token"]
+                  ? `Bearer ${runtimeState.cookies["better-auth.session_token"]}`
+                  : runtimeState.localStorage["auth_token"] || "Bearer simulated-session-token";
               simHeaders[b.targetField] = String(
-                resolvedVal !== undefined
+                resolvedVal !== undefined && resolvedVal !== "" && resolvedVal !== "Bearer <token>"
                   ? resolvedVal
                   : isProtected
-                  ? "Bearer <token>"
-                  : ""
+                  ? activeToken
+                  : resolvedVal ?? ""
               );
             } else if (resolvedVal !== undefined) {
-              payload[b.targetField] = resolvedVal;
+              simHeaders[b.targetField] = String(resolvedVal);
+            }
+          } else if (b.slot === "path_param") {
+            if (resolvedVal !== undefined) {
+              simPathParams[b.targetField] = String(resolvedVal);
+            }
+          } else if (b.slot === "query_param") {
+            if (resolvedVal !== undefined) {
+              simQueryParams[b.targetField] = String(resolvedVal);
+            }
+          } else if (b.slot === "body") {
+            if (resolvedVal !== undefined) {
+              simBody[b.targetField] = resolvedVal;
             }
           }
         });
 
         if (isProtected && !simHeaders["Authorization"] && targetEndpoint?.requireAuth !== false) {
-          simHeaders["Authorization"] = "Bearer <token>";
+          simHeaders["Authorization"] =
+            runtimeState.cookies["better-auth.session_token"]
+              ? `Bearer ${runtimeState.cookies["better-auth.session_token"]}`
+              : runtimeState.localStorage["auth_token"] || "Bearer simulated-session-token";
+        }
+
+        // Build resolved URL with pathParams and queryParams substituted
+        let targetUrl = targetEndpoint?.name || "/api/endpoint";
+        Object.entries(simPathParams).forEach(([pk, pv]) => {
+          targetUrl = targetUrl.replace(`:${pk}`, encodeURIComponent(pv)).replace(`{${pk}}`, encodeURIComponent(pv));
+        });
+        const queryEntries = Object.entries(simQueryParams);
+        if (queryEntries.length > 0) {
+          const qs = new URLSearchParams(queryEntries).toString();
+          targetUrl += (targetUrl.includes("?") ? "&" : "?") + qs;
         }
 
         // Mock response resolution
@@ -257,7 +371,7 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
           data: {
             id: `sim-${Date.now()}`,
             timestamp: new Date().toISOString(),
-            ...payload,
+            ...simBody,
           },
         };
 
@@ -282,9 +396,9 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
           details: {
             request: {
               method: targetEndpoint?.type || "POST",
-              url: targetEndpoint?.name || "/api/endpoint",
+              url: targetUrl,
               headers: simHeaders,
-              body: Object.keys(payload).length > 0 ? payload : undefined,
+              body: Object.keys(simBody).length > 0 ? simBody : undefined,
             },
             response: {
               status: 200,
@@ -413,7 +527,7 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
       }
     });
     return list;
-  }, [steps, testContext, allNodes]);
+  }, [effectiveSteps, testContext, allNodes]);
 
   return (
     <div className="flex flex-col gap-4 font-sans text-xs">
@@ -432,7 +546,7 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
         <Button
           type="button"
           onClick={runSimulation}
-          disabled={isRunning || steps.length === 0}
+          disabled={isRunning || effectiveSteps.length === 0}
           size="sm"
           className="h-8 gap-1.5 bg-cyan-600 hover:bg-cyan-700 text-white font-medium cursor-pointer shadow-xs"
         >
@@ -458,9 +572,13 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
           </button>
         </div>
 
-        {boundStoreKeys.length === 0 && Object.keys(testContext.inputs).length === 0 ? (
+        {boundStoreKeys.length === 0 &&
+        Object.keys(testContext.inputs).length === 0 &&
+        Object.keys(testContext.sessionStorage || {}).length === 0 &&
+        Object.keys(testContext.localStorage || {}).length === 0 &&
+        Object.keys(testContext.cookies || {}).length === 0 ? (
           <div className="text-[11px] text-muted-foreground/80 py-1 italic">
-            No dynamic store bindings detected. Configure an API request with store variables to test bindings.
+            No dynamic store bindings or inputs detected. Configure an API request with store variables or browser storage to test bindings.
           </div>
         ) : (
           <div className="flex flex-col gap-2 pt-1">
@@ -525,6 +643,93 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
                   }}
                   className="h-6 text-[11px] font-mono bg-background"
                   placeholder="Test input"
+                />
+              </div>
+            ))}
+
+            {/* Session Storage */}
+            {Object.entries(testContext.sessionStorage || {}).map(([key, val]) => (
+              <div
+                key={`session-${key}`}
+                className="grid grid-cols-2 items-center gap-2 p-1.5 rounded bg-muted/30 border border-border/40 font-mono text-[11px]"
+              >
+                <div className="flex items-center gap-1 truncate text-muted-foreground">
+                  <span className="text-cyan-400 font-semibold">sessionStorage</span>
+                  <span>.</span>
+                  <span className="text-foreground">{key}</span>
+                </div>
+                <Input
+                  value={String(val ?? "")}
+                  onChange={(e) => {
+                    const nextVal = e.target.value;
+                    setTestContext((prev) => ({
+                      ...prev,
+                      sessionStorage: {
+                        ...prev.sessionStorage,
+                        [key]: nextVal,
+                      },
+                    }));
+                  }}
+                  className="h-6 text-[11px] font-mono bg-background"
+                  placeholder="Storage value"
+                />
+              </div>
+            ))}
+
+            {/* Local Storage */}
+            {Object.entries(testContext.localStorage || {}).map(([key, val]) => (
+              <div
+                key={`local-${key}`}
+                className="grid grid-cols-2 items-center gap-2 p-1.5 rounded bg-muted/30 border border-border/40 font-mono text-[11px]"
+              >
+                <div className="flex items-center gap-1 truncate text-muted-foreground">
+                  <span className="text-emerald-400 font-semibold">localStorage</span>
+                  <span>.</span>
+                  <span className="text-foreground">{key}</span>
+                </div>
+                <Input
+                  value={String(val ?? "")}
+                  onChange={(e) => {
+                    const nextVal = e.target.value;
+                    setTestContext((prev) => ({
+                      ...prev,
+                      localStorage: {
+                        ...prev.localStorage,
+                        [key]: nextVal,
+                      },
+                    }));
+                  }}
+                  className="h-6 text-[11px] font-mono bg-background"
+                  placeholder="Storage value"
+                />
+              </div>
+            ))}
+
+            {/* Cookies */}
+            {Object.entries(testContext.cookies || {}).map(([cName, cVal]) => (
+              <div
+                key={`cookie-${cName}`}
+                className="grid grid-cols-2 items-center gap-2 p-1.5 rounded bg-muted/30 border border-border/40 font-mono text-[11px]"
+              >
+                <div className="flex items-center gap-1 truncate text-muted-foreground">
+                  <span className="text-purple-400 font-semibold">cookie</span>
+                  <span>.</span>
+                  <span className="text-foreground">{cName}</span>
+                </div>
+                <Input
+                  value={String(cVal ?? "")}
+                  onChange={(e) => {
+                    const nextVal = e.target.value;
+                    setTestContext((prev) => ({
+                      ...prev,
+                      cookies: {
+                        ...prev.cookies,
+                        [cName]: nextVal,
+                      },
+                    }));
+                  }}
+                  className="h-6 text-[11px] font-mono bg-background"
+                  placeholder="Cookie value"
                 />
               </div>
             ))}

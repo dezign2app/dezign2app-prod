@@ -99,17 +99,18 @@ export function useWebPageConnectedContext({
 
   const isProtected = useMemo(() => {
     if (data.useZoneDefault === false) {
-      return (data.accessType && data.accessType !== "public") || Boolean(data.protectionOverride);
+      return (data.accessType && data.accessType !== "public") || Boolean(data.protectionOverride) || data.requireAuth === true;
     }
     if (connectedWebApp) {
-      return isZoneProtected;
+      return isZoneProtected || data.requireAuth === true;
     }
     return Boolean(
       connectedZoneName?.toLowerCase().includes("private") ||
         connectedZoneName?.toLowerCase().includes("protected") ||
-        (data.accessType && data.accessType !== "public"),
+        (data.accessType && data.accessType !== "public") ||
+        data.requireAuth === true,
     );
-  }, [data.useZoneDefault, data.accessType, data.protectionOverride, connectedWebApp, isZoneProtected, connectedZoneName]);
+  }, [data.useZoneDefault, data.accessType, data.protectionOverride, data.requireAuth, connectedWebApp, isZoneProtected, connectedZoneName]);
 
   // Find connected service endpoint via any edge connected to this WebPage node
   const connectedEndpoint = useMemo<Endpoint | null>(() => {

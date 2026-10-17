@@ -314,6 +314,8 @@ export type QueryParamUpdateItem = {
   valueSource?: FrontendFieldSource;
 };
 
+export type BindingSlot = "header" | "path_param" | "query_param" | "body";
+
 export type FrontendFieldSource =
   | { kind: "literal"; value: string }
   | {
@@ -327,10 +329,18 @@ export type FrontendFieldSource =
   | { kind: "prev_response"; stepId: string; fieldPath: string }
   | { kind: "user_input"; fieldName: string }
   | { kind: "route_param"; paramName: string }
-  | { kind: "query_param"; paramName: string };
+  | { kind: "query_param"; paramName: string }
+  | { kind: "session_storage"; key: string }
+  | { kind: "local_storage"; key: string }
+  | { kind: "cookie"; cookieName: string }
+  | {
+      kind: "auth_token";
+      tokenType?: "session" | "cookie" | "local_storage";
+    };
 
 export type FrontendRequestFieldBinding = {
   id: string;
+  slot: BindingSlot;
   targetField: string;
   source: FrontendFieldSource;
 };

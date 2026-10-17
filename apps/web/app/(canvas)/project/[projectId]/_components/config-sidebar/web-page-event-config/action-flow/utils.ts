@@ -125,8 +125,8 @@ export function autoMapAuthBindings(
       return bindings.filter(
         (b) =>
           !isAuthHeaderName(b.targetField) ||
-          b.source.kind !== "literal" ||
-          b.source.value !== "Bearer <token>",
+          (b.source.kind !== "auth_token" &&
+            (b.source.kind !== "literal" || b.source.value !== "Bearer <token>")),
       );
     }
     return bindings;
@@ -134,19 +134,110 @@ export function autoMapAuthBindings(
 
   const result = [...bindings];
   for (const ah of authHeaders) {
-    const exists = result.some(
+    const existingIndex = result.findIndex(
       (b) => b.targetField.toLowerCase() === ah.name.toLowerCase(),
     );
-    if (!exists) {
+    if (existingIndex < 0) {
       result.push({
         id: `bind-auth-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        slot: "header",
         targetField: ah.name,
         source: {
-          kind: "literal",
-          value: ah.value,
+          kind: "auth_token",
+          tokenType: "session",
         },
       });
+    } else {
+      // Auto-upgrade legacy literal "Bearer <token>" placeholder to dynamic auth_token
+      const existing = result[existingIndex]!;
+      if (existing.source.kind === "literal" && existing.source.value === "Bearer <token>") {
+        result[existingIndex] = {
+          ...existing,
+          source: { kind: "auth_token", tokenType: "session" },
+        };
+      }
     }
+  }
+
+  return result;
+}
+
+/**
+ * Generates initial slot-aware bindings from an Endpoint definition.
+ * Populates headers (with auth if required), pathParams, queryParams, and requestBody fields.
+ */
+export function buildInitialBindingsFromEndpoint(
+  endpoint?: Endpoint | null,
+  isProtected?: boolean,
+): FrontendRequestFieldBinding[] {
+  if (!endpoint) return [];
+
+  const result: FrontendRequestFieldBinding[] = [];
+
+  // 1. Headers — use getEndpointAuthHeaders to check if auth header is required
+  const authHeaders = getEndpointAuthHeaders(endpoint, isProtected);
+  const headers = [...(endpoint.headers ?? [])];
+
+  for (const ah of authHeaders) {
+    if (!headers.some((h) => h.name?.toLowerCase() === ah.name.toLowerCase())) {
+      headers.unshift({
+        id: "auth-bearer-header",
+        name: ah.name,
+        type: "string",
+        required: true,
+      });
+    }
+  }
+
+  for (const h of headers) {
+    if (!h.name) continue;
+    const isAuth = isAuthHeaderName(h.name);
+    // If endpoint explicitly disallows auth, skip auth headers
+    if (isAuth && endpoint.requireAuth === false) continue;
+    // If not protected and endpoint does not require auth, skip default auth header
+    if (isAuth && !isProtected && endpoint.requireAuth !== true && authHeaders.length === 0) continue;
+
+    result.push({
+      id: `bind-h-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      slot: "header",
+      targetField: h.name,
+      source: isAuth
+        ? { kind: "auth_token", tokenType: "session" }
+        : { kind: "user_input", fieldName: h.name },
+    });
+  }
+
+  // 2. Path params — default to matching route param of same name
+  for (const p of endpoint.pathParams ?? []) {
+    if (!p.name) continue;
+    result.push({
+      id: `bind-p-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      slot: "path_param",
+      targetField: p.name,
+      source: { kind: "route_param", paramName: p.name },
+    });
+  }
+
+  // 3. Query params — default to matching query param of same name
+  for (const q of endpoint.queryParams ?? []) {
+    if (!q.name) continue;
+    result.push({
+      id: `bind-q-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      slot: "query_param",
+      targetField: q.name,
+      source: { kind: "query_param", paramName: q.name },
+    });
+  }
+
+  // 4. Body fields — default to user_input of same name
+  for (const f of endpoint.requestBody?.fields ?? []) {
+    if (!f.name) continue;
+    result.push({
+      id: `bind-b-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      slot: "body",
+      targetField: f.name,
+      source: { kind: "user_input", fieldName: f.name },
+    });
   }
 
   return result;
@@ -220,11 +311,14 @@ export function deriveStepsFromEdges(
     const requestBindings: FrontendRequestFieldBinding[] =
       existingDraft?.requestBindings ? [...existingDraft.requestBindings] : [];
 
-    const mappedBindings = autoMapAuthBindings(
-      requestBindings,
-      cStep.endpoint,
-      isProtected,
-    );
+    const mappedBindings =
+      cStep.endpoint && requestBindings.length === 0
+        ? buildInitialBindingsFromEndpoint(cStep.endpoint, isProtected)
+        : autoMapAuthBindings(
+            requestBindings,
+            cStep.endpoint,
+            isProtected,
+          );
 
     const draft: FrontendActionStepDraft = {
       id: existingDraft?.id || cStep.edgeId,
@@ -262,6 +356,16 @@ function formatDraftStep(
         if (src.kind === "prev_response") return `step.${src.fieldPath}`;
         if (src.kind === "route_param") return `params.${src.paramName}`;
         if (src.kind === "query_param") return `query.${src.paramName}`;
+        if (src.kind === "session_storage") return `sessionStorage.${src.key}`;
+        if (src.kind === "local_storage") return `localStorage.${src.key}`;
+        if (src.kind === "cookie") return `cookie.${src.cookieName}`;
+        if (src.kind === "auth_token") {
+          return src.tokenType === "cookie"
+            ? "cookie.session_token"
+            : src.tokenType === "local_storage"
+            ? "localStorage.auth_token"
+            : "auth.sessionToken";
+        }
         return "value";
       };
 
@@ -402,7 +506,15 @@ export function getActionFlowRuntime(
                             ? `params.${b.source.paramName}`
                             : b.source.kind === "query_param"
                               ? `query.${b.source.paramName}`
-                              : `Step.${b.source.fieldPath || ""}`;
+                              : b.source.kind === "session_storage"
+                                ? `sessionStorage.${b.source.key}`
+                                : b.source.kind === "local_storage"
+                                  ? `localStorage.${b.source.key}`
+                                  : b.source.kind === "cookie"
+                                    ? `cookie.${b.source.cookieName}`
+                                    : b.source.kind === "auth_token"
+                                      ? "auth.sessionToken"
+                                      : `Step.${b.source.fieldPath || ""}`;
                   return `${b.targetField}: ${src}`;
                 })
                 .join(", ")

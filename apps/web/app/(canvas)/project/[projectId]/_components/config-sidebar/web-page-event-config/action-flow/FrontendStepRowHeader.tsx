@@ -100,6 +100,16 @@ export function formatStepCodePreview(
         if (src.kind === "prev_response") return `step.${src.fieldPath}`;
         if (src.kind === "route_param") return `params.${src.paramName}`;
         if (src.kind === "query_param") return `query.${src.paramName}`;
+        if (src.kind === "session_storage") return `sessionStorage.${src.key}`;
+        if (src.kind === "local_storage") return `localStorage.${src.key}`;
+        if (src.kind === "cookie") return `cookie.${src.cookieName}`;
+        if (src.kind === "auth_token") {
+          return src.tokenType === "cookie"
+            ? "cookie.session_token"
+            : src.tokenType === "local_storage"
+            ? "localStorage.auth_token"
+            : "auth.sessionToken";
+        }
         return "value";
       };
 

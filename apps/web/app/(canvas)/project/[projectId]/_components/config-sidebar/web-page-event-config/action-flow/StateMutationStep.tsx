@@ -242,7 +242,10 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
                   | "user_input"
                   | "prev_response"
                   | "route_param"
-                  | "query_param",
+                  | "query_param"
+                  | "session_storage"
+                  | "local_storage"
+                  | "cookie",
               ) => {
                 let nextSource: FrontendFieldSource;
                 if (val === "literal") {
@@ -265,6 +268,12 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
                     stepId: priorSteps[0]?.id || "",
                     fieldPath: "",
                   };
+                } else if (val === "session_storage") {
+                  nextSource = { kind: "session_storage", key: "" };
+                } else if (val === "local_storage") {
+                  nextSource = { kind: "local_storage", key: "" };
+                } else if (val === "cookie") {
+                  nextSource = { kind: "cookie", cookieName: "" };
                 } else {
                   nextSource = { kind: "user_input", fieldName: "" };
                 }
@@ -279,6 +288,9 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
                 <SelectItem value="user_input">User Form Input</SelectItem>
                 <SelectItem value="route_param">Page Route Param</SelectItem>
                 <SelectItem value="query_param">Page Query Param</SelectItem>
+                <SelectItem value="session_storage">Session Storage</SelectItem>
+                <SelectItem value="local_storage">Local Storage</SelectItem>
+                <SelectItem value="cookie">Browser Cookie</SelectItem>
                 <SelectItem value="state_var">Another State Var</SelectItem>
                 {priorSteps.length > 0 && (
                   <SelectItem value="prev_response">Prior Step Response</SelectItem>
@@ -456,6 +468,63 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
                   placeholder="e.g. data.user or token"
                 />
               </div>
+            </div>
+          )}
+
+          {valueSource.kind === "session_storage" && (
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">
+                Session Storage Key (sessionStorage.getItem)
+              </Label>
+              <Input
+                value={valueSource.key}
+                onChange={(e) =>
+                  onChange({
+                    ...draft,
+                    stateValueSource: { kind: "session_storage", key: e.target.value },
+                  })
+                }
+                placeholder="e.g. authToken, session_id"
+                className="h-7 text-xs bg-background"
+              />
+            </div>
+          )}
+
+          {valueSource.kind === "local_storage" && (
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">
+                Local Storage Key (localStorage.getItem)
+              </Label>
+              <Input
+                value={valueSource.key}
+                onChange={(e) =>
+                  onChange({
+                    ...draft,
+                    stateValueSource: { kind: "local_storage", key: e.target.value },
+                  })
+                }
+                placeholder="e.g. theme, token, user_prefs"
+                className="h-7 text-xs bg-background"
+              />
+            </div>
+          )}
+
+          {valueSource.kind === "cookie" && (
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">
+                Cookie Name
+              </Label>
+              <Input
+                value={valueSource.cookieName}
+                onChange={(e) =>
+                  onChange({
+                    ...draft,
+                    stateValueSource: { kind: "cookie", cookieName: e.target.value },
+                  })
+                }
+                placeholder="e.g. session_token, csrftoken"
+                className="h-7 text-xs bg-background"
+              />
             </div>
           )}
         </div>

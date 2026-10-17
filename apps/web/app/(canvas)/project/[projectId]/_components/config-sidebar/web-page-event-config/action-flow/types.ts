@@ -1,4 +1,5 @@
 import type {
+  BindingSlot,
   FrontendActionStepType,
   FrontendFieldSource,
   FrontendRequestFieldBinding,
@@ -11,11 +12,15 @@ import type {
 import type { ActionStepItem } from "../TargetEndpointSection";
 
 export type {
+  BindingSlot,
   FrontendActionStepType,
   FrontendFieldSource,
   FrontendRequestFieldBinding,
   FrontendActionStepDraft,
   QueryParamUpdateItem,
+  BackendNode,
+  Endpoint,
+  UIEventItem,
 };
 
 export interface ActionFlowEditorProps {
