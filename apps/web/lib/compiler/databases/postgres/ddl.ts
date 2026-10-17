@@ -14,16 +14,27 @@ export function buildTableDDL(
   tableSchemas: Record<string, Array<{ name: string; pgType: string }>> = {},
 ): string[] {
   const stmts: string[] = [];
+  const pkCols = cols.filter((c) => c.isPrimaryKey);
+  const isCompositePk = pkCols.length > 1;
+
   const colDefs = cols.map((c) => {
     const pgType = toPostgresType(c.type, c.isPrimaryKey);
     let colDef = `  "${c.name}" ${pgType}`;
     if (c.isPrimaryKey) {
-      if (pgType === "BIGSERIAL") {
-        colDef += " PRIMARY KEY";
-      } else if (pgType === "UUID") {
-        colDef += " PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL";
+      if (isCompositePk) {
+        if (pgType === "UUID") {
+          colDef += " DEFAULT gen_random_uuid() NOT NULL";
+        } else {
+          colDef += " NOT NULL";
+        }
       } else {
-        colDef += " PRIMARY KEY NOT NULL";
+        if (pgType === "BIGSERIAL") {
+          colDef += " PRIMARY KEY";
+        } else if (pgType === "UUID") {
+          colDef += " PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL";
+        } else {
+          colDef += " PRIMARY KEY NOT NULL";
+        }
       }
     } else {
       if (c.isNotNull) colDef += " NOT NULL";
@@ -31,6 +42,11 @@ export function buildTableDDL(
     }
     return colDef;
   });
+
+  if (isCompositePk) {
+    const pkList = pkCols.map((c) => `"${c.name}"`).join(", ");
+    colDefs.push(`  PRIMARY KEY (${pkList})`);
+  }
 
   stmts.push(
     `CREATE TABLE IF NOT EXISTS "${tableName}" (\n${colDefs.join(",\n")}\n);`,

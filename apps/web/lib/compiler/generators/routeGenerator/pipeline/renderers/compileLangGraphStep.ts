@@ -165,6 +165,11 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`res.setHeader("Content-Type", "text/event-stream");`);
       rawLines.push(`res.setHeader("Cache-Control", "no-cache");`);
       rawLines.push(`res.setHeader("Connection", "keep-alive");`);
+      if (threadIdExpr) {
+        rawLines.push(`if (${threadIdExpr}) {`);
+        rawLines.push(`  res.setHeader("X-Thread-Id", String(${threadIdExpr}));`);
+        rawLines.push(`}`);
+      }
       rawLines.push(
         `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
       );
@@ -326,6 +331,11 @@ export function renderLangGraphInvokeStep(
     }
   } else {
     rawLines.push(`// --- LangGraph Invocation (${step.name}) ---`);
+    if (threadIdExpr) {
+      rawLines.push(`if (${threadIdExpr} && typeof res.setHeader === "function") {`);
+      rawLines.push(`  res.setHeader("X-Thread-Id", String(${threadIdExpr}));`);
+      rawLines.push(`}`);
+    }
     rawLines.push(`const agentState = ${stateInit};`);
     rawLines.push(`const ${outputVariable}Raw = await ${graphVar}.invoke(agentState${invokeConfigOptions});`);
 

@@ -1,6 +1,8 @@
 import type {
   LangGraphStepConfig,
   LangGraphEdgeConfig,
+  LangGraphTableDefinition,
+  LangGraphRedisSchemaDefinition,
 } from "../types";
 
 // ─── LangGraph Step Execution Types ───────────────────────────────────────────
@@ -99,3 +101,141 @@ export function ensureLangGraphDataReachability<T extends LangGraphDataInput>(
 ): T {
   return data;
 }
+
+// ─── LangGraph Checkpointer Table Definitions ──────────────────────────────────
+export const LANGGRAPH_POSTGRES_TABLE_DEFINITIONS: LangGraphTableDefinition[] = [
+  {
+    name: "checkpoints",
+    description: "LangGraph state checkpoints indexed by thread and run namespace",
+    columns: [
+      { name: "thread_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "checkpoint_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "parent_checkpoint_id", type: "TEXT", isNotNull: false },
+      { name: "type", type: "TEXT", isNotNull: false },
+      { name: "checkpoint", type: "JSON", isNotNull: true },
+      { name: "metadata", type: "JSON", isNotNull: true },
+    ],
+    indexes: [
+      { name: "idx_checkpoints_thread_id", columns: "thread_id" },
+      { name: "idx_checkpoints_thread_ns", columns: "thread_id, checkpoint_ns" },
+      { name: "idx_checkpoints_parent", columns: "parent_checkpoint_id" },
+    ],
+  },
+  {
+    name: "checkpoint_blobs",
+    description: "Serialized large-state blobs and message buffers",
+    columns: [
+      { name: "thread_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "channel", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "version", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "type", type: "TEXT", isNotNull: true },
+      { name: "blob", type: "BYTEA", isNotNull: false },
+    ],
+    indexes: [
+      { name: "idx_checkpoint_blobs_thread_id", columns: "thread_id" },
+      { name: "idx_checkpoint_blobs_channel", columns: "channel, version" },
+    ],
+  },
+  {
+    name: "checkpoint_writes",
+    description: "Pending channel writes and delta operations per graph step",
+    columns: [
+      { name: "thread_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "checkpoint_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "task_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "idx", type: "INTEGER", isPrimaryKey: true, isNotNull: true },
+      { name: "channel", type: "TEXT", isNotNull: true },
+      { name: "type", type: "TEXT", isNotNull: false },
+      { name: "blob", type: "BYTEA", isNotNull: true },
+    ],
+    indexes: [
+      { name: "idx_checkpoint_writes_thread_id", columns: "thread_id" },
+      { name: "idx_checkpoint_writes_checkpoint_id", columns: "checkpoint_id" },
+      { name: "idx_checkpoint_writes_task", columns: "task_id, idx" },
+    ],
+  },
+  {
+    name: "checkpoint_migrations",
+    description: "Database migration tracker for LangGraph schema versions",
+    columns: [
+      { name: "v", type: "INTEGER", isPrimaryKey: true, isNotNull: true },
+    ],
+    indexes: [
+      { name: "idx_checkpoint_migrations_v", columns: "v", isUnique: true },
+    ],
+  },
+];
+
+export const LANGGRAPH_SQLITE_TABLE_DEFINITIONS: LangGraphTableDefinition[] = [
+  {
+    name: "checkpoints",
+    description: "LangGraph SQLite state checkpoints indexed by thread and namespace",
+    columns: [
+      { name: "thread_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "checkpoint_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "parent_checkpoint_id", type: "TEXT", isNotNull: false },
+      { name: "type", type: "TEXT", isNotNull: false },
+      { name: "checkpoint", type: "BLOB", isNotNull: false },
+      { name: "metadata", type: "BLOB", isNotNull: false },
+    ],
+    indexes: [
+      { name: "idx_sqlite_checkpoints_thread_id", columns: "thread_id" },
+    ],
+  },
+  {
+    name: "writes",
+    description: "LangGraph SQLite task writes channel buffer",
+    columns: [
+      { name: "thread_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "checkpoint_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "task_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "idx", type: "INTEGER", isPrimaryKey: true, isNotNull: true },
+      { name: "channel", type: "TEXT", isNotNull: true },
+      { name: "type", type: "TEXT", isNotNull: false },
+      { name: "value", type: "BLOB", isNotNull: false },
+    ],
+    indexes: [
+      { name: "idx_sqlite_writes_thread_id", columns: "thread_id" },
+    ],
+  },
+];
+
+export const LANGGRAPH_REDIS_SCHEMA_DEFINITIONS: LangGraphRedisSchemaDefinition[] = [
+  {
+    name: "langgraph_checkpoints",
+    description: "LangGraph state checkpoints hash map indexed by thread and run namespace",
+    redisDataStructure: "hash",
+    keyTemplate: "checkpoint:{thread_id}:{checkpoint_ns}:{checkpoint_id}",
+    columns: [
+      { name: "checkpoint", type: "JSON", isNotNull: true },
+      { name: "metadata", type: "JSON", isNotNull: true },
+      { name: "parent_checkpoint_id", type: "TEXT", isNotNull: false },
+    ],
+  },
+  {
+    name: "langgraph_checkpoint_writes",
+    description: "LangGraph step writes channel buffer and tasks",
+    redisDataStructure: "hash",
+    keyTemplate: "writes:{thread_id}:{checkpoint_ns}:{checkpoint_id}:{task_id}",
+    columns: [
+      { name: "task_id", type: "TEXT", isNotNull: true },
+      { name: "channel", type: "TEXT", isNotNull: true },
+      { name: "blob", type: "JSON", isNotNull: true },
+    ],
+  },
+  {
+    name: "langgraph_checkpoint_blobs",
+    description: "Serialized large state binary objects and buffers",
+    redisDataStructure: "hash",
+    keyTemplate: "blobs:{thread_id}:{checkpoint_ns}:{channel}",
+    columns: [
+      { name: "blob", type: "JSON", isNotNull: true },
+      { name: "version", type: "TEXT", isNotNull: true },
+    ],
+  },
+];

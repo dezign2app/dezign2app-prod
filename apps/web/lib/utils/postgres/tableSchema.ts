@@ -47,16 +47,35 @@ export async function ensurePostgresTable(
 
   if (!exists) {
     const colDefs: string[] = [];
+    const pkColNames: string[] = [];
+    const explicitPkCols = (columns || []).filter(
+      (c) => c.isPrimaryKey || c.isPrimary || c.primaryKey,
+    );
+
     if (columns && columns.length > 0) {
       for (const col of columns) {
         const colName = (col.name || "col").replace(/[^a-zA-Z0-9_]/g, "");
-        const isPk = col.isPrimaryKey || col.isPrimary || col.primaryKey || colName === "id";
+        const isPk = explicitPkCols.length > 0
+          ? Boolean(col.isPrimaryKey || col.isPrimary || col.primaryKey)
+          : colName.toLowerCase() === "id";
+
+        if (isPk) {
+          pkColNames.push(colName);
+        }
+
         const pgType = normalizeToPostgresType(col.type, isPk);
         const defaultClause = isPk && pgType === "UUID" ? " DEFAULT gen_random_uuid()" : "";
-        colDefs.push(isPk ? `"${colName}" ${pgType}${defaultClause} PRIMARY KEY` : `"${colName}" ${pgType}`);
+        const notNullClause = isPk || (col as any).isNotNull ? " NOT NULL" : "";
+
+        if (isPk && explicitPkCols.length <= 1) {
+          colDefs.push(`"${colName}" ${pgType}${defaultClause} PRIMARY KEY`);
+        } else {
+          colDefs.push(`"${colName}" ${pgType}${defaultClause}${notNullClause}`);
+        }
       }
     }
-    if (!colDefs.some((d) => d.includes("PRIMARY KEY"))) {
+
+    if (pkColNames.length === 0 && !colDefs.some((d) => d.includes("PRIMARY KEY"))) {
       colDefs.unshift(`"id" TEXT PRIMARY KEY`);
     }
     if (!colDefs.some((d) => d.startsWith('"created_at"'))) {
@@ -64,6 +83,10 @@ export async function ensurePostgresTable(
     }
     if (!colDefs.some((d) => d.startsWith('"updated_at"'))) {
       colDefs.push(`"updated_at" TIMESTAMPTZ DEFAULT NOW()`);
+    }
+    if (pkColNames.length > 1) {
+      const pkList = pkColNames.map((c) => `"${c}"`).join(", ");
+      colDefs.push(`PRIMARY KEY (${pkList})`);
     }
 
     if (targetSchema && targetSchema !== "public") {

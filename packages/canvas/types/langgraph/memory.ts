@@ -1,3 +1,5 @@
+import type { CanvasEntityColumn } from "../database";
+
 export type LangGraphMemoryConfig = {
   enabled?: boolean;
   checkpointer?: "memory" | "postgres" | "redis" | "convex" | string;
@@ -32,4 +34,28 @@ export interface LangGraphMemoryDefinition {
   maxWindowMessages?: number;
   saveMessages?: boolean;
   position?: { x: number; y: number };
+}
+
+export interface LangGraphTableDefinition {
+  name: string;
+  description: string;
+  columns: CanvasEntityColumn[];
+  indexes?: {
+    name: string;
+    columns: string;
+    isUnique?: boolean;
+  }[];
+}
+
+export interface LangGraphRedisSchemaDefinition {
+  name: string;
+  description: string;
+  redisDataStructure: "hash" | "string" | "list" | "set" | "zset" | "stream";
+  keyTemplate: string;
+  columns: CanvasEntityColumn[];
+  indexes?: {
+    name: string;
+    columns: string;
+    isUnique?: boolean;
+  }[];
 }

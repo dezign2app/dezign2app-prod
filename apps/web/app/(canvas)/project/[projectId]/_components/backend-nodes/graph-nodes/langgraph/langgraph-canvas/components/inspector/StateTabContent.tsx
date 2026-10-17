@@ -139,6 +139,19 @@ export function StateTabContent({
             onUpdateCustomReducer={onUpdateCustomReducer}
             onDeleteCustomReducer={handleDeleteCustomReducer}
           />
+
+          {/* Thread ID Architecture Callout */}
+          <div className="flex items-start gap-2.5 p-3 rounded-xl bg-primary/5 border border-primary/20 text-xs">
+            <span className="text-primary mt-0.5 text-sm">ℹ️</span>
+            <div className="flex flex-col gap-1">
+              <span className="font-semibold text-foreground text-[11px] flex items-center gap-1.5">
+                <span>Looking for <code className="font-mono text-primary font-bold">thread_id</code>?</span>
+              </span>
+              <span className="text-[10px] text-muted-foreground leading-relaxed">
+                In LangGraph, <code className="font-mono text-foreground/80">thread_id</code> is managed as a checkpointer session key in the <strong>Memory</strong> tab and passed dynamically by calling API routes via <code className="font-mono text-primary font-bold">configurable.thread_id</code>. It is intentionally kept separate from State Channels so checkpointer storage can persist and resume conversation context across turns.
+              </span>
+            </div>
+          </div>
         </TabsContent>
 
         {/* ── Tab 2: Test State & Reducers (Testing & Simulation) ── */}

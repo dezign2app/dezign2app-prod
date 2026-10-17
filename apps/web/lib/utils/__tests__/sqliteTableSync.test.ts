@@ -326,4 +326,39 @@ describe("Database Table Schema Sync (SQLite)", () => {
     expect(finalCheck.inSync).toBe(true);
     expect(finalCheck.alteredColumns).toHaveLength(0);
   });
+
+  it("should create table with composite primary keys without syntax errors", () => {
+    const applyRes = applySqliteTableSync(TEST_SYNC_DB, "langgraph_checkpoints", [
+      { name: "thread_id", type: "TEXT", isPrimaryKey: true },
+      { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true },
+      { name: "checkpoint_id", type: "TEXT", isPrimaryKey: true },
+      { name: "checkpoint", type: "JSON", isNotNull: true },
+    ]);
+
+    expect(applyRes.success).toBe(true);
+    expect(applyRes.createdTable).toBe(true);
+
+    const { DatabaseSync } = require("node:sqlite");
+    const resolvedPath = resolveSqlitePath(TEST_SYNC_DB);
+    const db = new DatabaseSync(resolvedPath);
+    const info = db.prepare(`PRAGMA table_info("langgraph_checkpoints")`).all() as Array<{
+      cid: number;
+      name: string;
+      pk: number;
+    }>;
+    db.close();
+
+    const pkColumns = info.filter((c) => c.pk > 0);
+    expect(pkColumns).toHaveLength(3);
+    expect(pkColumns.map((c) => c.name)).toEqual(["thread_id", "checkpoint_ns", "checkpoint_id"]);
+
+    const syncCheck = checkSqliteTableSync(TEST_SYNC_DB, "langgraph_checkpoints", [
+      { name: "thread_id", type: "TEXT", isPrimaryKey: true },
+      { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true },
+      { name: "checkpoint_id", type: "TEXT", isPrimaryKey: true },
+      { name: "checkpoint", type: "JSON", isNotNull: true },
+    ]);
+    expect(syncCheck.tableExists).toBe(true);
+    expect(syncCheck.inSync).toBe(true);
+  });
 });

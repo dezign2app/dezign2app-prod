@@ -255,6 +255,7 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(code).toContain(
         "const memResultRaw = await agentMemoryGraph.invoke(agentState, { configurable: { thread_id: body.thread_id } });",
       );
+      expect(code).toContain('res.setHeader("X-Thread-Id", String(body.thread_id))');
       // Ensure thread_id is not injected as state channel in agentState
       expect(code).not.toContain('"thread_id"');
       expect(code).toContain('"messages": body.message');
@@ -283,6 +284,7 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(code).toContain(
         'await agentMemStreamGraph.stream(agentState, { streamMode: "messages", configurable: { thread_id: req.headers["x-thread-id"] } })',
       );
+      expect(code).toContain('res.setHeader("X-Thread-Id", String(req.headers["x-thread-id"]))');
     });
   });
 

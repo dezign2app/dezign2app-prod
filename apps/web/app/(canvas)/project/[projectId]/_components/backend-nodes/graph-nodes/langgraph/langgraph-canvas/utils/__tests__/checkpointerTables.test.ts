@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   checkCheckpointerTablesStatus,
   provisionCheckpointerTables,
+  provisionDatabaseAndCheckpointerTables,
   LANGGRAPH_POSTGRES_TABLE_DEFINITIONS,
   LANGGRAPH_REDIS_SCHEMA_DEFINITIONS,
 } from "../checkpointerTables";
@@ -66,7 +67,7 @@ describe("checkpointerTables utilities", () => {
         position: { x: 100, y: 300 },
         fractionalIndex: "a2",
         data: {
-          label: "langgraph_checkpoints",
+          label: "checkpoints",
           databaseId: "db-pg-1",
           systemBadge: "langgraph",
         },
@@ -136,7 +137,7 @@ describe("checkpointerTables utilities", () => {
   });
 
   describe("provisionCheckpointerTables", () => {
-    it("provisions all 4 tables for PostgreSQL with foreign keys, indexes, and connection edges", () => {
+    it("provisions all 4 tables for PostgreSQL with indexes and database connection edges (no foreign keys per LangGraph official schema)", () => {
       const addedNodes: BackendNode[] = [];
       const addedEdges: any[] = [];
 
@@ -150,29 +151,40 @@ describe("checkpointerTables utilities", () => {
 
       expect(createdCount).toBe(4);
       expect(addedNodes).toHaveLength(4);
-      // 4 database-connection edges + 2 foreign-key edges
-      expect(addedEdges).toHaveLength(6);
+      // 4 database-connection edges, 0 foreign-key edges
+      expect(addedEdges).toHaveLength(4);
 
       // Check checkpoints table
-      const checkpointsNode = addedNodes.find((n) => n.data?.label === "langgraph_checkpoints");
+      const checkpointsNode = addedNodes.find((n) => n.data?.label === "checkpoints");
       expect(checkpointsNode).toBeDefined();
       expect(checkpointsNode?.data?.systemBadge).toBe("langgraph");
       expect(checkpointsNode?.data?.databaseId).toBe("db-pg-1");
       expect(checkpointsNode?.data?.indexes).toHaveLength(3);
       expect(checkpointsNode?.data?.indexes?.[0]?.name).toBe("idx_checkpoints_thread_id");
 
-      // Check writes table foreign keys & indexes
-      const writesNode = addedNodes.find((n) => n.data?.label === "langgraph_checkpoint_writes");
+      // Check writes table: BYTEA blob, no FK
+      const writesNode = addedNodes.find((n) => n.data?.label === "checkpoint_writes");
       expect(writesNode).toBeDefined();
       expect(writesNode?.data?.indexes).toHaveLength(3);
-      const writesFkCol = writesNode?.data?.columns?.find((c) => c.name === "checkpoint_id");
-      expect(writesFkCol?.isForeignKey).toBe(true);
-      expect(writesFkCol?.references?.table).toBe("langgraph_checkpoints");
+      const writesBlobCol = writesNode?.data?.columns?.find((c) => c.name === "blob");
+      expect(writesBlobCol?.type).toBe("BYTEA");
+      expect(writesBlobCol?.isNotNull).toBe(true);
 
-      // Check foreign-key edges
+      const writesFkCol = writesNode?.data?.columns?.find((c) => c.name === "checkpoint_id");
+      expect(writesFkCol?.isForeignKey).toBeUndefined();
+
+      // Check blobs table: type TEXT NOT NULL, blob BYTEA NULL
+      const blobsNode = addedNodes.find((n) => n.data?.label === "checkpoint_blobs");
+      expect(blobsNode).toBeDefined();
+      const blobsTypeCol = blobsNode?.data?.columns?.find((c) => c.name === "type");
+      expect(blobsTypeCol?.isNotNull).toBe(true);
+      const blobsBlobCol = blobsNode?.data?.columns?.find((c) => c.name === "blob");
+      expect(blobsBlobCol?.type).toBe("BYTEA");
+      expect(blobsBlobCol?.isNotNull).toBe(false);
+
+      // Verify no foreign-key edges are created
       const fkEdges = addedEdges.filter((e) => e.type === "foreign-key");
-      expect(fkEdges).toHaveLength(2);
-      expect(fkEdges.some((e) => e.source === checkpointsNode?.id && e.target === writesNode?.id)).toBe(true);
+      expect(fkEdges).toHaveLength(0);
     });
 
     it("provisions all 3 schemas for Redis and creates connection edges", () => {
@@ -200,14 +212,14 @@ describe("checkpointerTables utilities", () => {
       expect(addedEdges[0]?.type).toBe("database-connection");
     });
 
-    it("updates existing tables with foreign keys and indexes when updateNode is provided", () => {
+    it("updates existing tables with indexes when updateNode is provided", () => {
       const existingTable: BackendNode = {
         id: "tbl-0",
         type: "entity",
         position: { x: 100, y: 300 },
         fractionalIndex: "e0",
         data: {
-          label: "langgraph_checkpoints",
+          label: "checkpoints",
           databaseId: "db-pg-1",
           systemBadge: "langgraph",
         },
@@ -232,4 +244,83 @@ describe("checkpointerTables utilities", () => {
       expect(updatedNodes[0]?.changes?.data?.indexes).toBeDefined();
     });
   });
+
+  describe("tableBreakdown reporting", () => {
+    it("reports all tables as missing when no storage node exists", () => {
+      const status = checkCheckpointerTablesStatus([], [], true, "postgres");
+      expect(status.tableBreakdown).toHaveLength(4);
+      expect(status.tableBreakdown.every((t) => !t.exists)).toBe(true);
+      expect(status.tableBreakdown.map((t) => t.name)).toContain("checkpoints");
+      expect(status.tableBreakdown.map((t) => t.name)).toContain("checkpoint_blobs");
+      expect(status.tableBreakdown.map((t) => t.name)).toContain("checkpoint_writes");
+      expect(status.tableBreakdown.map((t) => t.name)).toContain("checkpoint_migrations");
+    });
+
+    it("correctly identifies which specific tables exist and which are missing", () => {
+      const existingTable: BackendNode = {
+        id: "tbl-0",
+        type: "entity",
+        position: { x: 100, y: 300 },
+        fractionalIndex: "e0",
+        data: {
+          label: "checkpoints",
+          databaseId: "db-pg-1",
+          systemBadge: "langgraph",
+        },
+      };
+
+      const status = checkCheckpointerTablesStatus([mockPostgresDb, existingTable], [], true, "postgres", "db-pg-1");
+      const checkpointsItem = status.tableBreakdown.find((t) => t.name === "checkpoints");
+      const blobsItem = status.tableBreakdown.find((t) => t.name === "checkpoint_blobs");
+      const writesItem = status.tableBreakdown.find((t) => t.name === "checkpoint_writes");
+
+      expect(checkpointsItem?.exists).toBe(true);
+      expect(checkpointsItem?.nodeId).toBe("tbl-0");
+      expect(blobsItem?.exists).toBe(false);
+      expect(writesItem?.exists).toBe(false);
+    });
+  });
+
+  describe("provisionDatabaseAndCheckpointerTables", () => {
+    it("creates a new PostgreSQL DB and all 4 tables when no DB exists in canvas", () => {
+      const addedNodes: BackendNode[] = [];
+      const addedEdges: any[] = [];
+
+      const result = provisionDatabaseAndCheckpointerTables({
+        nodes: [],
+        addNode: (n) => addedNodes.push(n),
+        addEdge: (e) => addedEdges.push(e),
+        checkpointerType: "postgres",
+      });
+
+      expect(result.configuredNodeId).toBeDefined();
+      expect(result.createdCount).toBe(4);
+
+      // 1 database node + 4 entity nodes = 5 nodes added
+      expect(addedNodes).toHaveLength(5);
+      const dbNode = addedNodes.find((n) => n.type === "database");
+      expect(dbNode).toBeDefined();
+      expect(dbNode?.data?.dbEngine).toBe("postgres");
+      expect(dbNode?.data?.label).toBe("PostgreSQL DB");
+    });
+
+    it("reuses existing PostgreSQL DB and creates missing tables", () => {
+      const addedNodes: BackendNode[] = [];
+      const addedEdges: any[] = [];
+
+      const result = provisionDatabaseAndCheckpointerTables({
+        nodes: [mockPostgresDb],
+        addNode: (n) => addedNodes.push(n),
+        addEdge: (e) => addedEdges.push(e),
+        checkpointerType: "postgres",
+      });
+
+      expect(result.configuredNodeId).toBe("db-pg-1");
+      expect(result.createdCount).toBe(4);
+      // No extra database node created, only 4 entity nodes
+      expect(addedNodes).toHaveLength(4);
+      expect(addedNodes.every((n) => n.type === "entity")).toBe(true);
+    });
+  });
 });
+

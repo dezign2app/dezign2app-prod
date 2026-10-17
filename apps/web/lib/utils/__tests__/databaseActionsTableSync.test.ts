@@ -572,4 +572,38 @@ describe("databaseActions Table Sync Actions", () => {
     expect(afterCheck.inSync).toBe(true);
     expect(afterCheck.alteredColumns).toHaveLength(0);
   });
+
+  it("should create composite primary key table via applyDbTableSyncAction", async () => {
+    const applyRes = await applyDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "langgraph_checkpoints",
+      columns: [
+        { name: "thread_id", type: "TEXT", isPrimaryKey: true },
+        { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true },
+        { name: "checkpoint_id", type: "TEXT", isPrimaryKey: true },
+        { name: "type", type: "TEXT" },
+        { name: "checkpoint", type: "JSON", isNotNull: true },
+      ],
+    });
+
+    expect(applyRes.success).toBe(true);
+    expect(applyRes.createdTable).toBe(true);
+
+    const checkRes = await checkDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "langgraph_checkpoints",
+      columns: [
+        { name: "thread_id", type: "TEXT", isPrimaryKey: true },
+        { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true },
+        { name: "checkpoint_id", type: "TEXT", isPrimaryKey: true },
+        { name: "type", type: "TEXT" },
+        { name: "checkpoint", type: "JSON", isNotNull: true },
+      ],
+    });
+
+    expect(checkRes.tableExists).toBe(true);
+    expect(checkRes.inSync).toBe(true);
+  });
 });

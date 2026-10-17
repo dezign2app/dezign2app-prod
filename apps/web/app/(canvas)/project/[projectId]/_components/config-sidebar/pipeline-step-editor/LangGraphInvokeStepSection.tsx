@@ -17,7 +17,7 @@ import {
   Database,
   Key,
 } from "lucide-react";
-import { BackendNode, KafkaTopic, RedisStream } from "@workspace/canvas/types";
+import { BackendNode, KafkaTopic, RedisStream, Endpoint, Parameter } from "@workspace/canvas/types";
 import { Button } from "@workspace/ui/components/button";
 import { BufferedInput, LocalInput } from "./BufferedInput";
 import { Label } from "@workspace/ui/components/label";
@@ -139,12 +139,23 @@ export interface LangGraphInvokeStepSectionProps {
   availableSources?: AvailableSource[];
   serviceNodeId?: string;
   onChange: (updated: PipelineStepDraft) => void;
+  endpoint?: Endpoint;
+  onEndpointChange?: (changes: Partial<Endpoint>) => void;
   children?: React.ReactNode;
 }
 
 export const LangGraphInvokeStepSection: React.FC<
   LangGraphInvokeStepSectionProps
-> = ({ step, allNodes, availableSources = [], serviceNodeId, onChange, children }) => {
+> = ({
+  step,
+  allNodes,
+  availableSources = [],
+  serviceNodeId,
+  onChange,
+  endpoint,
+  onEndpointChange,
+  children,
+}) => {
   const [newKey, setNewKey] = useState("");
   const [newCustomBinding, setNewCustomBinding] = useState<StepBinding>({
     argName: "",
@@ -246,6 +257,99 @@ export const LangGraphInvokeStepSection: React.FC<
     if (rawMemoryConfig && rawMemoryConfig.enabled === false) return false;
     return Boolean(memoryConfig.checkpointer);
   }, [rawMemoryConfig, memoryConfig]);
+
+  // Check if the endpoint request contract already declares a thread_id field
+  const endpointHasThreadId = useMemo(() => {
+    if (!endpoint) return true;
+    const bodyFields = endpoint.requestBody?.fields || [];
+    const hasInBody = bodyFields.some(
+      (f: Parameter) =>
+        f.name?.toLowerCase() === "thread_id" ||
+        f.name?.toLowerCase() === "threadid" ||
+        f.name?.toLowerCase() === "sessionid" ||
+        f.name?.toLowerCase() === "session_id",
+    );
+    if (hasInBody) return true;
+    const headers = endpoint.headers || [];
+    const hasInHeaders = headers.some(
+      (h: Parameter) =>
+        h.name?.toLowerCase() === "x-thread-id" ||
+        h.name?.toLowerCase() === "thread_id",
+    );
+    if (hasInHeaders) return true;
+    const queryParams = endpoint.queryParams || [];
+    const hasInQuery = queryParams.some(
+      (q: Parameter) =>
+        q.name?.toLowerCase() === "thread_id" ||
+        q.name?.toLowerCase() === "threadid",
+    );
+    if (hasInQuery) return true;
+    const pathParams = endpoint.pathParams || [];
+    const hasInPath = pathParams.some(
+      (p: Parameter) =>
+        p.name?.toLowerCase() === "thread_id" ||
+        p.name?.toLowerCase() === "threadid",
+    );
+    return hasInPath;
+  }, [endpoint]);
+
+  const handleAddThreadIdToRequestBody = () => {
+    if (!endpoint || !onEndpointChange) return;
+    const currentFields = endpoint.requestBody?.fields || [];
+    const newField: Parameter = {
+      id: `param_thread_id_${Date.now()}`,
+      name: "thread_id",
+      key: "thread_id",
+      type: "string",
+      required: false,
+      description: "Conversation session thread ID for LangGraph checkpointer memory",
+      defaultValue: "",
+      value: "",
+    };
+    onEndpointChange({
+      requestBody: {
+        ...(endpoint.requestBody || { id: `req_${endpoint.id}` }),
+        fields: [...currentFields, newField],
+      },
+    });
+    handleArgBindingChange(
+      "thread_id",
+      {
+        argName: "thread_id",
+        source: { kind: "req_body", field: "thread_id" },
+      },
+      "langGraphThreadIdSource",
+    );
+  };
+
+  const handleUseHeaderThreadId = () => {
+    if (endpoint && onEndpointChange) {
+      const currentHeaders = endpoint.headers || [];
+      if (!currentHeaders.some((h: Parameter) => h.name?.toLowerCase() === "x-thread-id")) {
+        const newHeader: Parameter = {
+          id: `hdr_thread_id_${Date.now()}`,
+          name: "x-thread-id",
+          key: "x-thread-id",
+          type: "string",
+          required: false,
+          description: "Session thread ID header",
+          defaultValue: "",
+          value: "",
+        };
+        onEndpointChange({
+          headers: [...currentHeaders, newHeader],
+        });
+      }
+    }
+    handleArgBindingChange(
+      "thread_id",
+      {
+        argName: "thread_id",
+        source: { kind: "req_headers", field: "x-thread-id" },
+      },
+      "langGraphThreadIdSource",
+    );
+  };
 
   const mapping: Record<string, string> = useMemo(() => {
     return step.langGraphStateMapping || {};
@@ -757,15 +861,24 @@ export const LangGraphInvokeStepSection: React.FC<
                 Session Thread ID (Checkpointer Memory)
               </Label>
             </div>
-            <Badge
-              variant="outline"
-              className="text-[9px] font-mono border-emerald-500/40 text-emerald-400 bg-emerald-500/15"
-            >
-              {selectedAgentNode?.data?.memoryConfig?.checkpointer || "memory"} checkpointer
-            </Badge>
+            <div className="flex items-center gap-1.5">
+              <Badge
+                variant="outline"
+                className="text-[9px] font-mono border-primary/40 text-primary bg-primary/10"
+                title="Configurable runtime option passed directly to LangGraph checkpointer"
+              >
+                configurable.thread_id
+              </Badge>
+              <Badge
+                variant="outline"
+                className="text-[9px] font-mono border-emerald-500/40 text-emerald-400 bg-emerald-500/15"
+              >
+                {selectedAgentNode?.data?.memoryConfig?.checkpointer || "memory"} checkpointer
+              </Badge>
+            </div>
           </div>
           <p className="text-[10px] text-muted-foreground leading-relaxed">
-            LangGraph automatically queries the checkpointer database to retrieve the full chat history for this <code className="font-mono text-emerald-400">thread_id</code>. Only the new user message needs to be mapped into state channels.
+            LangGraph automatically queries the checkpointer database to retrieve the full chat history for this <code className="font-mono text-emerald-400">thread_id</code>. It is an execution config parameter (<code className="font-mono text-primary">configurable.thread_id</code>), not a state variable. Only the new user message needs to be mapped into state channels.
           </p>
 
           <div className="grid grid-cols-[140px_auto_1fr_auto] gap-2 items-center text-xs bg-background/60 p-2 rounded-lg border border-emerald-500/20">
@@ -788,6 +901,38 @@ export const LangGraphInvokeStepSection: React.FC<
             </div>
             <div className="w-6" />
           </div>
+
+          {!endpointHasThreadId && Boolean(onEndpointChange) && (
+            <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-300">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                <span>Endpoint contract does not define a thread ID field</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                Add <code className="font-mono text-amber-300">thread_id</code> to the endpoint contract so client applications can send a session ID to resume conversation context.
+              </p>
+              <div className="flex items-center gap-2 pt-0.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-6 text-[10px] font-semibold px-2 py-0 border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 text-amber-200"
+                  onClick={handleAddThreadIdToRequestBody}
+                >
+                  + Add &quot;thread_id&quot; to Request Body
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 text-[10px] font-semibold px-2 py-0 text-muted-foreground hover:text-foreground"
+                  onClick={handleUseHeaderThreadId}
+                >
+                  Use Header (x-thread-id)
+                </Button>
+              </div>
+            </div>
+          )}
 
           {!step.langGraphThreadIdSource && (
             <div className="flex items-center gap-1.5 text-[10px] text-amber-400/90 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20">

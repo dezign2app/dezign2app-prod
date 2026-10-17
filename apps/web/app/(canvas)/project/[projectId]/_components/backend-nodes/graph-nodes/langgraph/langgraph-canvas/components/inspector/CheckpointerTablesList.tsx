@@ -73,7 +73,11 @@ export function CheckpointerTablesList({
   // Check which tables are created
   const tableStatusList = (isRedis ? redisDefs : postgresDefs).map((def) => {
     const existingNode = existingTables.find(
-      (n) => n.data?.label === def.name || n.data?.tableName === def.name,
+      (n) =>
+        n.data?.label === def.name ||
+        n.data?.tableName === def.name ||
+        n.data?.label === `langgraph_${def.name}` ||
+        n.data?.tableName === `langgraph_${def.name}`,
     );
     return {
       def,

@@ -31,6 +31,7 @@ import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader, useServiceStepHandLayout } from "../common";
 import { useNodePipelineError } from "@/lib/utils/pipelineValidation";
 import { NodeEnvVarsSection } from "../nodes/ai-security/ExternalEnvVarsDrawer";
+import { checkCheckpointerTablesStatus } from "./langgraph-canvas/utils/checkpointerTables";
 
 export interface ConnectedRouteInfo {
   edgeId: string;
@@ -215,21 +216,30 @@ export const LangGraphNode = ({
   } = useServiceStepHandLayout(id, allCanvasNodes, edges, updateNode);
   const [isHovered, setIsHovered] = useState(false);
 
-  const checkpointerMissingError = React.useMemo(() => {
+  const checkpointerTablesStatus = React.useMemo(() => {
+    return checkCheckpointerTablesStatus(
+      allCanvasNodes,
+      edges,
+      memoryConfig.enabled !== false,
+      memoryConfig.checkpointer || "memory",
+      memoryConfig.checkpointerNodeId,
+    );
+  }, [allCanvasNodes, edges, memoryConfig]);
+
+  const checkpointerError = React.useMemo(() => {
     if (!memoryConfig || memoryConfig.enabled === false || memoryConfig.checkpointer === "memory") return null;
     const isPg = memoryConfig.checkpointer === "postgres";
     const isRedis = memoryConfig.checkpointer === "redis";
     if (!isPg && !isRedis) return null;
 
-    if (!memoryConfig.checkpointerNodeId) {
-      return `No ${isPg ? "PostgreSQL database" : "Redis"} linked in Memory`;
+    if (checkpointerTablesStatus.isMissingStorage) {
+      return `No ${isPg ? "PostgreSQL database" : "Redis"} in SchemaView`;
     }
-    const target = allCanvasNodes.find((n) => n.id === memoryConfig.checkpointerNodeId);
-    if (!target) {
-      return `Linked ${isPg ? "database" : "Redis instance"} missing`;
+    if (!checkpointerTablesStatus.areTablesCreated) {
+      return `${checkpointerTablesStatus.missingCount} checkpointer tables missing in SchemaView`;
     }
     return null;
-  }, [memoryConfig, allCanvasNodes]);
+  }, [memoryConfig, checkpointerTablesStatus]);
 
   return (
     <div
@@ -257,7 +267,7 @@ export const LangGraphNode = ({
         selected
           ? "border-primary ring-4 ring-primary/20 shadow-primary/10"
           : "border-border hover:border-border/80",
-        (hasPipelineError || Boolean(checkpointerMissingError)) &&
+        (hasPipelineError || Boolean(checkpointerError)) &&
           "border-destructive/80 ring-4 ring-destructive/20 shadow-destructive/10",
       )}
       onDoubleClick={handleOpenEditor}
@@ -272,10 +282,15 @@ export const LangGraphNode = ({
         placeholder="Enter agent name..."
         selected={selected}
         badges={
-          checkpointerMissingError ? (
-            <span className="text-[7px] font-medium px-1 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/30 flex items-center gap-0.5 shrink-0 animate-pulse">
+          checkpointerError ? (
+            <span
+              className="text-[7px] font-medium px-1 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/30 flex items-center gap-0.5 shrink-0 animate-pulse"
+              title={checkpointerError}
+            >
               <AlertTriangle size={8} />
-              No DB
+              {checkpointerTablesStatus.isMissingStorage
+                ? "No DB"
+                : `${checkpointerTablesStatus.existingTables.length}/${checkpointerTablesStatus.expectedCount} Tables`}
             </span>
           ) : hasPipelineError ? (
             <span className="text-[7px] font-medium px-1 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/30 flex items-center gap-0.5 shrink-0 animate-pulse">
@@ -351,14 +366,14 @@ export const LangGraphNode = ({
         }
       />
 
-      {checkpointerMissingError && (
+      {checkpointerError && (
         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-destructive/15 border-b border-destructive/30 text-[11px] text-destructive leading-tight font-medium">
           <AlertTriangle size={12} className="shrink-0" />
-          <span>{checkpointerMissingError}</span>
+          <span>{checkpointerError}</span>
         </div>
       )}
 
-      {hasPipelineError && !checkpointerMissingError && (
+      {hasPipelineError && !checkpointerError && (
         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 border-b border-destructive/20 text-[11px] text-destructive leading-tight">
           <AlertTriangle size={12} className="shrink-0" />
           <span className="font-medium">Missing required input mapping</span>
@@ -497,18 +512,38 @@ export const LangGraphNode = ({
           )}
         </div>
 
-        {/* Memory badge */}
-        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-          <span className="px-1.5 py-0.5 rounded bg-secondary text-foreground border border-border/40 font-mono">
-            {memoryConfig.checkpointer || "memory"}
-          </span>
-          <span>checkpointer</span>
-          {memoryConfig.autoSummarize && (
-            <span className="px-1.5 py-0.5 rounded bg-secondary text-muted-foreground border border-border/40 font-mono">
-              auto-summarize
+        {/* Checkpointer Status / Warning */}
+        {checkpointerError ? (
+          <div
+            className="flex items-center justify-between p-2 rounded-lg bg-destructive/15 border border-destructive/30 text-destructive text-[10px] font-medium"
+            title={checkpointerError}
+          >
+            <div className="flex items-center gap-1.5 truncate">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">{checkpointerError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleOpenEditor}
+              className="text-[9px] underline font-bold shrink-0 ml-1 hover:opacity-80 cursor-pointer"
+            >
+              fix in studio ↗
+            </button>
+          </div>
+        ) : (
+          /* Memory badge */
+          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+            <span className="px-1.5 py-0.5 rounded bg-secondary text-foreground border border-border/40 font-mono">
+              {memoryConfig.checkpointer || "memory"}
             </span>
-          )}
-        </div>
+            <span>checkpointer</span>
+            {memoryConfig.autoSummarize && (
+              <span className="px-1.5 py-0.5 rounded bg-secondary text-muted-foreground border border-border/40 font-mono">
+                auto-summarize
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Open Editor Button */}
         <Button

@@ -1,157 +1,19 @@
 import type { BackendNode } from "@/types/canvas";
-import type { CanvasEntityColumn } from "@workspace/canvas";
+import {
+  LANGGRAPH_POSTGRES_TABLE_DEFINITIONS,
+  LANGGRAPH_SQLITE_TABLE_DEFINITIONS,
+  LANGGRAPH_REDIS_SCHEMA_DEFINITIONS,
+  type LangGraphTableDefinition,
+  type LangGraphRedisSchemaDefinition,
+} from "@workspace/canvas";
 
-export interface LangGraphTableDefinition {
-  name: string;
-  description: string;
-  columns: CanvasEntityColumn[];
-  indexes?: {
-    name: string;
-    columns: string;
-    isUnique?: boolean;
-  }[];
-}
-
-export interface LangGraphRedisSchemaDefinition {
-  name: string;
-  description: string;
-  redisDataStructure: "hash" | "string" | "list" | "set" | "zset" | "stream";
-  keyTemplate: string;
-  columns: CanvasEntityColumn[];
-  indexes?: {
-    name: string;
-    columns: string;
-    isUnique?: boolean;
-  }[];
-}
-
-export const LANGGRAPH_POSTGRES_TABLE_DEFINITIONS: LangGraphTableDefinition[] = [
-  {
-    name: "langgraph_checkpoints",
-    description: "LangGraph state checkpoints indexed by thread and run namespace",
-    columns: [
-      { name: "thread_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      { name: "checkpoint_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      {
-        name: "parent_checkpoint_id",
-        type: "TEXT",
-        isNotNull: false,
-        isForeignKey: true,
-        references: { table: "langgraph_checkpoints", column: "checkpoint_id" },
-      },
-      { name: "type", type: "TEXT", isNotNull: false },
-      { name: "checkpoint", type: "JSON", isNotNull: true },
-      { name: "metadata", type: "JSON", isNotNull: true },
-    ],
-    indexes: [
-      { name: "idx_checkpoints_thread_id", columns: "thread_id" },
-      { name: "idx_checkpoints_thread_ns", columns: "thread_id, checkpoint_ns" },
-      { name: "idx_checkpoints_parent", columns: "parent_checkpoint_id" },
-    ],
-  },
-  {
-    name: "langgraph_checkpoint_writes",
-    description: "Pending channel writes and delta operations per graph step",
-    columns: [
-      {
-        name: "thread_id",
-        type: "TEXT",
-        isPrimaryKey: true,
-        isNotNull: true,
-        isForeignKey: true,
-        references: { table: "langgraph_checkpoints", column: "thread_id" },
-      },
-      { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      {
-        name: "checkpoint_id",
-        type: "TEXT",
-        isPrimaryKey: true,
-        isNotNull: true,
-        isForeignKey: true,
-        references: { table: "langgraph_checkpoints", column: "checkpoint_id" },
-      },
-      { name: "task_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      { name: "idx", type: "INTEGER", isPrimaryKey: true, isNotNull: true },
-      { name: "channel", type: "TEXT", isNotNull: true },
-      { name: "type", type: "TEXT", isNotNull: false },
-      { name: "blob", type: "JSON", isNotNull: true },
-    ],
-    indexes: [
-      { name: "idx_checkpoint_writes_thread_id", columns: "thread_id" },
-      { name: "idx_checkpoint_writes_checkpoint_id", columns: "checkpoint_id" },
-      { name: "idx_checkpoint_writes_task", columns: "task_id, idx" },
-    ],
-  },
-  {
-    name: "langgraph_checkpoint_blobs",
-    description: "Serialized large-state blobs and message buffers",
-    columns: [
-      {
-        name: "thread_id",
-        type: "TEXT",
-        isPrimaryKey: true,
-        isNotNull: true,
-        isForeignKey: true,
-        references: { table: "langgraph_checkpoints", column: "thread_id" },
-      },
-      { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      { name: "channel", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      { name: "version", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      { name: "type", type: "TEXT", isNotNull: false },
-      { name: "blob", type: "JSON", isNotNull: true },
-    ],
-    indexes: [
-      { name: "idx_checkpoint_blobs_thread_id", columns: "thread_id" },
-      { name: "idx_checkpoint_blobs_channel", columns: "channel, version" },
-    ],
-  },
-  {
-    name: "langgraph_checkpoint_migrations",
-    description: "Database migration tracker for LangGraph schema versions",
-    columns: [
-      { name: "v", type: "INTEGER", isPrimaryKey: true, isNotNull: true },
-    ],
-    indexes: [
-      { name: "idx_checkpoint_migrations_v", columns: "v", isUnique: true },
-    ],
-  },
-];
-
-export const LANGGRAPH_REDIS_SCHEMA_DEFINITIONS: LangGraphRedisSchemaDefinition[] = [
-  {
-    name: "langgraph_checkpoints",
-    description: "LangGraph state checkpoints hash map indexed by thread and run namespace",
-    redisDataStructure: "hash",
-    keyTemplate: "checkpoint:{thread_id}:{checkpoint_ns}:{checkpoint_id}",
-    columns: [
-      { name: "checkpoint", type: "JSON", isNotNull: true },
-      { name: "metadata", type: "JSON", isNotNull: true },
-      { name: "parent_checkpoint_id", type: "TEXT", isNotNull: false },
-    ],
-  },
-  {
-    name: "langgraph_checkpoint_writes",
-    description: "LangGraph step writes channel buffer and tasks",
-    redisDataStructure: "hash",
-    keyTemplate: "writes:{thread_id}:{checkpoint_ns}:{checkpoint_id}:{task_id}",
-    columns: [
-      { name: "task_id", type: "TEXT", isNotNull: true },
-      { name: "channel", type: "TEXT", isNotNull: true },
-      { name: "blob", type: "JSON", isNotNull: true },
-    ],
-  },
-  {
-    name: "langgraph_checkpoint_blobs",
-    description: "Serialized large state binary objects and buffers",
-    redisDataStructure: "hash",
-    keyTemplate: "blobs:{thread_id}:{checkpoint_ns}:{channel}",
-    columns: [
-      { name: "blob", type: "JSON", isNotNull: true },
-      { name: "version", type: "TEXT", isNotNull: true },
-    ],
-  },
-];
+export {
+  LANGGRAPH_POSTGRES_TABLE_DEFINITIONS,
+  LANGGRAPH_SQLITE_TABLE_DEFINITIONS,
+  LANGGRAPH_REDIS_SCHEMA_DEFINITIONS,
+  type LangGraphTableDefinition,
+  type LangGraphRedisSchemaDefinition,
+};
 
 /**
  * Returns existing LangGraph checkpointer tables or schemas associated with the given connectionId.
@@ -178,7 +40,11 @@ export function getExistingCheckpointerTables(
         (n.data?.databaseId === connectionId || isEdgeConnected(n.id)) &&
         (n.data?.systemBadge === "langgraph" ||
           LANGGRAPH_POSTGRES_TABLE_DEFINITIONS.some(
-            (def) => def.name === n.data?.label || def.name === n.data?.tableName,
+            (def) =>
+              def.name === n.data?.label ||
+              def.name === n.data?.tableName ||
+              `langgraph_${def.name}` === n.data?.label ||
+              `langgraph_${def.name}` === n.data?.tableName,
           )),
     );
   }
@@ -201,6 +67,13 @@ export function getExistingCheckpointerTables(
   return [];
 }
 
+export interface CheckpointerTableItemStatus {
+  name: string;
+  description: string;
+  exists: boolean;
+  nodeId?: string;
+}
+
 export interface CheckpointerTablesStatus {
   isConfigured: boolean;
   isMissingStorage: boolean;
@@ -211,6 +84,7 @@ export interface CheckpointerTablesStatus {
   areTablesCreated: boolean;
   missingCount: number;
   errorMessage: string | null;
+  tableBreakdown: CheckpointerTableItemStatus[];
 }
 
 /**
@@ -232,6 +106,7 @@ export function checkCheckpointerTablesStatus(
       areTablesCreated: true,
       missingCount: 0,
       errorMessage: null,
+      tableBreakdown: [],
     };
   }
 
@@ -243,6 +118,13 @@ export function checkCheckpointerTablesStatus(
       postgresNodes.find((p) => p.id === connectionId) || postgresNodes[0];
 
     if (!configuredDb) {
+      const breakdown: CheckpointerTableItemStatus[] =
+        LANGGRAPH_POSTGRES_TABLE_DEFINITIONS.map((def) => ({
+          name: def.name,
+          description: def.description,
+          exists: false,
+        }));
+
       return {
         isConfigured: false,
         isMissingStorage: true,
@@ -251,6 +133,7 @@ export function checkCheckpointerTablesStatus(
         areTablesCreated: false,
         missingCount: 4,
         errorMessage: "No PostgreSQL database found in SchemaView. Please create a Database node in SchemaView.",
+        tableBreakdown: breakdown,
       };
     }
 
@@ -259,6 +142,23 @@ export function checkCheckpointerTablesStatus(
     const areTablesCreated = existing.length >= expectedCount;
     const missingCount = Math.max(0, expectedCount - existing.length);
     const dbName = configuredDb.data?.label || "PostgreSQL";
+
+    const tableBreakdown: CheckpointerTableItemStatus[] =
+      LANGGRAPH_POSTGRES_TABLE_DEFINITIONS.map((def) => {
+        const match = existing.find(
+          (n) =>
+            n.data?.label === def.name ||
+            n.data?.tableName === def.name ||
+            n.data?.label === `langgraph_${def.name}` ||
+            n.data?.tableName === `langgraph_${def.name}`,
+        );
+        return {
+          name: def.name,
+          description: def.description,
+          exists: Boolean(match),
+          nodeId: match?.id,
+        };
+      });
 
     let errorMessage: string | null = null;
     if (!areTablesCreated) {
@@ -279,6 +179,7 @@ export function checkCheckpointerTablesStatus(
       areTablesCreated,
       missingCount,
       errorMessage,
+      tableBreakdown,
     };
   }
 
@@ -292,6 +193,13 @@ export function checkCheckpointerTablesStatus(
       redisNodes.find((r) => r.id === connectionId) || redisNodes[0];
 
     if (!configuredRedis) {
+      const breakdown: CheckpointerTableItemStatus[] =
+        LANGGRAPH_REDIS_SCHEMA_DEFINITIONS.map((def) => ({
+          name: def.name,
+          description: def.description,
+          exists: false,
+        }));
+
       return {
         isConfigured: false,
         isMissingStorage: true,
@@ -300,6 +208,7 @@ export function checkCheckpointerTablesStatus(
         areTablesCreated: false,
         missingCount: 3,
         errorMessage: "No Redis instance found in SchemaView. Please create a Redis instance in SchemaView.",
+        tableBreakdown: breakdown,
       };
     }
 
@@ -308,6 +217,19 @@ export function checkCheckpointerTablesStatus(
     const areTablesCreated = existing.length >= expectedCount;
     const missingCount = Math.max(0, expectedCount - existing.length);
     const redisName = configuredRedis.data?.label || "Redis";
+
+    const tableBreakdown: CheckpointerTableItemStatus[] =
+      LANGGRAPH_REDIS_SCHEMA_DEFINITIONS.map((def) => {
+        const match = existing.find(
+          (n) => n.data?.label === def.name || n.data?.tableName === def.name,
+        );
+        return {
+          name: def.name,
+          description: def.description,
+          exists: Boolean(match),
+          nodeId: match?.id,
+        };
+      });
 
     let errorMessage: string | null = null;
     if (!areTablesCreated) {
@@ -328,6 +250,7 @@ export function checkCheckpointerTablesStatus(
       areTablesCreated,
       missingCount,
       errorMessage,
+      tableBreakdown,
     };
   }
 
@@ -339,6 +262,7 @@ export function checkCheckpointerTablesStatus(
     areTablesCreated: true,
     missingCount: 0,
     errorMessage: null,
+    tableBreakdown: [],
   };
 }
 
@@ -437,7 +361,10 @@ export function provisionCheckpointerTables({
         (n) =>
           n.type === "entity" &&
           n.data?.databaseId === linkedNodeId &&
-          (n.data?.label === tableDef.name || n.data?.tableName === tableDef.name),
+          (n.data?.label === tableDef.name ||
+            n.data?.tableName === tableDef.name ||
+            n.data?.label === `langgraph_${tableDef.name}` ||
+            n.data?.tableName === `langgraph_${tableDef.name}`),
       );
 
       if (existingNode) {
@@ -488,52 +415,125 @@ export function provisionCheckpointerTables({
 
       createdCount++;
     });
-
-    // Establish foreign-key edges between checkpoints, writes, and blobs
-    const checkpointsId = tableIdMap["langgraph_checkpoints"];
-    const writesId = tableIdMap["langgraph_checkpoint_writes"];
-    const blobsId = tableIdMap["langgraph_checkpoint_blobs"];
-
-    // 1. langgraph_checkpoints (checkpoint_id at idx 2) -> langgraph_checkpoint_writes (checkpoint_id at idx 2)
-    if (checkpointsId && writesId) {
-      const hasWritesFk = edges.some(
-        (e) =>
-          e.type === "foreign-key" &&
-          ((e.source === checkpointsId && e.target === writesId) ||
-            (e.target === checkpointsId && e.source === writesId)),
-      );
-      if (!hasWritesFk) {
-        addEdge({
-          id: `edge-fk-${writesId}-${checkpointsId}-checkpoint_id`,
-          source: checkpointsId,
-          target: writesId,
-          sourceHandle: "source-2",
-          targetHandle: "target-2",
-          type: "foreign-key",
-        });
-      }
-    }
-
-    // 2. langgraph_checkpoints (thread_id at idx 0) -> langgraph_checkpoint_blobs (thread_id at idx 0)
-    if (checkpointsId && blobsId) {
-      const hasBlobsFk = edges.some(
-        (e) =>
-          e.type === "foreign-key" &&
-          ((e.source === checkpointsId && e.target === blobsId) ||
-            (e.target === checkpointsId && e.source === blobsId)),
-      );
-      if (!hasBlobsFk) {
-        addEdge({
-          id: `edge-fk-${blobsId}-${checkpointsId}-thread_id`,
-          source: checkpointsId,
-          target: blobsId,
-          sourceHandle: "source-0",
-          targetHandle: "target-0",
-          type: "foreign-key",
-        });
-      }
-    }
   }
 
   return createdCount > 0 ? createdCount : updatedCount;
+}
+
+/**
+ * Automatically provisions a PostgreSQL database or Redis instance if missing in SchemaView,
+ * and creates all required LangGraph checkpointer tables linked to it in 1 click.
+ */
+export function provisionDatabaseAndCheckpointerTables({
+  nodes,
+  edges = [],
+  addNode,
+  updateNode,
+  addEdge,
+  checkpointerType = "postgres",
+}: {
+  nodes: BackendNode[];
+  edges?: any[];
+  addNode: (node: Omit<BackendNode, "fractionalIndex"> | any) => void;
+  updateNode?: (id: string, changes: Partial<BackendNode>) => void;
+  addEdge: (edge: any) => void;
+  checkpointerType?: "postgres" | "redis" | string;
+}): { configuredNodeId: string; createdCount: number } {
+  if (checkpointerType === "redis") {
+    let redisNode = nodes.find(
+      (n) =>
+        n?.type === "redis_instance" ||
+        (n?.type === "database" && n.data?.dbEngine === "redis"),
+    );
+    let redisId: string;
+    if (!redisNode) {
+      redisId = crypto.randomUUID();
+      const pos = { x: 300, y: 150 };
+      const newRedisNode: BackendNode = {
+        id: redisId,
+        type: "redis_instance",
+        position: pos,
+        fractionalIndex: "r0",
+        data: {
+          label: "Redis Instance",
+          dbEngine: "redis",
+          dbType: "redis",
+          color: "#dc2626",
+          isDefault: true,
+          envVars: [
+            {
+              id: "redis-url",
+              name: "REDIS_URL",
+              description: "Redis connection URI (e.g. redis://localhost:6379)",
+            },
+          ],
+        },
+      };
+      addNode(newRedisNode);
+      redisNode = newRedisNode;
+    } else {
+      redisId = redisNode.id;
+    }
+
+    const createdCount = provisionCheckpointerTables({
+      linkedNodeId: redisId,
+      checkpointerType: "redis",
+      nodes: [...nodes, redisNode],
+      edges,
+      addNode,
+      updateNode,
+      addEdge,
+    });
+
+    return { configuredNodeId: redisId, createdCount };
+  }
+
+  // Default: PostgreSQL
+  let pgNode = nodes.find(
+    (n) => n?.type === "database" && n.data?.dbEngine === "postgres",
+  );
+  let pgId: string;
+  if (!pgNode) {
+    pgId = crypto.randomUUID();
+    const pos = { x: 300, y: 150 };
+    const newPgNode: BackendNode = {
+      id: pgId,
+      type: "database",
+      position: pos,
+      fractionalIndex: "d0",
+      data: {
+        label: "PostgreSQL DB",
+        dbEngine: "postgres",
+        dbType: "relational",
+        dbCategory: "sql",
+        dbConnectionType: "env_var",
+        connectionStringEnv: "DATABASE_URL",
+        color: "#006ddd",
+        isDefault: true,
+        envVars: [
+          {
+            id: "db-url",
+            name: "DATABASE_URL",
+            description: "PostgreSQL connection string (e.g. postgresql://user:pass@localhost:5432/mydb)",
+          },
+        ],
+      },
+    };
+    addNode(newPgNode);
+    pgNode = newPgNode;
+  } else {
+    pgId = pgNode.id;
+  }
+
+  const createdCount = provisionCheckpointerTables({
+    linkedNodeId: pgId,
+    checkpointerType: "postgres",
+    nodes: [...nodes, pgNode],
+    edges,
+    addNode,
+    updateNode,
+    addEdge,
+  });
+
+  return { configuredNodeId: pgId, createdCount };
 }
