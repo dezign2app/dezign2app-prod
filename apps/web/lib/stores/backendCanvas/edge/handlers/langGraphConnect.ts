@@ -152,8 +152,55 @@ export function handleLangGraphConnect({
         nextPipelineSteps = [...existingSteps, newLangGraphStep];
       }
 
+      // Check if endpoint requestBody exists or needs thread_id auto-provisioning
+      const currentReqBody = endpoint.requestBody;
+      const currentFields = currentReqBody?.fields || [];
+      const hasThreadId = currentFields.some(
+        (f: any) =>
+          f.name?.toLowerCase() === "thread_id" ||
+          f.name?.toLowerCase() === "threadid",
+      );
+      const hasMessage = currentFields.some(
+        (f: any) =>
+          f.name?.toLowerCase() === "message" ||
+          f.name?.toLowerCase() === "messages",
+      );
+
+      let updatedReqBody = currentReqBody;
+      if (hasMemory && !hasThreadId) {
+        const fieldsToAdd: any[] = [];
+        if (!hasMessage && currentFields.length === 0) {
+          fieldsToAdd.push({
+            id: `field_msg_${Date.now()}`,
+            name: "message",
+            key: "message",
+            type: "string",
+            required: true,
+            description: "User input prompt / message",
+            defaultValue: "",
+            value: "",
+          });
+        }
+        fieldsToAdd.push({
+          id: `field_thread_id_${Date.now()}`,
+          name: "thread_id",
+          key: "thread_id",
+          type: "string",
+          required: false,
+          description: "Conversation session thread ID for LangGraph checkpointer memory",
+          defaultValue: "",
+          value: "",
+        });
+
+        updatedReqBody = {
+          ...(currentReqBody || { id: `req_${endpoint.id}` }),
+          fields: [...currentFields, ...fieldsToAdd],
+        };
+      }
+
       get().updateEndpoint(endpointId, {
         pipelineSteps: nextPipelineSteps,
+        ...(updatedReqBody !== currentReqBody ? { requestBody: updatedReqBody } : {}),
       });
     }
   }

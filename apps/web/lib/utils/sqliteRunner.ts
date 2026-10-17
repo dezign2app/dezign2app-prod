@@ -54,6 +54,7 @@ export function mapColumnTypeToSqlite(type?: string): string {
   if (t === "number" || t === "int" || t === "integer" || t === "bigint") return "INTEGER";
   if (t === "float" || t === "double" || t === "real" || t === "decimal") return "REAL";
   if (t === "boolean" || t === "bool") return "INTEGER";
+  if (t === "blob" || t === "bytea") return "BLOB";
   return "TEXT";
 }
 
@@ -92,19 +93,36 @@ export function ensureSqliteTable(
 
   if (!exists) {
     const colSqlList: string[] = [];
+    const constraints: string[] = [];
+    const pkColNames: string[] = [];
+    const explicitPkCols = (columns || []).filter(
+      (c) => c.isPrimaryKey || c.isPrimary || c.primaryKey,
+    );
+
     if (columns && columns.length > 0) {
       for (const col of columns) {
         const colName = sanitizeIdentifier(col.name, "col");
         const colType = mapColumnTypeToSqlite(col.type);
         const isPk =
-          col.isPrimaryKey ||
-          col.isPrimary ||
-          col.primaryKey ||
-          colName.toLowerCase() === "id";
-        colSqlList.push(isPk ? `"${colName}" ${colType} PRIMARY KEY` : `"${colName}" ${colType}`);
+          explicitPkCols.length > 0
+            ? Boolean(col.isPrimaryKey || col.isPrimary || col.primaryKey)
+            : colName.toLowerCase() === "id";
+
+        if (isPk) {
+          pkColNames.push(colName);
+        }
+
+        const notNullClause = isPk || col.isNotNull ? " NOT NULL" : "";
+
+        if (isPk && explicitPkCols.length <= 1) {
+          colSqlList.push(`"${colName}" ${colType} PRIMARY KEY`);
+        } else {
+          colSqlList.push(`"${colName}" ${colType}${notNullClause}`);
+        }
       }
     }
-    if (!colSqlList.some((c) => c.includes("PRIMARY KEY"))) {
+
+    if (pkColNames.length === 0 && !colSqlList.some((c) => c.includes("PRIMARY KEY"))) {
       colSqlList.unshift('"id" TEXT PRIMARY KEY');
     }
     if (!colSqlList.some((c) => c.startsWith('"created_at" '))) {
@@ -114,17 +132,22 @@ export function ensureSqliteTable(
       colSqlList.push('"updated_at" TEXT DEFAULT CURRENT_TIMESTAMP');
     }
 
+    if (pkColNames.length > 1) {
+      const pkList = pkColNames.map((c) => `"${c}"`).join(", ");
+      constraints.push(`PRIMARY KEY (${pkList})`);
+    }
+
     if (foreignKeys && foreignKeys.length > 0) {
       for (const fk of foreignKeys) {
         const fkCol = sanitizeIdentifier(fk.column, "col");
         const fkTarget = sanitizeIdentifier(fk.foreignTable, "records");
         const fkTargetCol = sanitizeIdentifier(fk.foreignColumn, "id");
         const onDelete = (fk.onDelete || "CASCADE").toUpperCase();
-        colSqlList.push(`FOREIGN KEY ("${fkCol}") REFERENCES "${fkTarget}"("${fkTargetCol}") ON DELETE ${onDelete}`);
+        constraints.push(`FOREIGN KEY ("${fkCol}") REFERENCES "${fkTarget}"("${fkTargetCol}") ON DELETE ${onDelete}`);
       }
     }
 
-    db.exec(`CREATE TABLE IF NOT EXISTS "${safeTable}" (${colSqlList.join(", ")});`);
+    db.exec(`CREATE TABLE IF NOT EXISTS "${safeTable}" (${[...colSqlList, ...constraints].join(", ")});`);
   } else if (columns && columns.length > 0) {
     const infoStmt = db.prepare(`PRAGMA table_info("${safeTable}")`);
     const infoRows = infoStmt.all();
@@ -167,19 +190,36 @@ export function rebuildSqliteTableWithColumns(
 
   // 2. Build column definitions for temp table
   const colSqlList: string[] = [];
+  const constraints: string[] = [];
+  const pkColNames: string[] = [];
+  const explicitPkCols = (columns || []).filter(
+    (c) => c.isPrimaryKey || c.isPrimary || c.primaryKey,
+  );
+
   if (columns && columns.length > 0) {
     for (const col of columns) {
       const colName = sanitizeIdentifier(col.name, "col");
       const colType = mapColumnTypeToSqlite(col.type);
       const isPk =
-        col.isPrimaryKey ||
-        col.isPrimary ||
-        col.primaryKey ||
-        colName.toLowerCase() === "id";
-      colSqlList.push(isPk ? `"${colName}" ${colType} PRIMARY KEY` : `"${colName}" ${colType}`);
+        explicitPkCols.length > 0
+          ? Boolean(col.isPrimaryKey || col.isPrimary || col.primaryKey)
+          : colName.toLowerCase() === "id";
+
+      if (isPk) {
+        pkColNames.push(colName);
+      }
+
+      const notNullClause = isPk || col.isNotNull ? " NOT NULL" : "";
+
+      if (isPk && explicitPkCols.length <= 1) {
+        colSqlList.push(`"${colName}" ${colType} PRIMARY KEY`);
+      } else {
+        colSqlList.push(`"${colName}" ${colType}${notNullClause}`);
+      }
     }
   }
-  if (!colSqlList.some((c) => c.includes("PRIMARY KEY"))) {
+
+  if (pkColNames.length === 0 && !colSqlList.some((c) => c.includes("PRIMARY KEY"))) {
     colSqlList.unshift('"id" TEXT PRIMARY KEY');
   }
   if (!colSqlList.some((c) => c.startsWith('"created_at" '))) {
@@ -189,13 +229,18 @@ export function rebuildSqliteTableWithColumns(
     colSqlList.push('"updated_at" TEXT DEFAULT CURRENT_TIMESTAMP');
   }
 
+  if (pkColNames.length > 1) {
+    const pkList = pkColNames.map((c) => `"${c}"`).join(", ");
+    constraints.push(`PRIMARY KEY (${pkList})`);
+  }
+
   if (foreignKeys && foreignKeys.length > 0) {
     for (const fk of foreignKeys) {
       const fkCol = sanitizeIdentifier(fk.column, "col");
       const fkTarget = sanitizeIdentifier(fk.foreignTable, "records");
       const fkTargetCol = sanitizeIdentifier(fk.foreignColumn, "id");
       const onDelete = (fk.onDelete || "CASCADE").toUpperCase();
-      colSqlList.push(`FOREIGN KEY ("${fkCol}") REFERENCES "${fkTarget}"("${fkTargetCol}") ON DELETE ${onDelete}`);
+      constraints.push(`FOREIGN KEY ("${fkCol}") REFERENCES "${fkTarget}"("${fkTargetCol}") ON DELETE ${onDelete}`);
     }
   }
 
@@ -209,7 +254,7 @@ export function rebuildSqliteTableWithColumns(
 
   db.exec("PRAGMA foreign_keys=OFF;");
   try {
-    db.exec(`CREATE TABLE "${tempTable}" (${colSqlList.join(", ")});`);
+    db.exec(`CREATE TABLE "${tempTable}" (${[...colSqlList, ...constraints].join(", ")});`);
     if (commonCols.length > 0) {
       const colListStr = commonCols.map((c) => `"${c}"`).join(", ");
       db.exec(`INSERT INTO "${tempTable}" (${colListStr}) SELECT ${colListStr} FROM "${safeTable}";`);

@@ -10,11 +10,17 @@ import {
   MarkerType,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Layout, AlertTriangle, ExternalLink } from "lucide-react";
+import { Layout, AlertTriangle, ExternalLink, Plus } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
+import { toast } from "sonner";
 import type { BackendNode } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
+import {
+  checkCheckpointerTablesStatus,
+  provisionDatabaseAndCheckpointerTables,
+  provisionCheckpointerTables,
+} from "./langgraph-canvas/utils/checkpointerTables";
 import {
   useLangGraphAutoLayout,
   getLangGraphFlowNodes,
@@ -289,17 +295,24 @@ export function LangGraphStudioView({
     [nodes],
   );
   const allCanvasNodes = useBackendCanvasStore((s) => s.nodes);
-  const hasStorageNodes = useMemo(() => {
-    if (!memoryConfig || memoryConfig.enabled === false) return true;
-    const isPg = memoryConfig.checkpointer === "postgres";
-    const isRedis = memoryConfig.checkpointer === "redis";
-    if (!isPg && !isRedis) return true;
-    return allCanvasNodes.some(
-      (n) =>
-        (isPg && n?.type === "database" && n.data?.dbEngine === "postgres") ||
-        (isRedis && (n?.type === "redis_instance" || (n?.type === "database" && n.data?.dbEngine === "redis"))),
+  const allCanvasEdges = useBackendCanvasStore((s) => s.edges);
+  const addCanvasNode = useBackendCanvasStore((s) => s.addNode);
+  const updateCanvasNode = useBackendCanvasStore((s) => s.updateNode);
+  const addCanvasEdge = useBackendCanvasStore((s) => s.addEdge);
+
+  const checkpointerTablesStatus = useMemo(() => {
+    return checkCheckpointerTablesStatus(
+      allCanvasNodes,
+      allCanvasEdges,
+      memoryConfig?.enabled !== false,
+      memoryConfig?.checkpointer || "memory",
+      memoryConfig?.checkpointerNodeId,
     );
-  }, [memoryConfig, allCanvasNodes]);
+  }, [allCanvasNodes, allCanvasEdges, memoryConfig]);
+
+  const hasStorageNodes = useMemo(() => {
+    return !checkpointerTablesStatus.isMissingStorage;
+  }, [checkpointerTablesStatus]);
 
   const checkpointerMissingError = useMemo(() => {
     if (!memoryConfig || memoryConfig.enabled === false || memoryConfig.checkpointer === "memory") return null;
@@ -307,19 +320,60 @@ export function LangGraphStudioView({
     const isRedis = memoryConfig.checkpointer === "redis";
     if (!isPg && !isRedis) return null;
 
-    if (!hasStorageNodes) {
+    if (checkpointerTablesStatus.isMissingStorage) {
       return `No ${isPg ? "PostgreSQL database" : "Redis instance"} found in SchemaView. Please create one in SchemaView.`;
     }
 
-    if (!memoryConfig.checkpointerNodeId) {
+    if (!checkpointerTablesStatus.isConfigured) {
       return `No ${isPg ? "PostgreSQL database" : "Redis instance"} linked from SchemaView. Please link one in the Memory tab.`;
     }
-    const target = allCanvasNodes.find((n) => n.id === memoryConfig.checkpointerNodeId);
-    if (!target) {
-      return `Linked ${isPg ? "database" : "Redis instance"} was deleted or not found in SchemaView. Please re-link in Memory tab.`;
+
+    if (!checkpointerTablesStatus.areTablesCreated) {
+      return checkpointerTablesStatus.errorMessage || `Checkpointer tables are missing in SchemaView.`;
     }
+
     return null;
-  }, [memoryConfig, allCanvasNodes, hasStorageNodes]);
+  }, [memoryConfig, checkpointerTablesStatus]);
+
+  const handleCreateStudioCheckpointerTables = () => {
+    const currentEngine = memoryConfig?.checkpointer || "postgres";
+    if (checkpointerTablesStatus.isMissingStorage || !checkpointerTablesStatus.configuredNodeId) {
+      const result = provisionDatabaseAndCheckpointerTables({
+        nodes: allCanvasNodes,
+        edges: allCanvasEdges,
+        addNode: addCanvasNode,
+        updateNode: updateCanvasNode,
+        addEdge: addCanvasEdge,
+        checkpointerType: currentEngine,
+      });
+
+      if (result.configuredNodeId) {
+        setMemoryConfig({ ...memoryConfig, checkpointerNodeId: result.configuredNodeId });
+        toast.success(
+          `Created ${currentEngine === "redis" ? "Redis instance" : "PostgreSQL database"} and ${result.createdCount} checkpointer tables in SchemaView!`,
+        );
+      }
+      return;
+    }
+
+    const created = provisionCheckpointerTables({
+      linkedNodeId: checkpointerTablesStatus.configuredNodeId,
+      checkpointerType: currentEngine,
+      nodes: allCanvasNodes,
+      edges: allCanvasEdges,
+      addNode: addCanvasNode,
+      updateNode: updateCanvasNode,
+      addEdge: addCanvasEdge,
+    });
+
+    if (created > 0) {
+      toast.success(
+        `Created ${created} LangGraph checkpointer ${currentEngine === "postgres" ? "table" : "schema"}${created > 1 ? "s" : ""} in SchemaView!`,
+      );
+    } else {
+      toast.info("All LangGraph checkpointer tables already exist in SchemaView.");
+    }
+  };
 
   const loopWarnings = useMemo(() => {
     return detectInfiniteLoops({ nodes, edges });
@@ -650,6 +704,21 @@ export function LangGraphStudioView({
             <span>{checkpointerMissingError}</span>
           </div>
           <div className="flex items-center gap-2">
+            {!checkpointerTablesStatus.areTablesCreated && (
+              <Button
+                size="sm"
+                variant="destructive"
+                className="h-6 text-[11px] px-2.5 py-0 gap-1 font-bold cursor-pointer"
+                onClick={handleCreateStudioCheckpointerTables}
+              >
+                <Plus className="w-3 h-3" />
+                <span>
+                  {checkpointerTablesStatus.isMissingStorage
+                    ? `Create DB & Tables`
+                    : `Create Tables`}
+                </span>
+              </Button>
+            )}
             {hasStorageNodes && (
               <Button
                 size="sm"

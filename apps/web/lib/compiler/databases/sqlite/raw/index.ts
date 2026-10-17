@@ -644,6 +644,9 @@ export function compileRawSqliteDatabase(
         return { name: c.name, type: colType };
       });
 
+    const pkCols = cols.filter((c) => c.isPrimaryKey);
+    const isCompositePk = pkCols.length > 1;
+
     const colDefs = cols.map((c) => {
       let colType = "TEXT";
       const t = (c.type || "").toLowerCase();
@@ -652,11 +655,21 @@ export function compileRawSqliteDatabase(
       }
       let constraints = "";
       if (c.isPrimaryKey) {
-        constraints += colType === "INTEGER" ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY NOT NULL";
+        if (isCompositePk) {
+          constraints += " NOT NULL";
+        } else {
+          constraints += colType === "INTEGER" ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY NOT NULL";
+        }
       }
       if (c.isUnique) constraints += " UNIQUE";
       return `    "${c.name}" ${colType}${constraints}`;
     });
+
+    if (isCompositePk) {
+      const pkList = pkCols.map((c) => `"${c.name}"`).join(", ");
+      colDefs.push(`    PRIMARY KEY (${pkList})`);
+    }
+
     ddlStatements.push(`  CREATE TABLE IF NOT EXISTS "${tableName}" (\n${colDefs.join(",\n")}\n  );`);
 
     // Generate table-level indexes defined on the entity node

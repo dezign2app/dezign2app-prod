@@ -26,6 +26,7 @@ import { useShallow } from "zustand/react/shallow";
 import {
   checkCheckpointerTablesStatus,
   provisionCheckpointerTables,
+  provisionDatabaseAndCheckpointerTables,
 } from "../../utils/checkpointerTables";
 import { CheckpointerTablesList } from "./CheckpointerTablesList";
 import { toast } from "sonner";
@@ -78,8 +79,22 @@ export function MemoryNodeInspector({
   );
 
   const handleCreateInspectorTables = () => {
-    if (!tableStatus.configuredNodeId) {
-      toast.error(`Please select a ${checkpointer === "postgres" ? "PostgreSQL database" : "Redis instance"} first.`);
+    if (tableStatus.isMissingStorage || !tableStatus.configuredNodeId) {
+      const result = provisionDatabaseAndCheckpointerTables({
+        nodes: allCanvasNodes,
+        edges,
+        addNode,
+        updateNode,
+        addEdge,
+        checkpointerType: checkpointer,
+      });
+
+      if (result.configuredNodeId) {
+        onUpdateMemory({ checkpointerConnectionId: result.configuredNodeId });
+        toast.success(
+          `Created ${checkpointer === "postgres" ? "PostgreSQL database" : "Redis instance"} and ${result.createdCount} checkpointer tables in SchemaView!`,
+        );
+      }
       return;
     }
 
@@ -315,6 +330,32 @@ export function MemoryNodeInspector({
                 linkedNodeId={tableStatus.configuredNodeId}
                 onCreateTables={handleCreateInspectorTables}
               />
+            )}
+
+          {/* Missing Storage 1-Click Provisioning Card */}
+          {isEnabled &&
+            (checkpointer === "postgres" || checkpointer === "redis") &&
+            tableStatus.isMissingStorage && (
+              <div className="flex flex-col gap-2 p-2.5 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive mt-1">
+                <div className="flex items-center gap-1.5 text-xs font-semibold">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>
+                    No {checkpointer === "postgres" ? "PostgreSQL database" : "Redis instance"} in SchemaView
+                  </span>
+                </div>
+                <p className="text-[10px] text-muted-foreground leading-tight">
+                  LangGraph checkpointer requires tables to persist thread state across turns. Click below to provision the database and all checkpointer tables in SchemaView.
+                </p>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-7 text-xs font-bold gap-1 mt-0.5 cursor-pointer"
+                  onClick={handleCreateInspectorTables}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  + Create {checkpointer === "postgres" ? "PostgreSQL DB" : "Redis"} & Tables in SchemaView
+                </Button>
+              </div>
             )}
         </div>
       </div>

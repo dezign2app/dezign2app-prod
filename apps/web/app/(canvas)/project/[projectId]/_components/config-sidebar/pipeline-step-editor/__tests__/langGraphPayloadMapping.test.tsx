@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { LangGraphInvokeStepSection } from "../LangGraphInvokeStepSection";
 import { PipelineStepDraft, AvailableSource } from "../types";
-import { BackendNode } from "@workspace/canvas/types";
+import { BackendNode, PipelineStep } from "@workspace/canvas/types";
 
 vi.mock("@workspace/ui/components/select", () => ({
   Select: ({ children, value, onValueChange }: any) => (
@@ -260,5 +260,87 @@ describe("LangGraphInvokeStepSection Payload Mapping", () => {
     expect(handleChange).toHaveBeenCalledTimes(1);
     const updatedStep = handleChange.mock.calls[0]![0]!;
     expect(updatedStep.langGraphThreadIdSource).toBe("body.thread_id");
+  });
+
+  it("shows quick-action banner when endpoint contract lacks thread_id and provisions it on click", () => {
+    const memoryAgentNode: BackendNode = {
+      id: "agent-mem-2",
+      fractionalIndex:"a0",
+      type: "langgraph",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "MemoryChatBot",
+        memoryConfig: {
+          enabled: true,
+          checkpointer: "postgres",
+        },
+        stateChannels: [
+          { key: "messages", type: "messages", reducer: "add_messages" },
+        ],
+      },
+    };
+
+    const endpointWithoutThreadId = {
+      id: "ep-1",
+      name: "/api/chat",
+      type: "POST",
+      nodeId: "srv-1",
+      requestBody: {
+        id: "req_ep-1",
+        fields: [
+          { id: "f1", name: "message", key: "message", type: "string", required: true },
+        ],
+      },
+    } as any;
+
+    const step: PipelineStep = {
+      id: "step-agent-mem-2",
+      name: "MemoryChatBot",
+      type: "langgraph_invoke",
+      outputVariable: "chatResult",
+      langGraphTargetNodeId: "agent-mem-2",
+      langGraphStateMapping: {
+        messages: "body.message",
+      },
+      inputBindings: [
+        { argName: "messages", source: { kind: "req_body", field: "message" } },
+      ],
+    };
+
+    const handleChange = vi.fn();
+    const handleEndpointChange = vi.fn();
+
+    render(
+      <LangGraphInvokeStepSection
+        step={step}
+        allNodes={[memoryAgentNode]}
+        availableSources={mockAvailableSources}
+        onChange={handleChange}
+        endpoint={endpointWithoutThreadId}
+        onEndpointChange={handleEndpointChange}
+      />
+    );
+
+    // Banner and badge should appear
+    expect(screen.getAllByText("configurable.thread_id").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Endpoint contract does not define a thread ID field")).toBeInTheDocument();
+
+    const addBtn = screen.getByRole("button", { name: /\+ Add "thread_id" to Request Body/i });
+    expect(addBtn).toBeInTheDocument();
+
+    fireEvent.click(addBtn);
+
+    expect(handleEndpointChange).toHaveBeenCalledTimes(1);
+    const epChanges = handleEndpointChange.mock.calls[0]![0]!;
+    expect(epChanges.requestBody?.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "thread_id", key: "thread_id", type: "string" }),
+      ])
+    );
+    expect(handleChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        langGraphThreadIdSource: "body.thread_id",
+      })
+    );
   });
 });

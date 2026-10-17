@@ -38,6 +38,7 @@ import {
   LANGGRAPH_POSTGRES_TABLE_DEFINITIONS,
   LANGGRAPH_REDIS_SCHEMA_DEFINITIONS,
   provisionCheckpointerTables,
+  provisionDatabaseAndCheckpointerTables,
   getExistingCheckpointerTables,
 } from "../../utils/checkpointerTables";
 import { CheckpointerTablesList } from "./CheckpointerTablesList";
@@ -100,11 +101,21 @@ export function MemoryTabContent({
 
   const handleCreateTables = () => {
     if (!linkedNodeId || !linkedNode) {
-      toast.error(
-        currentEngine === "redis"
-          ? "Please select a Redis instance first."
-          : "Please select a PostgreSQL database first.",
-      );
+      const result = provisionDatabaseAndCheckpointerTables({
+        nodes,
+        edges,
+        addNode,
+        updateNode,
+        addEdge,
+        checkpointerType: currentEngine,
+      });
+
+      if (result.configuredNodeId) {
+        setMemoryConfig({ ...memoryConfig, checkpointerNodeId: result.configuredNodeId });
+        toast.success(
+          `Created ${currentEngine === "redis" ? "Redis instance" : "PostgreSQL database"} and ${result.createdCount} checkpointer tables in SchemaView!`,
+        );
+      }
       return;
     }
 

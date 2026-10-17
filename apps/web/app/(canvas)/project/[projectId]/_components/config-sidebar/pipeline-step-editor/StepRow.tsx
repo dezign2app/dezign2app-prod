@@ -620,6 +620,8 @@ const StepRowComponent = ({
                       availableSources={availableSources}
                       serviceNodeId={serviceNodeId}
                       onChange={onChange}
+                      endpoint={endpoint}
+                      onEndpointChange={onEndpointChange}
                     />
                   );
                 }
