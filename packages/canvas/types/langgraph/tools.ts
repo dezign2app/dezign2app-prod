@@ -16,10 +16,13 @@ export type StateUpdateSource =
   | "message_object"
   | "tool_output"
   | "expression"
-  | "literal";
+  | "literal"
+  | "none";
 
 export interface LangGraphStateUpdateItem {
   channelKey: string;
+  reducer?: string;
+  action?: string;
   source?: StateUpdateSource;
   schemaField?: string;
   mode?: StateUpdateMode;

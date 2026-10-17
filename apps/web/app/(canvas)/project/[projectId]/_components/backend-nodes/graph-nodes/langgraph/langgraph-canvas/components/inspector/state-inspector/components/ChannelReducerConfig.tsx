@@ -6,6 +6,7 @@ import {
   Check,
   Info,
   Wand2,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
@@ -15,6 +16,8 @@ import {
   BUILT_IN_REDUCERS,
   REDUCER_CODE_PRESETS,
   getSuggestedReducerCodeForChannelType,
+  extractActionsFromReducerCode,
+  getActionMetadata,
 } from "../constants";
 import type { LangGraphStateChannel, LangGraphCustomReducer } from "@/types/canvas";
 
@@ -86,6 +89,12 @@ export function ChannelReducerConfig({
     matchedCustom?.description || "",
   );
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
+
+  // Live auto-detected actions extracted from the current reducer code
+  const detectedActions = useMemo(() => {
+    const actions = extractActionsFromReducerCode(customCode);
+    return actions.map((act) => getActionMetadata(act, ch.type));
+  }, [customCode, ch.type]);
 
   // Auto-migrate legacy or empty reducer code to the action-aware template
   useEffect(() => {
@@ -413,6 +422,55 @@ export function ChannelReducerConfig({
           onChange={(e) => handleCodeChange(e.target.value)}
           debounceMs={150}
         />
+
+        {/* ── Auto-Detected Actions Live Validation Box ── */}
+        <div className="flex flex-col gap-1.5 p-2.5 rounded-lg bg-purple-500/[0.07] border border-purple-500/25 text-xs">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-purple-300 font-mono text-[10px] font-semibold">
+              <Sparkles className="w-3 h-3 text-purple-400 shrink-0" />
+              <span>Auto-Detected Actions ({detectedActions.length})</span>
+            </div>
+            <span className="text-[9px] text-muted-foreground font-mono">
+              Live extracted from reducer code
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+            {/* Always display default / direct update badge first */}
+            <Badge
+              variant="outline"
+              className="text-[9px] font-mono px-2 py-0.5 border border-purple-500/40 bg-purple-500/10 text-purple-200"
+              title="Default update: passes value directly when action is empty or default"
+            >
+              <span className="font-semibold">default</span>
+              <span className="ml-1 text-[8px] opacity-70">(direct)</span>
+            </Badge>
+
+            {detectedActions.map((act) => (
+              <Badge
+                key={act.action}
+                variant="outline"
+                className={`text-[9px] font-mono px-2 py-0.5 border transition-colors ${
+                  act.requiresValue
+                    ? "border-blue-500/40 bg-blue-500/10 text-blue-200 hover:bg-blue-500/20"
+                    : "border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20"
+                }`}
+                title={act.description}
+              >
+                <span className="font-semibold">⚡ {act.action}</span>
+                <span className="ml-1 text-[8px] opacity-75">
+                  {act.requiresValue ? "(value)" : "(no value)"}
+                </span>
+              </Badge>
+            ))}
+          </div>
+
+          {detectedActions.length === 0 && (
+            <p className="text-[9px] text-muted-foreground font-mono italic">
+              No custom action branches detected. Standard updates will pass directly to the reducer.
+            </p>
+          )}
+        </div>
       </div>
 
       {/* ── Explanation Banner: How Nodes Dispatch ── */}

@@ -1,5 +1,5 @@
 import React from "react";
-import { Bot, Sparkles, ChevronUp, ChevronDown, Trash } from "lucide-react";
+import { Bot, Sparkles, Trash } from "lucide-react";
 import { LocalInput } from "../../../../common";
 
 interface NodeHeaderProps {
@@ -9,8 +9,8 @@ interface NodeHeaderProps {
   setNameValue: (val: string) => void;
   handleNameSave: () => void;
   dataName?: string;
-  isExpanded: boolean;
-  toggleExpand: () => void;
+  isExpanded?: boolean;
+  toggleExpand?: () => void;
   handleDelete: () => void;
 }
 
@@ -21,8 +21,6 @@ export const NodeHeader: React.FC<NodeHeaderProps> = ({
   setNameValue,
   handleNameSave,
   dataName,
-  isExpanded,
-  toggleExpand,
   handleDelete,
 }) => {
   return (
@@ -78,22 +76,6 @@ export const NodeHeader: React.FC<NodeHeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
-        <button
-          type="button"
-          className="p-1.5 rounded-lg hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 transition-colors shrink-0 nodrag"
-          onClick={(e: React.MouseEvent) => {
-            e.stopPropagation();
-            toggleExpand();
-          }}
-          title={isExpanded ? "Collapse Node" : "Expand Node"}
-        >
-          {isExpanded ? (
-            <ChevronUp className="w-4 h-4" />
-          ) : (
-            <ChevronDown className="w-4 h-4" />
-          )}
-        </button>
-
         <button
           type="button"
           className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors shrink-0 nodrag"

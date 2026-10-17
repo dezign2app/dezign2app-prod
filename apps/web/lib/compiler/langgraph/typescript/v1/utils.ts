@@ -276,7 +276,8 @@ export function escapeStr(str: string): string {
 }
 
 export function escapeTemplateLiteral(str: string): string {
-  return str.replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
+  // Escape backticks and backslashes while preserving ${...} template variables for runtime interpolation
+  return str.replace(/\\/g, "\\\\").replace(/`/g, "\\`");
 }
 
 export function indent(code: string, spaces: number): string {

@@ -137,6 +137,7 @@ export interface AppliedStateUpdate {
   previousValue: unknown;
   newValue: unknown;
   reducer: string;
+  action?: string;
   source: string;
   sourceField?: string;
 }

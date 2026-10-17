@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { FileJson, Shield, Radio, ChevronDown, ChevronRight } from "lucide-react";
 import { Switch } from "@workspace/ui/components/switch";
 import { Label } from "@workspace/ui/components/label";
@@ -12,12 +12,18 @@ import type {
   LangGraphMiddlewareRefNode,
   LangGraphAgentResponseFormatConfig,
   LangGraphCanvasNode,
+  LangGraphNodePipelineStep,
+  LangGraphStateChannel,
 } from "@workspace/canvas";
 
 import { AgentAttachedComponentsSection } from "./AgentAttachedComponentsSection";
 import { AgentMiddlewareSection } from "./AgentMiddlewareSection";
 import { AgentStructuredOutputSection } from "./AgentStructuredOutputSection";
 import { AgentEventStreamingSection } from "./AgentEventStreamingSection";
+import {
+  AgentPromptVariablePicker,
+  PromptActiveVariablesBar,
+} from "./AgentPromptVariablePicker";
 import {
   DEFAULT_SELECTED_STREAM_EVENTS,
   DEFAULT_STREAM_ENVELOPE,
@@ -28,6 +34,11 @@ import { LocalTextarea } from "../../../../../common";
 interface AgentLlmStepContentProps {
   selectedAgentData: AgentNodeData;
   onUpdateAgent: (changes: Partial<AgentNodeData>) => void;
+  step?: LangGraphNodePipelineStep;
+  onUpdateStep?: (updatedStep: LangGraphNodePipelineStep) => void;
+  priorSteps?: LangGraphNodePipelineStep[];
+  allPipelineSteps?: LangGraphNodePipelineStep[];
+  stateChannels?: LangGraphStateChannel[];
   availableLLMNodes?: (LangGraphLLMNode | LangGraphLLMRefNode)[];
   availableToolNodes?: (ToolNode | LangGraphToolRefNode)[];
   availableMiddlewareNodes?: (MiddlewareNode | LangGraphMiddlewareRefNode)[];
@@ -53,6 +64,11 @@ interface AgentLlmStepContentProps {
 export function AgentLlmStepContent({
   selectedAgentData,
   onUpdateAgent,
+  step,
+  onUpdateStep,
+  priorSteps = [],
+  allPipelineSteps = [],
+  stateChannels = [],
   availableLLMNodes = [],
   availableToolNodes = [],
   availableMiddlewareNodes = [],
@@ -84,26 +100,93 @@ export function AgentLlmStepContent({
     Boolean(selectedAgentData.streamConfig?.enabled),
   );
 
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleInsertVariable = (token: string) => {
+    const textarea = textareaRef.current;
+    const currentPrompt = selectedAgentData.systemPrompt || "";
+    let nextPrompt = "";
+    let nextPos = 0;
+
+    if (textarea) {
+      const start = textarea.selectionStart ?? currentPrompt.length;
+      const end = textarea.selectionEnd ?? currentPrompt.length;
+      nextPrompt =
+        currentPrompt.slice(0, start) + token + currentPrompt.slice(end);
+      nextPos = start + token.length;
+
+      // Dispatch native input event to ensure LocalTextarea updates immediately
+      const nativeSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        "value",
+      )?.set;
+      if (nativeSetter) {
+        nativeSetter.call(textarea, nextPrompt);
+        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    } else {
+      nextPrompt = currentPrompt
+        ? `${currentPrompt.trimEnd()} ${token}`
+        : token;
+      nextPos = nextPrompt.length;
+    }
+
+    onUpdateAgent({ systemPrompt: nextPrompt });
+
+    if (step && onUpdateStep) {
+      onUpdateStep({ ...step, systemPrompt: nextPrompt });
+    }
+
+    requestAnimationFrame(() => {
+      if (textarea) {
+        textarea.focus();
+        textarea.setSelectionRange(nextPos, nextPos);
+      }
+    });
+  };
+
   return (
     <div className="flex flex-col gap-3.5">
       {/* 1. Identity & System Instructions */}
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
-          <Label className="text-xs font-semibold text-foreground">
-            System Prompt
-          </Label>
-          {selectedAgentData.systemPrompt && (
-            <span className="text-[10px] text-muted-foreground font-mono">
-              {selectedAgentData.systemPrompt.length} chars
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            <Label className="text-xs font-semibold text-foreground">
+              System Prompt
+            </Label>
+            {selectedAgentData.systemPrompt && (
+              <span className="text-[10px] text-muted-foreground font-mono">
+                {selectedAgentData.systemPrompt.length} chars
+              </span>
+            )}
+          </div>
         </div>
-        <LocalTextarea
-          value={selectedAgentData.systemPrompt || ""}
-          onChange={(e) => onUpdateAgent({ systemPrompt: e.target.value })}
-          className="text-xs min-h-[90px] resize-y bg-background/50 font-mono leading-relaxed"
-          placeholder="System instructions / prompt for this agent node..."
+
+        {/* Cascading Variable Picker: Select Step/State -> Select Field -> Add Button */}
+        <AgentPromptVariablePicker
+          stateChannels={stateChannels}
+          priorSteps={priorSteps}
+          nodes={nodes}
+          onInsertVariable={handleInsertVariable}
+          currentPrompt={selectedAgentData.systemPrompt}
         />
+
+        <LocalTextarea
+          ref={textareaRef}
+          value={selectedAgentData.systemPrompt || ""}
+          onChange={(e) => {
+            const nextVal = e.target.value;
+            onUpdateAgent({ systemPrompt: nextVal });
+            if (step && onUpdateStep) {
+              onUpdateStep({ ...step, systemPrompt: nextVal });
+            }
+          }}
+          className="text-xs min-h-[90px] resize-y bg-background/50 font-mono leading-relaxed"
+          placeholder="System instructions / prompt for this agent node... (use ${state.msg} or ${step1Result.field1} to interpolate variables)"
+        />
+
+        {/* Active Variables in Prompt Indicator */}
+        <PromptActiveVariablesBar currentPrompt={selectedAgentData.systemPrompt} />
       </div>
 
       {/* 2. Model & Tool Attachments (LLM Binding + Function Calling) */}
