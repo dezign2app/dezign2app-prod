@@ -606,4 +606,80 @@ describe("databaseActions Table Sync Actions", () => {
     expect(checkRes.tableExists).toBe(true);
     expect(checkRes.inSync).toBe(true);
   });
+
+  it("should create dependent table with composite PK and logical reference to checkpoints", async () => {
+    // 1. Create checkpoints table first
+    await applyDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "checkpoints",
+      columns: [
+        { name: "thread_id", type: "TEXT", isPrimaryKey: true },
+        { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true },
+        { name: "checkpoint_id", type: "TEXT", isPrimaryKey: true },
+        { name: "checkpoint", type: "JSON", isNotNull: true },
+      ],
+    });
+
+    // 2. Create checkpoint_blobs table with FK referencing checkpoints.thread_id
+    const applyBlobsRes = await applyDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "checkpoint_blobs",
+      columns: [
+        {
+          name: "thread_id",
+          type: "TEXT",
+          isPrimaryKey: true,
+          isForeignKey: true,
+          references: { table: "checkpoints", column: "thread_id" },
+        },
+        { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true },
+        { name: "channel", type: "TEXT", isPrimaryKey: true },
+        { name: "version", type: "TEXT", isPrimaryKey: true },
+        { name: "type", type: "TEXT" },
+        { name: "blob", type: "BLOB" },
+      ],
+      foreignKeys: [
+        {
+          column: "thread_id",
+          foreignTable: "checkpoints",
+          foreignColumn: "thread_id",
+        },
+      ],
+    });
+
+    expect(applyBlobsRes.success).toBe(true);
+    expect(applyBlobsRes.createdTable).toBe(true);
+
+    const checkBlobsRes = await checkDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "checkpoint_blobs",
+      columns: [
+        {
+          name: "thread_id",
+          type: "TEXT",
+          isPrimaryKey: true,
+          isForeignKey: true,
+          references: { table: "checkpoints", column: "thread_id" },
+        },
+        { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true },
+        { name: "channel", type: "TEXT", isPrimaryKey: true },
+        { name: "version", type: "TEXT", isPrimaryKey: true },
+        { name: "type", type: "TEXT" },
+        { name: "blob", type: "BLOB" },
+      ],
+      foreignKeys: [
+        {
+          column: "thread_id",
+          foreignTable: "checkpoints",
+          foreignColumn: "thread_id",
+        },
+      ],
+    });
+
+    expect(checkBlobsRes.tableExists).toBe(true);
+    expect(checkBlobsRes.inSync).toBe(true);
+  });
 });

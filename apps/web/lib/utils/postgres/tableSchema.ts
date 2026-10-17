@@ -63,7 +63,8 @@ export async function ensurePostgresTable(
           pkColNames.push(colName);
         }
 
-        const pgType = normalizeToPostgresType(col.type, isPk);
+        const isSinglePk = explicitPkCols.length <= 1 && isPk;
+        const pgType = normalizeToPostgresType(col.type, isSinglePk);
         const defaultClause = isPk && pgType === "UUID" ? " DEFAULT gen_random_uuid()" : "";
         const notNullClause = isPk || (col as any).isNotNull ? " NOT NULL" : "";
 

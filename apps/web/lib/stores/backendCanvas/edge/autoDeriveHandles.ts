@@ -22,23 +22,31 @@ export function autoDeriveForeignKeyHandles<T extends Partial<BackendEdge>>(
       sourceNode.data.columns &&
       targetNode.data.columns
     ) {
-      // Find the PK column on the source node
-      const pkIdx = sourceNode.data.columns.findIndex(
-        (c) => c.isPrimaryKey,
-      );
       // Find the FK column on the target node that references the source table
       const fkIdx = targetNode.data.columns.findIndex(
         (c) =>
           c.isForeignKey &&
-          c.references?.table === sourceNode.data.label,
+          (c.references?.table === sourceNode.data.label ||
+            c.references?.table === sourceNode.data.tableName),
       );
+      const fkCol = fkIdx !== -1 ? targetNode.data.columns[fkIdx] : undefined;
 
-      if (pkIdx !== -1) {
+      // Find the referenced column on the source node, falling back to primary key
+      let pkIdx = -1;
+      if (fkCol?.references?.column) {
+        pkIdx = sourceNode.data.columns.findIndex(
+          (c) => c.name === fkCol.references?.column,
+        );
+      }
+      if (pkIdx === -1) {
+        pkIdx = sourceNode.data.columns.findIndex((c) => c.isPrimaryKey);
+      }
+
+      if (pkIdx !== -1 || fkIdx !== -1) {
         return {
           ...edge,
-          sourceHandle: `source-${pkIdx}`,
-          // Only set targetHandle if we found a matching FK column
-          targetHandle: fkIdx !== -1 ? `target-${fkIdx}` : edge.targetHandle,
+          sourceHandle: edge.sourceHandle ?? (pkIdx !== -1 ? `source-${pkIdx}` : undefined),
+          targetHandle: edge.targetHandle ?? (fkIdx !== -1 ? `target-${fkIdx}` : undefined),
         };
       }
     }

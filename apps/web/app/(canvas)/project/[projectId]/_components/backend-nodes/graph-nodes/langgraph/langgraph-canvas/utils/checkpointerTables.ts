@@ -433,41 +433,99 @@ export function provisionCheckpointerTables({
       tableIdMap["checkpoint_blobs"] ||
       tableIdMap["langgraph_checkpoint_blobs"];
 
-    // 1. checkpoints (checkpoint_id at idx 2) -> checkpoint_writes / writes (checkpoint_id at idx 2)
+    // 1. checkpoints (checkpoint_id) -> checkpoint_writes / writes (checkpoint_id)
     if (checkpointsId && writesId) {
+      const checkpointsNode = nodes.find((n) => n.id === checkpointsId);
+      const writesNode = nodes.find((n) => n.id === writesId);
+
+      const cpColIdx =
+        (checkpointsNode?.data?.columns?.findIndex(
+          (c) => c.name === "checkpoint_id",
+        ) ?? -1) >= 0
+          ? checkpointsNode!.data!.columns!.findIndex(
+              (c) => c.name === "checkpoint_id",
+            )
+          : LANGGRAPH_POSTGRES_TABLE_DEFINITIONS.find(
+              (t) => t.name === "checkpoints",
+            )?.columns.findIndex((c) => c.name === "checkpoint_id") ?? 2;
+
+      const writesColIdx =
+        (writesNode?.data?.columns?.findIndex(
+          (c) => c.name === "checkpoint_id",
+        ) ?? -1) >= 0
+          ? writesNode!.data!.columns!.findIndex(
+              (c) => c.name === "checkpoint_id",
+            )
+          : LANGGRAPH_POSTGRES_TABLE_DEFINITIONS.find(
+              (t) => t.name === "checkpoint_writes",
+            )?.columns.findIndex((c) => c.name === "checkpoint_id") ?? 2;
+
+      const sourceHandle = `source-${cpColIdx >= 0 ? cpColIdx : 2}`;
+      const targetHandle = `target-${writesColIdx >= 0 ? writesColIdx : 2}`;
+
       const hasWritesFk = edges.some(
         (e) =>
           e.type === "foreign-key" &&
-          ((e.source === checkpointsId && e.target === writesId) ||
-            (e.target === checkpointsId && e.source === writesId)),
+          e.source === checkpointsId &&
+          e.target === writesId &&
+          e.targetHandle === targetHandle,
       );
       if (!hasWritesFk) {
         addEdge({
           id: `edge-fk-${writesId}-${checkpointsId}-checkpoint_id`,
           source: checkpointsId,
           target: writesId,
-          sourceHandle: "source-2",
-          targetHandle: "target-2",
+          sourceHandle,
+          targetHandle,
           type: "foreign-key",
         });
       }
     }
 
-    // 2. checkpoints (thread_id at idx 0) -> checkpoint_blobs (thread_id at idx 0)
+    // 2. checkpoints (thread_id) -> checkpoint_blobs (thread_id)
     if (checkpointsId && blobsId) {
+      const checkpointsNode = nodes.find((n) => n.id === checkpointsId);
+      const blobsNode = nodes.find((n) => n.id === blobsId);
+
+      const cpThreadIdx =
+        (checkpointsNode?.data?.columns?.findIndex(
+          (c) => c.name === "thread_id",
+        ) ?? -1) >= 0
+          ? checkpointsNode!.data!.columns!.findIndex(
+              (c) => c.name === "thread_id",
+            )
+          : LANGGRAPH_POSTGRES_TABLE_DEFINITIONS.find(
+              (t) => t.name === "checkpoints",
+            )?.columns.findIndex((c) => c.name === "thread_id") ?? 0;
+
+      const blobsThreadIdx =
+        (blobsNode?.data?.columns?.findIndex(
+          (c) => c.name === "thread_id",
+        ) ?? -1) >= 0
+          ? blobsNode!.data!.columns!.findIndex(
+              (c) => c.name === "thread_id",
+            )
+          : LANGGRAPH_POSTGRES_TABLE_DEFINITIONS.find(
+              (t) => t.name === "checkpoint_blobs",
+            )?.columns.findIndex((c) => c.name === "thread_id") ?? 0;
+
+      const sourceHandle = `source-${cpThreadIdx >= 0 ? cpThreadIdx : 0}`;
+      const targetHandle = `target-${blobsThreadIdx >= 0 ? blobsThreadIdx : 0}`;
+
       const hasBlobsFk = edges.some(
         (e) =>
           e.type === "foreign-key" &&
-          ((e.source === checkpointsId && e.target === blobsId) ||
-            (e.target === checkpointsId && e.source === blobsId)),
+          e.source === checkpointsId &&
+          e.target === blobsId &&
+          e.targetHandle === targetHandle,
       );
       if (!hasBlobsFk) {
         addEdge({
           id: `edge-fk-${blobsId}-${checkpointsId}-thread_id`,
           source: checkpointsId,
           target: blobsId,
-          sourceHandle: "source-0",
-          targetHandle: "target-0",
+          sourceHandle,
+          targetHandle,
           type: "foreign-key",
         });
       }

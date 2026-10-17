@@ -65,18 +65,18 @@ export function handleForeignKeyConnect({
     targetCol.isUnique ||
     targetCol.name === "_id";
 
-  let fkNode = sourceNode;
-  let fkCol = sourceCol;
-  let fkColIndex = sourceColIndex;
-  let refNode = targetNode;
-  let refCol = targetCol;
+  let fkNode = targetNode;
+  let fkCol = targetCol;
+  let fkColIndex = targetColIndex;
+  let refNode = sourceNode;
+  let refCol = sourceCol;
 
-  if (isSourcePK && !isTargetPK) {
-    fkNode = targetNode;
-    fkCol = targetCol;
-    fkColIndex = targetColIndex;
-    refNode = sourceNode;
-    refCol = sourceCol;
+  if (isTargetPK && !isSourcePK) {
+    fkNode = sourceNode;
+    fkCol = sourceCol;
+    fkColIndex = sourceColIndex;
+    refNode = targetNode;
+    refCol = targetCol;
   }
 
   const refTable = refNode.data.label || "";

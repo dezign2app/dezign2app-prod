@@ -95,6 +95,9 @@ export async function checkPostgresTableSync(
     const canvasCols = (columns || []).map((c) => ({
       name: c.name || "col",
       type: c.type || "string",
+      isPrimaryKey: Boolean(c.isPrimaryKey),
+      isNotNull: Boolean(c.isNotNull),
+      isUnique: Boolean(c.isUnique),
     }));
 
     // Check which prerequisite tables exist in the database
@@ -340,10 +343,50 @@ export async function checkPostgresTableSync(
       existingForeignKeys = [];
     }
 
+    // Query which columns in targetSchema form a valid single-column FK target (unique constraint or single-column PK or unique index)
+    let candidateKeySet = new Set<string>();
+    try {
+      const candidateRes = await client.query<{ table_name: string; column_name: string }>(
+        `SELECT LOWER(cl.relname) AS table_name, LOWER(att.attname) AS column_name
+         FROM pg_constraint c
+         JOIN pg_class cl ON cl.oid = c.conrelid
+         JOIN pg_namespace n ON n.oid = cl.relnamespace
+         JOIN pg_attribute att ON att.attrelid = c.conrelid AND att.attnum = ANY(c.conkey)
+         WHERE c.contype IN ('p', 'u')
+           AND n.nspname = $1
+           AND array_length(c.conkey, 1) = 1
+         UNION
+         SELECT LOWER(cl.relname) AS table_name, LOWER(att.attname) AS column_name
+         FROM pg_index ix
+         JOIN pg_class cl ON cl.oid = ix.indrelid
+         JOIN pg_namespace n ON n.oid = cl.relnamespace
+         JOIN pg_attribute att ON att.attrelid = cl.oid AND att.attnum = ANY(ix.indkey)
+         WHERE ix.indisunique = true
+           AND n.nspname = $1
+           AND array_length(ix.indkey, 1) = 1`,
+        [targetSchema],
+      );
+      candidateKeySet = new Set(
+        (candidateRes.rows || []).map((r) => `${r.table_name}.${r.column_name}`),
+      );
+    } catch {
+      candidateKeySet = new Set();
+    }
+
     const missingForeignKeys = validCanvasFks.filter((cFk) => {
       const cCol = cFk.column.toLowerCase();
       const cTargetTable = cFk.foreignTable.toLowerCase();
       const cTargetCol = cFk.foreignColumn.toLowerCase();
+
+      // If the target table exists in DB, but the target column is not a candidate key (unique/PK),
+      // PostgreSQL cannot support a physical foreign key constraint. Treat as logical canvas relation.
+      if (
+        existingTableNames.has(cTargetTable) &&
+        !candidateKeySet.has(`${cTargetTable}.${cTargetCol}`)
+      ) {
+        return false;
+      }
+
       return !existingForeignKeys.some(
         (dbFk) =>
           dbFk.column.toLowerCase() === cCol &&

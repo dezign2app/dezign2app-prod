@@ -132,6 +132,45 @@ export async function applyForeignKeysToTable(
       continue;
     }
 
+    // Verify target column is a candidate key (unique constraint or single-column PK or unique index)
+    try {
+      const candidateKeyRes = await client.query<{ exists: boolean }>(
+        `SELECT EXISTS (
+          SELECT 1 FROM (
+            SELECT att.attname AS colname
+            FROM pg_constraint c
+            JOIN pg_class cl ON cl.oid = c.conrelid
+            JOIN pg_namespace n ON n.oid = cl.relnamespace
+            JOIN pg_attribute att ON att.attrelid = c.conrelid AND att.attnum = ANY(c.conkey)
+            WHERE c.contype IN ('p', 'u')
+              AND LOWER(cl.relname) = LOWER($1)
+              AND n.nspname = $2
+              AND array_length(c.conkey, 1) = 1
+            UNION
+            SELECT att.attname AS colname
+            FROM pg_index ix
+            JOIN pg_class cl ON cl.oid = ix.indrelid
+            JOIN pg_namespace n ON n.oid = cl.relnamespace
+            JOIN pg_attribute att ON att.attrelid = cl.oid AND att.attnum = ANY(ix.indkey)
+            WHERE ix.indisunique = true
+              AND LOWER(cl.relname) = LOWER($1)
+              AND n.nspname = $2
+              AND array_length(ix.indkey, 1) = 1
+          ) sub
+          WHERE LOWER(colname) = LOWER($3)
+        ) AS exists`,
+        [targetTable, targetFkSchema, targetCol],
+      );
+
+      if (!candidateKeyRes.rows[0]?.exists) {
+        // The referenced column is not uniquely constrained in PostgreSQL (e.g. composite PK in LangGraph checkpoints).
+        // PostgreSQL forbids physical FKs to non-unique columns. Keep as logical ER relation on canvas without failing migration.
+        continue;
+      }
+    } catch {
+      // Continue to attempt physical FK creation if candidate check cannot be completed
+    }
+
     let safeFkName = (missingFk.name || `fk_${safeTable}_${colName}`).replace(/[^a-zA-Z0-9_]/g, "");
     const onDeleteAction = (missingFk.onDelete || "CASCADE").toUpperCase();
     const onDeleteClause = ["CASCADE", "SET NULL", "RESTRICT", "NO ACTION", "SET DEFAULT"].includes(onDeleteAction)
@@ -189,6 +228,10 @@ export async function applyForeignKeysToTable(
           extra = parts.join(". ");
         }
         const baseMsg = activeErr ? activeErr.message : String(fallbackErr || fkErr);
+        if (baseMsg.toLowerCase().includes("there is no unique constraint matching given keys")) {
+          // Gracefully skip non-unique foreign key target
+          continue;
+        }
         foreignKeyErrors.push(
           `FK "${safeFkName}": ${baseMsg}${extra ? ` (${extra})` : ""}`,
         );

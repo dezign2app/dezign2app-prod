@@ -254,6 +254,11 @@ export interface ElectronCheckDbTableSyncPayload {
     isPrimaryKey?: boolean;
     isNotNull?: boolean;
     isUnique?: boolean;
+    isForeignKey?: boolean;
+    references?: {
+      table: string;
+      column: string;
+    };
   }>;
   indexes?: Array<{
     name: string;

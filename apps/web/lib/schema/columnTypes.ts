@@ -158,5 +158,14 @@ export function arePostgresTypesEquivalent(
   if ((normCanvas === "SERIAL" || normCanvas === "INTEGER") && normDb === "INTEGER") return true;
   if ((normCanvas === "NUMERIC" || normCanvas === "DECIMAL") && normDb === "NUMERIC") return true;
 
+  // Integer compatibility for primary keys or serial equivalents (BIGINT / int8 vs INTEGER / int4)
+  if (
+    isPrimaryKey &&
+    (normCanvas === "INTEGER" || normCanvas === "BIGINT" || normCanvas === "BIGSERIAL" || normCanvas === "SERIAL") &&
+    (normDb === "INTEGER" || normDb === "BIGINT")
+  ) {
+    return true;
+  }
+
   return false;
 }
