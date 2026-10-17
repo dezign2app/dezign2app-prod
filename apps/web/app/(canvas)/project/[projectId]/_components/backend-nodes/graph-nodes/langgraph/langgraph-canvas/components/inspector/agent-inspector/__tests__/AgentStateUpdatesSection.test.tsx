@@ -87,6 +87,20 @@ describe("AgentStateUpdatesSection Action & Reducer Helpers", () => {
     expect(actions).toContain("replace");
   });
 
+  it("extracts action names from array includes style", () => {
+    const customCode = `(prev, next) => {
+      const action = next?.action;
+      if (["reset", "clear"].includes(action)) return [];
+      if (action === "replace") return next.value;
+      return prev;
+    }`;
+
+    const actions = extractActionsFromReducerCode(customCode);
+    expect(actions).toContain("reset");
+    expect(actions).toContain("clear");
+    expect(actions).toContain("replace");
+  });
+
   it("provides standard actions for number channel type", () => {
     const actions = getActionsForReducer("number", "count_reducer");
     const actionNames = actions.map((a) => a.action);
@@ -157,13 +171,38 @@ describe("AgentStateUpdatesSection Component", () => {
     );
 
     expect(screen.getByText("Graph State Updates")).toBeDefined();
-    expect(screen.getByText("State Channel & Reducer")).toBeDefined();
-    expect(screen.getByText("Reducer Action")).toBeDefined();
-    expect(screen.getByText("New Value (Source)")).toBeDefined();
+    expect(screen.getByText("1. State Channel")).toBeDefined();
+    expect(screen.getByText("2. Reducer Action")).toBeDefined();
+    expect(screen.getByText("3. New Value / Mapping")).toBeDefined();
 
-    // Verify Feeds text previews the action and value
+    // Verify Dispatches text previews the action and value
     expect(screen.getByText(/action:\s*"increment"/)).toBeDefined();
     expect(screen.getAllByText("count_reducer").length).toBeGreaterThan(0);
+  });
+
+  it("renders 'No value required' when a valueless action like reset is selected", () => {
+    const onUpdateAgent = vi.fn();
+
+    render(
+      <AgentStateUpdatesSection
+        selectedAgentData={{
+          ...dummyAgentData,
+          stateUpdates: [
+            {
+              channelKey: "count",
+              reducer: "count_reducer",
+              action: "reset",
+              source: "none",
+            },
+          ],
+        }}
+        onUpdateAgent={onUpdateAgent}
+        stateChannels={dummyStateChannels}
+        customReducers={dummyCustomReducers}
+      />,
+    );
+
+    expect(screen.getByText("No value required")).toBeDefined();
   });
 
   it("adds a new state update with default action and reducer", () => {

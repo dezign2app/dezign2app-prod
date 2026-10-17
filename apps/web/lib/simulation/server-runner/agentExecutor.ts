@@ -623,7 +623,9 @@ export async function executeAgentNode(
 
       let val: unknown;
 
-      if (update.source === "structured_field" || update.schemaField) {
+      if (update.source === "none") {
+        val = undefined;
+      } else if (update.source === "structured_field" || update.schemaField) {
         val = resolveStructuredFieldValue(rawFieldKey, parsedObj, latestAssistantResponse);
       } else if (update.source === "structured_full") {
         val = outputDelta.structuredResponse;
@@ -661,6 +663,7 @@ export async function executeAgentNode(
       }
 
       const isActionWithoutValue =
+        update.source === "none" ||
         update.action === "reset" ||
         update.action === "toggle" ||
         update.action === "clear";

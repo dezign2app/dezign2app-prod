@@ -1,10 +1,15 @@
-import React from "react";
-import { Code2, X, Check } from "lucide-react";
+import React, { useMemo } from "react";
+import { Code2, X, Check, Sparkles } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
+import { Badge } from "@workspace/ui/components/badge";
 import { Label } from "@workspace/ui/components/label";
 import { LocalInput, LocalTextarea } from "../../../../../../common";
 import { TargetVariableCombobox } from "./TargetVariableCombobox";
-import { REDUCER_CODE_PRESETS } from "../constants";
+import {
+  REDUCER_CODE_PRESETS,
+  extractActionsFromReducerCode,
+  getActionMetadata,
+} from "../constants";
 import type { LangGraphStateChannel } from "@/types/canvas";
 
 interface EditCustomReducerFormProps {
@@ -40,6 +45,11 @@ export function EditCustomReducerForm({
   onSave,
   onCancel,
 }: EditCustomReducerFormProps) {
+  const detectedActions = useMemo(() => {
+    const actions = extractActionsFromReducerCode(editReducerCode);
+    return actions.map((act) => getActionMetadata(act));
+  }, [editReducerCode]);
+
   return (
     <div id="edit-custom-reducer-form" className="flex flex-col gap-2.5 p-2.5 rounded-xl border border-purple-500/50 bg-purple-500/10 shadow-sm">
       <div className="flex items-center justify-between">
@@ -119,6 +129,47 @@ export function EditCustomReducerForm({
           onChange={(e) => onReducerCodeChange(e.target.value)}
           debounceMs={150}
         />
+
+        {/* ── Auto-Detected Actions Live Validation Box ── */}
+        <div className="flex flex-col gap-1 p-2 rounded-lg bg-purple-500/[0.08] border border-purple-500/20 text-xs">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-purple-300 font-mono text-[9px] font-semibold">
+              <Sparkles className="w-3 h-3 text-purple-400 shrink-0" />
+              <span>Detected Actions ({detectedActions.length})</span>
+            </div>
+            <span className="text-[8px] text-muted-foreground font-mono">
+              Live from code
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1 pt-0.5">
+            <Badge
+              variant="outline"
+              className="text-[8px] font-mono px-1.5 py-0.2 border border-purple-500/40 bg-purple-500/10 text-purple-200"
+            >
+              <span>default</span>
+              <span className="ml-1 text-[7px] opacity-70">(direct)</span>
+            </Badge>
+
+            {detectedActions.map((act) => (
+              <Badge
+                key={act.action}
+                variant="outline"
+                className={`text-[8px] font-mono px-1.5 py-0.2 border transition-colors ${
+                  act.requiresValue
+                    ? "border-blue-500/40 bg-blue-500/10 text-blue-200"
+                    : "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+                }`}
+                title={act.description}
+              >
+                <span>⚡ {act.action}</span>
+                <span className="ml-1 text-[7px] opacity-75">
+                  {act.requiresValue ? "(value)" : "(no value)"}
+                </span>
+              </Badge>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-col gap-1">

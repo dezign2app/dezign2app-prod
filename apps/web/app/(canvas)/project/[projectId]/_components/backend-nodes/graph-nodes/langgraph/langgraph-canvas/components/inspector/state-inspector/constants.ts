@@ -300,3 +300,198 @@ export function getSuggestedReducerCodeForChannelType(type?: string): string {
   }
   return DEFAULT_REDUCER_CODE;
 }
+
+export interface ReducerActionMeta {
+  action: string;
+  label: string;
+  description: string;
+  requiresValue: boolean;
+}
+
+/**
+ * Checks if an action is typically valueless (e.g. reset, clear, toggle).
+ */
+export function isValuelessAction(action?: string): boolean {
+  if (!action) return false;
+  const lower = action.toLowerCase().trim();
+  return (
+    lower === "reset" ||
+    lower === "clear" ||
+    lower === "toggle" ||
+    lower === "empty" ||
+    lower.startsWith("clear_") ||
+    lower.startsWith("reset_")
+  );
+}
+
+/**
+ * Extracts action names from custom reducer JavaScript code.
+ * Detects patterns like:
+ * - action === "name" or action == "name"
+ * - "name" === action
+ * - case "name":
+ * - ["reset", "clear"].includes(action)
+ */
+export function extractActionsFromReducerCode(code?: string): string[] {
+  if (!code || typeof code !== "string") return [];
+  const actions = new Set<string>();
+
+  // Pattern 1: action === "name" or .action === "name"
+  const eqRegex = /(?:action|\.action)\s*===?\s*["']([^"']+)["']/g;
+  let match: RegExpExecArray | null;
+  while ((match = eqRegex.exec(code)) !== null) {
+    const act = match[1]?.trim();
+    if (act && act !== "default" && act !== "") {
+      actions.add(act);
+    }
+  }
+
+  // Pattern 2: "name" === action or "name" === next?.action
+  const revEqRegex = /["']([^"']+)["']\s*===?\s*(?:action|\.action)/g;
+  while ((match = revEqRegex.exec(code)) !== null) {
+    const act = match[1]?.trim();
+    if (act && act !== "default" && act !== "") {
+      actions.add(act);
+    }
+  }
+
+  // Pattern 3: case "name":
+  const caseRegex = /case\s*["']([^"']+)["']\s*:/g;
+  while ((match = caseRegex.exec(code)) !== null) {
+    const act = match[1]?.trim();
+    if (act && act !== "default" && act !== "") {
+      actions.add(act);
+    }
+  }
+
+  // Pattern 4: ["reset", "clear"].includes(action)
+  const includesRegex = /\[([^\]]+)\]\.includes\(\s*(?:action|\.action)\s*\)/g;
+  while ((match = includesRegex.exec(code)) !== null) {
+    const inner = match[1];
+    if (!inner) continue;
+    const strRegex = /["']([^"']+)["']/g;
+    let sm: RegExpExecArray | null;
+    while ((sm = strRegex.exec(inner)) !== null) {
+      const act = sm[1]?.trim();
+      if (act && act !== "default" && act !== "") {
+        actions.add(act);
+      }
+    }
+  }
+
+  return Array.from(actions);
+}
+
+/**
+ * Returns formatted action metadata for an action name.
+ */
+export function getActionMetadata(
+  action: string,
+  _channelType?: string,
+): ReducerActionMeta {
+  const isValueless = isValuelessAction(action);
+  let label = action;
+  let desc = `Dispatches { action: "${action}" }`;
+
+  if (action === "default") {
+    label = "default (Direct)";
+    desc = "Standard reducer update passing value directly";
+  } else if (action === "replace") {
+    label = "replace (= Set / Overwrite)";
+    desc = "Explicitly overwrites the current state value";
+  } else if (action === "reset") {
+    label = "reset (Clear)";
+    desc = "Resets state channel (no value needed)";
+  } else if (action === "clear") {
+    label = "clear (Empty)";
+    desc = "Clears state channel (no value needed)";
+  } else if (action === "toggle") {
+    label = "toggle (Flip)";
+    desc = "Inverts boolean state (no value needed)";
+  } else if (action === "increment") {
+    label = "increment (+ Add)";
+    desc = "Adds amount to number";
+  } else if (action === "decrement") {
+    label = "decrement (- Sub)";
+    desc = "Subtracts amount from number";
+  } else if (action === "append") {
+    label = "append (Push)";
+    desc = "Appends item(s) to array";
+  } else if (action === "merge") {
+    label = "merge (Spread)";
+    desc = "Shallow merges keys into object";
+  }
+
+  return {
+    action,
+    label,
+    description: desc,
+    requiresValue: !isValueless,
+  };
+}
+
+/**
+ * Returns the list of available actions for a channel, prioritizing auto-detected
+ * actions from the channel's custom reducer code.
+ */
+export function getActionsForReducer(
+  channelType?: string,
+  _reducerName?: string,
+  customCode?: string,
+): ReducerActionMeta[] {
+  const actions: ReducerActionMeta[] = [];
+  const seen = new Set<string>();
+
+  const add = (meta: ReducerActionMeta) => {
+    if (!seen.has(meta.action)) {
+      seen.add(meta.action);
+      actions.push(meta);
+    }
+  };
+
+  // 1. Default update action (always first)
+  add({
+    action: "default",
+    label: "default (Direct)",
+    description: "Standard reducer update passing value directly",
+    requiresValue: true,
+  });
+
+  // 2. Extract actions from custom reducer code if present (HIGH PRIORITY)
+  if (customCode) {
+    const detected = extractActionsFromReducerCode(customCode);
+    for (const act of detected) {
+      add(getActionMetadata(act, channelType));
+    }
+  }
+
+  // 3. Fallback type-specific actions (only if not already added)
+  if (channelType === "number") {
+    add(getActionMetadata("increment", channelType));
+    add(getActionMetadata("decrement", channelType));
+    add(getActionMetadata("replace", channelType));
+    add(getActionMetadata("reset", channelType));
+  } else if (channelType === "boolean") {
+    add(getActionMetadata("toggle", channelType));
+    add(getActionMetadata("replace", channelType));
+    add(getActionMetadata("reset", channelType));
+  } else if (channelType === "array" || channelType === "messages") {
+    add(getActionMetadata("append", channelType));
+    add(getActionMetadata("replace", channelType));
+    add(getActionMetadata("reset", channelType));
+    add(getActionMetadata("clear", channelType));
+  } else if (channelType === "object" || channelType === "json") {
+    add(getActionMetadata("merge", channelType));
+    add(getActionMetadata("replace", channelType));
+    add(getActionMetadata("reset", channelType));
+  } else if (channelType === "string") {
+    add(getActionMetadata("replace", channelType));
+    add(getActionMetadata("reset", channelType));
+    add(getActionMetadata("clear", channelType));
+  } else {
+    add(getActionMetadata("replace", channelType));
+    add(getActionMetadata("reset", channelType));
+  }
+
+  return actions;
+}

@@ -11,6 +11,8 @@ import {
   Info,
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
+  Check,
   CheckCircle2,
   Shuffle,
 } from "lucide-react";
@@ -51,205 +53,21 @@ interface AgentStateUpdatesSectionProps {
   embedded?: boolean;
 }
 
-// Helper to extract action names from custom reducer code
-export function extractActionsFromReducerCode(code?: string): string[] {
-  if (!code || typeof code !== "string") return [];
-  const actions = new Set<string>();
+import {
+  extractActionsFromReducerCode,
+  isValuelessAction,
+  getActionsForReducer,
+  getActionMetadata,
+  type ReducerActionMeta,
+} from "../state-inspector/constants";
 
-  const eqRegex = /(?:action|\.action)\s*===?\s*["']([^"']+)["']/g;
-  let match: RegExpExecArray | null;
-  while ((match = eqRegex.exec(code)) !== null) {
-    const act = match[1]?.trim();
-    if (act && act !== "default" && act !== "") {
-      actions.add(act);
-    }
-  }
-
-  const caseRegex = /case\s*["']([^"']+)["']\s*:/g;
-  while ((match = caseRegex.exec(code)) !== null) {
-    const act = match[1]?.trim();
-    if (act && act !== "default" && act !== "") {
-      actions.add(act);
-    }
-  }
-
-  return Array.from(actions);
-}
-
-export interface ReducerActionMeta {
-  action: string;
-  label: string;
-  description: string;
-  requiresValue: boolean;
-}
-
-export function getActionsForReducer(
-  channelType?: string,
-  reducerName?: string,
-  customCode?: string,
-): ReducerActionMeta[] {
-  const actions: ReducerActionMeta[] = [];
-  const seen = new Set<string>();
-
-  const addAction = (meta: ReducerActionMeta) => {
-    if (!seen.has(meta.action)) {
-      seen.add(meta.action);
-      actions.push(meta);
-    }
-  };
-
-  // 1. Default update action (passes direct value)
-  addAction({
-    action: "default",
-    label: "default (Direct)",
-    description: "Standard reducer update passing value directly",
-    requiresValue: true,
-  });
-
-  // 2. Extract actions from custom reducer code if present
-  if (customCode) {
-    const parsed = extractActionsFromReducerCode(customCode);
-    for (const act of parsed) {
-      const isValueless = act === "reset" || act === "clear" || act === "toggle";
-      addAction({
-        action: act,
-        label:
-          act === "replace"
-            ? "replace (= Set)"
-            : act === "reset"
-              ? "reset (Clear)"
-              : act === "increment"
-                ? "increment (+ Add)"
-                : act === "decrement"
-                  ? "decrement (- Sub)"
-                  : act === "toggle"
-                    ? "toggle (Flip)"
-                    : act,
-        description: `Dispatches { action: "${act}", value: ... }`,
-        requiresValue: !isValueless,
-      });
-    }
-  }
-
-  // 3. Built-in actions based on channel type
-  if (channelType === "number") {
-    addAction({
-      action: "increment",
-      label: "increment (+ Amount)",
-      description: "Adds amount to counter (default 1)",
-      requiresValue: true,
-    });
-    addAction({
-      action: "decrement",
-      label: "decrement (- Amount)",
-      description: "Subtracts amount from counter (default 1)",
-      requiresValue: true,
-    });
-    addAction({
-      action: "replace",
-      label: "replace (= Overwrite)",
-      description: "Explicitly replaces number with new value",
-      requiresValue: true,
-    });
-    addAction({
-      action: "reset",
-      label: "reset (0)",
-      description: "Resets counter to 0",
-      requiresValue: false,
-    });
-  } else if (channelType === "boolean") {
-    addAction({
-      action: "toggle",
-      label: "toggle (Flip !)",
-      description: "Inverts boolean state (true <-> false)",
-      requiresValue: false,
-    });
-    addAction({
-      action: "replace",
-      label: "replace (= Set)",
-      description: "Explicitly sets boolean value",
-      requiresValue: true,
-    });
-    addAction({
-      action: "reset",
-      label: "reset (False)",
-      description: "Resets boolean to false",
-      requiresValue: false,
-    });
-  } else if (channelType === "array" || channelType === "messages") {
-    addAction({
-      action: "append",
-      label: "append (Push)",
-      description: "Appends items to list",
-      requiresValue: true,
-    });
-    addAction({
-      action: "replace",
-      label: "replace (= Overwrite)",
-      description: "Overwrites entire list with new array",
-      requiresValue: true,
-    });
-    addAction({
-      action: "reset",
-      label: "reset (Empty [])",
-      description: "Empties list",
-      requiresValue: false,
-    });
-  } else if (channelType === "object" || channelType === "json") {
-    addAction({
-      action: "merge",
-      label: "merge ({...})",
-      description: "Shallow merges keys into dictionary",
-      requiresValue: true,
-    });
-    addAction({
-      action: "replace",
-      label: "replace (= Overwrite)",
-      description: "Overwrites entire object",
-      requiresValue: true,
-    });
-    addAction({
-      action: "reset",
-      label: "reset (Empty {})",
-      description: "Empties object",
-      requiresValue: false,
-    });
-  } else if (channelType === "string") {
-    addAction({
-      action: "concat",
-      label: "concat (+ Append)",
-      description: "Appends text to existing string",
-      requiresValue: true,
-    });
-    addAction({
-      action: "replace",
-      label: "replace (= Overwrite)",
-      description: "Overwrites string",
-      requiresValue: true,
-    });
-    addAction({
-      action: "reset",
-      label: "reset (Empty \"\")",
-      description: "Clears string",
-      requiresValue: false,
-    });
-  } else {
-    addAction({
-      action: "replace",
-      label: "replace (= Overwrite)",
-      description: "Replaces state value with new value",
-      requiresValue: true,
-    });
-    addAction({
-      action: "reset",
-      label: "reset (Clear)",
-      description: "Resets channel value",
-      requiresValue: false,
-    });
-  }
-
-  return actions;
-}
+export {
+  extractActionsFromReducerCode,
+  isValuelessAction,
+  getActionsForReducer,
+  getActionMetadata,
+};
+export type { ReducerActionMeta };
 
 export function AgentStateUpdatesSection({
   selectedAgentData,
@@ -556,12 +374,12 @@ export function AgentStateUpdatesSection({
           </div>
         )}
 
-        {/* Mapping Rows Header: Channel & Reducer | Reducer Action | New Value (Source) */}
+        {/* Mapping Rows Header: 1. State Channel | 2. Action | 3. New Value / Mapping */}
         {stateUpdates.length > 0 && (
           <div className="flex items-center justify-between px-2 text-[9px] font-bold text-muted-foreground uppercase tracking-wider">
-            <span className="flex-1 min-w-[130px]">State Channel &amp; Reducer</span>
-            <span className="w-[125px] px-1">Reducer Action</span>
-            <span className="flex-1 min-w-[130px] pl-4">New Value (Source)</span>
+            <span className="flex-1 min-w-[130px]">1. State Channel</span>
+            <span className="w-[135px] px-1">2. Reducer Action</span>
+            <span className="flex-1 min-w-[140px] pl-3">3. New Value / Mapping</span>
             <span className="w-7 text-right"></span>
           </div>
         )}
@@ -612,10 +430,10 @@ export function AgentStateUpdatesSection({
             (a) => a.action === (su.action || "default"),
           );
 
-          const isValuelessAction =
-            su.action === "reset" ||
-            su.action === "toggle" ||
-            su.action === "clear";
+          const isValueless =
+            su.source === "none" ||
+            isValuelessAction(su.action) ||
+            currentActionMeta?.requiresValue === false;
 
           // Format value description for preview
           const valueDisplay =
@@ -803,7 +621,7 @@ export function AgentStateUpdatesSection({
                 </div>
 
                 {/* 2. Reducer Action Selector */}
-                <div className="w-[125px] shrink-0">
+                <div className="w-[135px] shrink-0">
                   <Select
                     value={
                       isCustomActionActive
@@ -827,21 +645,53 @@ export function AgentStateUpdatesSection({
                           return next;
                         });
 
-                        let nextValue = current.value;
-                        let nextSource = current.source;
-                        if (val === "increment" || val === "decrement") {
-                          if (!nextValue || nextValue === "response.content") {
-                            nextValue = "1";
-                            nextSource = "expression";
-                          }
-                        }
+                        const actMeta = availableActions.find((a) => a.action === val);
+                        const isActionValueless =
+                          isValuelessAction(val) || actMeta?.requiresValue === false;
 
-                        updated[sIdx] = {
-                          ...current,
-                          action: val,
-                          value: nextValue,
-                          source: nextSource,
-                        };
+                        if (isActionValueless) {
+                          updated[sIdx] = {
+                            ...current,
+                            action: val,
+                            source: "none",
+                            value: undefined,
+                            schemaField: undefined,
+                          };
+                        } else {
+                          let nextValue = current.value;
+                          let nextSource = current.source === "none" ? undefined : current.source;
+                          let nextField = current.schemaField;
+                          if (!nextSource) {
+                            if (isStructured && schemaFields.length > 0) {
+                              nextSource = "structured_field";
+                              nextField = schemaFields[0]?.name;
+                              nextValue = nextField;
+                            } else {
+                              nextSource =
+                                channelMeta.type === "messages"
+                                  ? "message_object"
+                                  : "message_content";
+                              nextValue =
+                                channelMeta.type === "messages"
+                                  ? "response"
+                                  : "response.content";
+                            }
+                          }
+                          if (val === "increment" || val === "decrement") {
+                            if (!nextValue || nextValue === "response.content") {
+                              nextValue = "1";
+                              nextSource = "expression";
+                            }
+                          }
+
+                          updated[sIdx] = {
+                            ...current,
+                            action: val,
+                            value: nextValue,
+                            source: nextSource,
+                            schemaField: nextField,
+                          };
+                        }
                         onUpdateAgent({ stateUpdates: updated });
                       }
                     }}
@@ -882,26 +732,37 @@ export function AgentStateUpdatesSection({
 
                 {/* Arrow Connector */}
                 <div className="flex items-center justify-center text-muted-foreground/60 select-none px-0.5">
-                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </div>
 
                 {/* 3. Source & Field Selector (New Value) */}
-                <div className="flex-1 min-w-[130px] flex items-center gap-1.5 min-w-0">
-                  <Select
-                    value={
-                      currentSource === "structured_field"
-                        ? `field:${su.schemaField || su.value || ""}`
-                        : currentSource === "expression" &&
-                            su.value &&
-                            transformerSteps.some(
-                              (ts) =>
-                                ts.outputVariable &&
-                                (su.value === ts.outputVariable ||
-                                  su.value?.startsWith(`${ts.outputVariable}.`)),
-                            )
-                          ? `step_var:${su.value}`
-                          : currentSource
-                    }
+                {isValueless ? (
+                  <div className="flex-1 min-w-[130px] flex items-center justify-between gap-1.5 px-2.5 h-7 rounded-md bg-emerald-500/[0.08] border border-emerald-500/25 text-[10px] font-mono text-emerald-300">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <Check className="w-3 h-3 text-emerald-400 shrink-0" />
+                      <span className="font-medium">No value required</span>
+                    </div>
+                    <span className="text-[8px] text-emerald-400/80 font-sans uppercase tracking-wider">
+                      {su.action || "action"}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex-1 min-w-[130px] flex items-center gap-1.5 min-w-0">
+                    <Select
+                      value={
+                        currentSource === "structured_field"
+                          ? `field:${su.schemaField || su.value || ""}`
+                          : currentSource === "expression" &&
+                              su.value &&
+                              transformerSteps.some(
+                                (ts) =>
+                                  ts.outputVariable &&
+                                  (su.value === ts.outputVariable ||
+                                    su.value?.startsWith(`${ts.outputVariable}.`)),
+                              )
+                            ? `step_var:${su.value}`
+                            : currentSource
+                      }
                     onValueChange={(val: string) => {
                       const updated = [...stateUpdates];
                       const current = updated[sIdx];
@@ -1122,6 +983,7 @@ export function AgentStateUpdatesSection({
                     </Tooltip>
                   )}
                 </div>
+              )}
 
                 {/* 4. Delete Row Button */}
                 <Button
@@ -1182,10 +1044,11 @@ export function AgentStateUpdatesSection({
               )}
 
               {/* Expression or Custom Value Input */}
-              {(currentSource === "expression" ||
-                currentSource === "literal" ||
-                su.action === "increment" ||
-                su.action === "decrement") && (
+              {!isValueless &&
+                (currentSource === "expression" ||
+                  currentSource === "literal" ||
+                  su.action === "increment" ||
+                  su.action === "decrement") && (
                 <div className="flex items-center gap-2 pt-1 border-t border-border/30">
                   <span className="text-[10px] text-muted-foreground font-mono shrink-0">
                     {su.action === "increment" || su.action === "decrement"
@@ -1216,40 +1079,30 @@ export function AgentStateUpdatesSection({
                 </div>
               )}
 
-              {/* Valueless action indicator (e.g. reset/toggle) */}
-              {isValuelessAction && !su.value && (
-                <div className="flex items-center gap-1.5 pt-0.5 text-[10px] text-amber-400/90 font-mono">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                  <span>
-                    Action &apos;{su.action}&apos; automatically mutates channel without a new value.
-                  </span>
-                </div>
-              )}
-
               {/* Feeds / Reducer Contract Hint */}
               <div className="flex items-center justify-between text-[10px] text-muted-foreground/80 px-1 font-mono pt-0.5">
                 <span className="truncate">
                   {su.action && su.action !== "default" ? (
-                    isValuelessAction && !su.value ? (
+                    isValueless ? (
                       <>
-                        Feeds:{" "}
+                        Dispatches:{" "}
                         <span className="text-amber-300 font-bold">
                           &#123; action: &quot;{su.action}&quot; &#125;
                         </span>{" "}
-                        →{" "}
+                        ➔{" "}
                         <span className="text-sky-300 font-bold">
                           {channelMeta.reducer}
                         </span>
                       </>
                     ) : (
                       <>
-                        Feeds:{" "}
+                        Dispatches:{" "}
                         <span className="text-amber-300 font-bold">
                           &#123; action: &quot;{su.action}&quot;, value:{" "}
                           <span className="text-purple-300">{valueDisplay}</span>{" "}
                           &#125;
                         </span>{" "}
-                        →{" "}
+                        ➔{" "}
                         <span className="text-sky-300 font-bold">
                           {channelMeta.reducer}
                         </span>
@@ -1257,8 +1110,8 @@ export function AgentStateUpdatesSection({
                     )
                   ) : (
                     <>
-                      Feeds:{" "}
-                      <span className="text-purple-300">{valueDisplay}</span> →{" "}
+                      Dispatches:{" "}
+                      <span className="text-purple-300">{valueDisplay}</span> ➔{" "}
                       <span className="text-sky-300 font-bold">
                         {channelMeta.reducer}
                       </span>

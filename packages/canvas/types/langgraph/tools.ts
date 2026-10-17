@@ -16,7 +16,8 @@ export type StateUpdateSource =
   | "message_object"
   | "tool_output"
   | "expression"
-  | "literal";
+  | "literal"
+  | "none";
 
 export interface LangGraphStateUpdateItem {
   channelKey: string;
