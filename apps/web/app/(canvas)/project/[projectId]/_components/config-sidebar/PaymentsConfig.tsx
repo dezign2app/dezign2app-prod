@@ -44,6 +44,8 @@ export const PaymentsConfig = ({
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const edges = useBackendCanvasStore((s) => s.edges);
   const nodes = useBackendCanvasStore((s) => s.nodes);
+  const addNode = useBackendCanvasStore((s) => s.addNode);
+  const addEdge = useBackendCanvasStore((s) => s.addEdge);
 
   if (!node) return null;
 
@@ -81,9 +83,6 @@ export const PaymentsConfig = ({
       (n.data?.label?.toLowerCase() === "subscription" ||
         n.data?.label?.toLowerCase() === "subscriptions"),
   );
-
-  const addNode = useBackendCanvasStore((s) => s.addNode);
-  const addEdge = useBackendCanvasStore((s) => s.addEdge);
 
   const handleAddSubscriptionTable = () => {
     let dbNode = nodes.find((n) => n.type === "database" && n.data?.dbEngine !== "redis");

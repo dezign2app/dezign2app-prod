@@ -50,14 +50,14 @@ export interface TransformerConfigProps {
   initialTab?: string;
 }
 
-export const TransformerConfig: React.FC<TransformerConfigProps> = ({
+const TransformerConfigContent: React.FC<
+  TransformerConfigProps & { node: NonNullable<ReturnType<typeof useBackendCanvasStore.getState>["nodes"][0]> }
+> = ({
   id,
   nodeId,
   initialTab,
+  node,
 }) => {
-  const rawNode = useBackendCanvasStore((s) =>
-    s.nodes.find((n) => n.id === (nodeId || id)),
-  );
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const addEdge = useBackendCanvasStore((s) => s.addEdge);
   const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
@@ -66,23 +66,6 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
   const allNodes = useBackendCanvasStore((s) => s.nodes);
   const allEdges = useBackendCanvasStore((s) => s.edges);
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
-
-  const node = React.useMemo(() => {
-    if (!rawNode) return null;
-    if (rawNode.type === "transformer_ref" && rawNode.data?.transformerRef) {
-      const master = allNodes.find(
-        (n) =>
-          n.type === "transformer" &&
-          (n.id === rawNode.data.transformerRef ||
-            n.data?.functionName === rawNode.data.transformerRef ||
-            n.data?.label === rawNode.data.transformerRef),
-      );
-      return master || rawNode;
-    }
-    return rawNode;
-  }, [rawNode, allNodes]);
-
-  if (!node) return null;
 
   const data = node.data;
   const customDependencies: NodeDependencyItem[] = data.customDependencies || [];
@@ -1203,4 +1186,40 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
     </div>
   );
 };
+
+export const TransformerConfig: React.FC<TransformerConfigProps> = ({
+  id,
+  nodeId,
+  initialTab,
+}) => {
+  const allNodes = useBackendCanvasStore((s) => s.nodes);
+  const rawNode = allNodes.find((n) => n.id === (nodeId || id));
+
+  const node = React.useMemo(() => {
+    if (!rawNode) return null;
+    if (rawNode.type === "transformer_ref" && rawNode.data?.transformerRef) {
+      const master = allNodes.find(
+        (n) =>
+          n.type === "transformer" &&
+          (n.id === rawNode.data.transformerRef ||
+            n.data?.functionName === rawNode.data.transformerRef ||
+            n.data?.label === rawNode.data.transformerRef),
+      );
+      return master || rawNode;
+    }
+    return rawNode;
+  }, [rawNode, allNodes]);
+
+  if (!node) return null;
+
+  return (
+    <TransformerConfigContent
+      id={id}
+      nodeId={nodeId}
+      initialTab={initialTab}
+      node={node}
+    />
+  );
+};
+
 export default TransformerConfig;

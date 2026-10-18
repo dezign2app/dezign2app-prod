@@ -61,14 +61,15 @@ function isPersistenceMode(val: string): val is PersistenceMode {
   return val === "None" || val === "RDB" || val === "AOF" || val === "RDB+AOF";
 }
 
-export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
+function DatabaseConfigContent({
+  id,
+  nodeId,
+  dbNode,
+}: DatabaseConfigProps & { dbNode: NonNullable<ReturnType<typeof useBackendCanvasStore.getState>["nodes"][0]> }) {
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const addNode = useBackendCanvasStore((s) => s.addNode);
   const addEdge = useBackendCanvasStore((s) => s.addEdge);
-
-  const dbNode = nodes.find((n) => n.id === nodeId);
-  if (!dbNode) return null;
 
   const data = dbNode.data || {};
   const label = data.label || "Primary Database";
@@ -939,5 +940,13 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
       </div>
     </div>
   );
+}
+
+export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
+  const nodes = useBackendCanvasStore((s) => s.nodes);
+  const dbNode = nodes.find((n) => n.id === nodeId);
+  if (!dbNode) return null;
+
+  return <DatabaseConfigContent id={id} nodeId={nodeId} dbNode={dbNode} />;
 }
 

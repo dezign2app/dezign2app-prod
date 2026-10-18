@@ -181,15 +181,15 @@ export const HTTPConnectionEdge = (props: EdgeProps<BackendEdge>) => {
   const targetNode = useBackendCanvasStore((s) =>
     s.nodes.find((n) => n.id === props.target),
   );
+  const sourceNode = useBackendCanvasStore((s) =>
+    s.nodes.find((n) => n.id === props.source),
+  );
   const simulation = useSimulationEdgeState(props.id);
 
   if (targetNode?.type === "database") {
     return <DatabaseRefEdge {...props} />;
   }
 
-  const sourceNode = useBackendCanvasStore((s) =>
-    s.nodes.find((n) => n.id === props.source),
-  );
   if (
     sourceNode?.type === "types" ||
     targetNode?.type === "types" ||

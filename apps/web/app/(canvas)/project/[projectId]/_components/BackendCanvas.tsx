@@ -77,19 +77,19 @@ function Flow({ projectId, view }: BackendCanvasProps) {
 }
 
 export function BackendCanvas(props: BackendCanvasProps) {
-  React.useEffect(() => {
-    useChatStore.setState({ showAIPopup: false });
-    useSimulationStore.setState({ terminalOpen: false });
-  }, []);
-
-  if (!props.projectId) return null;
-
   const nodesPendingDeletion = useBackendCanvasStore(
     (s) => s.nodesPendingDeletion,
   );
   const setNodesPendingDeletion = useBackendCanvasStore(
     (s) => s.setNodesPendingDeletion,
   );
+
+  React.useEffect(() => {
+    useChatStore.setState({ showAIPopup: false });
+    useSimulationStore.setState({ terminalOpen: false });
+  }, []);
+
+  if (!props.projectId) return null;
 
   return (
     <>

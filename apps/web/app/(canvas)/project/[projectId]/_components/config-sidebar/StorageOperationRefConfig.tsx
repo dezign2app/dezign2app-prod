@@ -39,10 +39,11 @@ export interface StorageOperationRefConfigProps {
   nodeId: string;
 }
 
-export function StorageOperationRefConfig({
+function StorageOperationRefConfigContent({
   id: _id,
   nodeId,
-}: StorageOperationRefConfigProps) {
+  refNode,
+}: StorageOperationRefConfigProps & { refNode: NonNullable<ReturnType<typeof useBackendCanvasStore.getState>["nodes"][0]> }) {
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
@@ -53,9 +54,6 @@ export function StorageOperationRefConfig({
   const [dialogOp, setDialogOp] = useState<StorageOperationFunction | null>(
     null,
   );
-
-  const refNode = nodes.find((n) => n.id === nodeId);
-  if (!refNode) return null;
 
   const data = refNode.data || {};
 
@@ -485,4 +483,12 @@ export function StorageOperationRefConfig({
       )}
     </div>
   );
+}
+
+export function StorageOperationRefConfig(props: StorageOperationRefConfigProps) {
+  const nodes = useBackendCanvasStore((s) => s.nodes);
+  const refNode = nodes.find((n) => n.id === props.nodeId);
+  if (!refNode) return null;
+
+  return <StorageOperationRefConfigContent {...props} refNode={refNode} />;
 }

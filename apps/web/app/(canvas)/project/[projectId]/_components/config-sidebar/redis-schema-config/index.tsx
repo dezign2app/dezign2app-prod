@@ -38,25 +38,15 @@ export interface RedisSchemaConfigProps {
 export * from "./constants";
 export * from "./components";
 
-export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
-  nodeId,
-}) => {
-  const node = useBackendCanvasStore((s) =>
-    s.nodes.find((n) => n.id === nodeId),
-  );
+const RedisSchemaConfigContent: React.FC<{
+  node: NonNullable<ReturnType<typeof useBackendCanvasStore.getState>["nodes"][0]>;
+  nodeId: string;
+}> = ({ node, nodeId }) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
   );
   const allNodes = useBackendCanvasStore((s) => s.nodes);
-
-  if (!node || (node.type !== "redis_schema" && node.type !== "entity")) {
-    return (
-      <div className="p-4 text-sm text-muted-foreground">
-        Redis Schema node not found.
-      </div>
-    );
-  }
 
   const data = node.data || {};
   const label = data.label || "Redis_Schema";
@@ -303,4 +293,22 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
       />
     </div>
   );
+};
+
+export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
+  nodeId,
+}) => {
+  const node = useBackendCanvasStore((s) =>
+    s.nodes.find((n) => n.id === nodeId),
+  );
+
+  if (!node || (node.type !== "redis_schema" && node.type !== "entity")) {
+    return (
+      <div className="p-4 text-sm text-muted-foreground">
+        Redis Schema node not found.
+      </div>
+    );
+  }
+
+  return <RedisSchemaConfigContent node={node} nodeId={nodeId} />;
 };

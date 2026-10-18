@@ -89,6 +89,18 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
   const [syncingBucketName, setSyncingBucketName] = useState<string | null>(null);
   const [bucketSyncSuccessMap, setBucketSyncSuccessMap] = useState<Record<string, string>>({});
 
+  // Auto-seed default env vars if missing
+  useEffect(() => {
+    if (!node || node.data.envVars !== undefined) return;
+    const defaults = getDefaultNodeEnvVars("storage", node.data);
+    updateNode(node.id, {
+      data: {
+        ...node.data,
+        envVars: defaults,
+      },
+    });
+  }, [node?.id, node?.data?.envVars, updateNode]);
+
   if (!node) {  
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
@@ -114,14 +126,6 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
       },
     });
   };
-
-  // Auto-seed default env vars if missing
-  useEffect(() => {
-    if (data.envVars === undefined) {
-      const defaults = getDefaultNodeEnvVars("storage", data);
-      handleUpdateField("envVars", defaults);
-    }
-  }, [node?.id, data.envVars]);
 
   const handleAddBucket = () => {
     const trimmed = newBucketName.trim().toLowerCase().replace(/[^a-z0-9.-]/g, "-");

@@ -29,15 +29,21 @@ export interface StateStoreConfigProps {
   className?: string;
 }
 
-export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
+function isStoreTab(val: string): val is "schema" | "playground" {
+  return val === "schema" || val === "playground";
+}
+
+const StateStoreConfigContent: React.FC<
+  StateStoreConfigProps & {
+    node: NonNullable<ReturnType<typeof useBackendCanvasStore.getState>["nodes"][0]>;
+  }
+> = ({
   id,
   nodeId,
   className,
+  node,
 }) => {
   const targetNodeId = nodeId || id;
-  const node = useBackendCanvasStore((s) =>
-    s.nodes.find((n) => n.id === targetNodeId),
-  );
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const allNodes = useBackendCanvasStore((s) => s.nodes);
   const allEdges = useBackendCanvasStore((s) => s.edges);
@@ -45,16 +51,16 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
 
   const [activeTab, setActiveTab] = useState<"schema" | "playground">("schema");
 
-  const fields: GlobalStoreField[] = useMemo(() => node?.data?.fields || [], [node?.data?.fields]);
-  const actions: GlobalStoreAction[] = useMemo(() => node?.data?.actions || [], [node?.data?.actions]);
-  const savedTestCases: StateStoreTestCase[] = useMemo(() => node?.data?.testCases || [], [node?.data?.testCases]);
+  const fields: GlobalStoreField[] = useMemo(() => node.data.fields || [], [node.data.fields]);
+  const actions: GlobalStoreAction[] = useMemo(() => node.data.actions || [], [node.data.actions]);
+  const savedTestCases: StateStoreTestCase[] = useMemo(() => node.data.testCases || [], [node.data.testCases]);
   const disabledDefaultManipulators: string[] = useMemo(
-    () => node?.data?.disabledDefaultManipulators || [],
-    [node?.data?.disabledDefaultManipulators],
+    () => node.data.disabledDefaultManipulators || [],
+    [node.data.disabledDefaultManipulators],
   );
   const deletedDefaultManipulators: string[] = useMemo(
-    () => node?.data?.deletedDefaultManipulators || [],
-    [node?.data?.deletedDefaultManipulators],
+    () => node.data.deletedDefaultManipulators || [],
+    [node.data.deletedDefaultManipulators],
   );
 
   const connectedPages = useMemo(() => {
@@ -920,8 +926,6 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
     updateNode(node.id, { data: { ...node.data, storage: val } });
   }, [node, updateNode]);
 
-  if (!node) return null;
-
   const data = node.data;
   const storeName = data.storeName || data.label || "App";
   const scope = data.scope || "global";
@@ -1049,7 +1053,9 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
       {/* Main Tabs: Store & Logic vs. Live Test Area */}
       <Tabs
         value={activeTab}
-        onValueChange={(val) => setActiveTab(val as "schema" | "playground")}
+        onValueChange={(val) => {
+          if (isStoreTab(val)) setActiveTab(val);
+        }}
         className="w-full"
       >
         <TabsList className="grid grid-cols-2 w-full h-8 bg-muted p-0.5 rounded-lg border border-border">
@@ -1132,6 +1138,28 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
         </TabsContent>
       </Tabs>
     </div>
+  );
+};
+
+export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
+  id,
+  nodeId,
+  className,
+}) => {
+  const targetNodeId = nodeId || id;
+  const node = useBackendCanvasStore((s) =>
+    s.nodes.find((n) => n.id === targetNodeId),
+  );
+
+  if (!node) return null;
+
+  return (
+    <StateStoreConfigContent
+      id={id}
+      nodeId={nodeId}
+      className={className}
+      node={node}
+    />
   );
 };
 

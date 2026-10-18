@@ -28,17 +28,16 @@ import {
   useWebPageRename,
 } from "./web-page-config";
 
-export const WebPageConfig = ({
+const WebPageConfigContent = ({
   id,
   nodeId,
+  node,
 }: {
   id: string;
   nodeId: string;
+  node: NonNullable<ReturnType<typeof useBackendCanvasStore.getState>["nodes"][0]>;
 }) => {
   const router = useRouter();
-  const node = useBackendCanvasStore((s) =>
-    s.nodes.find((n) => n.id === nodeId),
-  );
   const allNodes = useBackendCanvasStore((s) => s.nodes);
   const allEdges = useBackendCanvasStore((s) => s.edges);
   const allEndpoints = useBackendCanvasStore((s) => s.endpoints);
@@ -69,8 +68,6 @@ export const WebPageConfig = ({
   const projectId = resolvedProjectId as Id<"projects">;
 
   const { outputDir } = useTerminalWorkspace(resolvedProjectId);
-
-  if (!node) return null;
 
   const data = node.data;
 
@@ -402,4 +399,14 @@ export const WebPageConfig = ({
       />
     </div>
   );
+};
+
+export const WebPageConfig = (props: { id: string; nodeId: string }) => {
+  const node = useBackendCanvasStore((s) =>
+    s.nodes.find((n) => n.id === props.nodeId),
+  );
+
+  if (!node) return null;
+
+  return <WebPageConfigContent {...props} node={node} />;
 };

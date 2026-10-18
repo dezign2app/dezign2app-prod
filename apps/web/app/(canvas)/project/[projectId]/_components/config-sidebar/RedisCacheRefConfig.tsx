@@ -29,16 +29,17 @@ interface RedisCacheRefConfigProps {
   nodeId: string;
 }
 
-export function RedisCacheRefConfig({ id, nodeId }: RedisCacheRefConfigProps) {
+function RedisCacheRefConfigContent({
+  id,
+  nodeId,
+  refNode,
+}: RedisCacheRefConfigProps & { refNode: NonNullable<ReturnType<typeof useBackendCanvasStore.getState>["nodes"][0]> }) {
   const router = useRouter();
   const projectId = useBackendCanvasStore((s) => s.projectId);
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
-
-  const refNode = nodes.find((n) => n.id === nodeId);
-  if (!refNode) return null;
 
   const data = refNode.data || {};
 
@@ -374,4 +375,12 @@ export function RedisCacheRefConfig({ id, nodeId }: RedisCacheRefConfigProps) {
       </div>
     </div>
   );
+}
+
+export function RedisCacheRefConfig({ id, nodeId }: RedisCacheRefConfigProps) {
+  const nodes = useBackendCanvasStore((s) => s.nodes);
+  const refNode = nodes.find((n) => n.id === nodeId);
+  if (!refNode) return null;
+
+  return <RedisCacheRefConfigContent id={id} nodeId={nodeId} refNode={refNode} />;
 }
