@@ -11,7 +11,7 @@ import { compileNextjsV16Service } from "./services/nextjs/v16";
 import { compileDatabaseNodes } from "./compileDatabaseNodes";
 import { compileKafkaNodes, isServiceConnectedToKafka } from "./compileKafkaNodes";
 import { compileRedisNodes, isServiceConnectedToRedis } from "./compileRedisNodes";
-import { cleanUnusedImports, toTableName, toSingular, toPlural } from "./utils";
+import { cleanUnusedImports, toTableName, toSingular, toPlural, normalizeEndpointRequestBody } from "./utils";
 
 /**
  * Compiles a single Service Node into its modular microservice directory structure based on selected tech and version
@@ -262,6 +262,9 @@ export function compileServiceNode(
         : ep;
     });
   }
+
+  // Normalize endpoint requestBody schemas to align with parameters referenced in pipeline steps
+  nodeEndpoints = nodeEndpoints.map(normalizeEndpointRequestBody);
 
   // Filter events for this specific node
   let nodeEvents = events.filter(

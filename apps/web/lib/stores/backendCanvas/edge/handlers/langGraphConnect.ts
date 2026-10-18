@@ -1,4 +1,4 @@
-import { PipelineStep } from "@workspace/canvas/types";
+import { PipelineStep, Parameter } from "@workspace/canvas/types";
 import { toVarName } from "@/lib/compiler/utils";
 import { ConnectionContext } from "../types";
 
@@ -101,7 +101,7 @@ export function handleLangGraphConnect({
     if (!hasMatchingStep) {
       const defaultStateMapping: Record<string, string> = {};
       if (stateChannels.length > 0) {
-        stateChannels.forEach((ch: any) => {
+        stateChannels.forEach((ch: { key: string }) => {
           if (ch.key === "messages") {
             defaultStateMapping[ch.key] = "body.message";
           } else {
@@ -156,31 +156,31 @@ export function handleLangGraphConnect({
       const currentReqBody = endpoint.requestBody;
       const currentFields = currentReqBody?.fields || [];
       const hasThreadId = currentFields.some(
-        (f: any) =>
+        (f: Parameter) =>
           f.name?.toLowerCase() === "thread_id" ||
           f.name?.toLowerCase() === "threadid",
       );
       const hasMessage = currentFields.some(
-        (f: any) =>
+        (f: Parameter) =>
           f.name?.toLowerCase() === "message" ||
           f.name?.toLowerCase() === "messages",
       );
 
       let updatedReqBody = currentReqBody;
+      const fieldsToAdd: Parameter[] = [];
+      if (!hasMessage) {
+        fieldsToAdd.push({
+          id: `field_msg_${Date.now()}`,
+          name: "message",
+          key: "message",
+          type: "string",
+          required: true,
+          description: "User input prompt / message",
+          defaultValue: "",
+          value: "",
+        });
+      }
       if (hasMemory && !hasThreadId) {
-        const fieldsToAdd: any[] = [];
-        if (!hasMessage && currentFields.length === 0) {
-          fieldsToAdd.push({
-            id: `field_msg_${Date.now()}`,
-            name: "message",
-            key: "message",
-            type: "string",
-            required: true,
-            description: "User input prompt / message",
-            defaultValue: "",
-            value: "",
-          });
-        }
         fieldsToAdd.push({
           id: `field_thread_id_${Date.now()}`,
           name: "thread_id",
@@ -191,7 +191,9 @@ export function handleLangGraphConnect({
           defaultValue: "",
           value: "",
         });
+      }
 
+      if (fieldsToAdd.length > 0) {
         updatedReqBody = {
           ...(currentReqBody || { id: `req_${endpoint.id}` }),
           fields: [...currentFields, ...fieldsToAdd],
@@ -220,7 +222,7 @@ export function handleLangGraphConnect({
     if (!hasMatchingStep) {
       const defaultStateMapping: Record<string, string> = {};
       if (stateChannels.length > 0) {
-        stateChannels.forEach((ch: any) => {
+        stateChannels.forEach((ch: { key: string }) => {
           if (ch.key === "messages") {
             defaultStateMapping[ch.key] = "event.message";
           } else {

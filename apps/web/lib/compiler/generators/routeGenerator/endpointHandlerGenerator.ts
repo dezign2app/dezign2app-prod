@@ -6,7 +6,7 @@
 
 import { Endpoint, AnyMessagingResource, CompiledFile, ReusableFunction } from "@workspace/canvas/types";
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { parseSchemaJson, deriveRouteFileName, cleanUnusedImports } from "../../utils";
+import { parseSchemaJson, deriveRouteFileName, cleanUnusedImports, normalizeEndpointRequestBody } from "../../utils";
 import { parametersToTsInterface, schemaToTsInterface } from "../schemaToTypeScript";
 import { resolveEndpointTrace } from "../../traceResolver";
 import { pickDbFunctionsForEndpoint } from "./dbResolver";
@@ -66,7 +66,7 @@ export function generateEndpointRouteHandler(
   params: GenerateEndpointHandlerParams,
 ): GenerateEndpointHandlerResult {
   const {
-    ep,
+    ep: rawEp,
     index,
     serviceName,
     pascalServiceName,
@@ -83,6 +83,7 @@ export function generateEndpointRouteHandler(
     usedFileNames,
   } = params;
 
+  const ep = normalizeEndpointRequestBody(rawEp);
   const method = (ep.type || "GET").toLowerCase();
   let routeFileName = deriveRouteFileName(ep, index, serviceName);
 
