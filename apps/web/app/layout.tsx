@@ -1,4 +1,5 @@
-import { Geist, Geist_Mono, Ubuntu, Space_Grotesk, IBM_Plex_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Ubuntu, IBM_Plex_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -26,10 +27,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const spaceGrotesk = Space_Grotesk({
+const spaceGrotesk = localFont({
+  src: "./fonts/space-grotesk.woff2",
   variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["500", "700"],
+  display: "swap",
 });
 
 const ibmPlexMono = IBM_Plex_Mono({
