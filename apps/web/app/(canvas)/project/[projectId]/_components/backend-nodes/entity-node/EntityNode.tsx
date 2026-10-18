@@ -1,6 +1,6 @@
 import React, { useRef } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Database, Table2, Trash, Settings, Sparkles, Lock, CheckCircle2, AlertTriangle, RefreshCw } from "lucide-react";
+import { Database, Table2, Trash, Settings, Sparkles, Lock, CheckCircle2, AlertTriangle, RefreshCw, Boxes } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { createTypesNodeFromEntity } from "@/lib/stores/backendCanvas/packageTypesSync";
 import { getOutOfSyncDerivedTypesNodes } from "@/lib/stores/backendCanvas/node";
@@ -22,6 +22,7 @@ import { VectorConfig } from "./VectorConfig";
 import { DbOperationsList } from "./DbOperationsList";
 import { EntityAffectedTypesBanner } from "./EntityAffectedTypesBanner";
 import { EntityDbSyncBanner } from "./EntityDbSyncBanner";
+import { EntityGroupSelect } from "./EntityGroupSelect";
 import { getUniqueNodeLabel } from "@workspace/canvas";
 import { NodeHeader } from "../graph-nodes/common";
 import { EntityRenameDialog } from "./EntityRenameDialog";
@@ -325,7 +326,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
               </div>
               <div
                 className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-all cursor-pointer"
-                title="DB Operation Functions"
+                title="Configure Entity & DB Functions"
                 onClick={openSettings}
               >
                 <Settings size={14} />
@@ -450,6 +451,22 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
             )}
           </div>
         </div>
+
+      {/* Schema View Group Bar */}
+      <div className="px-3 py-1.5 border-b flex items-center justify-between gap-1.5 nodrag text-[10px] bg-muted/10">
+        <span className="text-muted-foreground font-medium shrink-0 flex items-center gap-1">
+          <Boxes size={10} className="text-sky-400" />
+          Group:
+        </span>
+        <div className="flex items-center gap-1 min-w-0">
+          <EntityGroupSelect
+            nodeId={id}
+            variant="button"
+            size="sm"
+            readOnly={data.readOnly}
+          />
+        </div>
+      </div>
 
       {/* Description */}
       <div className="px-3 py-2 bg-secondary/5 border-b nodrag">

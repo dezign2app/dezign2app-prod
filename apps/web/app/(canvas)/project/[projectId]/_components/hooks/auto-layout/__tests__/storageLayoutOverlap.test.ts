@@ -262,7 +262,7 @@ describe("Storage Node Auto-Layout - No Overlap with WebPageNode", () => {
         position: { x: 0, y: 0 },
         data: {
           label: "api",
-          endpoints: [{ id: "ep1", name: "POST upload" }],
+          endpoints: [{ id: "ep1", name: "POST upload", type: "rest" }],
         },
       },
     ];

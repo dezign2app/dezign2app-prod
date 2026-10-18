@@ -113,13 +113,25 @@ export const createNodeSlice = (
 
   addTableNode: (parentId, position) => {
     get().pushHistorySnapshot("schema");
+    const parentGroup = parentId
+      ? get().nodes.find((n) => n.id === parentId)
+      : undefined;
+    const initialPos =
+      position ||
+      (parentGroup?.position
+        ? { x: parentGroup.position.x + 36, y: parentGroup.position.y + 120 }
+        : { x: 100, y: 100 });
+
     const node: Omit<BackendNode, "fractionalIndex"> = {
       id: crypto.randomUUID(),
       type: "entity",
-      position: position || { x: 100, y: 100 },
-      parentId,
+      position: initialPos,
       data: {
         label: "",
+        ...(parentId && {
+          groupId: parentId,
+          group: parentGroup?.data?.label,
+        }),
         columns: [
           { name: "id", type: "TEXT", isPrimaryKey: true },
           { name: "created_at", type: "TIMESTAMPTZ" },

@@ -18,6 +18,7 @@ import {
 } from "@workspace/ui/components/alert-dialog";
 import { FunctionDetailEditor } from "./FunctionDetailEditor";
 import { EntityFunctionsList } from "./EntityFunctionsList";
+import { EntityGroupSelect } from "../../backend-nodes/entity-node/EntityGroupSelect";
 import {
   buildDefaultDbPromptContext,
   TableSchemaInfo,
@@ -343,19 +344,26 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
           onDeleteRequest={(op) => setOpToDelete(op)}
         />
       ) : (
-        <EntityFunctionsList
-          label={label}
-          autoOps={autoOps}
-          customOps={customOps}
-          onSelectOp={(id) => {
-            setSelectedOpId(id);
-            setIsNewOp(false);
-          }}
-          onToggle={handleToggle}
-          onRegenerateDefaults={handleRegenerateDefaults}
-          onCreateNewFunction={handleCreateNewFunction}
-          onDeleteRequest={(op) => setOpToDelete(op)}
-        />
+        <div className="space-y-4">
+          <EntityGroupSelect
+            nodeId={nodeId}
+            variant="sidebar"
+            readOnly={node.data?.readOnly}
+          />
+          <EntityFunctionsList
+            label={label}
+            autoOps={autoOps}
+            customOps={customOps}
+            onSelectOp={(id) => {
+              setSelectedOpId(id);
+              setIsNewOp(false);
+            }}
+            onToggle={handleToggle}
+            onRegenerateDefaults={handleRegenerateDefaults}
+            onCreateNewFunction={handleCreateNewFunction}
+            onDeleteRequest={(op) => setOpToDelete(op)}
+          />
+        </div>
       )}
 
       {/* Delete Function Confirmation Dialog */}

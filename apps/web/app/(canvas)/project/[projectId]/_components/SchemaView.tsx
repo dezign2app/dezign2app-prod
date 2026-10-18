@@ -80,6 +80,7 @@ export function SchemaView({ projectId }: SchemaViewProps) {
 
           return {
             ...n,
+            parentId: undefined,
             zIndex: -1,
             width: w,
             height: h,
@@ -93,6 +94,7 @@ export function SchemaView({ projectId }: SchemaViewProps) {
         }
         return {
           ...n,
+          parentId: undefined,
           zIndex: 1,
           style: {
             ...n.style,

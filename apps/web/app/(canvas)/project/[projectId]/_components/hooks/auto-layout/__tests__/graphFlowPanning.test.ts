@@ -74,10 +74,10 @@ describe("GraphView Auto Layout - Flow-focused Panning (Start to End)", () => {
 
   it("passes only the flow nodes to fitView during performGraphLayout", () => {
     const nodes: LayoutNode[] = [
-      { id: "webApp-1", type: "webApp", position: { x: 0, y: 0 }, data: {} },
-      { id: "service-orders", type: "microservice", position: { x: 0, y: 0 }, data: {} },
-      { id: "types-order", type: "types", position: { x: 0, y: 0 }, data: {} },
-      { id: "orphan-service", type: "microservice", position: { x: 0, y: 0 }, data: {} },
+      { id: "webApp-1", type: "webApp", position: { x: 0, y: 0 }, data: { label: "webApp-1" } },
+      { id: "service-orders", type: "microservice", position: { x: 0, y: 0 }, data: { label: "service-orders" } },
+      { id: "types-order", type: "types", position: { x: 0, y: 0 }, data: { label: "types-order" } },
+      { id: "orphan-service", type: "microservice", position: { x: 0, y: 0 }, data: { label: "orphan-service" } },
     ];
 
     const edges: LayoutEdge[] = [
