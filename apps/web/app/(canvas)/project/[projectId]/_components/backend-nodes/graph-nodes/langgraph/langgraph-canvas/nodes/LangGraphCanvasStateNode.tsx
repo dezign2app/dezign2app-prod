@@ -14,7 +14,6 @@ import {
 import {
   type StateGlobalNode,
   type LangGraphStateChannel,
-  type LangGraphCustomReducer,
   isLangGraphChannelType,
 } from "@workspace/canvas";
 import { Button } from "@workspace/ui/components/button";
@@ -50,7 +49,6 @@ export const LangGraphCanvasStateNode = ({
             defaultValue: [],
           },
         ];
-  const customReducers = data.customReducers || [];
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
 
 
@@ -200,124 +198,46 @@ export const LangGraphCanvasStateNode = ({
                       </Button>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[9px] text-muted-foreground font-medium">
-                          Type
-                        </span>
-                        <Select
-                          value={ch.type}
-                          onValueChange={(val) => {
-                            if (isLangGraphChannelType(val)) {
-                              const defaultReducer =
-                                val === "messages"
-                                  ? "add_messages"
-                                  : val === "array"
-                                    ? "append"
-                                    : val === "object"
-                                      ? "merge_object"
-                                      : "replace";
-                              handleUpdate(idx, {
-                                type: val,
-                                reducer: defaultReducer,
-                              });
-                            }
-                          }}
-                        >
-                          <SelectTrigger
-                            size="sm"
-                            className="h-6 text-[10px] bg-background font-mono w-full"
-                          >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="font-mono text-xs">
-                            <SelectItem value="messages">messages</SelectItem>
-                            <SelectItem value="string">string</SelectItem>
-                            <SelectItem value="number">number</SelectItem>
-                            <SelectItem value="boolean">boolean</SelectItem>
-                            <SelectItem value="array">array</SelectItem>
-                            <SelectItem value="object">object</SelectItem>
-                            <SelectItem value="json">json</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[9px] text-muted-foreground font-medium">
-                          Reducer
-                        </span>
-                        <Select
-                          value={ch.reducer}
-                          onValueChange={(val) => {
-                            const matchedCustom = customReducers.find((r) => r.name === val);
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[9px] text-muted-foreground font-medium">
+                        Type
+                      </span>
+                      <Select
+                        value={ch.type}
+                        onValueChange={(val) => {
+                          if (isLangGraphChannelType(val)) {
+                            const defaultReducer =
+                              val === "messages"
+                                ? "add_messages"
+                                : val === "array"
+                                  ? "append"
+                                  : val === "object"
+                                    ? "merge_object"
+                                    : "replace";
                             handleUpdate(idx, {
-                              reducer: val,
-                              customReducerCode:
-                                val === "custom"
-                                  ? (ch.customReducerCode || "(prev, next) => next")
-                                  : matchedCustom?.code,
+                              type: val,
+                              reducer: defaultReducer,
                             });
-                          }}
-                        >
-                          <SelectTrigger
-                            size="sm"
-                            className="h-6 text-[10px] bg-background font-mono w-full"
-                          >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="font-mono text-xs">
-                            <div className="px-2 py-0.5 text-[9px] font-bold text-muted-foreground uppercase">
-                              Built-in
-                            </div>
-                            <SelectItem value="replace">replace</SelectItem>
-                            <SelectItem value="add_messages">
-                              add_messages
-                            </SelectItem>
-                            <SelectItem value="append">append</SelectItem>
-                            <SelectItem value="concat_array">
-                              concat_array
-                            </SelectItem>
-                            <SelectItem value="merge_object">
-                              merge_object
-                            </SelectItem>
-                            <div className="px-2 py-0.5 text-[9px] font-bold text-purple-400 uppercase border-t border-border/40 mt-1">
-                              Developer Defined
-                            </div>
-                            <SelectItem value="custom" className="text-purple-300 font-semibold">
-                              custom (inline)
-                            </SelectItem>
-                            {customReducers.length > 0 && (
-                              <>
-                                <div className="px-2 py-0.5 text-[9px] font-bold text-muted-foreground uppercase border-t border-border/40 mt-1">
-                                  Shared
-                                </div>
-                                {customReducers.map((r) => (
-                                  <SelectItem key={r.id} value={r.name}>
-                                    {r.name}
-                                  </SelectItem>
-                                ))}
-                              </>
-                            )}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    {(ch.reducer === "custom" || (!["replace", "add_messages", "append", "concat_array", "merge_object"].includes(ch.reducer) && ch.customReducerCode)) && (
-                      <div className="flex flex-col gap-1 p-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30 mt-1.5">
-                        <span className="text-[9px] font-bold text-purple-300 font-mono">
-                          Reducer: (prev, next) =&gt; combined
-                        </span>
-                        <LocalInput
-                          className="h-6 text-[10px] font-mono bg-background text-purple-300 border-purple-500/30"
-                          placeholder="(prev, next) => next"
-                          value={ch.customReducerCode || ""}
-                          onChange={(e) =>
-                            handleUpdate(idx, { customReducerCode: e.target.value })
                           }
-                        />
-                      </div>
-                    )}
+                        }}
+                      >
+                        <SelectTrigger
+                          size="sm"
+                          className="h-6 text-[10px] bg-background font-mono w-full"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="font-mono text-xs">
+                          <SelectItem value="messages">messages</SelectItem>
+                          <SelectItem value="string">string</SelectItem>
+                          <SelectItem value="number">number</SelectItem>
+                          <SelectItem value="boolean">boolean</SelectItem>
+                          <SelectItem value="array">array</SelectItem>
+                          <SelectItem value="object">object</SelectItem>
+                          <SelectItem value="json">json</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 );
               }
@@ -366,17 +286,6 @@ export const LangGraphCanvasStateNode = ({
                       className="text-[9px] px-1 py-0 h-4 border-border/60 text-muted-foreground font-mono font-normal shrink-0"
                     >
                       {ch.type}
-                    </Badge>
-                    <Badge
-                      variant="secondary"
-                      className="text-[9px] px-1 py-0 h-4 bg-[#006ddd]/15 text-[#006ddd] border border-[#006ddd]/20 font-mono font-semibold shrink-0"
-                      title={
-                        ch.reducer === "add_messages"
-                          ? "add_messages: ID deduplication + append"
-                          : `Reducer function: ${ch.reducer}`
-                      }
-                    >
-                      {ch.reducer}
                     </Badge>
                     {isBuiltin && (
                       <Badge
