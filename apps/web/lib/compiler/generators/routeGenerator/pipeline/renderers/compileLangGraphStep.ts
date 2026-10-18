@@ -166,7 +166,7 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`res.setHeader("Cache-Control", "no-cache");`);
       rawLines.push(`res.setHeader("Connection", "keep-alive");`);
       if (threadIdExpr) {
-        rawLines.push(`if (${threadIdExpr}) {`);
+        rawLines.push(`if (${threadIdExpr} && typeof res.setHeader === "function") {`);
         rawLines.push(`  res.setHeader("X-Thread-Id", String(${threadIdExpr}));`);
         rawLines.push(`}`);
       }

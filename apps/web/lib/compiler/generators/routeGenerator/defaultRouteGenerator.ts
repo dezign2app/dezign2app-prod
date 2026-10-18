@@ -20,6 +20,8 @@ export type HealthResponseContext =
   | {
       status: (code: number) => { json: (data: { status: string; service: string; timestamp: string }) => void };
       json: (data: { status: string; service: string; timestamp: string }) => void;
+      setHeader?: (name: string, value: string | number | readonly string[]) => void | Response;
+      header?: (name: string, value?: string | number | readonly string[]) => void | Response;
     };
 
 export async function healthHandler(_req: HealthRequest, res: HealthResponseContext) {

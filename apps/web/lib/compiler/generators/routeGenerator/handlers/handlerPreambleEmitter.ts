@@ -167,6 +167,8 @@ ${hasStreamingStep ? `export type ${pascalName}ResponseContext = Response;\n` : 
         json: (data?: ${pascalName}Response | ${pascalName}ErrorResponse) => void | Response;
       };
       json: (data?: ${pascalName}Response | ${pascalName}ErrorResponse) => void | Response;
+      setHeader?: (name: string, value: string | number | readonly string[]) => void | Response;
+      header?: (name: string, value?: string | number | readonly string[]) => void | Response;
     };
 `}
 

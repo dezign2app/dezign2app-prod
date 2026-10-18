@@ -547,5 +547,112 @@ app.use(express.json());
     expect(compiledIndex!.content).toContain('import "dotenv/config";');
     expect(compiledIndex!.content).toContain("const app = express();");
   });
+
+  it("compileServiceNode and generateTypesPackage correctly type postSendMessage with LangGraph invoke, setHeader on ResponseContext, and auto-provision body.message", () => {
+    const serviceNode: BackendNode = {
+      id: "srv-conversations",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "conversations",
+        techStack: "express",
+        port: "8080",
+      },
+    };
+
+    const endpoint: Endpoint & { nodeId: string } = {
+      id: "ep-send-message",
+      nodeId: "srv-conversations",
+      name: "/sendMessage",
+      type: "POST",
+      summary: "Send message to conversation agent",
+      requestBody: {
+        id: "req-send-msg",
+        fields: [
+          { name: "thread_id", type: "string", required: false, id: "123" },
+        ],
+      },
+      pipelineSteps: [
+        {
+          id: "step-lg-invoke",
+          name: "agent",
+          type: "langgraph_invoke",
+          enabled: true,
+          outputVariable: "agentResult",
+          langGraphTargetNodeId: "agentNode",
+          langGraphStreamingEnabled: false,
+          langGraphThreadIdSource: "body.thread_id",
+          langGraphStateMapping: {
+            messages: "body.message",
+          },
+        },
+      ],
+    };
+
+    const compiledService = compileServiceNode(
+      serviceNode,
+      [endpoint],
+      [],
+      [serviceNode],
+      [],
+      [],
+      [],
+      [],
+      "conversations",
+    );
+
+    const routeFile = compiledService.files.find((f) =>
+      f.filename.includes("postSendMessage.ts"),
+    );
+    expect(routeFile).toBeDefined();
+    const routeCode = routeFile!.content;
+
+    // 1. Must include setHeader and header in ResponseContext union
+    expect(routeCode).toContain("ConversationsPostSendMessageResponseContext =");
+    expect(routeCode).toContain("setHeader?: (name: string, value: string | number | readonly string[]) => void | Response;");
+    expect(routeCode).toContain("header?: (name: string, value?: string | number | readonly string[]) => void | Response;");
+
+    // 2. Must guard res.setHeader call
+    expect(routeCode).toContain('if (body.thread_id && typeof res.setHeader === "function") {');
+    expect(routeCode).toContain('res.setHeader("X-Thread-Id", String(body.thread_id));');
+
+    // 3. Must contain state channel mapping
+    expect(routeCode).toContain('"messages": body.message');
+
+    // 4. Must NOT contain any, unknown, or as casts in route handler
+    expect(routeCode).not.toContain(": any");
+    expect(routeCode).not.toContain("as any");
+    expect(routeCode).not.toContain("as unknown");
+    expect(routeCode).not.toMatch(/\bas\s+[A-Za-z0-9_]+/);
+
+    // 5. Types package must include both thread_id and message in body interface and schema
+    const typesFiles = generateTypesPackage(
+      [serviceNode],
+      [endpoint],
+      [],
+      [{ id: serviceNode.id, name: "conversations", folderName: "conversations" }],
+      [],
+    );
+
+    const typesFile = typesFiles.find((f) =>
+      f.filename.includes("postSendMessage.ts"),
+    );
+    expect(typesFile).toBeDefined();
+    const typeCode = typesFile!.content;
+
+    expect(typeCode).toContain("export interface ConversationsPostSendMessageBody {");
+    expect(typeCode).toContain("thread_id?: string;");
+    expect(typeCode).toContain("message?: string;");
+    expect(typeCode).toContain("conversationsPostSendMessageBodySchema = z.object({");
+    expect(typeCode).toMatch(/message:\s*z\.string\(\)\.optional\(\)/);
+
+    // 6. Must NOT contain any, unknown, or as casts in types file
+    expect(typeCode).not.toContain(": any");
+    expect(typeCode).not.toContain("as any");
+    expect(typeCode).not.toContain("as unknown");
+    expect(typeCode).not.toContain(": unknown");
+    expect(typeCode).not.toMatch(/\bas\s+[A-Za-z0-9_]+/);
+  });
 });
 

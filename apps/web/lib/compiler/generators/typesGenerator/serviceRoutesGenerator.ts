@@ -4,6 +4,7 @@ import {
   toVarName,
   toPascalCase,
   deriveRouteFileName,
+  normalizeEndpointRequestBody,
 } from "../../utils";
 import {
   parametersToTsInterface,
@@ -70,7 +71,8 @@ export function generateServiceRouteTypes(
     const usedFileNames = new Set<string>();
 
     if (nodeEndpoints.length > 0) {
-      nodeEndpoints.forEach((ep, index) => {
+      nodeEndpoints.forEach((rawEp, index) => {
+        const ep = normalizeEndpointRequestBody(rawEp);
         let routeFileName = deriveRouteFileName(ep, index, rawServiceName);
 
         if (usedFileNames.has(routeFileName)) {

@@ -1,5 +1,11 @@
-import { Endpoint } from "@workspace/canvas/types";
-import { JSONValue } from "@workspace/canvas/types";
+import {
+  Endpoint,
+  PipelineStep,
+  PipelineStepInputSource,
+  ConditionExpr,
+  JSONValue,
+  JSONObject,
+} from "@workspace/canvas/types";
 import { parseRelaxedJson } from "./generators/routeGenerator/jsonInterpolation";
 
 /**
@@ -436,6 +442,225 @@ export function cleanUnusedImports(sourceCode: string): string {
       return fullMatch.startsWith("\n") ? `\n${reconstructed}` : reconstructed;
     })
     .replace(/\n{3,}/g, "\n\n");
+}
+
+/**
+ * Recursively collects all body property field names that pipeline steps reference
+ * (e.g., from `langGraphStateMapping`, `langGraphThreadIdSource`, `inputBindings`, conditions, etc.).
+ */
+export function collectReferencedBodyFields(steps?: PipelineStep[]): Set<string> {
+  const fields = new Set<string>();
+  if (!Array.isArray(steps) || steps.length === 0) return fields;
+
+  function visitSource(src?: PipelineStepInputSource) {
+    if (src && "field" in src && src.field && src.kind === "req_body") {
+      const trimmed = src.field.trim();
+      if (trimmed) {
+        const rootField = trimmed.split(".")[0];
+        if (rootField && /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(rootField)) {
+          fields.add(rootField);
+        }
+      }
+    }
+  }
+
+  function visitConditionExpr(expr?: ConditionExpr) {
+    if (!expr) return;
+    if ("left" in expr) {
+      visitSource(expr.left);
+      if (expr.right) {
+        visitSource(expr.right);
+      }
+    } else if ("and" in expr && Array.isArray(expr.and)) {
+      for (const sub of expr.and) {
+        visitConditionExpr(sub);
+      }
+    } else if ("or" in expr && Array.isArray(expr.or)) {
+      for (const sub of expr.or) {
+        visitConditionExpr(sub);
+      }
+    } else if ("not" in expr && expr.not) {
+      visitConditionExpr(expr.not);
+    }
+  }
+
+  function visitPath(path?: string) {
+    if (!path || typeof path !== "string") return;
+    const trimmed = path.trim();
+    if (trimmed.startsWith("body.")) {
+      const field = trimmed.slice(5).trim();
+      if (field) {
+        const rootField = field.split(".")[0];
+        if (rootField && /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(rootField)) {
+          fields.add(rootField);
+        }
+      }
+    } else if (
+      !trimmed.includes(".") &&
+      !trimmed.startsWith("inline:") &&
+      !trimmed.startsWith("`") &&
+      !trimmed.startsWith('"') &&
+      !trimmed.startsWith("'") &&
+      trimmed !== "body" &&
+      trimmed !== "headers" &&
+      trimmed !== "params" &&
+      trimmed !== "query" &&
+      trimmed !== "env" &&
+      /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(trimmed)
+    ) {
+      fields.add(trimmed);
+    }
+  }
+
+  for (const step of steps) {
+    if (!step || step.enabled === false) continue;
+
+    // 1. LangGraph invoke step
+    if (step.type === "langgraph_invoke") {
+      if (step.langGraphThreadIdSource) {
+        visitPath(step.langGraphThreadIdSource);
+      }
+      if (step.langGraphStateMapping && typeof step.langGraphStateMapping === "object") {
+        for (const p of Object.values(step.langGraphStateMapping)) {
+          visitPath(p);
+        }
+      } else if (!step.inputBindings || step.inputBindings.length === 0) {
+        fields.add("message");
+      }
+      if (step.langGraphStreamingRoom) {
+        visitPath(step.langGraphStreamingRoom);
+      }
+      if (step.langGraphStreamingKafkaKey) {
+        visitPath(step.langGraphStreamingKafkaKey);
+      }
+      if (step.langGraphStreamingRedisKey) {
+        visitPath(step.langGraphStreamingRedisKey);
+      }
+    }
+
+    // 2. Input bindings
+    if (Array.isArray(step.inputBindings)) {
+      for (const b of step.inputBindings) {
+        visitSource(b.source);
+      }
+    }
+
+    // 3. Condition step
+    if (step.conditionExpr) {
+      visitConditionExpr(step.conditionExpr);
+    }
+
+    // 4. Switch step
+    if (step.switchSource) {
+      visitSource(step.switchSource);
+    }
+
+    // 5. Loop step
+    if (step.loopSource) {
+      visitSource(step.loopSource);
+    }
+
+    // 6. Nested control flow steps
+    if (Array.isArray(step.thenSteps)) {
+      for (const f of collectReferencedBodyFields(step.thenSteps)) fields.add(f);
+    }
+    if (Array.isArray(step.elseSteps)) {
+      for (const f of collectReferencedBodyFields(step.elseSteps)) fields.add(f);
+    }
+    if (Array.isArray(step.trySteps)) {
+      for (const f of collectReferencedBodyFields(step.trySteps)) fields.add(f);
+    }
+    if (Array.isArray(step.catchSteps)) {
+      for (const f of collectReferencedBodyFields(step.catchSteps)) fields.add(f);
+    }
+    if (Array.isArray(step.switchCases)) {
+      for (const c of step.switchCases) {
+        if (Array.isArray(c.steps)) {
+          for (const f of collectReferencedBodyFields(c.steps)) fields.add(f);
+        }
+      }
+    }
+    if (Array.isArray(step.switchDefault)) {
+      for (const f of collectReferencedBodyFields(step.switchDefault)) fields.add(f);
+    }
+    if (Array.isArray(step.parallelBranches)) {
+      for (const br of step.parallelBranches) {
+        if (Array.isArray(br.steps)) {
+          for (const f of collectReferencedBodyFields(br.steps)) fields.add(f);
+        }
+      }
+    }
+    if (Array.isArray(step.loopBody)) {
+      for (const f of collectReferencedBodyFields(step.loopBody)) fields.add(f);
+    }
+  }
+
+  return fields;
+}
+
+/**
+ * Ensures that all body fields referenced by an endpoint's pipeline steps
+ * are present in the endpoint's requestBody schema and TypeScript definition.
+ */
+export function normalizeEndpointRequestBody<T extends Endpoint>(ep: T): T {
+  const referencedFields = collectReferencedBodyFields(ep.pipelineSteps);
+  if (referencedFields.size === 0) return ep;
+
+  const currentReqBody = ep.requestBody;
+  const currentFields = currentReqBody?.fields ? [...currentReqBody.fields] : [];
+  const existingFieldNames = new Set(
+    currentFields.map((f) => f.name?.toLowerCase().trim()).filter(Boolean),
+  );
+
+  let rawJsonObj: JSONObject | null = null;
+  if (currentReqBody?.rawJson) {
+    const parsed = parseSchemaJson(currentReqBody.rawJson);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      rawJsonObj = { ...parsed };
+      for (const k of Object.keys(rawJsonObj)) {
+        existingFieldNames.add(k.toLowerCase().trim());
+      }
+    }
+  }
+
+  let hasAdded = false;
+  for (const field of referencedFields) {
+    if (!field || existingFieldNames.has(field.toLowerCase().trim())) continue;
+
+    hasAdded = true;
+    existingFieldNames.add(field.toLowerCase().trim());
+
+    const lower = field.toLowerCase();
+    const type =
+      lower.includes("messages") || lower.includes("items") || lower.includes("list")
+        ? "array"
+        : "string";
+
+    currentFields.push({
+      id: `field_auto_${field}`,
+      name: field,
+      type,
+      required: false,
+      description: `Auto-provisioned parameter for pipeline step: ${field}`,
+    });
+
+    if (rawJsonObj) {
+      rawJsonObj[field] = type === "array" ? [] : "";
+    }
+  }
+
+  if (!hasAdded) return ep;
+
+  const nextReqBody = {
+    ...(currentReqBody || { id: `req_${ep.id || "ep"}` }),
+    fields: currentFields,
+    ...(rawJsonObj ? { rawJson: JSON.stringify(rawJsonObj, null, 2) } : {}),
+  };
+
+  return {
+    ...ep,
+    requestBody: nextReqBody,
+  };
 }
 
 
