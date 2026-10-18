@@ -48,6 +48,13 @@ export const ServiceConfig: React.FC<ServiceConfigProps> = ({ id, nodeId }) => {
 
   const [activeTab, setActiveTab] = useState<string>("settings");
 
+  // Auto-seed default env vars if missing
+  useEffect(() => {
+    if (!node || node.data.envVars !== undefined) return;
+    const defaults = getDefaultNodeEnvVars("service", node.data);
+    updateNode(nodeId, { data: { ...node.data, envVars: defaults } });
+  }, [nodeId, node?.data?.envVars, updateNode]);
+
   if (!node) return null;
 
   const data = node.data;
@@ -55,14 +62,6 @@ export const ServiceConfig: React.FC<ServiceConfigProps> = ({ id, nodeId }) => {
   const updateData = (changes: Partial<typeof data>) => {
     updateNode(nodeId, { data: { ...data, ...changes } });
   };
-
-  // Auto-seed default env vars if missing
-  useEffect(() => {
-    if (data.envVars === undefined) {
-      const defaults = getDefaultNodeEnvVars("service", data);
-      updateData({ envVars: defaults });
-    }
-  }, [nodeId, data.envVars]);
 
   const serviceLabel = data.label || "Service";
   const port = String(data.port || "8080");

@@ -29,12 +29,10 @@ export interface EntityFunctionsConfigProps {
   nodeId: string;
 }
 
-export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
-  nodeId,
-}) => {
-  const node = useBackendCanvasStore((s) =>
-    s.nodes.find((n) => n.id === nodeId),
-  );
+const EntityFunctionsConfigContent: React.FC<{
+  node: NonNullable<ReturnType<typeof useBackendCanvasStore.getState>["nodes"][0]>;
+  nodeId: string;
+}> = ({ node, nodeId }) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const allNodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
@@ -43,14 +41,6 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
   const [selectedOpId, setSelectedOpId] = useState<string | null>(null);
   const [isNewOp, setIsNewOp] = useState<boolean>(false);
   const [opToDelete, setOpToDelete] = useState<{ id: string; name: string } | null>(null);
-
-  if (!node || (node.type !== "entity" && node.type !== "redis_schema")) {
-    return (
-      <div className="p-4 text-sm text-muted-foreground">
-        Entity node not found.
-      </div>
-    );
-  }
 
   const isRedis =
     node.type === "redis_schema" ||
@@ -406,4 +396,22 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
       </AlertDialog>
     </>
   );
+};
+
+export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
+  nodeId,
+}) => {
+  const node = useBackendCanvasStore((s) =>
+    s.nodes.find((n) => n.id === nodeId),
+  );
+
+  if (!node || (node.type !== "entity" && node.type !== "redis_schema")) {
+    return (
+      <div className="p-4 text-sm text-muted-foreground">
+        Entity node not found.
+      </div>
+    );
+  }
+
+  return <EntityFunctionsConfigContent node={node} nodeId={nodeId} />;
 };

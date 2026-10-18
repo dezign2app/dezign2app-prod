@@ -33,16 +33,17 @@ interface DatabaseTableRefConfigProps {
   nodeId: string;
 }
 
-export function DatabaseTableRefConfig({ id, nodeId }: DatabaseTableRefConfigProps) {
+function DatabaseTableRefConfigContent({
+  id,
+  nodeId,
+  refNode,
+}: DatabaseTableRefConfigProps & { refNode: NonNullable<ReturnType<typeof useBackendCanvasStore.getState>["nodes"][0]> }) {
   const router = useRouter();
   const projectId = useBackendCanvasStore((s) => s.projectId);
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
-
-  const refNode = nodes.find((n) => n.id === nodeId);
-  if (!refNode) return null;
 
   const data = refNode.data || {};
 
@@ -389,4 +390,12 @@ export function DatabaseTableRefConfig({ id, nodeId }: DatabaseTableRefConfigPro
       </div>
     </div>
   );
+}
+
+export function DatabaseTableRefConfig({ id, nodeId }: DatabaseTableRefConfigProps) {
+  const nodes = useBackendCanvasStore((s) => s.nodes);
+  const refNode = nodes.find((n) => n.id === nodeId);
+  if (!refNode) return null;
+
+  return <DatabaseTableRefConfigContent id={id} nodeId={nodeId} refNode={refNode} />;
 }

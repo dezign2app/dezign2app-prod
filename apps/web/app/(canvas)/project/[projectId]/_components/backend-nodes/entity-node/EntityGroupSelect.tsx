@@ -31,7 +31,10 @@ interface GroupOption {
   memberCount?: number;
 }
 
-export const EntityGroupSelect: React.FC<EntityGroupSelectProps> = ({
+const EntityGroupSelectContent: React.FC<
+  EntityGroupSelectProps & { node: BackendNode }
+> = ({
+  node,
   nodeId,
   variant = "button",
   size = "default",
@@ -44,9 +47,6 @@ export const EntityGroupSelect: React.FC<EntityGroupSelectProps> = ({
 
   const [isOpen, setIsOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
-
-  const node = allNodes.find((n) => n.id === nodeId);
-  if (!node) return null;
 
   // Existing group nodes on canvas
   const canvasGroups = useMemo((): GroupOption[] => {
@@ -485,4 +485,13 @@ export const EntityGroupSelect: React.FC<EntityGroupSelectProps> = ({
       {popoverContent}
     </Popover>
   );
+};
+
+export const EntityGroupSelect: React.FC<EntityGroupSelectProps> = (props) => {
+  const allNodes = useBackendCanvasStore((s) => s.nodes);
+  const node = allNodes.find((n) => n.id === props.nodeId);
+
+  if (!node) return null;
+
+  return <EntityGroupSelectContent {...props} node={node} />;
 };
