@@ -160,10 +160,50 @@ export function partitionEntitiesIntoFunctionalGroups(
     const parentId = entity.parentId || entity.data?.groupId;
     if (parentId && groupById.has(parentId)) {
       const gNode = groupById.get(parentId)!;
-      const gTitle = gNode.data?.label || "Custom Group";
-      const existing = customGroupMap.get(parentId) || { title: gTitle, entities: [], groupNode: gNode };
+      const gTitle = (gNode.data?.label || "").toLowerCase().trim();
+      if (gTitle.includes("auth")) {
+        authEntities.push(entity);
+        return;
+      }
+      if (gTitle.includes("langgraph")) {
+        langgraphEntities.push(entity);
+        return;
+      }
+      if (gTitle.includes("application") || gTitle === "app" || gTitle.includes("domain")) {
+        appEntities.push(entity);
+        return;
+      }
+      const existing = customGroupMap.get(parentId) || { title: gNode.data?.label || "Custom Group", entities: [], groupNode: gNode };
       existing.entities.push(entity);
       customGroupMap.set(parentId, existing);
+      return;
+    }
+
+    const explicitGroupName = (entity.data?.group || "").toLowerCase().trim();
+    if (explicitGroupName) {
+      if (explicitGroupName.includes("auth")) {
+        authEntities.push(entity);
+        return;
+      }
+      if (explicitGroupName.includes("langgraph")) {
+        langgraphEntities.push(entity);
+        return;
+      }
+      if (explicitGroupName.includes("application") || explicitGroupName === "app" || explicitGroupName.includes("domain")) {
+        appEntities.push(entity);
+        return;
+      }
+      const matchedGroup =
+        groupByLabel.get(explicitGroupName) ||
+        (entity.data?.groupId ? groupById.get(entity.data.groupId) : undefined);
+      const groupKey = matchedGroup?.id || explicitGroupName;
+      const existing = customGroupMap.get(groupKey) || {
+        title: matchedGroup?.data?.label || entity.data?.group || "Custom Group",
+        entities: [],
+        groupNode: matchedGroup,
+      };
+      existing.entities.push(entity);
+      customGroupMap.set(groupKey, existing);
       return;
     }
 

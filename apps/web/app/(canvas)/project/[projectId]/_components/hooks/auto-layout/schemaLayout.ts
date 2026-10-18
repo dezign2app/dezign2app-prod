@@ -85,9 +85,9 @@ function layoutIsolatedCluster(
 
   // Group container padding and gaps
   const GROUP_PAD_X = 36;
-  const GROUP_HEADER_TOP = 64; // Header tab space at top-left
-  const GROUP_PAD_BOTTOM = 36;
-  const GROUP_GAP_X = 90; // Side-by-side gap between groups
+  const GROUP_HEADER_TOP = 130; // Header tab space at top-left to provide generous gap between group label and tables
+  const GROUP_PAD_BOTTOM = 80; // Bottom clearance to ensure tall entity tables never overflow group boundary
+  const GROUP_GAP_X = 100; // Side-by-side gap between groups
   const STORAGE_TO_GROUPS_GAP_Y = 130; // Vertical gap between DB node and groups
 
   const storageDim = cluster.storageNode
@@ -200,7 +200,7 @@ function layoutIsolatedCluster(
     const groupEntitiesHeight = maxY - minY;
 
     const groupWidth = Math.max(450, groupEntitiesWidth + GROUP_PAD_X * 2);
-    const groupHeight = Math.max(280, groupEntitiesHeight + GROUP_HEADER_TOP + GROUP_PAD_BOTTOM);
+    const groupHeight = Math.max(340, groupEntitiesHeight + GROUP_HEADER_TOP + GROUP_PAD_BOTTOM);
 
     // Entity positions relative to this group container's top-left corner
     const groupLocalEntityPositions = new Map<string, { x: number; y: number }>();
@@ -655,6 +655,34 @@ export function performSchemaLayout({
     processClusterResult(unassignedResult, clusterOriginX, clusterOriginY);
   }
 
+  // 5.5 Position any remaining empty existing group nodes cleanly so they never overlap active clusters
+  const positionedGroupIds = new Set(allFinalGroupNodes.map((g) => g.id));
+  const emptyExistingGroups = existingGroupNodes.filter(
+    (g) => !positionedGroupIds.has(g.id),
+  );
+
+  if (emptyExistingGroups.length > 0) {
+    const EMPTY_GROUP_GAP_X = 90;
+    let emptyGroupX = curX + (curX > START_X ? SECTION_GAP_X : 0);
+    emptyExistingGroups.forEach((eg) => {
+      const w = 450;
+      const h = 280;
+      positionsMap.set(eg.id, {
+        x: emptyGroupX,
+        y: START_Y,
+      });
+      allFinalGroupNodes.push({
+        ...eg,
+        position: { x: emptyGroupX, y: START_Y },
+        width: w,
+        height: h,
+        style: { width: w, height: h },
+      });
+      emptyGroupX += w + EMPTY_GROUP_GAP_X;
+    });
+    curX = Math.max(curX, emptyGroupX);
+  }
+
   // 6. Canvas origin margin check
   let globalMinX = Infinity;
   let globalMinY = Infinity;
@@ -726,6 +754,11 @@ export function performSchemaLayout({
         finalDataMap.set(n.id, n.data);
       });
 
+      const finalGroupMap = new Map<string, LayoutNode>();
+      allFinalGroupNodes.forEach((gn) => {
+        finalGroupMap.set(gn.id, gn);
+      });
+
       const existingNodeMap = new Map<string, BackendNode>();
       state.nodes.forEach((n) => {
         existingNodeMap.set(n.id, n);
@@ -734,12 +767,30 @@ export function performSchemaLayout({
       const updatedExistingNodes: BackendNode[] = state.nodes.map((node) => {
         const pos = positionsMap.get(node.id);
         const finalData = finalDataMap.get(node.id);
-        if (!pos && !finalData) return node;
+        const isGroup = node.type === "group";
+        const groupLayout = isGroup ? finalGroupMap.get(node.id) : undefined;
+
+        if (!pos && !finalData && !groupLayout) return node;
 
         const isDb = storageNodeIdSet.has(node.id);
         const isTrans = node.type === "transformer";
 
-        const isGroup = node.type === "group";
+        if (isGroup && groupLayout) {
+          return {
+            ...node,
+            position: pos ?? node.position,
+            data: finalData ?? node.data,
+            width: groupLayout.width,
+            height: groupLayout.height,
+            style: {
+              ...node.style,
+              width: groupLayout.width,
+              height: groupLayout.height,
+              zIndex: -1,
+            },
+            zIndex: -1,
+          };
+        }
 
         return {
           ...node,
@@ -786,7 +837,14 @@ export function performSchemaLayout({
           (existing.data?.groupId !== finalData?.groupId ||
             existing.data?.group !== finalData?.group);
 
-        if (hasPosChanged || hasDataChanged) {
+        const isGroup = existing.type === "group";
+        const groupLayout = isGroup ? finalGroupMap.get(id) : undefined;
+        const hasSizeChanged =
+          Boolean(groupLayout) &&
+          (existing.width !== groupLayout?.width ||
+            existing.height !== groupLayout?.height);
+
+        if (hasPosChanged || hasDataChanged || hasSizeChanged) {
           movedNodeIds.add(id);
         }
       });

@@ -146,7 +146,7 @@ export const SchemaGroupNode = ({
       >
         <div
           ref={containerRef}
-          className="absolute top-0 left-0 bg-secondary/80 px-4 py-1.5 rounded-br-lg rounded-tl-lg border-r-2 border-b-2 border-border flex flex-col gap-0.5 cursor-text min-w-[150px]"
+          className="absolute top-0 left-0 bg-secondary/90 backdrop-blur-md px-3.5 py-1.5 rounded-br-xl rounded-tl-lg border-r-2 border-b-2 border-border flex flex-col gap-0.5 cursor-text min-w-[160px] shadow-sm"
           onDoubleClick={(e) => {
             e.stopPropagation();
             setIsEditing(true);
@@ -155,7 +155,7 @@ export const SchemaGroupNode = ({
           }}
         >
           {isEditing ? (
-            <div className="flex flex-col gap-1 nodrag">
+            <div className="flex flex-col gap-0.5 nodrag">
               <input
                 ref={inputRef}
                 value={editValue}
@@ -180,7 +180,7 @@ export const SchemaGroupNode = ({
                   }
                 }}
                 className={cn(
-                  "bg-transparent border-none outline-none p-0 m-0 w-full focus:ring-0 text-sm font-semibold placeholder:text-muted-foreground/50",
+                  "bg-transparent border-none outline-none p-0 m-0 w-full focus:ring-0 text-sm md:text-base font-bold tracking-tight placeholder:text-muted-foreground/50",
                   isError && "text-red-500",
                 )}
               />
@@ -218,34 +218,30 @@ export const SchemaGroupNode = ({
                 {(() => {
                   const lbl = (data.label || "").toLowerCase();
                   if (lbl.includes("auth")) {
-                    return <ShieldCheck className="w-3.5 h-3.5 text-sky-400 shrink-0" />;
+                    return <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0" />;
                   }
                   if (lbl.includes("langgraph")) {
-                    return <Workflow className="w-3.5 h-3.5 text-purple-400 shrink-0" />;
+                    return <Workflow className="w-4 h-4 text-purple-400 shrink-0" />;
                   }
-                  return <Table2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />;
+                  return <Table2 className="w-4 h-4 text-amber-400 shrink-0" />;
                 })()}
-                <span className="font-semibold text-xs tracking-tight">
+                <span className="font-bold text-sm md:text-base tracking-tight text-foreground">
                   {data.label || "Untitled Group"}
                 </span>
                 {data.badge && (
                   <Badge
                     variant="outline"
-                    className="text-[9px] px-1 py-0 font-mono bg-background/50 border-border/60"
+                    className="text-[9px] px-1 py-0 font-mono bg-background/50 border-border/60 font-medium"
                   >
                     {data.badge}
                   </Badge>
                 )}
               </div>
               {data.description ? (
-                <span className="text-[10px] text-muted-foreground/75 font-normal max-w-[240px] truncate">
+                <span className="text-[10px] text-muted-foreground/75 font-normal max-w-[260px] truncate leading-tight">
                   {data.description}
                 </span>
-              ) : (
-                <span className="text-[10px] text-muted-foreground/30 font-normal italic">
-                  double-click to describe
-                </span>
-              )}
+              ) : null}
             </div>
           )}
         </div>

@@ -211,7 +211,7 @@ describe("hangingStateStoreLayout - Auto-Layout for Hanging State Store Nodes", 
         position: { x: 0, y: 0 },
         data: {
           label: "web",
-          zones: [{ id: "zone-public", handleId: "public-in", name: "Public Section" }],
+          zones: [{ id: "zone-public", handleId: "public-in", name: "Public Section", accessType: "public" }],
         },
       },
       {

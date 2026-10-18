@@ -7,3 +7,4 @@ export * from "./OperationTestStudio";
 export * from "./ConnectedDatabasesSection";
 export * from "./test-studio";
 export * from "./function-editor";
+export { EntityGroupSelect } from "../../backend-nodes/entity-node/EntityGroupSelect";

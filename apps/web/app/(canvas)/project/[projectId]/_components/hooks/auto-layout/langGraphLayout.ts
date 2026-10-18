@@ -33,7 +33,12 @@ const LANGGRAPH_HEAD_HANDLES = new Set([
 // Subsequent columns are ordered: Tool | LLM | Middleware
 export type DefColumnId = "state" | "tool" | "llm" | "middleware";
 
-export function isStateStoreNode(node: { id: string; type?: string }): boolean {
+export function isStateStoreNode(node: {
+  id: string;
+  type?: string;
+  position?: { x: number; y: number };
+  data?: object;
+}): boolean {
   const type = node.type || "";
   const id   = node.id   || "";
   return (
@@ -45,7 +50,12 @@ export function isStateStoreNode(node: { id: string; type?: string }): boolean {
   );
 }
 
-export function isMemoryNode(node: { id: string; type?: string }): boolean {
+export function isMemoryNode(node: {
+  id: string;
+  type?: string;
+  position?: { x: number; y: number };
+  data?: object;
+}): boolean {
   const type = node.type || "";
   const id   = node.id   || "";
   return (
@@ -57,7 +67,12 @@ export function isMemoryNode(node: { id: string; type?: string }): boolean {
   );
 }
 
-export function getDefColumn(node: { id: string; type?: string }): DefColumnId | null {
+export function getDefColumn(node: {
+  id: string;
+  type?: string;
+  position?: { x: number; y: number };
+  data?: object;
+}): DefColumnId | null {
   const type = node.type || "";
 
   if (isStateStoreNode(node) || isMemoryNode(node))
@@ -72,14 +87,24 @@ export function getDefColumn(node: { id: string; type?: string }): DefColumnId |
   return null; // not a definition node → belongs in topology
 }
 
-export function isLangGraphDefinitionNode(node: { id: string; type?: string }): boolean {
+export function isLangGraphDefinitionNode(node: {
+  id: string;
+  type?: string;
+  position?: { x: number; y: number };
+  data?: object;
+}): boolean {
   return getDefColumn(node) !== null;
 }
 
 // Ordered column list (left → right)
 export const DEF_COLUMN_ORDER: DefColumnId[] = ["state", "tool", "llm", "middleware"];
 
-export function isStartNode(node: { id: string; type?: string; data?: object }): boolean {
+export function isStartNode(node: {
+  id: string;
+  type?: string;
+  data?: object;
+  position?: { x: number; y: number };
+}): boolean {
   const type = node.type || "";
   const id = node.id || "";
   if (id === "START" || type === "start" || type === "START") {
@@ -92,7 +117,12 @@ export function isStartNode(node: { id: string; type?: string; data?: object }):
   return false;
 }
 
-export function isEndNode(node: { id: string; type?: string; data?: object }): boolean {
+export function isEndNode(node: {
+  id: string;
+  type?: string;
+  data?: object;
+  position?: { x: number; y: number };
+}): boolean {
   const type = node.type || "";
   const id = node.id || "";
   if (
@@ -116,7 +146,12 @@ export function isEndNode(node: { id: string; type?: string; data?: object }): b
  * Ignores definition nodes (state, tools, llm, middleware) and any disconnected nodes.
  */
 export function getLangGraphFlowNodes<
-  TNode extends { id: string; type?: string; data?: object },
+  TNode extends {
+    id: string;
+    type?: string;
+    data?: object;
+    position?: { x: number; y: number };
+  },
   TEdge extends { source: string; target: string; type?: string; targetHandle?: string | null }
 >(
   nodes: TNode[],

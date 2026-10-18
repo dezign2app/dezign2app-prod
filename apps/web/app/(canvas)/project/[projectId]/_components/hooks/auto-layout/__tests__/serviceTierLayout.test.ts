@@ -6,11 +6,11 @@ import type { LayoutNode, LayoutEdge } from "../types";
 describe("Service Tier Auto Layout - Level 1 alignment and intra-tier invocation", () => {
   it("aligns all client-invoked servers at Level 1, and downstream servers at Level 2", () => {
     const nodes: LayoutNode[] = [
-      { id: "client", type: "webPage", position: { x: 0, y: 0 }, data: {} },
-      { id: "service-1", type: "service", position: { x: 0, y: 0 }, data: {} },
-      { id: "service-2", type: "service", position: { x: 0, y: 0 }, data: {} },
-      { id: "service-3", type: "service", position: { x: 0, y: 0 }, data: {} },
-      { id: "service-4", type: "service", position: { x: 0, y: 0 }, data: {} },
+      { id: "client", type: "webPage", position: { x: 0, y: 0 }, data: { label: "client" } },
+      { id: "service-1", type: "service", position: { x: 0, y: 0 }, data: { label: "service-1" } },
+      { id: "service-2", type: "service", position: { x: 0, y: 0 }, data: { label: "service-2" } },
+      { id: "service-3", type: "service", position: { x: 0, y: 0 }, data: { label: "service-3" } },
+      { id: "service-4", type: "service", position: { x: 0, y: 0 }, data: { label: "service-4" } },
     ];
 
     const edges: LayoutEdge[] = [
@@ -37,9 +37,9 @@ describe("Service Tier Auto Layout - Level 1 alignment and intra-tier invocation
     // service-1 also invokes service-2.
     // Both service-1 and service-2 must remain at Level 1.
     const nodes: LayoutNode[] = [
-      { id: "client", type: "webPage", position: { x: 0, y: 0 }, data: {} },
-      { id: "service-1", type: "service", position: { x: 0, y: 0 }, data: {} },
-      { id: "service-2", type: "service", position: { x: 0, y: 0 }, data: {} },
+      { id: "client", type: "webPage", position: { x: 0, y: 0 }, data: { label: "client" } },
+      { id: "service-1", type: "service", position: { x: 0, y: 0 }, data: { label: "service-1" } },
+      { id: "service-2", type: "service", position: { x: 0, y: 0 }, data: { label: "service-2" } },
     ];
 
     const edges: LayoutEdge[] = [
@@ -61,9 +61,9 @@ describe("Service Tier Auto Layout - Level 1 alignment and intra-tier invocation
 
   it("positions service-1 and service-2 at the same X coordinate in performGraphLayout", () => {
     const nodes: LayoutNode[] = [
-      { id: "client", type: "webPage", position: { x: 0, y: 0 }, data: {} },
-      { id: "service-1", type: "service", position: { x: 0, y: 0 }, data: {} },
-      { id: "service-2", type: "service", position: { x: 0, y: 0 }, data: {} },
+      { id: "client", type: "webPage", position: { x: 0, y: 0 }, data: { label: "client" } },
+      { id: "service-1", type: "service", position: { x: 0, y: 0 }, data: { label: "service-1" } },
+      { id: "service-2", type: "service", position: { x: 0, y: 0 }, data: { label: "service-2" } },
     ];
 
     const edges: LayoutEdge[] = [

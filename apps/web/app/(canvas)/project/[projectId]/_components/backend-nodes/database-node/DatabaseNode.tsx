@@ -1,11 +1,13 @@
 import React from "react";
 import { useParams } from "next/navigation";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Database, Trash, Settings, Server, Palette, Key, Table2, KeyRound, Zap } from "lucide-react";
+import { Database, Trash, Settings, Server, Palette, Key, Table2, KeyRound, Zap, RefreshCw } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Badge } from "@workspace/ui/components/badge";
+import { Button } from "@workspace/ui/components/button";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { useDbSyncStore } from "@/lib/stores/dbSyncStore";
 import { DEFAULT_DATABASE_NODE_LABEL, DEFAULT_DATABASE_ENGINE } from "@workspace/canvas";
 
 import { NodeHeader } from "../graph-nodes/common";
@@ -33,6 +35,10 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
     (s) => s.requestDeleteNode,
   );
   const allNodes = useBackendCanvasStore((s) => s.nodes);
+  const validateDatabase = useDbSyncStore((s) => s.validateDatabase);
+  const isValidatingThisDb = useDbSyncStore(
+    (s) => Boolean(s.validatingDatabases[id] || s.isValidatingAll),
+  );
 
   const engine = data.dbEngine || DEFAULT_DATABASE_ENGINE;
   const color = data.color || "#f59e0b"; // Default to Amber
@@ -224,15 +230,39 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
           </div>
         )}
 
-        {/* Connected Entities Counter */}
-        <div className="flex items-center justify-between pt-1 border-t border-border/40 text-[11px] text-muted-foreground">
-          <div className="flex items-center gap-1">
+        {/* Connected Entities Counter & Validate DB Button */}
+        <div className="flex items-center justify-between pt-2 border-t border-border/40 text-[11px] nodrag">
+          <div className="flex items-center gap-1.5 text-muted-foreground">
             <Table2 size={12} style={{ color }} />
             <span>Hanging Tables</span>
+            <span className="font-semibold text-foreground bg-secondary px-1.5 py-0.2 rounded-full text-[10px]">
+              {attachedTables.length}
+            </span>
           </div>
-          <span className="font-semibold text-foreground bg-secondary px-1.5 rounded-full">
-            {attachedTables.length}
-          </span>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={isValidatingThisDb || attachedTables.length === 0}
+            onClick={(e) => {
+              e.stopPropagation();
+              validateDatabase(id);
+            }}
+            className="h-7 px-2.5 text-xs text-foreground hover:bg-secondary/80 border border-border/50 hover:border-emerald-500/40 rounded-lg gap-1.5 shadow-xs transition-colors"
+            title={
+              attachedTables.length === 0
+                ? "No tables connected to this database"
+                : "Validate schema of all tables attached to this database against live DB"
+            }
+          >
+            <RefreshCw
+              className={cn(
+                "w-3.5 h-3.5 text-emerald-500",
+                isValidatingThisDb && "animate-spin",
+              )}
+            />
+            <span>{isValidatingThisDb ? "Validating DB..." : "Validate DB"}</span>
+          </Button>
         </div>
       </div>
 

@@ -112,37 +112,37 @@ describe("LangGraph Auto Layout - Flow-focused Panning (START to END)", () => {
         id: "STATE_GLOBAL",
         type: "state_global",
         position: { x: 0, y: 0 },
-        data: {},
+        data: { label: "STATE_GLOBAL" },
       },
       {
         id: "tool_1",
         type: "langgraph_tool",
         position: { x: 0, y: 0 },
-        data: {},
+        data: { label: "tool_1" },
       },
       {
         id: "START",
         type: "start",
         position: { x: 0, y: 0 },
-        data: {},
+        data: { label: "START" },
       },
       {
         id: "step_main",
         type: "step",
         position: { x: 0, y: 0 },
-        data: {},
+        data: { label: "step_main" },
       },
       {
         id: "END",
         type: "end",
         position: { x: 0, y: 0 },
-        data: {},
+        data: { label: "END" },
       },
       {
         id: "orphan_node",
         type: "step",
         position: { x: 0, y: 0 },
-        data: {},
+        data: { label: "orphan_node" },
       },
     ];
 
@@ -185,11 +185,11 @@ describe("LangGraph Auto Layout - Flow-focused Panning (START to END)", () => {
 
   it("handles cyclical graphs (agent-tool loop) correctly", () => {
     const nodes: LayoutNode[] = [
-      { id: "STATE_GLOBAL", type: "state_global", position: { x: 0, y: 0 }, data: {} },
-      { id: "START", type: "start", position: { x: 0, y: 0 }, data: {} },
-      { id: "agent", type: "step", position: { x: 0, y: 0 }, data: {} },
-      { id: "tool_step", type: "step", position: { x: 0, y: 0 }, data: {} },
-      { id: "END", type: "end", position: { x: 0, y: 0 }, data: {} },
+      { id: "STATE_GLOBAL", type: "state_global", position: { x: 0, y: 0 }, data: { label: "STATE_GLOBAL" } },
+      { id: "START", type: "start", position: { x: 0, y: 0 }, data: { label: "START" } },
+      { id: "agent", type: "step", position: { x: 0, y: 0 }, data: { label: "agent" } },
+      { id: "tool_step", type: "step", position: { x: 0, y: 0 }, data: { label: "tool_step" } },
+      { id: "END", type: "end", position: { x: 0, y: 0 }, data: { label: "END" } },
     ];
 
     const edges: LayoutEdge[] = [

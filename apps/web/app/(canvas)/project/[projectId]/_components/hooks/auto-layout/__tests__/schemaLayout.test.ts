@@ -596,40 +596,46 @@ describe("schemaLayout - Isolated Multi-Cluster Auto-Layout for N Databases & M 
 
     const nodes: LayoutNode[] = [
       dbNode,
-      ...authTableNames.map((name) => ({
-        id: `table-${name}`,
-        type: "entity" as const,
-        position: { x: 0, y: 0 },
-        data: {
-          label: name,
-          tableName: name,
-          databaseId: dbId,
-          columns: [{ name: "id", type: "UUID", isPrimaryKey: true }],
-        },
-      })),
-      ...langgraphTableNames.map((name) => ({
-        id: `table-${name}`,
-        type: "entity" as const,
-        position: { x: 0, y: 0 },
-        data: {
-          label: name,
-          tableName: name,
-          databaseId: dbId,
-          systemBadge: "langgraph",
-          columns: [{ name: "thread_id", type: "TEXT", isPrimaryKey: true }],
-        },
-      })),
-      ...appTableNames.map((name) => ({
-        id: `table-${name}`,
-        type: "entity" as const,
-        position: { x: 0, y: 0 },
-        data: {
-          label: name,
-          tableName: name,
-          databaseId: dbId,
-          columns: [{ name: "id", type: "UUID", isPrimaryKey: true }],
-        },
-      })),
+      ...authTableNames.map(
+        (name): LayoutNode => ({
+          id: `table-${name}`,
+          type: "entity",
+          position: { x: 0, y: 0 },
+          data: {
+            label: name,
+            tableName: name,
+            databaseId: dbId,
+            columns: [{ name: "id", type: "UUID", isPrimaryKey: true }],
+          },
+        }),
+      ),
+      ...langgraphTableNames.map(
+        (name): LayoutNode => ({
+          id: `table-${name}`,
+          type: "entity",
+          position: { x: 0, y: 0 },
+          data: {
+            label: name,
+            tableName: name,
+            databaseId: dbId,
+            systemBadge: "langgraph",
+            columns: [{ name: "thread_id", type: "TEXT", isPrimaryKey: true }],
+          },
+        }),
+      ),
+      ...appTableNames.map(
+        (name): LayoutNode => ({
+          id: `table-${name}`,
+          type: "entity",
+          position: { x: 0, y: 0 },
+          data: {
+            label: name,
+            tableName: name,
+            databaseId: dbId,
+            columns: [{ name: "id", type: "UUID", isPrimaryKey: true }],
+          },
+        }),
+      ),
     ];
 
     const edges: LayoutEdge[] = [
@@ -729,4 +735,82 @@ describe("schemaLayout - Isolated Multi-Cluster Auto-Layout for N Databases & M 
     expect(dbPos.x).toBeGreaterThan(leftMostX);
     expect(dbPos.x).toBeLessThan(rightMostX);
   });
+
+  it("respects user explicit group selection via data.group and places entity inside that group container", () => {
+    const dbId = "postgres-main";
+    const dbNode: LayoutNode = {
+      id: dbId,
+      type: "database",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Primary PostgreSQL DB",
+        dbEngine: "postgres",
+        dbType: "relational",
+        isDefault: true,
+      },
+    };
+
+    // User explicitly assigns custom table "custom_logs" to Authentication group
+    const customAuthTable: LayoutNode = {
+      id: "table-custom-logs",
+      type: "entity",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "custom_logs",
+        tableName: "custom_logs",
+        databaseId: dbId,
+        group: "Authentication",
+        columns: [{ name: "id", type: "string", isPrimaryKey: true }],
+      },
+    };
+
+    // User explicitly assigns table "products" to a custom group "Inventory"
+    const inventoryTable: LayoutNode = {
+      id: "table-products",
+      type: "entity",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "products",
+        tableName: "products",
+        databaseId: dbId,
+        group: "Inventory",
+        columns: [{ name: "id", type: "string", isPrimaryKey: true }],
+      },
+    };
+
+    const nodes: LayoutNode[] = [dbNode, customAuthTable, inventoryTable];
+    const edges: LayoutEdge[] = [];
+
+    let recordedChanges: PositionNodeChange[] = [];
+    const onNodesChange = vi.fn((changes: PositionNodeChange[]) => {
+      recordedChanges = changes;
+    });
+    const fitView = vi.fn();
+
+    performSchemaLayout({
+      nodes,
+      edges,
+      onNodesChange,
+      fitView,
+    });
+
+    expect(onNodesChange).toHaveBeenCalled();
+
+    // Group containers should include Authentication and Inventory
+    const groupChanges = recordedChanges.filter((c) => c.id.startsWith("group-"));
+    const authGroup = groupChanges.find((c) => c.id.includes("auth"));
+    const inventoryGroup = groupChanges.find((c) => c.id.includes("inventory"));
+
+    expect(authGroup).toBeDefined();
+    expect(inventoryGroup).toBeDefined();
+
+    // Custom logs is positioned inside the Authentication group bounds
+    const customLogsPos = recordedChanges.find((c) => c.id === "table-custom-logs")!.position;
+    expect(customLogsPos.x).toBeGreaterThanOrEqual(authGroup!.position.x);
+
+    // Products table is positioned inside the Inventory group bounds
+    const productsPos = recordedChanges.find((c) => c.id === "table-products")!.position;
+    expect(productsPos.x).toBeGreaterThanOrEqual(inventoryGroup!.position.x);
+  });
 });
+

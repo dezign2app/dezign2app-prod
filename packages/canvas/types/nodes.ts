@@ -11,6 +11,8 @@ import type {
   CanvasLangGraphNodeData,
   CanvasLangGraphStepNodeData,
   CanvasAINodeData,
+  LangGraphMemoryDefinition,
+  LangGraphMiddlewareDefinition,
 } from "./langgraph";
 import type { CanvasDatabaseNodeData, CanvasEntityNodeData } from "./database";
 import type {
@@ -299,6 +301,8 @@ export type BackendNodeData = BaseNodeData &
       CanvasPaymentsNodeData &
       CanvasLangGraphNodeData &
       CanvasLangGraphStepNodeData &
+      LangGraphMemoryDefinition &
+      LangGraphMiddlewareDefinition &
       CanvasPageRefNodeData &
       CanvasTransformerNodeData &
       CanvasTransformerRefNodeData &

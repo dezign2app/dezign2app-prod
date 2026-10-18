@@ -198,7 +198,7 @@ export function getNodeDimensions(node: LayoutNodeLike): {
     case "state_store": {
       const data = getLayoutNodeData(node);
       const fields = Array.isArray(data?.fields) ? data.fields : [];
-      const arrayFieldsCount = fields.filter((f: any) => Boolean(f?.isArray || f?.type === "array" || f?.type?.endsWith("[]"))).length;
+      const arrayFieldsCount = fields.filter((f) => Boolean(f?.isArray || f?.type === "array" || f?.type?.endsWith("[]"))).length;
       const actions = Array.isArray(data?.actions) ? data.actions.length : 0;
       const manipulatorsCount = 2 + fields.length + arrayFieldsCount * 2 + actions;
       const estHeight = Math.max(160, 75 + 24 + fields.length * 28 + 24 + manipulatorsCount * 24);
@@ -348,40 +348,62 @@ export function getNodeDimensions(node: LayoutNodeLike): {
       const colCount = columns.length > 0 ? columns.length : 1;
       const idxCount = indexes.length;
 
-      // Header: 68px (standard SQL with engine select) or 44px (vector/redis)
-      const headerH = isVector || isRedis ? 44 : 68;
-      // Description box is always rendered in EntityNode DOM (~44px)
-      const descH = 44;
-      // Vector config block (if vector db type): ~120px
+      // Realistic DOM heights from EntityNode components:
+      // - Node Header (title + icons + controls): ~44px
+      // - DB Node selector row: ~36px
+      // - Group selector row: ~32px
+      // - Description box: ~46px
+      // - Live DB sync status banner (if relational SQL): ~36px
+      // - Vector config block (if vector): ~120px
+      // - Redis config block (if redis): ~130px
+      // - Column list: section header (34px) + each column row (~50px)
+      // - Index list: section header (32px) + each index row (~42px)
+      // - DB Operations header: ~38px
+      // - Card borders and padding: ~28px
+      const headerH = isVector || isRedis ? 48 : 112; // NodeHeader + DB row + Group row
+      const descH = 46;
+      const syncBannerH = !isVector && !isRedis ? 36 : 0;
       const vectorConfigH = isVector ? 120 : 0;
-      // Redis config block (if redis db type): ~130px
       const redisConfigH = isRedis ? 130 : 0;
-      // Column list: rendered for relational, vector, or Redis Hash/JSON
       const showColumns =
         !isRedis ||
         redisStructure === "hash" ||
         redisStructure === "json" ||
         !redisStructure;
-      const columnsH = showColumns ? 24 + colCount * 42 : 0;
-      // Index list: header 24px + 44px per index row (if indexes present and not redis/vector)
-      const indexesH = !isRedis && !isVector && idxCount > 0 ? 24 + idxCount * 44 : 0;
-      // DbOperations list header: ~30px
-      const dbOpsH = 30;
-      // Card padding / bottom margin
-      const paddingH = 16;
+      const columnsH = showColumns ? 34 + colCount * 50 : 0;
+      const indexesH = !isRedis && !isVector && idxCount > 0 ? 32 + idxCount * 42 : 0;
+      const dbOpsH = 38;
+      const paddingH = 28;
 
       const estHeight =
-        headerH + descH + vectorConfigH + redisConfigH + columnsH + indexesH + dbOpsH + paddingH;
+        headerH + descH + syncBannerH + vectorConfigH + redisConfigH + columnsH + indexesH + dbOpsH + paddingH;
       const estWidth = 320;
 
-      if (isMeasured && measuredWidth !== undefined && measuredHeight !== undefined) {
-        return {
-          width: Math.max(measuredWidth, estWidth),
-          height: Math.max(measuredHeight, estHeight),
-        };
-      }
+      const realMeasuredHeight =
+        measured && "height" in measured && typeof measured.height === "number" && measured.height > 0
+          ? measured.height
+          : typeof (node).height === "number" && (node).height > 0
+            ? (node).height
+            : undefined;
 
-      return { width: estWidth, height: Math.max(220, estHeight) };
+      const realMeasuredWidth =
+        measured && "width" in measured && typeof measured.width === "number" && measured.width > 0
+          ? measured.width
+          : typeof (node).width === "number" && (node).width > 0
+            ? (node).width
+            : undefined;
+
+      const finalWidth =
+        realMeasuredWidth !== undefined
+          ? Math.max(realMeasuredWidth, estWidth)
+          : estWidth;
+
+      const finalHeight =
+        realMeasuredHeight !== undefined
+          ? Math.max(realMeasuredHeight, estHeight)
+          : Math.max(260, estHeight);
+
+      return { width: finalWidth, height: finalHeight };
     }
     default:
       if (isMeasured && measuredWidth !== undefined && measuredHeight !== undefined) {
@@ -434,7 +456,7 @@ export function getHandleYRatio(
             { id: "zone-private", handleId: "private-in", name: "Private Section", accessType: "protected" },
           ];
 
-    const zoneIndex = zones.findIndex((z: any) => z.handleId === handleId);
+    const zoneIndex = zones.findIndex((z) => z.handleId === handleId);
     if (zoneIndex >= 0) {
       const headerH = 78;
       const paddingH = 10;
@@ -454,7 +476,7 @@ export function getHandleYRatio(
     const fields = Array.isArray(data?.fields) ? data.fields : [];
     if (handleId.startsWith("store-field-out-") || handleId.startsWith("store-field-in-")) {
       const fId = handleId.replace(/^store-field-(out|in)-/, "");
-      const idx = fields.findIndex((f: any) => f && f.id === fId);
+      const idx = fields.findIndex((f) => f && f.id === fId);
       if (idx !== -1) {
         const targetY = 75 + 24 + idx * 28 + 14;
         return Math.min(0.95, Math.max(0.05, targetY / height));
@@ -534,7 +556,7 @@ export function getHandleYRatio(
       for (const sec of sections) {
         const stList = Array.isArray(sec.stateObjects) ? sec.stateObjects : [];
         const actList = Array.isArray(sec.actions) ? sec.actions : [];
-        const stIdx = stList.findIndex((st: any) => handleId === `section-state-in-${sec.id}-${st.id}`);
+        const stIdx = stList.findIndex((st) => handleId === `section-state-in-${sec.id}-${st.id}`);
         if (stIdx !== -1) {
           const targetY = currentY + 36 + 26 + stIdx * 28 + 14;
           return Math.min(0.95, Math.max(0.05, targetY / height));

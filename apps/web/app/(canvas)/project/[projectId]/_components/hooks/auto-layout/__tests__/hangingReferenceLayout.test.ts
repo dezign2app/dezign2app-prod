@@ -12,7 +12,7 @@ describe("hangingReferenceLayout - Auto-Layout for Hanging Reference Nodes (DB R
         position: { x: 0, y: 0 },
         data: {
           label: "products",
-          endpoints: [{ id: "ep-test", name: "GET test" }],
+          endpoints: [{ id: "ep-test", name: "GET test", type: "rest" }],
         },
       },
       {
@@ -110,8 +110,8 @@ describe("hangingReferenceLayout - Auto-Layout for Hanging Reference Nodes (DB R
         data: {
           label: "conversations",
           endpoints: [
-            { id: "ep-get", name: "GET /" },
-            { id: "ep-send", name: "POST send message" },
+            { id: "ep-get", name: "GET /", type: "rest" },
+            { id: "ep-send", name: "POST send message", type: "rest" },
           ],
         },
       },
@@ -214,7 +214,7 @@ describe("hangingReferenceLayout - Auto-Layout for Hanging Reference Nodes (DB R
         position: { x: 0, y: 0 },
         data: {
           label: "service",
-          endpoints: [{ id: "ep-1", name: "GET /test" }],
+          endpoints: [{ id: "ep-1", name: "GET /test", type: "rest" }],
         },
       },
       {
@@ -267,8 +267,8 @@ describe("hangingReferenceLayout - Auto-Layout for Hanging Reference Nodes (DB R
       data: {
         label: "profile",
         endpoints: [
-          { id: "ep-health", name: "GET /health" },
-          { id: "ep-chat", name: "POST simple-chat" },
+          { id: "ep-health", name: "GET /health", type: "rest" },
+          { id: "ep-chat", name: "POST simple-chat", type: "rest" },
         ],
       },
     };

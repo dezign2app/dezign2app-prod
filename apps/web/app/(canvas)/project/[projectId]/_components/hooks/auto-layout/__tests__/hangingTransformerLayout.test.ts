@@ -34,7 +34,7 @@ describe("hangingTransformerLayout - Auto-Layout for Hanging Transformers", () =
         position: { x: 0, y: 0 },
         data: {
           label: "products",
-          endpoints: [{ id: "ep-test", name: "GET test" }],
+          endpoints: [{ id: "ep-test", name: "GET test", type: "rest" }],
         },
       },
     ];
@@ -130,7 +130,7 @@ describe("hangingTransformerLayout - Auto-Layout for Hanging Transformers", () =
         position: { x: 0, y: 0 },
         data: {
           label: "products",
-          endpoints: [{ id: "ep-demo", name: "GET demo" }],
+          endpoints: [{ id: "ep-demo", name: "GET demo", type: "rest" }],
         },
       },
     ];
@@ -201,8 +201,8 @@ describe("hangingTransformerLayout - Auto-Layout for Hanging Transformers", () =
         data: {
           label: "products",
           endpoints: [
-            { id: "ep-1", name: "GET test" },
-            { id: "ep-2", name: "GET demo" },
+            { id: "ep-1", name: "GET test", type: "rest" },
+            { id: "ep-2", name: "GET demo", type: "rest" },
           ],
         },
       },
