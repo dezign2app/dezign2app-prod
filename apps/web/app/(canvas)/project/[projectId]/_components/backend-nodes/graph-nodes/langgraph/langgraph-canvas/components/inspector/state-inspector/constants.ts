@@ -44,17 +44,17 @@ export const BUILT_IN_REDUCERS: BuiltInReducer[] = [
 
 export const DEFAULT_REDUCER_CODE = `(prev, next) => {
   // Check action sent by node (e.g. { action: "replace", value: ... })
-  const action = next?.action;
+  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
 
   // 1. Default update: when action is undefined, "", or "default"
   if (!action || action === "" || action === "default") {
-    return next?.value !== undefined ? next.value : (next !== undefined ? next : prev);
+    return typeof next === "object" && next !== null && "value" in next && next.value !== undefined ? next.value : (next !== undefined ? next : prev);
   }
 
   // 2. Action: replace - explicitly replaces current value with incoming value
   // e.g. dispatch { my_var: { action: "replace", value: "new_value" } }
   if (action === "replace") {
-    return next?.value !== undefined ? next.value : next;
+    return typeof next === "object" && next !== null && "value" in next && next.value !== undefined ? next.value : next;
   }
 
   // 3. Action: reset - resets to undefined or initial state
@@ -68,13 +68,13 @@ export const DEFAULT_REDUCER_CODE = `(prev, next) => {
 
 export const REDUCER_CODE_PRESETS = {
   chat: `(prev, next) => {
-  const action = next?.action;
+  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
   const prevArr = Array.isArray(prev) ? prev : [];
 
   // 1. Default update: when action is undefined, "", or "default" (appends incoming messages)
   // e.g. dispatch { messages: [newMsg] } or { messages: newMsg }
   if (!action || action === "" || action === "default") {
-    const incoming = next?.value !== undefined ? next.value : next;
+    const incoming = typeof next === "object" && next !== null && "value" in next && next.value !== undefined ? next.value : next;
     const nextArr = Array.isArray(incoming) ? incoming : (incoming != null ? [incoming] : []);
     return [...prevArr, ...nextArr];
   }
@@ -82,7 +82,7 @@ export const REDUCER_CODE_PRESETS = {
   // 2. Action: replace - overwrites entire message history
   // e.g. dispatch { messages: { action: "replace", value: [systemMsg, userMsg] } }
   if (action === "replace") {
-    const incoming = next?.value !== undefined ? next.value : next;
+    const incoming = typeof next === "object" && next !== null && "value" in next && next.value !== undefined ? next.value : next;
     return Array.isArray(incoming) ? incoming : (incoming != null ? [incoming] : []);
   }
 
@@ -95,13 +95,13 @@ export const REDUCER_CODE_PRESETS = {
   return prevArr;
 }`,
   array: `(prev, next) => {
-  const action = next?.action;
+  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
   const prevArr = Array.isArray(prev) ? prev : [];
 
   // 1. Default update: when action is undefined, "", or "default" (appends items)
   // e.g. dispatch { items: [newItem] } or { items: newItem }
   if (!action || action === "" || action === "default") {
-    const incoming = next?.value !== undefined ? next.value : next;
+    const incoming = typeof next === "object" && next !== null && "value" in next && next.value !== undefined ? next.value : next;
     const nextArr = Array.isArray(incoming) ? incoming : (incoming != null ? [incoming] : []);
     return [...prevArr, ...nextArr];
   }
@@ -109,7 +109,7 @@ export const REDUCER_CODE_PRESETS = {
   // 2. Action: replace - overwrites entire array
   // e.g. dispatch { items: { action: "replace", value: [1, 2, 3] } }
   if (action === "replace") {
-    const incoming = next?.value !== undefined ? next.value : next;
+    const incoming = typeof next === "object" && next !== null && "value" in next && next.value !== undefined ? next.value : next;
     return Array.isArray(incoming) ? incoming : (incoming != null ? [incoming] : []);
   }
 
@@ -123,7 +123,7 @@ export const REDUCER_CODE_PRESETS = {
 }`,
   object: `(prev, next) => {
   const current = (prev && typeof prev === "object" && !Array.isArray(prev)) ? prev : {};
-  const action = next?.action;
+  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
 
   // 1. Action: reset / clear - empties object
   // e.g. dispatch { profile: { action: "reset" } }
@@ -132,31 +132,30 @@ export const REDUCER_CODE_PRESETS = {
   }
 
   // Extract payload cleanly (stripping action metadata so it never leaks into state)
-  const rawPayload = (next?.value && typeof next.value === "object" && !Array.isArray(next.value))
+  const payload = typeof next === "object" && next !== null && "value" in next && typeof next.value === "object" && next.value !== null
     ? next.value
-    : (next && typeof next === "object" && !Array.isArray(next) ? next : {});
-  const { action: _ignored, ...incoming } = rawPayload;
+    : (typeof next === "object" && next !== null ? next : {});
 
   // 2. Action: replace / set - overwrites entire object
   // e.g. dispatch { profile: { action: "replace", value: { status: "fresh" } } }
   if (action === "replace" || action === "set") {
-    return { ...incoming };
+    return { ...payload };
   }
 
   // 3. Default update: shallow merges keys (when action is undefined, "", "default", "update", "patch")
   // e.g. dispatch { profile: { status: "active" } }
   if (!action || action === "" || action === "default" || action === "update" || action === "patch") {
-    return { ...current, ...incoming };
+    return { ...current, ...payload };
   }
 
   return current;
 }`,
   number: `(prev, next) => {
   const current = typeof prev === "number" && !Number.isNaN(prev) ? prev : 0;
-  const action = next?.action;
+  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
 
   // Extract raw incoming value
-  const rawValue = next !== null && typeof next === "object" && "value" in next
+  const rawValue = typeof next === "object" && next !== null && "value" in next
     ? next.value
     : next;
   const numValue = Number(rawValue);
@@ -177,14 +176,14 @@ export const REDUCER_CODE_PRESETS = {
   // 3. Action: increment - adds amount (default 1)
   // e.g. dispatch { count: { action: "increment", amount: 1 } }
   if (action === "increment" || action === "add") {
-    const step = isValidNum ? numValue : (Number(next?.amount) || 1);
+    const step = isValidNum ? numValue : (typeof next === "object" && next !== null && "amount" in next ? Number(next.amount) || 1 : 1);
     return current + step;
   }
 
   // 4. Action: decrement - subtracts amount (default 1)
   // e.g. dispatch { count: { action: "decrement", amount: 1 } }
   if (action === "decrement" || action === "subtract") {
-    const step = isValidNum ? numValue : (Number(next?.amount) || 1);
+    const step = isValidNum ? numValue : (typeof next === "object" && next !== null && "amount" in next ? Number(next.amount) || 1 : 1);
     return current - step;
   }
 
@@ -198,9 +197,9 @@ export const REDUCER_CODE_PRESETS = {
 }`,
   counterActions: `(prev, next) => {
   const current = typeof prev === "number" && !Number.isNaN(prev) ? prev : 0;
-  const action = next?.action;
+  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
 
-  const rawValue = next !== null && typeof next === "object" && "value" in next
+  const rawValue = typeof next === "object" && next !== null && "value" in next
     ? next.value
     : next;
   const numValue = Number(rawValue);
@@ -218,13 +217,13 @@ export const REDUCER_CODE_PRESETS = {
 
   // 3. Action: increment
   if (action === "increment" || action === "add") {
-    const step = isValidNum ? numValue : (Number(next?.amount) || 1);
+    const step = isValidNum ? numValue : (typeof next === "object" && next !== null && "amount" in next ? Number(next.amount) || 1 : 1);
     return current + step;
   }
 
   // 4. Action: decrement
   if (action === "decrement" || action === "subtract") {
-    const step = isValidNum ? numValue : (Number(next?.amount) || 1);
+    const step = isValidNum ? numValue : (typeof next === "object" && next !== null && "amount" in next ? Number(next.amount) || 1 : 1);
     return current - step;
   }
 
@@ -237,10 +236,10 @@ export const REDUCER_CODE_PRESETS = {
 }`,
   string: `(prev, next) => {
   const current = typeof prev === "string" ? prev : "";
-  const action = next?.action;
+  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
 
   // Extract raw incoming string
-  const rawValue = next !== null && typeof next === "object" && "value" in next
+  const rawValue = typeof next === "object" && next !== null && "value" in next
     ? next.value
     : next;
   const incoming = rawValue !== undefined && rawValue !== null ? String(rawValue) : "";
@@ -248,14 +247,14 @@ export const REDUCER_CODE_PRESETS = {
   // 1. Default update: appends incoming text (supports optional separator)
   // e.g. dispatch { notes: "world" }
   if (!action || action === "" || action === "default") {
-    const sep = next?.separator !== undefined ? String(next.separator) : "";
+    const sep = typeof next === "object" && next !== null && "separator" in next && next.separator !== undefined ? String(next.separator) : "";
     return current ? \`\${current}\${sep}\${incoming}\` : incoming;
   }
 
   // 2. Action: prepend - adds incoming text before the current string
   // e.g. dispatch { notes: { action: "prepend", value: "[INFO] " } }
   if (action === "prepend") {
-    const sep = next?.separator !== undefined ? String(next.separator) : "";
+    const sep = typeof next === "object" && next !== null && "separator" in next && next.separator !== undefined ? String(next.separator) : "";
     return current ? \`\${incoming}\${sep}\${current}\` : incoming;
   }
 
@@ -275,18 +274,20 @@ export const REDUCER_CODE_PRESETS = {
 }`,
   boolean: `(prev, next) => {
   const current = Boolean(prev);
-  const action = next?.action;
+  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
 
   // 1. Default update: when action is undefined, "", or "default"
   // e.g. dispatch { is_active: true }
   if (!action || action === "" || action === "default") {
-    return next?.value !== undefined ? Boolean(next.value) : Boolean(next);
+    const val = typeof next === "object" && next !== null && "value" in next ? next.value : next;
+    return val !== undefined ? Boolean(val) : false;
   }
 
   // 2. Action: replace - explicitly sets boolean value
   // e.g. dispatch { is_active: { action: "replace", value: false } }
   if (action === "replace" || action === "set") {
-    return next?.value !== undefined ? Boolean(next.value) : Boolean(next);
+    const val = typeof next === "object" && next !== null && "value" in next ? next.value : next;
+    return val !== undefined ? Boolean(val) : false;
   }
 
   // 3. Action: toggle - inverts boolean
@@ -408,7 +409,7 @@ export function generateSchemaAwareReducerCode(
     ? fields
         .map(
           (f) =>
-            `      ${f.name}: payload.${f.name} !== undefined ? payload.${f.name} : initial.${f.name},`,
+            `      ${f.name}: "${f.name}" in payload && payload.${f.name} !== undefined ? payload.${f.name} : initial.${f.name},`,
         )
         .join("\n") + "\n"
     : "";
@@ -417,7 +418,7 @@ export function generateSchemaAwareReducerCode(
     ? fields
         .map(
           (f) =>
-            `      ${f.name}: payload.${f.name} !== undefined ? payload.${f.name} : current.${f.name},`,
+            `      ${f.name}: "${f.name}" in payload && payload.${f.name} !== undefined ? payload.${f.name} : current.${f.name},`,
         )
         .join("\n") + "\n"
     : "";
@@ -433,7 +434,7 @@ ${initialLines}  };
     ? { ...initial, ...prev }
     : { ...initial };
 
-  const action = next?.action;
+  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
 
   // 1. Action: reset / clear - resets back to typed initial values
   // e.g. dispatch { action: "reset" }
@@ -442,10 +443,9 @@ ${initialLines}  };
   }
 
   // Extract payload cleanly (stripping action metadata so it never leaks into state)
-  const rawPayload = (next?.value && typeof next.value === "object" && !Array.isArray(next.value))
+  const payload = typeof next === "object" && next !== null && "value" in next && typeof next.value === "object" && next.value !== null
     ? next.value
-    : (next && typeof next === "object" && !Array.isArray(next) ? next : {});
-  const { action: _action, ...payload } = rawPayload;
+    : (typeof next === "object" && next !== null ? next : {});
 
   // 2. Action: replace / set - overwrites with incoming values (defaults missing fields)
   // e.g. dispatch { action: "replace", value: { ... } }
@@ -465,7 +465,7 @@ ${updateLines}    };
   }
 
   return current;
-}`;
+};`;
 }
 
 export function getSuggestedReducerCodeForChannelType(

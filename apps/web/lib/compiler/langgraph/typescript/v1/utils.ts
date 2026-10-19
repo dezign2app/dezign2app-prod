@@ -62,7 +62,10 @@ export function getEnvKey(data: LangGraphLLMNodeData): string | null {
   }
 }
 
-export function getZodType(type: string, defaultValue?: unknown): string {
+export function getZodType(
+  type: string,
+  defaultValue?: string | number | boolean | string[] | Record<string, string>,
+): string {
   switch (type) {
     case "string":
       return `z.string().default(${JSON.stringify(defaultValue ?? "")})`;
@@ -96,13 +99,22 @@ export function getReducerFn(reducer: string, type: string): string {
   }
 }
 
-export function jsonSchemaToZod(schema: Record<string, unknown>): string {
+export interface JsonSchemaProperty {
+  type?: string;
+  description?: string;
+  enum?: string[];
+}
+
+export interface JsonSchemaInput {
+  type?: string;
+  properties?: Record<string, JsonSchemaProperty>;
+  required?: string[];
+}
+
+export function jsonSchemaToZod(schema: JsonSchemaInput): string {
   if (schema.type !== "object" || !schema.properties) return "z.object({})";
-  const props = schema.properties as Record<
-    string,
-    { type?: string; description?: string; enum?: string[] }
-  >;
-  const required = (schema.required as string[]) || [];
+  const props = schema.properties;
+  const required = schema.required || [];
 
   const fields = Object.entries(props).map(([key, prop]) => {
     let zodType: string;
@@ -151,14 +163,11 @@ export function resolveNodeName(
   const node = ctx.input.nodes.find((n) => n.id === nodeId);
   if (!node) return null;
 
-  const nodeType = node.type as string | undefined;
   if (
-    nodeType === LANGGRAPH_CANVAS_NODE_AGENT_REF ||
-    nodeType === LANGGRAPH_CANVAS_NODE_NODE_REF
+    node.type === LANGGRAPH_CANVAS_NODE_AGENT_REF ||
+    node.type === LANGGRAPH_CANVAS_NODE_NODE_REF
   ) {
-    const targetRefId =
-      (node.data as { agentRef?: string; nodeRef?: string })?.agentRef ||
-      (node.data as { agentRef?: string; nodeRef?: string })?.nodeRef;
+    const targetRefId = node.data.agentRef || node.data.nodeRef;
     if (targetRefId && targetRefId !== nodeId) {
       return resolveNodeName(targetRefId, ctx, nodeMetaMap);
     }
@@ -168,14 +177,10 @@ export function resolveNodeName(
     node.type === LANGGRAPH_CANVAS_NODE_NODE ||
     node.type === LANGGRAPH_CANVAS_NODE_AGENT
   ) {
-    return toIdentifier(
-      (node.data as CanvasNodeData).name ||
-        (node.data as CanvasNodeData).label ||
-        nodeId,
-    );
+    return toIdentifier(node.data.name || node.data.label || nodeId);
   }
   if (node.type === LANGGRAPH_CANVAS_NODE_STEP) {
-    return toIdentifier((node.data as StepNodeData).label || nodeId);
+    return toIdentifier(node.data.label || nodeId);
   }
   if (node.type === LANGGRAPH_CANVAS_NODE_END) return "END";
   if (node.type === LANGGRAPH_CANVAS_NODE_START) return "START";

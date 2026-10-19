@@ -32,16 +32,16 @@ export function buildIndividualLLMFile(
     toolIds.forEach((tid) => connectedToolIds.add(tid));
   }
 
-  const toolVarNames = [
+  const toolVarNames: string[] = [
     ...new Set(
       [...connectedToolIds]
         .map((tid) => {
           const tMeta = toolMetaMap.get(tid);
-          return tMeta ? tMeta.varName : null;
+          return tMeta ? tMeta.varName : "";
         })
-        .filter(Boolean),
+        .filter((x): x is string => Boolean(x)),
     ),
-  ] as string[];
+  ];
 
   if (toolVarNames.length > 0) {
     imports.push(`import { ${toolVarNames.join(", ")} } from "../tools";`);

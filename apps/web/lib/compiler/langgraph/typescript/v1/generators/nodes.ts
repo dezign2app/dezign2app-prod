@@ -58,7 +58,7 @@ export function buildAgentNodeFile(
     );
   } else {
     bodyLines.push(`  // Node without LLM execution logic`);
-    bodyLines.push(`  const response = null;`);
+    bodyLines.push(`  const response: Record<string, string | undefined> = {};`);
   }
 
   const stateUpdates = d.stateUpdates || [];
@@ -137,25 +137,7 @@ export function buildStepNodeFile(
   const schemaName = `${toPascalCase(ctx.graphId)}State`;
 
   if (d.stepType === "router") {
-    const routerConfig = d.routerConfig as
-      | {
-          branches?: Array<{
-            id: string;
-            label: string;
-            field?: string;
-            operator?: string;
-            value?: string;
-            isDefault?: boolean;
-            conditions?: Array<{
-              field?: string;
-              operator?: string;
-              value?: string;
-            }>;
-            targetId?: string;
-          }>;
-          defaultBranchId?: string;
-        }
-      | undefined;
+    const routerConfig = d.routerConfig;
 
     const branches = routerConfig?.branches || [];
     const branchLines: string[] = [];
@@ -293,16 +275,16 @@ ${branchLines.join("\n")}
   }
 
   if (d.stepType === "tool_node") {
-    const toolVarNames = [
+    const toolVarNames: string[] = [
       ...new Set(
         ctx.toolNodes
           .map((t) => {
             const tMeta = toolMetaMap?.get(t.id);
             return tMeta ? tMeta.varName : toIdentifier(t.data.name || `tool_${t.id}`);
           })
-          .filter(Boolean),
+          .filter((x): x is string => Boolean(x)),
       ),
-    ] as string[];
+    ];
     return `import { ToolNode } from "@langchain/langgraph";
 import { ${toolVarNames.join(", ")} } from "../tools";
 
