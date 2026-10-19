@@ -72,8 +72,14 @@ export interface ElectronAPI {
 
   /** Browser-based Authentication */
   auth: {
+    /** Opens the external system browser to complete login flow */
     openBrowserLogin(url?: string): Promise<void>;
+    /** Subscribes to the auth:callback IPC event pushed from the main process */
     onAuthCallback(cb: (data: { token?: string; ticket?: string; rawUrl?: string }) => void): () => void;
+    /** Retrieves any pending auth ticket cached by the main process (useful on mount/focus) */
+    getPendingAuthCallback(): Promise<{ token?: string; ticket?: string; rawUrl?: string } | null>;
+    /** Clears the pending auth ticket cache in the main process after consumption */
+    clearPendingAuthCallback(): Promise<{ success: boolean }>;
   };
 
   /** PTY terminal sessions */
@@ -141,6 +147,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     onAuthCallback: (
       cb: (data: { token?: string; ticket?: string; rawUrl?: string }) => void
     ) => on("auth:callback", cb),
+    getPendingAuthCallback: () =>
+      ipcRenderer.invoke("auth:get-pending-callback"),
+    clearPendingAuthCallback: () =>
+      ipcRenderer.invoke("auth:clear-pending-callback"),
   },
 
   fs: {

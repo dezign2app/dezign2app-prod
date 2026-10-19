@@ -70,10 +70,16 @@ export interface ElectronAPI {
   };
 
   auth: {
+    /** Opens the default browser to complete web-based authentication */
     openBrowserLogin(url?: string): Promise<void>;
+    /** Subscribes to the auth:callback IPC event containing deep-link credentials */
     onAuthCallback(
       cb: (data: { token?: string; ticket?: string; rawUrl?: string }) => void
     ): () => void;
+    /** Polls the main process for any unconsumed auth credentials (deep link ticket/token) */
+    getPendingAuthCallback?(): Promise<{ token?: string; ticket?: string; rawUrl?: string } | null>;
+    /** Clears pending auth cache in the main process once consumed by the renderer */
+    clearPendingAuthCallback?(): Promise<{ success: boolean }>;
   };
 
   docker: {

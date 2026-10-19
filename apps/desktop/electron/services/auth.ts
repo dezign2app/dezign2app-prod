@@ -1,12 +1,53 @@
 import { app, shell } from "electron";
 import path from "path";
-import fs from "fs";
 import { PROTOCOL_SCHEME, IS_DEV } from "../constants";
 import { getMainWindow, getCurrentAppUrl } from "../window";
 import { log } from "../logger";
 
 /**
- * Registers custom protocol client (dezign2app://) for browser OAuth redirect.
+ * Payload structure for authentication deep links (dezign2app://...).
+ */
+export interface PendingAuthPayload {
+  token?: string;
+  ticket?: string;
+  rawUrl?: string;
+}
+
+/**
+ * In-memory cache for incoming auth credentials received from external browser redirects.
+ *
+ * Why this is necessary:
+ * When an external browser redirects to `dezign2app://auth?ticket=...`, the main process receives
+ * the URL and sends an IPC event ("auth:callback") to the renderer. However, if the window was
+ * minimized, blurred, or mid-transition, the React renderer may miss the IPC push.
+ * By caching `pendingAuthData`, the renderer can proactively pull the ticket upon gaining window focus
+ * or mounting via `auth:get-pending-callback`.
+ */
+let pendingAuthData: PendingAuthPayload | null = null;
+
+/**
+ * Returns the currently cached pending auth payload, if any.
+ */
+export function getPendingAuthData(): PendingAuthPayload | null {
+  return pendingAuthData;
+}
+
+/**
+ * Clears the pending auth payload once successfully consumed by the renderer.
+ */
+export function clearPendingAuthData(): void {
+  pendingAuthData = null;
+}
+
+/**
+ * Registers the custom protocol client (dezign2app://) with the host operating system.
+ *
+ * Operating System Registration Nuance:
+ * - Packaged App: The OS maps `dezign2app://` directly to the compiled executable (`D2A.exe`).
+ * - Development Mode: On Windows, Electron needs the path to the main script (`process.argv[1]`,
+ *   e.g. `d:/ai/dezign2app/apps/desktop`) passed alongside `process.execPath` (the `electron.exe` binary)
+ *   so that when the OS launches the protocol link, it correctly runs `electron.exe <appPath> <url>`
+ *   rather than invoking an empty Electron shell.
  */
 export function registerProtocolClient(): void {
   if (!app.isPackaged || IS_DEV) {
@@ -25,6 +66,15 @@ export function registerProtocolClient(): void {
 
 /**
  * Handles incoming auth deep links (dezign2app://...).
+ *
+ * Responsibilities:
+ * 1. Sanitizes the deep link string to strip any trailing slashes or stray OS quote marks
+ *    (e.g., Windows protocol clients can sometimes append `/` or `"` to the query string).
+ * 2. Parses query parameters (`ticket` and `token`).
+ * 3. Stores the credentials in `pendingAuthData` for pull-based fallback.
+ * 4. Restores and focuses the primary Electron window so the user is brought back to the desktop app.
+ * 5. Dispatches `auth:callback` IPC event immediately and with staggered retries (300ms, 800ms)
+ *    to guarantee delivery even during asynchronous window focus or restore transitions.
  */
 export function handleAuthUrl(urlStr: string): void {
   if (!urlStr) {
@@ -32,47 +82,81 @@ export function handleAuthUrl(urlStr: string): void {
     return;
   }
   log("[auth-service] handleAuthUrl received input:", urlStr);
+
   const match = urlStr.match(/dezign2app:\/\/[^\s"']+/i);
   if (!match) {
     console.warn("[auth-service] URL did not match dezign2app:// pattern:", urlStr);
     return;
   }
-  const cleanUrl = match[0].replace(/\/$/, "");
+
+  // Trim trailing slashes or quotes that OS shells / browsers might append to protocol links
+  const cleanUrl = match[0].replace(/[\/'"]+$/, "");
   log("[auth-service] Clean auth deep link:", cleanUrl);
 
   try {
     const urlObj = new URL(cleanUrl);
-    const token = urlObj.searchParams.get("token") || undefined;
-    const ticket = urlObj.searchParams.get("ticket") || undefined;
+    let token = urlObj.searchParams.get("token") || undefined;
+    let ticket = urlObj.searchParams.get("ticket") || undefined;
+
+    // Clean up any extraneous trailing slash in individual query parameters
+    if (token) token = token.replace(/[\/'"]+$/, "").trim();
+    if (ticket) ticket = ticket.replace(/[\/'"]+$/, "").trim();
+
     log("[auth-service] Parsed deep link params:", {
       hasToken: !!token,
       hasTicket: !!ticket,
       ticketPreview: ticket ? `${ticket.substring(0, 15)}...` : undefined,
     });
 
-    const mainWindow = getMainWindow();
-    if (!mainWindow) {
-      console.error("[auth-service] getMainWindow() is null! Cannot deliver auth:callback.");
-      return;
-    }
-
-    log("[auth-service] Sending auth:callback event to renderer...");
-    mainWindow.webContents.send("auth:callback", {
+    const payload: PendingAuthPayload = {
       token,
       ticket,
       rawUrl: cleanUrl,
-    });
+    };
 
+    // Cache the pending auth data so the renderer can retrieve it on mount or window focus
+    pendingAuthData = payload;
+
+    const mainWindow = getMainWindow();
+    if (!mainWindow) {
+      console.warn(
+        "[auth-service] getMainWindow() is null or window not ready yet. Saved to pendingAuthData."
+      );
+      return;
+    }
+
+    // Bring desktop app to front when returning from browser login
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
     mainWindow.focus();
+
+    const sendAuthCallback = () => {
+      try {
+        if (!mainWindow.isDestroyed() && mainWindow.webContents) {
+          log("[auth-service] Delivering auth:callback event to renderer webContents...");
+          mainWindow.webContents.send("auth:callback", payload);
+        }
+      } catch (err) {
+        console.warn("[auth-service] Error sending auth:callback to renderer:", err);
+      }
+    };
+
+    // 1. Immediate dispatch
+    sendAuthCallback();
+
+    // 2. Additional dispatches with small delays to guarantee receipt if renderer
+    //    was in the middle of being restored or gaining window focus
+    setTimeout(sendAuthCallback, 300);
+    setTimeout(sendAuthCallback, 800);
   } catch (err) {
     console.error("[auth-service] Failed to parse auth deep link URL:", err);
   }
 }
 
 /**
- * Checks command line args for initial deep link on startup.
+ * Checks command line arguments for initial deep link on cold startup.
+ * If the user clicked a dezign2app:// link while the app was closed, the URL is passed
+ * as a startup argument in process.argv.
  */
 export function handleInitialDeepLink(): void {
   const initialDeepLink = process.argv.find((arg) =>
@@ -83,6 +167,12 @@ export function handleInitialDeepLink(): void {
   }
 }
 
+/**
+ * Opens the external default browser to initiate the Web/OAuth authentication flow.
+ *
+ * @param customUrl Optional custom login URL to navigate to. Defaults to Next.js /sign-in
+ *                  with desktop=true and redirect_url pointing to /auth/desktop.
+ */
 export async function openBrowserLogin(customUrl?: string): Promise<{ success: boolean }> {
   const authUrl =
     process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL ||
