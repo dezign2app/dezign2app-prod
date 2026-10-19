@@ -4,6 +4,7 @@ import {
   BUILT_IN_REDUCERS,
   REDUCER_CODE_PRESETS,
   getSuggestedReducerCodeForChannelType,
+  isReducerCodeCompatibleWithType,
 } from "../constants";
 
 describe("State Channel Reducer Configuration", () => {
@@ -79,6 +80,21 @@ describe("State Channel Reducer Configuration", () => {
       const strCode = getSuggestedReducerCodeForChannelType("string");
       expect(strCode).toBe(REDUCER_CODE_PRESETS.string);
       expect(strCode).toContain('action === "replace"');
+      expect(strCode).toContain('action === "prepend"');
+
+      // Test evaluation of the string reducer
+      const fn = new Function("return " + strCode)();
+      // Default: concats incoming text directly (with optional separator)
+      expect(fn("", "first line")).toBe("first line");
+      expect(fn("first", " second")).toBe("first second");
+      expect(fn("first", { value: "second", separator: " " })).toBe("first second");
+      // Prepend
+      expect(fn("world", { action: "prepend", value: "hello " })).toBe("hello world");
+      // Replace
+      expect(fn("old", { action: "replace", value: "new" })).toBe("new");
+      // Reset / clear
+      expect(fn("old", { action: "clear" })).toBe("");
+      expect(fn("old", { action: "reset" })).toBe("");
     });
 
     it("suggests boolean toggle with replace action for boolean channels", () => {
@@ -98,6 +114,43 @@ describe("State Channel Reducer Configuration", () => {
       expect(names).toContain("append");
       expect(names).toContain("concat_array");
       expect(names).toContain("merge_object");
+    });
+  });
+
+  describe("isReducerCodeCompatibleWithType", () => {
+    it("detects string reducer code is incompatible with number channels", () => {
+      const stringCode = REDUCER_CODE_PRESETS.string;
+      expect(isReducerCodeCompatibleWithType(stringCode, "number")).toBe(false);
+    });
+
+    it("detects number reducer code is compatible with number channels", () => {
+      const numberCode = REDUCER_CODE_PRESETS.number;
+      expect(isReducerCodeCompatibleWithType(numberCode, "number")).toBe(true);
+    });
+
+    it("executes number reducer correctly without string coercion", () => {
+      // Evaluate the generated number reducer function
+      const fn = new Function("return " + REDUCER_CODE_PRESETS.number)();
+
+      // Default set: passes raw number or object value
+      expect(fn(0, 5)).toBe(5);
+      expect(fn(5, { value: 42 })).toBe(42);
+
+      // Replace / set action
+      expect(fn(10, { action: "replace", value: 99 })).toBe(99);
+      expect(fn(10, { action: "set", value: 100 })).toBe(100);
+
+      // Increment / add action
+      expect(fn(10, { action: "increment", amount: 3 })).toBe(13);
+      expect(fn(10, { action: "add", value: 5 })).toBe(15);
+
+      // Decrement / subtract action
+      expect(fn(10, { action: "decrement", amount: 2 })).toBe(8);
+      expect(fn(10, { action: "subtract", value: 4 })).toBe(6);
+
+      // Reset / clear action
+      expect(fn(10, { action: "reset" })).toBe(0);
+      expect(fn(10, { action: "clear" })).toBe(0);
     });
   });
 });

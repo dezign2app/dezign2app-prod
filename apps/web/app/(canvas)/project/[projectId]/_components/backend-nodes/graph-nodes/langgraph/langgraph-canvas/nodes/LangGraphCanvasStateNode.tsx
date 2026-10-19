@@ -37,6 +37,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
+import { getSuggestedReducerCodeForChannelType } from "../components/inspector/state-inspector/constants";
 
 export const LangGraphCanvasStateNode = ({
   data,
@@ -225,35 +226,57 @@ export const LangGraphCanvasStateNode = ({
                       <Select
                         value={ch.customTypeId ? `custom:${ch.customTypeId}` : ch.type}
                         onValueChange={(val) => {
+                          const matchedCustom = data.customReducers?.find(
+                            (r) =>
+                              r.name === ch.reducer ||
+                              r.id === ch.reducer ||
+                              (r.targetField && r.targetField === ch.key),
+                          );
+
                           if (val.startsWith("custom:")) {
                             const typeId = val.replace("custom:", "");
                             const targetType = availableCustomTypes.find((t) => t.id === typeId);
+                            const suggestedCode = getSuggestedReducerCodeForChannelType("object");
+                            const reducerName = `${ch.key || "state"}_reducer`;
                             handleUpdate(idx, {
                               type: "object",
-                              reducer: "merge_object",
+                              reducer: reducerName,
+                              customReducerCode: suggestedCode,
                               customTypeId: typeId,
                               customTypeName: targetType?.name,
                               customTypeSchema: targetType,
                             });
+                            if (matchedCustom && data.onUpdateCustomReducer) {
+                              data.onUpdateCustomReducer(matchedCustom.id, {
+                                name: reducerName,
+                                code: suggestedCode,
+                                targetField: ch.key,
+                              });
+                            }
                             return;
                           }
 
                           if (isLangGraphChannelType(val)) {
-                            const defaultReducer =
+                            const suggestedCode = getSuggestedReducerCodeForChannelType(val);
+                            const reducerName =
                               val === "messages"
                                 ? "add_messages"
-                                : val === "array"
-                                  ? "append"
-                                  : val === "object"
-                                    ? "merge_object"
-                                    : "replace";
+                                : `${ch.key || val}_reducer`;
                             handleUpdate(idx, {
                               type: val,
-                              reducer: defaultReducer,
+                              reducer: reducerName,
+                              customReducerCode: suggestedCode,
                               customTypeId: undefined,
                               customTypeName: undefined,
                               customTypeSchema: undefined,
                             });
+                            if (matchedCustom && data.onUpdateCustomReducer) {
+                              data.onUpdateCustomReducer(matchedCustom.id, {
+                                name: reducerName,
+                                code: suggestedCode,
+                                targetField: ch.key,
+                              });
+                            }
                           }
                         }}
                       >

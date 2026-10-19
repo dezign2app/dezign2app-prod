@@ -16,6 +16,7 @@ import {
   BUILT_IN_REDUCERS,
   REDUCER_CODE_PRESETS,
   getSuggestedReducerCodeForChannelType,
+  isReducerCodeCompatibleWithType,
   extractActionsFromReducerCode,
   getActionMetadata,
 } from "../constants";
@@ -69,10 +70,15 @@ export function ChannelReducerConfig({
     );
   }, [customReducers, ch.reducer, ch.key]);
 
-  // Initial code computation: prefer existing code with action support, else suggest for type
+  // Initial code computation: prefer existing code with action support that is compatible with this channel type
   const resolveInitialCode = useCallback(() => {
     const raw = matchedCustom?.code || ch.customReducerCode;
-    if (raw && raw.trim().length > 0 && raw.includes("action")) {
+    if (
+      raw &&
+      raw.trim().length > 0 &&
+      raw.includes("action") &&
+      isReducerCodeCompatibleWithType(raw, ch.type)
+    ) {
       return raw;
     }
     return getSuggestedReducerCodeForChannelType(ch.type);
@@ -90,16 +96,25 @@ export function ChannelReducerConfig({
   );
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
 
+  // Keep track of previous channel type to detect when type changes
+  const prevTypeRef = React.useRef(ch.type);
+
   // Live auto-detected actions extracted from the current reducer code
   const detectedActions = useMemo(() => {
     const actions = extractActionsFromReducerCode(customCode);
     return actions.map((act) => getActionMetadata(act, ch.type));
   }, [customCode, ch.type]);
 
-  // Auto-migrate legacy or empty reducer code to the action-aware template
+  // Auto-migrate legacy, empty, or type-mismatched reducer code to the action-aware template
   useEffect(() => {
+    const typeChanged = prevTypeRef.current !== ch.type;
+    prevTypeRef.current = ch.type;
+
     const raw = matchedCustom?.code || ch.customReducerCode;
-    if (!raw || !raw.includes("action")) {
+    const isLegacyOrEmpty = !raw || !raw.includes("action");
+    const isTypeMismatch = Boolean(raw && !isReducerCodeCompatibleWithType(raw, ch.type));
+
+    if (isLegacyOrEmpty || isTypeMismatch || (typeChanged && isTypeMismatch)) {
       const suggested = getSuggestedReducerCodeForChannelType(ch.type);
       setCustomCode(suggested);
       const newName =
@@ -114,6 +129,7 @@ export function ChannelReducerConfig({
       });
       if (matchedCustom && onUpdateCustomReducer) {
         onUpdateCustomReducer(matchedCustom.id, {
+          name: newName,
           code: suggested,
           targetField: ch.key,
         });
@@ -253,18 +269,26 @@ export function ChannelReducerConfig({
                   type="button"
                   onClick={() =>
                     handleApplyPreset(`(prev, next) => {
-  const current = typeof prev === "number" ? prev : 0;
+  const current = typeof prev === "number" && !Number.isNaN(prev) ? prev : 0;
   const action = next?.action;
 
+  const rawValue = next !== null && typeof next === "object" && "value" in next ? next.value : next;
+  const numValue = Number(rawValue);
+  const isValidNum = !Number.isNaN(numValue) && rawValue !== undefined && rawValue !== null;
+
   // 1. Default update: sum incoming delta
-  if (!action || action === "" || action === "default") {
-    const val = typeof next === "number" ? next : (next?.value ?? 0);
-    return current + val;
+  if (!action || action === "" || action === "default" || action === "add") {
+    return current + (isValidNum ? numValue : 0);
   }
 
-  // 2. Action: replace
-  if (action === "replace") {
-    return typeof next?.value === "number" ? next.value : (typeof next === "number" ? next : current);
+  // 2. Action: replace / set
+  if (action === "replace" || action === "set") {
+    return isValidNum ? numValue : current;
+  }
+
+  // 3. Action: reset / clear
+  if (action === "reset" || action === "clear") {
+    return 0;
   }
 
   return current;
@@ -279,12 +303,21 @@ export function ChannelReducerConfig({
                   type="button"
                   onClick={() =>
                     handleApplyPreset(`(prev, next) => {
+  const current = typeof prev === "number" && !Number.isNaN(prev) ? prev : 0;
   const action = next?.action;
+
+  const rawValue = next !== null && typeof next === "object" && "value" in next ? next.value : next;
+  const numValue = Number(rawValue);
+  const isValidNum = !Number.isNaN(numValue) && rawValue !== undefined && rawValue !== null;
+
   // Overwrites current value with incoming
-  if (action === "replace" || !action || action === "" || action === "default") {
-    return typeof next?.value === "number" ? next.value : (typeof next === "number" ? next : prev);
+  if (!action || action === "" || action === "default" || action === "replace" || action === "set") {
+    return isValidNum ? numValue : current;
   }
-  return prev;
+  if (action === "reset" || action === "clear") {
+    return 0;
+  }
+  return current;
 }`)
                   }
                   className="text-[8px] px-1.5 py-0.5 rounded bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 font-mono transition-colors cursor-pointer border border-purple-500/30"
@@ -379,14 +412,72 @@ export function ChannelReducerConfig({
             )}
 
             {ch.type === "string" && (
-              <button
-                type="button"
-                onClick={() => handleApplyPreset(REDUCER_CODE_PRESETS.string)}
-                className="text-[8px] px-1.5 py-0.5 rounded bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 font-mono transition-colors cursor-pointer border border-purple-500/40 font-semibold"
-                title="Supports next.action: replace, clear/reset, default concat"
-              >
-                ⚡ Actions (concat/replace/clear)
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleApplyPreset(REDUCER_CODE_PRESETS.string)}
+                  className="text-[8px] px-1.5 py-0.5 rounded bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 font-mono transition-colors cursor-pointer border border-purple-500/40 font-semibold"
+                  title="Supports next.action: concat/append (default), prepend, replace/set, reset/clear"
+                >
+                  ⚡ Actions (concat/prepend/replace/clear)
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleApplyPreset(`(prev, next) => {
+  const current = typeof prev === "string" ? prev : "";
+  const action = next?.action;
+  const rawValue = next !== null && typeof next === "object" && "value" in next ? next.value : next;
+  const incoming = rawValue !== undefined && rawValue !== null ? String(rawValue) : "";
+
+  // 1. Default update: concat with separator
+  if (!action || action === "" || action === "default") {
+    const sep = next?.separator !== undefined ? String(next.separator) : " ";
+    return current ? \`\${current}\${sep}\${incoming}\` : incoming;
+  }
+
+  // 2. Action: replace
+  if (action === "replace") {
+    return incoming;
+  }
+
+  // 3. Action: reset / clear
+  if (action === "reset" || action === "clear") {
+    return "";
+  }
+
+  return current;
+}`)
+                  }
+                  className="text-[8px] px-1.5 py-0.5 rounded bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 font-mono transition-colors cursor-pointer border border-purple-500/30"
+                  title="Concatenate strings with custom separator (defaults to space)"
+                >
+                  ⚡ Concat (with separator)
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleApplyPreset(`(prev, next) => {
+  const action = next?.action;
+  const rawValue = next !== null && typeof next === "object" && "value" in next ? next.value : next;
+  const incoming = rawValue !== undefined && rawValue !== null ? String(rawValue) : "";
+
+  // Overwrite current value with incoming
+  if (!action || action === "" || action === "default" || action === "replace") {
+    return incoming;
+  }
+  if (action === "reset" || action === "clear") {
+    return "";
+  }
+  return typeof prev === "string" ? prev : "";
+}`)
+                  }
+                  className="text-[8px] px-1.5 py-0.5 rounded bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 font-mono transition-colors cursor-pointer border border-purple-500/30"
+                  title="Last value overwrites previous string (no concatenation)"
+                >
+                  ⚡ Replace Only
+                </button>
+              </>
             )}
 
             {ch.type === "boolean" && (

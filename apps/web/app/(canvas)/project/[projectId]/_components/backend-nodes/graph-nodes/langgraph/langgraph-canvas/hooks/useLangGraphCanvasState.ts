@@ -10,6 +10,7 @@ import {
   type LangGraphCanvasEdge,
 } from "@workspace/canvas";
 import { isReservedNodeId, NODE_ID_STATE_GLOBAL } from "../constants";
+import { getSuggestedReducerCodeForChannelType } from "../components/inspector/state-inspector/constants";
 
 import { buildInitialNodes, buildInitialEdges } from "./utils/initializers";
 import { useAgentResourceConnections } from "./useAgentResourceConnections";
@@ -106,6 +107,7 @@ export function useLangGraphCanvasState({
       type: "string",
       reducer: "replace",
       defaultValue: "",
+      customReducerCode: getSuggestedReducerCodeForChannelType("string"),
     };
     setStateChannels((prev) => [...prev, newChannel]);
     setSelectedNodeId(NODE_ID_STATE_GLOBAL);
