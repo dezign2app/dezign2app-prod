@@ -9,20 +9,14 @@ import { log } from "../logger";
  * Registers custom protocol client (dezign2app://) for browser OAuth redirect.
  */
 export function registerProtocolClient(): void {
-  if (process.defaultApp || IS_DEV) {
-    const packagedExe = path.join(
-      __dirname,
-      "../../release/win-unpacked/D2A.exe"
-    );
-    if (fs.existsSync(packagedExe)) {
-      app.setAsDefaultProtocolClient(PROTOCOL_SCHEME, packagedExe);
+  if (!app.isPackaged || IS_DEV) {
+    const mainScript = process.argv[1];
+    if (mainScript) {
+      app.setAsDefaultProtocolClient(PROTOCOL_SCHEME, process.execPath, [
+        path.resolve(mainScript),
+      ]);
     } else {
-      const mainScript = process.argv[1];
-      if (mainScript) {
-        app.setAsDefaultProtocolClient(PROTOCOL_SCHEME, process.execPath, [
-          path.resolve(mainScript),
-        ]);
-      }
+      app.setAsDefaultProtocolClient(PROTOCOL_SCHEME);
     }
   } else {
     app.setAsDefaultProtocolClient(PROTOCOL_SCHEME);

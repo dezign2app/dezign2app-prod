@@ -79,12 +79,14 @@ async function handleProxy(req: NextRequest) {
 
   if (isLoopback && process.env.NEXT_PUBLIC_APP_URL) {
     try {
-      const publicHost = new URL(process.env.NEXT_PUBLIC_APP_URL).host;
+      const appUrlObj = new URL(process.env.NEXT_PUBLIC_APP_URL);
+      const publicHost = appUrlObj.host;
+      const publicProto = appUrlObj.protocol.replace(/:$/, "");
       headers.set("x-forwarded-host", publicHost);
-      headers.set("x-forwarded-proto", "https");
+      headers.set("x-forwarded-proto", publicProto);
       headers.set("x-better-auth-forwarded-host", publicHost);
-      headers.set("x-better-auth-forwarded-proto", "https");
-      log("[auth proxy]  x-forwarded-host  :", publicHost, "(from NEXT_PUBLIC_APP_URL)");
+      headers.set("x-better-auth-forwarded-proto", publicProto);
+      log("[auth proxy]  x-forwarded-host  :", publicHost, "proto:", publicProto, "(from NEXT_PUBLIC_APP_URL)");
     } catch {
       headers.set("x-forwarded-host", requestUrl.host);
       headers.set("x-forwarded-proto", requestUrl.protocol.replace(/:$/, ""));
