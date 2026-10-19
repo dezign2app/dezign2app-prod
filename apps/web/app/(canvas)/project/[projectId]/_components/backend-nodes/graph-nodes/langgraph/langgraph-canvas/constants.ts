@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Radio,
   Link2,
+  Braces,
 } from "lucide-react";
 import type { LangGraphCanvasNodeAddType } from "@workspace/canvas";
 
@@ -91,6 +92,8 @@ export const LANGGRAPH_CANVAS_NODE_OUTPUT = "langgraph_output" as const;
 export const LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF = "langgraph_state_reducer_ref" as const;
 export const LANGGRAPH_CANVAS_NODE_TRANSFORMER = "transformer" as const;
 export const LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF = "transformer_ref" as const;
+export const LANGGRAPH_CANVAS_NODE_TYPES = "langgraph_types" as const;
+export const LANGGRAPH_CANVAS_NODE_TYPES_REF = "langgraph_types_ref" as const;
 
 export const HANDLE_MIDDLEWARE_IN = "middleware_in" as const;
 export const HANDLE_MIDDLEWARE_OUT = "middleware_out" as const;
@@ -106,6 +109,9 @@ export const HANDLE_STATE_OUT = "state_out" as const;
 
 export const HANDLE_TRANSFORMER_IN = "transformer_in" as const;
 export const HANDLE_TRANSFORMER_OUT = "transformer-out" as const;
+
+export const HANDLE_TYPES_IN = "types_in" as const;
+export const HANDLE_TYPES_OUT = "types_out" as const;
 
 // ─── Reserved LangGraph Canvas Node IDs ─────────────────────────────────────────────
 export const NODE_ID_START = "START" as const;
@@ -540,5 +546,17 @@ export const TOOL_PALETTE_ITEMS: ToolPaletteItem[] = [
     label: "Output Channel",
     desc: "Emit SSE, WebSocket, Event, or Webhook output",
     icon: Radio,
+  },
+  {
+    type: LANGGRAPH_CANVAS_NODE_TYPES,
+    label: "Types / Schemas",
+    desc: "Define custom TypeScript interfaces, types & schemas",
+    icon: Braces,
+  },
+  {
+    type: LANGGRAPH_CANVAS_NODE_TYPES_REF,
+    label: "Types Ref",
+    desc: "Reference existing Types & Schemas across nodes",
+    icon: Link2,
   },
 ];

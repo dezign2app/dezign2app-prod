@@ -64,7 +64,7 @@ export function buildGraphAnnotationSchema(
         reducer: (x, y) => (y !== undefined ? Boolean(y) : (x !== undefined ? Boolean(x) : false)),
         default: () => Boolean(ch.defaultValue),
       });
-    } else if (ch.type === "object" || ch.type === "json") {
+    } else if (ch.type === "object") {
       schemaSpec[ch.key] = Annotation<Record<string, unknown>>({
         reducer: (x, y) => ({ ...(x || {}), ...((y as Record<string, unknown>) || {}) }),
         default: () => ((ch.defaultValue as Record<string, unknown>) || {}),

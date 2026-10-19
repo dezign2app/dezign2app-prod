@@ -19,6 +19,9 @@ import type {
   LangGraphAgentRefNode,
   TransformerCanvasNode,
   TransformerRefCanvasNode,
+  LangGraphTypesNode,
+  LangGraphTypesRefNode,
+  CustomTypeItem,
   Parameter,
 } from "@workspace/canvas";
 import {
@@ -40,6 +43,8 @@ import {
   LANGGRAPH_CANVAS_NODE_OUTPUT,
   LANGGRAPH_CANVAS_NODE_TRANSFORMER,
   LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
+  LANGGRAPH_CANVAS_NODE_TYPES,
+  LANGGRAPH_CANVAS_NODE_TYPES_REF,
   HANDLE_LLM_IN,
   HANDLE_LLM_OUT,
   HANDLE_TOOL_IN,
@@ -50,6 +55,8 @@ import {
   HANDLE_MEMORY_OUT,
   HANDLE_TRANSFORMER_IN,
   HANDLE_TRANSFORMER_OUT,
+  HANDLE_TYPES_IN,
+  HANDLE_TYPES_OUT,
   NODE_ID_START,
   NODE_ID_END,
   NODE_ID_STATE_GLOBAL,
@@ -435,6 +442,75 @@ export function buildInitialNodes(
       },
     };
     result.push(trRefNode);
+  });
+
+  interface InitializerTypesDef {
+    id?: string;
+    label?: string;
+    typesId?: string;
+    types?: CustomTypeItem[];
+    rawTypeScript?: string;
+    definitionMode?: "visual" | "raw";
+    position?: { x: number; y: number };
+  }
+
+  function isInitializerTypesDef(val: unknown): val is InitializerTypesDef {
+    return typeof val === "object" && val !== null;
+  }
+
+  interface InitializerTypesRefDef {
+    id?: string;
+    label?: string;
+    typesRef?: string;
+    position?: { x: number; y: number };
+  }
+
+  function isInitializerTypesRefDef(val: unknown): val is InitializerTypesRefDef {
+    return typeof val === "object" && val !== null;
+  }
+
+  const rawTypes: unknown[] = Array.isArray(data.typesDefinitions)
+    ? data.typesDefinitions
+    : Array.isArray(data.customTypesNodes)
+      ? data.customTypesNodes
+      : [];
+
+  rawTypes.forEach((item: unknown, tIdx: number) => {
+    if (!isInitializerTypesDef(item)) return;
+    const typesNodeId = item.id || item.typesId || `types_${Date.now()}_${tIdx}`;
+    const typesNode: LangGraphTypesNode = {
+      id: typesNodeId,
+      type: LANGGRAPH_CANVAS_NODE_TYPES,
+      position: item.position || { x: 340, y: 380 + tIdx * 60 },
+      data: {
+        label: item.label || "Custom Types",
+        typesId: typesNodeId,
+        types: Array.isArray(item.types) ? item.types : [],
+        rawTypeScript: item.rawTypeScript || "",
+        definitionMode: item.definitionMode || "visual",
+      },
+    };
+    result.push(typesNode);
+  });
+
+  const rawTypesRefs: unknown[] = Array.isArray(data.customTypesRefNodes)
+    ? data.customTypesRefNodes
+    : [];
+
+  rawTypesRefs.forEach((item: unknown, rIdx: number) => {
+    if (!isInitializerTypesRefDef(item)) return;
+    const refId = item.id || `types_ref_${Date.now()}_${rIdx}`;
+    const typesRefNode: LangGraphTypesRefNode = {
+      id: refId,
+      type: LANGGRAPH_CANVAS_NODE_TYPES_REF,
+      position: item.position || { x: 340, y: 440 + rIdx * 60 },
+      data: {
+        label: item.label || "Types Ref",
+        typesRef: item.typesRef,
+        refId,
+      },
+    };
+    result.push(typesRefNode);
   });
 
   const savedEndNodes = data.endNodes || [];

@@ -123,7 +123,7 @@ export function LangGraphTestCasesInspector({
               ? false
               : channel.type === "array" || channel.type === "messages"
                 ? []
-                : channel.type === "object" || channel.type === "json"
+                : channel.type === "object"
                   ? {}
                   : "";
         return body;

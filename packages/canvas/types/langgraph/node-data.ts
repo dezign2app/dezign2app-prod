@@ -1,4 +1,5 @@
 import type { Edge } from "@xyflow/react";
+import type { CustomTypeItem } from "../custom-types";
 import type {
   LangGraphStateChannel,
   LangGraphInputChannel,
@@ -385,3 +386,24 @@ export interface OutputNodeData
   onOpenInspector?: () => void;
   onSelectNode?: () => void;
 }
+
+export interface LangGraphTypesNodeData extends Record<string, unknown> {
+  label: string;
+  typesId?: string;
+  types?: CustomTypeItem[];
+  rawTypeScript?: string;
+  definitionMode?: "visual" | "raw";
+  onDeleteTypes?: () => void;
+  onOpenInspector?: () => void;
+  onSelectNode?: () => void;
+}
+
+export interface LangGraphTypesRefNodeData extends Record<string, unknown> {
+  label: string;
+  refId: string;
+  typesRef?: string;
+  onDeleteTypesRef?: () => void;
+  onOpenInspector?: () => void;
+  onSelectNode?: () => void;
+}
+

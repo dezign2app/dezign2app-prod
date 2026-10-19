@@ -21,6 +21,8 @@ import {
   LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF,
   LANGGRAPH_CANVAS_NODE_TRANSFORMER,
   LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
+  LANGGRAPH_CANVAS_NODE_TYPES,
+  LANGGRAPH_CANVAS_NODE_TYPES_REF,
 } from "../../constants";
 import type { BaseNodeData } from "../nodes";
 import type {
@@ -45,6 +47,8 @@ import type {
   LangGraphMemoryRefNodeData,
   OutputNodeData,
   LangGraphStateReducerRefNodeData,
+  LangGraphTypesNodeData,
+  LangGraphTypesRefNodeData,
 } from "./node-data";
 import type { LangGraphStepConfig } from "./steps";
 
@@ -168,6 +172,18 @@ export type TransformerRefCanvasNode = Node<
 > &
   BaseCanvasNodeProps;
 
+export type LangGraphTypesNode = Node<
+  LangGraphTypesNodeData,
+  typeof LANGGRAPH_CANVAS_NODE_TYPES
+> &
+  BaseCanvasNodeProps;
+
+export type LangGraphTypesRefNode = Node<
+  LangGraphTypesRefNodeData,
+  typeof LANGGRAPH_CANVAS_NODE_TYPES_REF
+> &
+  BaseCanvasNodeProps;
+
 export type LangGraphCanvasEdge = Edge & {
   selected?: boolean;
 };
@@ -191,7 +207,9 @@ export type LangGraphCanvasNodeUnion =
   | OutputNode
   | LangGraphStateReducerRefNode
   | TransformerCanvasNode
-  | TransformerRefCanvasNode;
+  | TransformerRefCanvasNode
+  | LangGraphTypesNode
+  | LangGraphTypesRefNode;
 
 export type LangGraphCanvasNode = LangGraphCanvasNodeUnion;
 
@@ -209,6 +227,18 @@ export function isTransformerRefCanvasNode(
   node: LangGraphCanvasNode,
 ): node is TransformerRefCanvasNode {
   return node.type === LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF;
+}
+
+export function isTypesNode(
+  node: LangGraphCanvasNode,
+): node is LangGraphTypesNode {
+  return node.type === LANGGRAPH_CANVAS_NODE_TYPES;
+}
+
+export function isTypesRefNode(
+  node: LangGraphCanvasNode,
+): node is LangGraphTypesRefNode {
+  return node.type === LANGGRAPH_CANVAS_NODE_TYPES_REF;
 }
 
 export function getStepData(node: LangGraphCanvasNode): StepNodeData | null {
@@ -234,4 +264,6 @@ export type LangGraphCanvasNodeAddType =
   | typeof LANGGRAPH_CANVAS_NODE_OUTPUT
   | typeof LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF
   | typeof LANGGRAPH_CANVAS_NODE_TRANSFORMER
-  | typeof LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF;
+  | typeof LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF
+  | typeof LANGGRAPH_CANVAS_NODE_TYPES
+  | typeof LANGGRAPH_CANVAS_NODE_TYPES_REF;

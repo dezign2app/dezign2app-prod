@@ -22,6 +22,8 @@ import type {
   OutputNode,
   LangGraphCanvasNode,
   TransformerCanvasNodeData,
+  LangGraphTypesNodeData,
+  LangGraphTypesRefNodeData,
 } from "@workspace/canvas";
 import { LLMNodeInspector } from "./LLMNodeInspector";
 import { StepNodeInspector } from "./StepNodeInspector";
@@ -31,6 +33,7 @@ import { AgentNodeInspector } from "./AgentNodeInspector";
 import { MemoryNodeInspector } from "./MemoryNodeInspector";
 import { OutputNodeInspector } from "./OutputNodeInspector";
 import { TransformerNodeInspector } from "./TransformerNodeInspector";
+import { TypesNodeInspector } from "./TypesNodeInspector";
 import type { ConnectedRouteInfo } from "../../../LangGraphNode";
 
 interface InspectorTabContentProps {
@@ -43,6 +46,8 @@ interface InspectorTabContentProps {
   selectedOutputData?: OutputNodeData | null;
   selectedTransformerData?: TransformerCanvasNodeData | null;
   selectedTransformerRefData?: TransformerCanvasNodeData | null;
+  selectedTypesData?: LangGraphTypesNodeData | null;
+  selectedTypesRefData?: LangGraphTypesRefNodeData | null;
   connectedToolsCount?: number;
   connectedMiddlewareCount?: number;
   availableLLMNodes?: (LangGraphLLMNode | LangGraphLLMRefNode)[];
@@ -74,6 +79,8 @@ interface InspectorTabContentProps {
   onUpdateMemory?: (changes: Partial<MemoryNodeData>) => void;
   onUpdateOutput?: (changes: Partial<OutputNodeData>) => void;
   onUpdateTransformer?: (changes: Partial<TransformerCanvasNodeData>) => void;
+  onUpdateTypes?: (changes: Partial<LangGraphTypesNodeData>) => void;
+  onUpdateTypesRef?: (changes: Partial<LangGraphTypesRefNodeData>) => void;
   onSelectNode?: (nodeId: string) => void;
   stateChannels: LangGraphStateChannel[];
   customReducers?: LangGraphCustomReducer[];
@@ -90,6 +97,8 @@ export function InspectorTabContent({
   selectedOutputData,
   selectedTransformerData,
   selectedTransformerRefData,
+  selectedTypesData,
+  selectedTypesRefData,
   connectedToolsCount = 0,
   connectedMiddlewareCount = 0,
   availableLLMNodes,
@@ -121,6 +130,8 @@ export function InspectorTabContent({
   onUpdateMemory,
   onUpdateOutput,
   onUpdateTransformer,
+  onUpdateTypes,
+  onUpdateTypesRef,
   onSelectNode,
   stateChannels,
   customReducers,
@@ -211,6 +222,16 @@ export function InspectorTabContent({
           selectedTransformerRefData={selectedTransformerRefData}
           onDeleteTransformer={onDeleteStep}
           onUpdateTransformer={onUpdateTransformer || (() => {})}
+          nodes={nodes}
+          onSelectNode={onSelectNode}
+        />
+      ) : selectedTypesData || selectedTypesRefData ? (
+        <TypesNodeInspector
+          selectedTypesData={selectedTypesData}
+          selectedTypesRefData={selectedTypesRefData}
+          onDeleteTypes={onDeleteStep}
+          onUpdateTypes={onUpdateTypes || (() => {})}
+          onUpdateTypesRef={onUpdateTypesRef}
           nodes={nodes}
           onSelectNode={onSelectNode}
         />

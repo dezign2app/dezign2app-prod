@@ -289,7 +289,7 @@ export function getSuggestedReducerCodeForChannelType(type?: string): string {
   if (type === "number") {
     return REDUCER_CODE_PRESETS.number;
   }
-  if (type === "object" || type === "json") {
+  if (type === "object") {
     return REDUCER_CODE_PRESETS.object;
   }
   if (type === "string") {
@@ -390,36 +390,13 @@ export function getActionMetadata(
   _channelType?: string,
 ): ReducerActionMeta {
   const isValueless = isValuelessAction(action);
-  let label = action;
+  const hint = isValueless ? "(no value)" : "(value)";
+  let label = `${action} ${hint}`;
   let desc = `Dispatches { action: "${action}" }`;
 
   if (action === "default") {
-    label = "default (Direct)";
+    label = "default (direct)";
     desc = "Standard reducer update passing value directly";
-  } else if (action === "replace") {
-    label = "replace (= Set / Overwrite)";
-    desc = "Explicitly overwrites the current state value";
-  } else if (action === "reset") {
-    label = "reset (Clear)";
-    desc = "Resets state channel (no value needed)";
-  } else if (action === "clear") {
-    label = "clear (Empty)";
-    desc = "Clears state channel (no value needed)";
-  } else if (action === "toggle") {
-    label = "toggle (Flip)";
-    desc = "Inverts boolean state (no value needed)";
-  } else if (action === "increment") {
-    label = "increment (+ Add)";
-    desc = "Adds amount to number";
-  } else if (action === "decrement") {
-    label = "decrement (- Sub)";
-    desc = "Subtracts amount from number";
-  } else if (action === "append") {
-    label = "append (Push)";
-    desc = "Appends item(s) to array";
-  } else if (action === "merge") {
-    label = "merge (Spread)";
-    desc = "Shallow merges keys into object";
   }
 
   return {
@@ -431,12 +408,12 @@ export function getActionMetadata(
 }
 
 /**
- * Returns the list of available actions for a channel, prioritizing auto-detected
- * actions from the channel's custom reducer code.
+ * Returns the list of available actions for a channel.
+ * If custom reducer code is present, it returns ONLY the auto-detected actions (plus default).
  */
 export function getActionsForReducer(
   channelType?: string,
-  _reducerName?: string,
+  reducerName?: string,
   customCode?: string,
 ): ReducerActionMeta[] {
   const actions: ReducerActionMeta[] = [];
@@ -452,20 +429,55 @@ export function getActionsForReducer(
   // 1. Default update action (always first)
   add({
     action: "default",
-    label: "default (Direct)",
+    label: "default (direct)",
     description: "Standard reducer update passing value directly",
     requiresValue: true,
   });
 
-  // 2. Extract actions from custom reducer code if present (HIGH PRIORITY)
-  if (customCode) {
-    const detected = extractActionsFromReducerCode(customCode);
-    for (const act of detected) {
-      add(getActionMetadata(act, channelType));
+  // 2. Extract actions from custom reducer code or preset code for channel type
+  // Extracts THOSE ACTIONS ALONE matching ChannelReducerConfig!
+  const effectiveCode =
+    customCode && typeof customCode === "string" && customCode.trim()
+      ? customCode
+      : getSuggestedReducerCodeForChannelType(channelType);
+
+  if (effectiveCode) {
+    const detected = extractActionsFromReducerCode(effectiveCode);
+    if (detected.length > 0) {
+      for (const act of detected) {
+        add(getActionMetadata(act, channelType));
+      }
+      return actions;
     }
   }
 
-  // 3. Fallback type-specific actions (only if not already added)
+  // 3. Built-in reducers
+  if (reducerName === "replace") {
+    add(getActionMetadata("replace", channelType));
+    return actions;
+  }
+  if (reducerName === "add_messages") {
+    add(getActionMetadata("append", channelType));
+    add(getActionMetadata("replace", channelType));
+    add(getActionMetadata("reset", channelType));
+    return actions;
+  }
+  if (reducerName === "append" || reducerName === "concat_array") {
+    add(getActionMetadata("append", channelType));
+    add(getActionMetadata("replace", channelType));
+    add(getActionMetadata("reset", channelType));
+    add(getActionMetadata("clear", channelType));
+    return actions;
+  }
+  if (reducerName === "merge_object") {
+    add(getActionMetadata("merge", channelType));
+    add(getActionMetadata("replace", channelType));
+    add(getActionMetadata("reset", channelType));
+    add(getActionMetadata("clear", channelType));
+    return actions;
+  }
+
+  // 4. Fallback type-specific actions ONLY if no specific reducer code was found
   if (channelType === "number") {
     add(getActionMetadata("increment", channelType));
     add(getActionMetadata("decrement", channelType));
@@ -480,7 +492,7 @@ export function getActionsForReducer(
     add(getActionMetadata("replace", channelType));
     add(getActionMetadata("reset", channelType));
     add(getActionMetadata("clear", channelType));
-  } else if (channelType === "object" || channelType === "json") {
+  } else if (channelType === "object") {
     add(getActionMetadata("merge", channelType));
     add(getActionMetadata("replace", channelType));
     add(getActionMetadata("reset", channelType));

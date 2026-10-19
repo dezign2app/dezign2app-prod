@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
-import { LocalInput } from "../../../../../common";
+import { LocalInput, LocalTextarea } from "../../../../../common";
 import {
   Select,
   SelectContent,
@@ -29,6 +29,15 @@ import {
   SelectLabel,
   SelectSeparator,
 } from "@workspace/ui/components/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuGroup,
+} from "@workspace/ui/components/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
@@ -41,7 +50,10 @@ import type {
   AgentNodeData,
   LangGraphStateUpdateItem,
   StateUpdateSource,
+  LangGraphCanvasNode,
+  CustomTypeItem,
 } from "@workspace/canvas";
+import { LANGGRAPH_CANVAS_NODE_TYPES } from "@workspace/canvas";
 import type { Parameter } from "@/types/canvas";
 import { parseSchemaJsonToFields } from "./AgentStructuredOutputSection";
 
@@ -51,6 +63,7 @@ interface AgentStateUpdatesSectionProps {
   stateChannels?: LangGraphStateChannel[];
   customReducers?: LangGraphCustomReducer[];
   embedded?: boolean;
+  nodes?: LangGraphCanvasNode[];
 }
 
 import {
@@ -58,6 +71,7 @@ import {
   isValuelessAction,
   getActionsForReducer,
   getActionMetadata,
+  getSuggestedReducerCodeForChannelType,
   type ReducerActionMeta,
 } from "../state-inspector/constants";
 
@@ -66,6 +80,7 @@ export {
   isValuelessAction,
   getActionsForReducer,
   getActionMetadata,
+  getSuggestedReducerCodeForChannelType,
 };
 export type { ReducerActionMeta };
 
@@ -75,6 +90,7 @@ export function AgentStateUpdatesSection({
   stateChannels = [],
   customReducers = [],
   embedded = false,
+  nodes = [],
 }: AgentStateUpdatesSectionProps) {
   const stateUpdates: LangGraphStateUpdateItem[] =
     selectedAgentData.stateUpdates || [];
@@ -82,6 +98,14 @@ export function AgentStateUpdatesSection({
   const [customActionIdxs, setCustomActionIdxs] = React.useState<
     Record<number, boolean>
   >({});
+
+  // Reference insertion step & field per row
+  const [rowRefStep, setRowRefStep] = React.useState<Record<number, string>>({});
+  const [rowRefField, setRowRefField] = React.useState<Record<number, string>>({});
+  const [rowJsonOverrides, setRowJsonOverrides] = React.useState<Record<number, boolean>>({});
+
+  const inputRefs = React.useRef<Record<number, HTMLInputElement | null>>({});
+  const textareaRefs = React.useRef<Record<number, HTMLTextAreaElement | null>>({});
 
   const isStructured = Boolean(selectedAgentData.responseFormat?.enabled);
   const schemaJson = selectedAgentData.responseFormat?.schemaJson || "";
@@ -100,6 +124,248 @@ export function AgentStateUpdatesSection({
     );
   }, [selectedAgentData.pipelineSteps]);
 
+  // Available reference steps and fields for insertion
+  const availableReferenceSteps = useMemo(() => {
+    const steps: Array<{
+      id: string;
+      label: string;
+      fields: Array<{
+        path: string;
+        label: string;
+        short: string;
+        type?: string;
+      }>;
+    }> = [];
+
+    // 1. LLM Agent Step
+    const llmFields: Array<{ path: string; label: string; short: string; type?: string }> = [
+      { path: "response.content", label: "content (AI Text)", short: "response.content", type: "string" },
+      { path: "response", label: "response (Whole Message)", short: "response", type: "object" },
+    ];
+
+    if (isStructured && schemaFields.length > 0) {
+      for (const sf of schemaFields) {
+        if (!sf.name?.trim()) continue;
+        llmFields.push({
+          path: `response.${sf.name.trim()}`,
+          label: `${sf.name} (${sf.type || "string"})`,
+          short: `response.${sf.name.trim()}`,
+          type: sf.type || "string",
+        });
+      }
+    }
+
+    llmFields.push(
+      { path: "response.role", label: "role (string)", short: "response.role", type: "string" },
+      { path: "response.tool_calls", label: "tool_calls (array)", short: "response.tool_calls", type: "array" },
+    );
+
+    steps.push({
+      id: "response",
+      label: "LLM Agent (response)",
+      fields: llmFields,
+    });
+
+    // 2. All Pipeline Steps (LLM steps, transformers, custom code, tools, etc.)
+    const pSteps = selectedAgentData.pipelineSteps || [];
+    pSteps.forEach((ps, idx) => {
+      const stepNum = idx + 1;
+      const stepVar = ps.outputVariable || ps.id || `step${stepNum}`;
+      const stepLabel = ps.label
+        ? `${ps.label} (${stepVar})`
+        : `Step ${stepNum}: ${ps.type} (${stepVar})`;
+
+      const pFields: Array<{ path: string; label: string; short: string; type?: string }> = [
+        { path: stepVar, label: `${stepVar} (Whole Output)`, short: stepVar, type: "object" },
+      ];
+
+      const returnSchema = ps.outputSchema || ps.functionRef?.returnSchema || [];
+      returnSchema.forEach((rf) => {
+        if (rf.name?.trim()) {
+          pFields.push({
+            path: `${stepVar}.${rf.name.trim()}`,
+            label: `${rf.name} (${rf.type || "string"})`,
+            short: `${stepVar}.${rf.name.trim()}`,
+            type: rf.type || "string",
+          });
+        }
+      });
+
+      if (ps.type === "custom_code") {
+        pFields.push({
+          path: `${stepVar}.result`,
+          label: "result (output)",
+          short: `${stepVar}.result`,
+          type: "string",
+        });
+      } else if (ps.type === "tools") {
+        pFields.push(
+          {
+            path: `${stepVar}.output`,
+            label: "output (object)",
+            short: `${stepVar}.output`,
+            type: "object",
+          },
+          {
+            path: `${stepVar}.content`,
+            label: "content (string)",
+            short: `${stepVar}.content`,
+            type: "string",
+          },
+        );
+      } else if (ps.type === "llm_call") {
+        pFields.push(
+          {
+            path: `${stepVar}.content`,
+            label: "content (string)",
+            short: `${stepVar}.content`,
+            type: "string",
+          },
+          {
+            path: `${stepVar}.response`,
+            label: "response (object)",
+            short: `${stepVar}.response`,
+            type: "object",
+          },
+        );
+      } else if (returnSchema.length === 0) {
+        pFields.push(
+          {
+            path: `${stepVar}.output`,
+            label: "output (data)",
+            short: `${stepVar}.output`,
+            type: "object",
+          },
+          {
+            path: `${stepVar}.content`,
+            label: "content (string)",
+            short: `${stepVar}.content`,
+            type: "string",
+          },
+        );
+      }
+
+      steps.push({
+        id: stepVar,
+        label: stepLabel,
+        fields: pFields,
+      });
+    });
+
+    // 3. Upstream Canvas Nodes
+    if (nodes && nodes.length > 0) {
+      nodes.forEach((n) => {
+        if (!n || n.id === selectedAgentData.id) return;
+        const nodeData = n.data;
+        let nodeName: string = n.id;
+        let nodeVar: string = n.id;
+
+        if (typeof nodeData === "object" && nodeData !== null) {
+          if ("label" in nodeData && typeof nodeData.label === "string" && nodeData.label.trim()) {
+            nodeName = nodeData.label.trim();
+          } else if ("name" in nodeData && typeof nodeData.name === "string" && nodeData.name.trim()) {
+            nodeName = nodeData.name.trim();
+          }
+
+          if ("outputVariable" in nodeData && typeof nodeData.outputVariable === "string" && nodeData.outputVariable.trim()) {
+            nodeVar = nodeData.outputVariable.trim();
+          }
+        }
+
+        steps.push({
+          id: `node_${n.id}`,
+          label: `Node: ${nodeName}`,
+          fields: [
+            {
+              path: `${nodeVar}.content`,
+              label: "content (text)",
+              short: `${nodeVar}.content`,
+              type: "string",
+            },
+            {
+              path: `${nodeVar}.output`,
+              label: "output (data)",
+              short: `${nodeVar}.output`,
+              type: "object",
+            },
+            {
+              path: nodeVar,
+              label: `${nodeVar} (whole)`,
+              short: nodeVar,
+              type: "object",
+            },
+          ],
+        });
+      });
+    }
+
+    // 4. Graph State Variables
+    if (stateChannels.length > 0) {
+      const stateFields: Array<{ path: string; label: string; short: string; type?: string }> = [];
+
+      stateChannels
+        .filter((c) => Boolean(c.key?.trim()))
+        .forEach((c) => {
+          const typeLabel = c.customTypeName ? c.customTypeName : c.type;
+          stateFields.push({
+            path: `state.${c.key}`,
+            label: `state.${c.key} (${typeLabel})`,
+            short: `state.${c.key}`,
+            type: c.type,
+          });
+
+          // Check if custom type schema has fields
+          let schema: CustomTypeItem | undefined = c.customTypeSchema;
+          if (!schema && c.customTypeId && nodes && nodes.length > 0) {
+            for (const n of nodes) {
+              if (
+                n &&
+                n.type === LANGGRAPH_CANVAS_NODE_TYPES &&
+                n.data &&
+                typeof n.data === "object" &&
+                "types" in n.data &&
+                Array.isArray(n.data.types)
+              ) {
+                const found = n.data.types.find(
+                  (t) =>
+                    t &&
+                    typeof t === "object" &&
+                    "id" in t &&
+                    t.id === c.customTypeId,
+                );
+                if (found) {
+                  schema = found;
+                  break;
+                }
+              }
+            }
+          }
+
+          if (schema && schema.fields && Array.isArray(schema.fields)) {
+            schema.fields.forEach((f) => {
+              if (f && f.name && !f.isOmitted) {
+                const fieldTypeStr = f.isArray ? `${f.type}[]` : f.type;
+                stateFields.push({
+                  path: `state.${c.key}.${f.name}`,
+                  label: `state.${c.key}.${f.name} (${fieldTypeStr})`,
+                  short: `state.${c.key}.${f.name}`,
+                  type: f.type,
+                });
+              }
+            });
+          }
+        });
+
+      steps.push({
+        id: "state",
+        label: "Graph State (state.*)",
+        fields: stateFields,
+      });
+    }
+
+    return steps;
+  }, [isStructured, schemaFields, selectedAgentData.pipelineSteps, selectedAgentData.id, stateChannels, nodes]);
+
   // Helper to get channel details and its active reducer
   const getChannelMeta = (channelKey: string) => {
     const channel = stateChannels.find((c) => c.key === channelKey);
@@ -112,12 +378,17 @@ export function AgentStateUpdatesSection({
       (r) => r.name === reducerName || r.id === reducerName || r.targetField === channelKey,
     );
 
+    const effectiveCode =
+      matchedCustom?.code ||
+      channel?.customReducerCode ||
+      getSuggestedReducerCodeForChannelType(channelType);
+
     return {
       channel,
       type: channelType,
       reducer: reducerName,
-      isCustom: Boolean(matchedCustom),
-      customCode: matchedCustom?.code || channel?.customReducerCode,
+      isCustom: Boolean(matchedCustom || channel?.customReducerCode),
+      customCode: effectiveCode,
       description: matchedCustom?.description,
     };
   };
@@ -373,14 +644,16 @@ export function AgentStateUpdatesSection({
             )}
           </div>
         )}
-
-        {/* Mapping Rows Header: 1. State Channel | 2. Action | 3. New Value / Mapping */}
+        {/* Mapping Rows Header: 1. State Channel | 2. Reducer Action */}
         {stateUpdates.length > 0 && (
           <div className="flex items-center justify-between px-2 text-[9px] font-bold text-muted-foreground uppercase tracking-wider">
-            <span className="flex-1 min-w-[130px]">1. State Channel</span>
-            <span className="w-[135px] px-1">2. Reducer Action</span>
-            <span className="flex-1 min-w-[140px] pl-3">3. New Value / Mapping</span>
-            <span className="w-7 text-right"></span>
+            <div className="flex items-center gap-2">
+              <span className="w-[180px]">1. State Channel</span>
+              <span className="w-[170px]">2. Reducer Action</span>
+            </div>
+            <span className="text-[10px] font-mono text-muted-foreground">
+              {stateUpdates.length} update{stateUpdates.length > 1 ? "s" : ""}
+            </span>
           </div>
         )}
 
@@ -403,7 +676,6 @@ export function AgentStateUpdatesSection({
           const hasTypeMismatch = Boolean(
             currentSource === "structured_field" &&
               matchedSchemaField &&
-              channelMeta.type !== "json" &&
               channelMeta.type !== "object" &&
               matchedSchemaField.type &&
               !matchedSchemaField.type.startsWith(channelMeta.type) &&
@@ -413,18 +685,12 @@ export function AgentStateUpdatesSection({
               ),
           );
 
-          // Available actions for this channel and reducer
+          // Available actions for this channel and reducer (auto-detected only!)
           const availableActions = getActionsForReducer(
             channelMeta.type,
             channelMeta.reducer,
             channelMeta.customCode,
           );
-
-          const isCustomActionActive =
-            Boolean(customActionIdxs[sIdx]) ||
-            (Boolean(su.action) &&
-              su.action !== "default" &&
-              !availableActions.some((a) => a.action === su.action));
 
           const currentActionMeta = availableActions.find(
             (a) => a.action === (su.action || "default"),
@@ -435,221 +701,179 @@ export function AgentStateUpdatesSection({
             isValuelessAction(su.action) ||
             currentActionMeta?.requiresValue === false;
 
+          // Check if channel expects object/JSON or user toggled JSON mode
+          const expectsJson =
+            channelMeta.type === "object" ||
+            channelMeta.reducer === "merge_object";
+
+          const isRowJsonMode =
+            rowJsonOverrides[sIdx] !== undefined
+              ? rowJsonOverrides[sIdx]
+              : (expectsJson || (typeof su.value === "string" && (su.value.includes("\n") || su.value.trim().startsWith("{"))));
+
+          // Determine active step and field in the helper for this row
+          const activeStepId = rowRefStep[sIdx] || availableReferenceSteps[0]?.id || "response";
+          const activeStepObj = availableReferenceSteps.find((st) => st.id === activeStepId) || availableReferenceSteps[0];
+          const activeFieldPath = rowRefField[sIdx] || activeStepObj?.fields[0]?.path || "response.content";
+          const activeFieldObj = activeStepObj?.fields.find((f) => f.path === activeFieldPath) || activeStepObj?.fields[0];
+
           // Format value description for preview
-          const valueDisplay =
-            currentSource === "structured_field"
-              ? `structuredResponse.${su.schemaField || su.value}`
-              : currentSource === "structured_full"
-                ? `full structuredResponse`
-                : currentSource === "message_content"
-                  ? `response.content`
-                  : currentSource === "message_object"
-                    ? `AIMessage`
-                    : currentSource === "expression"
-                      ? (su.value || "(empty expr)")
-                      : currentSource === "literal"
-                        ? JSON.stringify(su.value || "")
-                        : (su.value || "value");
+          const displayVal =
+            su.value !== undefined && su.value !== ""
+              ? su.value
+              : currentSource === "structured_field"
+                ? (su.schemaField ? `response.${su.schemaField}` : (su.value || ""))
+                : currentSource === "structured_full"
+                  ? "response"
+                  : currentSource === "message_content"
+                    ? "response.content"
+                    : currentSource === "message_object"
+                      ? "response"
+                      : "";
+
+          const valueDisplay = displayVal || (isValueless ? "" : '""');
+
+          const handleRawValueChange = (raw: string) => {
+            const updated = [...stateUpdates];
+            const cur = updated[sIdx];
+            if (!cur) return;
+
+            let nextSource: StateUpdateSource = "literal";
+            let nextSchemaField: string | undefined = undefined;
+
+            const cleanMatch = raw.replace(/^response\??\./, "").trim();
+            const matchedField = schemaFields.find(
+              (f) => f.name === cleanMatch || f.name === raw,
+            );
+
+            if (matchedField) {
+              nextSource = "structured_field";
+              nextSchemaField = matchedField.name;
+            } else if (raw === "response.content") {
+              nextSource = "message_content";
+            } else if (raw === "response") {
+              nextSource = "message_object";
+            } else if (
+              raw.startsWith("state.") ||
+              raw.includes("${") ||
+              transformerSteps.some(
+                (ts) =>
+                  ts.outputVariable &&
+                  (raw === ts.outputVariable || raw.startsWith(`${ts.outputVariable}.`)),
+              )
+            ) {
+              nextSource = "expression";
+            } else {
+              nextSource = "literal";
+            }
+
+            updated[sIdx] = {
+              ...cur,
+              value: raw,
+              source: nextSource,
+              schemaField: nextSchemaField,
+              mode: nextSource === "expression" ? "expression" : "set",
+            };
+            onUpdateAgent({ stateUpdates: updated });
+          };
+
+          const handleInsertRefAtCursor = (refString: string) => {
+            const isJson = Boolean(isRowJsonMode);
+            const el = isJson ? textareaRefs.current[sIdx] : inputRefs.current[sIdx];
+            const currentVal = su.value !== undefined ? String(su.value) : "";
+
+            let nextVal: string;
+            let nextCursor = 0;
+
+            if (el) {
+              const start = el.selectionStart ?? el.value.length;
+              const end = el.selectionEnd ?? el.value.length;
+              nextVal = currentVal.substring(0, start) + refString + currentVal.substring(end);
+              nextCursor = start + refString.length;
+            } else {
+              nextVal = currentVal ? `${currentVal} ${refString}` : refString;
+              nextCursor = nextVal.length;
+            }
+
+            handleRawValueChange(nextVal);
+
+            setTimeout(() => {
+              const activeEl = isJson ? textareaRefs.current[sIdx] : inputRefs.current[sIdx];
+              if (activeEl) {
+                activeEl.focus();
+                activeEl.setSelectionRange(nextCursor, nextCursor);
+              }
+            }, 50);
+          };
 
           return (
             <div
               key={sIdx}
-              className="flex flex-col gap-2 p-2.5 rounded-lg border bg-background/50 text-xs shadow-xs transition-colors hover:border-border/80"
+              className="flex flex-col gap-2.5 p-3 rounded-xl border bg-background/60 text-xs shadow-xs transition-all hover:border-border/80"
             >
-              {/* Top Controls: Channel & Reducer | Action | Arrow | Source | Delete */}
-              <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 min-w-0">
-                {/* 1. Target Channel & Reducer */}
-                <div className="flex-1 min-w-[130px] flex items-center gap-1 min-w-0">
-                  <Select
-                    value={su.channelKey}
-                    onValueChange={(v: string) => {
-                      const updated = [...stateUpdates];
-                      const current = updated[sIdx];
-                      if (current) {
-                        const chMeta = getChannelMeta(v);
-                        updated[sIdx] = {
-                          ...current,
-                          channelKey: v,
-                          reducer: chMeta.reducer,
-                          action: "default",
-                        };
-                        onUpdateAgent({ stateUpdates: updated });
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="h-7 text-xs bg-background font-mono flex-1 min-w-0 px-2" title="Select State Channel & Reducer">
-                      <SelectValue placeholder="Select channel" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectLabel className="text-[10px] uppercase font-bold text-muted-foreground">
-                          State Channels &amp; Reducers
-                        </SelectLabel>
-                        {stateChannels
-                          .filter((ch: LangGraphStateChannel) =>
-                            Boolean(ch.key?.trim()),
-                          )
-                          .map((ch: LangGraphStateChannel) => (
-                            <SelectItem key={ch.key} value={ch.key}>
-                              <div className="flex items-center gap-1.5 font-mono">
-                                <span className="font-semibold text-foreground">
-                                  {ch.key}
-                                </span>
-                                <span className="text-[10px] text-sky-400">
-                                  ({ch.reducer || "replace"})
-                                </span>
-                                <span className="text-[9px] text-muted-foreground font-sans">
-                                  [{ch.type}]
-                                </span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        {!stateChannels.some(
-                          (c: LangGraphStateChannel) => c.key === su.channelKey,
-                        ) &&
-                          su.channelKey && (
-                            <SelectItem value={su.channelKey}>
-                              <span className="font-mono font-semibold">
-                                {su.channelKey}
-                              </span>
-                            </SelectItem>
-                          )}
-                      </SelectGroup>
-
-                      {customReducers.length > 0 && (
-                        <>
-                          <SelectSeparator />
-                          <SelectGroup>
-                            <SelectLabel className="text-[10px] uppercase font-bold text-purple-400">
-                              Custom Reducers (@langgraphstateconfig)
-                            </SelectLabel>
-                            {customReducers.map((cr) => (
-                              <SelectItem
-                                key={cr.id}
-                                value={cr.targetField || cr.name}
-                              >
-                                <div className="flex items-center gap-1.5 font-mono text-purple-300">
-                                  <Code2 className="w-3 h-3 text-purple-400" />
-                                  <span className="font-semibold">{cr.name}</span>
-                                  {cr.targetField && (
-                                    <span className="text-[9px] text-muted-foreground font-sans">
-                                      ➔ {cr.targetField}
-                                    </span>
-                                  )}
+              {/* ─── Top Row: 1. State Channel | 2. Reducer Action | Valueless Pill | Delete ─── */}
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap sm:flex-nowrap">
+                  {/* 1. Target Channel */}
+                  <div className="w-[180px] shrink-0">
+                    <Select
+                      value={su.channelKey}
+                      onValueChange={(v: string) => {
+                        const updated = [...stateUpdates];
+                        const current = updated[sIdx];
+                        if (current) {
+                          const chMeta = getChannelMeta(v);
+                          updated[sIdx] = {
+                            ...current,
+                            channelKey: v,
+                            reducer: chMeta.reducer,
+                            action: "default",
+                          };
+                          onUpdateAgent({ stateUpdates: updated });
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-7 text-xs bg-background font-mono px-2" title="Select State Channel">
+                        <SelectValue placeholder="Select channel" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectLabel className="text-[10px] uppercase font-bold text-muted-foreground">
+                            State Channels
+                          </SelectLabel>
+                          {stateChannels
+                            .filter((ch: LangGraphStateChannel) => Boolean(ch.key?.trim()))
+                            .map((ch: LangGraphStateChannel) => (
+                              <SelectItem key={ch.key} value={ch.key}>
+                                <div className="flex items-center gap-1.5 font-mono">
+                                  <span className="font-semibold text-foreground">{ch.key}</span>
+                                  <span className="text-[9px] text-muted-foreground font-sans">[{ch.type}]</span>
                                 </div>
                               </SelectItem>
                             ))}
-                          </SelectGroup>
-                        </>
-                      )}
-                    </SelectContent>
-                  </Select>
+                          {!stateChannels.some((c: LangGraphStateChannel) => c.key === su.channelKey) && su.channelKey && (
+                            <SelectItem value={su.channelKey}>
+                              <span className="font-mono font-semibold">{su.channelKey}</span>
+                            </SelectItem>
+                          )}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                  {/* Reducer Indicator Badge */}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="shrink-0 cursor-help">
-                        {channelMeta.isCustom ? (
-                          <Badge
-                            variant="secondary"
-                            className="text-[9px] px-1.5 py-0 h-5 bg-purple-500/15 text-purple-300 border border-purple-500/30 font-mono font-medium flex items-center gap-1"
-                          >
-                            <Code2 className="w-2.5 h-2.5 text-purple-400" />
-                            {channelMeta.reducer}
-                          </Badge>
-                        ) : channelMeta.reducer === "add_messages" ? (
-                          <Badge
-                            variant="secondary"
-                            className="text-[9px] px-1.5 py-0 h-5 bg-purple-500/10 text-purple-300 border border-purple-500/20 font-mono"
-                          >
-                            add_messages
-                          </Badge>
-                        ) : channelMeta.reducer === "append" ||
-                          channelMeta.reducer === "concat_array" ? (
-                          <Badge
-                            variant="secondary"
-                            className="text-[9px] px-1.5 py-0 h-5 bg-amber-500/10 text-amber-300 border border-amber-500/20 font-mono"
-                          >
-                            append
-                          </Badge>
-                        ) : channelMeta.reducer === "merge_object" ? (
-                          <Badge
-                            variant="secondary"
-                            className="text-[9px] px-1.5 py-0 h-5 bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-mono"
-                          >
-                            merge_obj
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant="outline"
-                            className="text-[9px] px-1.5 py-0 h-5 text-sky-400 border-sky-500/30 font-mono"
-                          >
-                            replace
-                          </Badge>
-                        )}
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent
-                      side="top"
-                      className="max-w-[280px] p-2 text-xs font-mono"
-                    >
-                      <div className="flex flex-col gap-1">
-                        <span className="font-bold text-foreground">
-                          Reducer: {channelMeta.reducer}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground font-sans">
-                          {channelMeta.description ||
-                            (channelMeta.isCustom
-                              ? "Custom reducer function defined in @langgraphstateconfig"
-                              : channelMeta.reducer === "add_messages"
-                                ? "Deduplicates by ID and appends messages"
-                                : channelMeta.reducer === "append" ||
-                                    channelMeta.reducer === "concat_array"
-                                  ? "Concatenates array payload to existing channel"
-                                  : channelMeta.reducer === "merge_object"
-                                    ? "Merges object properties into existing state"
-                                    : "Replaces channel value with node output")}
-                        </span>
-                        {channelMeta.customCode && (
-                          <code className="text-[9px] bg-background/80 p-1 rounded border border-border/50 text-purple-200 whitespace-pre-wrap max-h-24 overflow-y-auto">
-                            {channelMeta.customCode}
-                          </code>
-                        )}
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-
-                {/* 2. Reducer Action Selector */}
-                <div className="w-[135px] shrink-0">
-                  <Select
-                    value={
-                      isCustomActionActive
-                        ? "__custom__"
-                        : (su.action || "default")
-                    }
-                    onValueChange={(val: string) => {
-                      const updated = [...stateUpdates];
-                      const current = updated[sIdx];
-                      if (!current) return;
-
-                      if (val === "__custom__") {
-                        setCustomActionIdxs((prev) => ({
-                          ...prev,
-                          [sIdx]: true,
-                        }));
-                      } else {
-                        setCustomActionIdxs((prev) => {
-                          const next = { ...prev };
-                          delete next[sIdx];
-                          return next;
-                        });
+                  {/* 2. Reducer Action Combobox (auto-detected actions only) */}
+                  <div className="w-[170px] shrink-0">
+                    <Select
+                      value={su.action || "default"}
+                      onValueChange={(val: string) => {
+                        const updated = [...stateUpdates];
+                        const current = updated[sIdx];
+                        if (!current) return;
 
                         const actMeta = availableActions.find((a) => a.action === val);
-                        const isActionValueless =
-                          isValuelessAction(val) || actMeta?.requiresValue === false;
+                        const isActValueless = isValuelessAction(val) || actMeta?.requiresValue === false;
 
-                        if (isActionValueless) {
+                        if (isActValueless) {
                           updated[sIdx] = {
                             ...current,
                             action: val,
@@ -665,25 +889,12 @@ export function AgentStateUpdatesSection({
                             if (isStructured && schemaFields.length > 0) {
                               nextSource = "structured_field";
                               nextField = schemaFields[0]?.name;
-                              nextValue = nextField;
+                              nextValue = nextField ? `response.${nextField}` : undefined;
                             } else {
-                              nextSource =
-                                channelMeta.type === "messages"
-                                  ? "message_object"
-                                  : "message_content";
-                              nextValue =
-                                channelMeta.type === "messages"
-                                  ? "response"
-                                  : "response.content";
+                              nextSource = channelMeta.type === "messages" ? "message_object" : "message_content";
+                              nextValue = channelMeta.type === "messages" ? "response" : "response.content";
                             }
                           }
-                          if (val === "increment" || val === "decrement") {
-                            if (!nextValue || nextValue === "response.content") {
-                              nextValue = "1";
-                              nextSource = "expression";
-                            }
-                          }
-
                           updated[sIdx] = {
                             ...current,
                             action: val,
@@ -693,307 +904,45 @@ export function AgentStateUpdatesSection({
                           };
                         }
                         onUpdateAgent({ stateUpdates: updated });
-                      }
-                    }}
-                  >
-                    <SelectTrigger
-                      className="h-7 text-xs bg-background font-mono px-2"
-                      title="Select Action for this Reducer"
+                      }}
                     >
-                      <SelectValue placeholder="Action" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectLabel className="text-[10px] uppercase font-bold text-amber-400">
-                          Reducer Actions
-                        </SelectLabel>
-                        {availableActions.map((act) => (
-                          <SelectItem
-                            key={act.action}
-                            value={act.action}
-                            className="font-mono text-xs"
-                          >
-                            <span className="font-semibold text-amber-300">
-                              {act.label}
-                            </span>
-                          </SelectItem>
-                        ))}
-                        <SelectSeparator />
-                        <SelectItem
-                          value="__custom__"
-                          className="text-xs italic text-primary font-mono"
-                        >
-                          + Custom action...
-                        </SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Arrow Connector */}
-                <div className="flex items-center justify-center text-muted-foreground/60 select-none px-0.5">
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </div>
-
-                {/* 3. Source & Field Selector (New Value) */}
-                {isValueless ? (
-                  <div className="flex-1 min-w-[130px] flex items-center justify-between gap-1.5 px-2.5 h-7 rounded-md bg-emerald-500/[0.08] border border-emerald-500/25 text-[10px] font-mono text-emerald-300">
-                    <div className="flex items-center gap-1.5 truncate">
-                      <Check className="w-3 h-3 text-emerald-400 shrink-0" />
-                      <span className="font-medium">No value required</span>
-                    </div>
-                    <span className="text-[8px] text-emerald-400/80 font-sans uppercase tracking-wider">
-                      {su.action || "action"}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex-1 min-w-[130px] flex items-center gap-1.5 min-w-0">
-                    <Select
-                      value={
-                        currentSource === "structured_field"
-                          ? `field:${su.schemaField || su.value || ""}`
-                          : currentSource === "expression" &&
-                              su.value &&
-                              transformerSteps.some(
-                                (ts) =>
-                                  ts.outputVariable &&
-                                  (su.value === ts.outputVariable ||
-                                    su.value?.startsWith(`${ts.outputVariable}.`)),
-                              )
-                            ? `step_var:${su.value}`
-                            : currentSource
-                      }
-                    onValueChange={(val: string) => {
-                      const updated = [...stateUpdates];
-                      const current = updated[sIdx];
-                      if (!current) return;
-
-                      if (val.startsWith("field:")) {
-                        const fieldName = val.replace("field:", "");
-                        updated[sIdx] = {
-                          ...current,
-                          source: "structured_field",
-                          schemaField: fieldName,
-                          value: fieldName,
-                          mode: "set",
-                        };
-                      } else if (val.startsWith("step_var:")) {
-                        const varPath = val.replace("step_var:", "");
-                        updated[sIdx] = {
-                          ...current,
-                          source: "expression",
-                          schemaField: undefined,
-                          value: varPath,
-                          mode: "set",
-                        };
-                      } else if (val === "structured_full") {
-                        updated[sIdx] = {
-                          ...current,
-                          source: "structured_full",
-                          schemaField: undefined,
-                          value: "structuredResponse",
-                          mode: "set",
-                        };
-                      } else if (val === "message_content") {
-                        updated[sIdx] = {
-                          ...current,
-                          source: "message_content",
-                          schemaField: undefined,
-                          value: "response.content",
-                          mode: "set",
-                        };
-                      } else if (val === "message_object") {
-                        updated[sIdx] = {
-                          ...current,
-                          source: "message_object",
-                          schemaField: undefined,
-                          value: "response",
-                          mode: "append",
-                        };
-                      } else if (val === "expression") {
-                        updated[sIdx] = {
-                          ...current,
-                          source: "expression",
-                          schemaField: undefined,
-                          mode: "expression",
-                          value:
-                            current.action === "increment" ||
-                            current.action === "decrement"
-                              ? "1"
-                              : current.value || "state.count + 1",
-                        };
-                      } else if (val === "literal") {
-                        updated[sIdx] = {
-                          ...current,
-                          source: "literal",
-                          schemaField: undefined,
-                          mode: "set",
-                          value: current.value || "success",
-                        };
-                      }
-                      onUpdateAgent({ stateUpdates: updated });
-                    }}
-                  >
-                    <SelectTrigger
-                      className="h-7 text-xs bg-background flex-1 min-w-0 px-2 font-mono"
-                      title="Select source for new value"
-                    >
-                      <SelectValue placeholder="Select source" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {/* Structured Output Options */}
-                      {isStructured && schemaFields.length > 0 && (
+                      <SelectTrigger className="h-7 text-xs bg-background font-mono px-2" title="Select Action for this Reducer">
+                        <SelectValue placeholder="Action" />
+                      </SelectTrigger>
+                      <SelectContent>
                         <SelectGroup>
-                          <SelectLabel className="text-[10px] uppercase font-bold text-purple-400">
-                            Structured Output Fields
+                          <SelectLabel className="text-[10px] uppercase font-bold text-amber-400">
+                            Reducer Actions ({channelMeta.channel?.key || su.channelKey})
                           </SelectLabel>
-                          {schemaFields.map((f) => (
-                            <SelectItem
-                              key={f.name}
-                              value={`field:${f.name}`}
-                              className="font-mono text-xs"
-                            >
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-semibold text-purple-300">
-                                  {f.name}
-                                </span>
-                                <span className="text-[9px] text-muted-foreground font-sans">
-                                  ({f.type || "string"})
-                                </span>
+                          {availableActions.map((act) => (
+                            <SelectItem key={act.action} value={act.action} className="font-mono text-xs">
+                              <div className="flex items-center gap-1 font-semibold text-amber-300">
+                                {act.action !== "default" && <span className="text-amber-400 text-[10px]">⚡</span>}
+                                <span>{act.label}</span>
                               </div>
                             </SelectItem>
                           ))}
-                          <SelectItem
-                            value="structured_full"
-                            className="font-mono text-xs"
-                          >
-                            <span className="font-semibold text-purple-400">
-                              Full Structured JSON Object
-                            </span>
-                          </SelectItem>
                         </SelectGroup>
-                      )}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                      {isStructured && <SelectSeparator />}
-
-                      {/* General LLM Outputs */}
-                      <SelectGroup>
-                        <SelectLabel className="text-[10px] uppercase font-bold text-muted-foreground">
-                          LLM Output
-                        </SelectLabel>
-                        <SelectItem value="message_content">
-                          <div className="flex items-center gap-1.5">
-                            <span>Text Content</span>
-                            <span className="text-[9px] text-muted-foreground">
-                              (string)
-                            </span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="message_object">
-                          <div className="flex items-center gap-1.5">
-                            <span>AIMessage Object</span>
-                            <span className="text-[9px] text-muted-foreground">
-                              (BaseMessage)
-                            </span>
-                          </div>
-                        </SelectItem>
-                      </SelectGroup>
-
-                      {/* Transformer Step Outputs */}
-                      {transformerSteps.length > 0 && (
-                        <>
-                          <SelectSeparator />
-                          <SelectGroup>
-                            <SelectLabel className="text-[10px] uppercase font-bold text-purple-400">
-                              Pipeline Transformer Outputs
-                            </SelectLabel>
-                            {transformerSteps.map((ts) => {
-                              const varName = ts.outputVariable || ts.id;
-                              const returnFields =
-                                ts.outputSchema ||
-                                ts.functionRef?.returnSchema ||
-                                [];
-                              return (
-                                <React.Fragment key={ts.id}>
-                                  <SelectItem value={`step_var:${varName}`}>
-                                    <div className="flex items-center gap-1.5 font-mono text-purple-300">
-                                      <Shuffle className="w-3 h-3 text-purple-400" />
-                                      <span>{varName}</span>
-                                      <span className="text-[9px] text-muted-foreground">
-                                        (whole)
-                                      </span>
-                                    </div>
-                                  </SelectItem>
-                                  {returnFields.map((f) => (
-                                    <SelectItem
-                                      key={`${varName}.${f.name}`}
-                                      value={`step_var:${varName}.${f.name}`}
-                                    >
-                                      <div className="flex items-center gap-1.5 font-mono text-purple-300 pl-2">
-                                        <span>
-                                          {varName}.{f.name}
-                                        </span>
-                                        <span className="text-[9px] text-muted-foreground">
-                                          ({f.type})
-                                        </span>
-                                      </div>
-                                    </SelectItem>
-                                  ))}
-                                </React.Fragment>
-                              );
-                            })}
-                          </SelectGroup>
-                        </>
-                      )}
-
-                      <SelectSeparator />
-
-                      {/* Expressions & Constants */}
-                      <SelectGroup>
-                        <SelectLabel className="text-[10px] uppercase font-bold text-muted-foreground">
-                          Custom
-                        </SelectLabel>
-                        <SelectItem
-                          value="expression"
-                          className="text-amber-400 font-mono"
-                        >
-                          Custom Expression (state.*)
-                        </SelectItem>
-                        <SelectItem value="literal">
-                          Literal Constant
-                        </SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-
-                  {/* Type Mismatch Warning */}
-                  {hasTypeMismatch && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent
-                        side="top"
-                        className="text-xs text-amber-200 max-w-[220px]"
-                      >
-                        Type mismatch: Channel is {channelMeta.type}, but field
-                        '{matchedSchemaField?.name}' is{" "}
-                        {matchedSchemaField?.type}.
-                      </TooltipContent>
-                    </Tooltip>
+                  {/* Valueless pill (e.g. reset / clear) */}
+                  {isValueless && (
+                    <div className="flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-emerald-500/[0.08] border border-emerald-500/25 text-[10px] font-mono text-emerald-300">
+                      <Check className="w-3 h-3 text-emerald-400 shrink-0" />
+                      <span>No value required ({su.action || "action"})</span>
+                    </div>
                   )}
                 </div>
-              )}
 
-                {/* 4. Delete Row Button */}
+                {/* Delete button */}
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 cursor-pointer"
                   onClick={() => {
-                    const updated = stateUpdates.filter(
-                      (_: LangGraphStateUpdateItem, i: number) => i !== sIdx,
-                    );
+                    const updated = stateUpdates.filter((_, i) => i !== sIdx);
                     onUpdateAgent({ stateUpdates: updated });
                   }}
                   title="Remove state update"
@@ -1002,84 +951,342 @@ export function AgentStateUpdatesSection({
                 </Button>
               </div>
 
-              {/* Custom Action Name Input (when user selects custom action) */}
-              {isCustomActionActive && (
-                <div className="flex items-center gap-2 pt-1 border-t border-border/30">
-                  <span className="text-[10px] text-amber-400 font-mono shrink-0 font-semibold">
-                    Action Name:
-                  </span>
-                  <LocalInput
-                    className="h-6 text-[11px] bg-background font-mono flex-1 border-amber-500/30"
-                    placeholder="e.g. increment_by_5 or clear_cart"
-                    value={su.action === "default" ? "" : su.action || ""}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                      const updated = [...stateUpdates];
-                      const current = updated[sIdx];
-                      if (current) {
-                        updated[sIdx] = { ...current, action: e.target.value };
-                        onUpdateAgent({ stateUpdates: updated });
+              {/* ─── Bottom Section: 3. New Value / Mapping (ONLY when !isValueless) ─── */}
+              {!isValueless && (
+                <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
+                  {/* Section Sub-header */}
+                  <div className="flex items-center justify-between px-0.5">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-purple-400" /> 3. New Value / Mapping
+                    </span>
+                    <div className="flex items-center gap-1">
+                      {/* Mode Toggle: Single-line vs JSON Textarea */}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={isRowJsonMode ? "secondary" : "ghost"}
+                        className={`h-5 px-1.5 text-[9px] font-mono cursor-pointer ${
+                          isRowJsonMode
+                            ? "bg-purple-500/20 text-purple-200 border border-purple-500/40"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                        onClick={() => {
+                          setRowJsonOverrides((prev) => ({ ...prev, [sIdx]: !isRowJsonMode }));
+                        }}
+                        title={isRowJsonMode ? "Switch to single-line input" : "Switch to JSON / Multi-line Textarea"}
+                      >
+                        <Code2 className="w-2.5 h-2.5 mr-0.5" />
+                        {isRowJsonMode ? "JSON Active" : "{ } JSON"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Reference Insertion Helper Toolbar */}
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 bg-secondary/20 p-2 rounded-lg border border-border/30 text-[10px] font-mono">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                        Insert Reference:
+                      </span>
+
+                      {/* Step Selector */}
+                      <Select
+                        value={activeStepId}
+                        onValueChange={(sid) => {
+                          setRowRefStep((prev) => ({ ...prev, [sIdx]: sid }));
+                          const targetStep = availableReferenceSteps.find((st) => st.id === sid);
+                          if (targetStep && targetStep.fields.length > 0) {
+                            setRowRefField((prev) => ({ ...prev, [sIdx]: targetStep.fields[0]!.path }));
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="h-6 text-[10px] font-mono bg-background min-w-[130px] max-w-[170px] px-2">
+                          <SelectValue placeholder="Select Step" />
+                        </SelectTrigger>
+                        <SelectContent className="font-mono text-xs max-h-60">
+                          {availableReferenceSteps.map((st) => (
+                            <SelectItem key={st.id} value={st.id}>
+                              {st.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <ArrowRight className="w-3 h-3 text-muted-foreground/50 shrink-0" />
+
+                      {/* Field Selector */}
+                      <Select
+                        value={activeFieldPath}
+                        onValueChange={(fpath) => {
+                          setRowRefField((prev) => ({ ...prev, [sIdx]: fpath }));
+                        }}
+                      >
+                        <SelectTrigger className="h-6 text-[10px] font-mono bg-background min-w-[140px] max-w-[190px] px-2">
+                          <SelectValue placeholder="Select Field" />
+                        </SelectTrigger>
+                        <SelectContent className="font-mono text-xs max-h-60">
+                          {activeStepObj?.fields.map((f) => (
+                            <SelectItem key={f.path} value={f.path}>
+                              {f.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <ArrowRight className="w-3 h-3 text-muted-foreground/50 shrink-0" />
+
+                      {/* Insert ${step.field} */}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-6 px-2 text-[10px] font-mono bg-purple-500/10 text-purple-300 border-purple-500/30 hover:bg-purple-500/20 cursor-pointer"
+                        onClick={() => handleInsertRefAtCursor(`\${${activeFieldPath}}`)}
+                        title={`Insert \${${activeFieldPath}} at cursor position`}
+                      >
+                        + Insert {'${'}{activeFieldObj?.short || activeFieldPath}{'}'}
+                      </Button>
+
+                      {/* Set Value Directly */}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-1.5 text-[10px] font-mono text-muted-foreground hover:text-foreground cursor-pointer"
+                        onClick={() =>
+                          handleRawValueChange(
+                            isRowJsonMode
+                              ? `{\n  "${activeFieldObj?.short?.split(".").pop() || "field"}": "\${${activeFieldPath}}"\n}`
+                              : activeFieldPath,
+                          )
+                        }
+                        title={`Set whole value directly to ${activeFieldPath}`}
+                      >
+                        Set Value
+                      </Button>
+
+                      {/* Map picker dropdown */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-2 text-[10px] font-mono gap-1 border-border hover:bg-secondary/50 cursor-pointer text-muted-foreground hover:text-foreground"
+                            title="Directly map from LLM output, structured fields, transformer steps, or state"
+                          >
+                            <Sparkles className="w-2.5 h-2.5 text-purple-400" />
+                            <span>Map</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-64 max-h-80 overflow-y-auto font-mono text-xs">
+                          {/* 1. Structured Output Fields */}
+                          {isStructured && schemaFields.length > 0 && (
+                            <DropdownMenuGroup>
+                              <DropdownMenuLabel className="text-[10px] uppercase font-bold text-purple-400 flex items-center gap-1">
+                                <FileJson className="w-3 h-3" /> Structured Output Fields
+                              </DropdownMenuLabel>
+                              {schemaFields.map((f) => (
+                                <DropdownMenuItem
+                                  key={f.name}
+                                  className="cursor-pointer flex items-center justify-between text-xs"
+                                  onClick={() => handleRawValueChange(`response.${f.name}`)}
+                                >
+                                  <span className="font-semibold text-purple-300 truncate">
+                                    response.{f.name}
+                                  </span>
+                                  <span className="text-[9px] text-muted-foreground font-sans">
+                                    {f.type || "string"}
+                                  </span>
+                                </DropdownMenuItem>
+                              ))}
+                              <DropdownMenuItem
+                                className="cursor-pointer text-xs text-purple-400 font-semibold"
+                                onClick={() => handleRawValueChange("response")}
+                              >
+                                response (Full Object)
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                            </DropdownMenuGroup>
+                          )}
+
+                          {/* 2. LLM Output */}
+                          <DropdownMenuGroup>
+                            <DropdownMenuLabel className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                              <Zap className="w-3 h-3 text-amber-400" /> LLM Response
+                            </DropdownMenuLabel>
+                            <DropdownMenuItem
+                              className="cursor-pointer flex items-center justify-between text-xs"
+                              onClick={() => handleRawValueChange("response.content")}
+                            >
+                              <span>response.content</span>
+                              <span className="text-[9px] text-muted-foreground font-sans">(text)</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="cursor-pointer flex items-center justify-between text-xs"
+                              onClick={() => handleRawValueChange("response")}
+                            >
+                              <span>response</span>
+                              <span className="text-[9px] text-muted-foreground font-sans">(AIMessage)</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuGroup>
+
+                          {/* 3. Pipeline Transformer Step Outputs */}
+                          {transformerSteps.length > 0 && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuGroup>
+                                <DropdownMenuLabel className="text-[10px] uppercase font-bold text-purple-400 flex items-center gap-1">
+                                  <Shuffle className="w-3 h-3" /> Transformer Step Outputs
+                                </DropdownMenuLabel>
+                                {transformerSteps.map((ts) => {
+                                  const varName = ts.outputVariable || ts.id;
+                                  const returnFields =
+                                    ts.outputSchema ||
+                                    ts.functionRef?.returnSchema ||
+                                    [];
+                                  return (
+                                    <React.Fragment key={ts.id}>
+                                      <DropdownMenuItem
+                                        className="cursor-pointer flex items-center justify-between text-xs text-purple-300"
+                                        onClick={() => handleRawValueChange(varName)}
+                                      >
+                                        <span>{varName}</span>
+                                        <span className="text-[9px] text-muted-foreground font-sans">(whole)</span>
+                                      </DropdownMenuItem>
+                                      {returnFields.map((rf) => (
+                                        <DropdownMenuItem
+                                          key={`${varName}.${rf.name}`}
+                                          className="cursor-pointer flex items-center justify-between text-xs text-purple-300 pl-4"
+                                          onClick={() => handleRawValueChange(`${varName}.${rf.name}`)}
+                                        >
+                                          <span>{varName}.{rf.name}</span>
+                                          <span className="text-[9px] text-muted-foreground font-sans">({rf.type || "string"})</span>
+                                        </DropdownMenuItem>
+                                      ))}
+                                    </React.Fragment>
+                                  );
+                                })}
+                              </DropdownMenuGroup>
+                            </>
+                          )}
+
+                          {/* 4. Graph State Channels */}
+                          {stateChannels.length > 0 && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuGroup>
+                                <DropdownMenuLabel className="text-[10px] uppercase font-bold text-sky-400 flex items-center gap-1">
+                                  <Code2 className="w-3 h-3" /> State Variables
+                                </DropdownMenuLabel>
+                                {stateChannels
+                                  .filter((ch) => ch.key?.trim())
+                                  .map((ch) => (
+                                    <DropdownMenuItem
+                                      key={ch.key}
+                                      className="cursor-pointer flex items-center justify-between text-xs text-sky-300"
+                                      onClick={() => handleRawValueChange(`state.${ch.key}`)}
+                                    >
+                                      <span>state.{ch.key}</span>
+                                      <span className="text-[9px] text-muted-foreground font-sans">({ch.type || "string"})</span>
+                                    </DropdownMenuItem>
+                                  ))}
+                              </DropdownMenuGroup>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+
+                  {/* Quick Click Reference Chips */}
+                  <div className="flex items-center gap-1 flex-wrap px-0.5">
+                    <span className="text-[9px] text-muted-foreground/70 font-mono">Quick:</span>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertRefAtCursor("${response.content}")}
+                      className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-border/50 bg-secondary/30 hover:bg-purple-500/15 hover:border-purple-500/40 text-muted-foreground hover:text-purple-300 transition-colors cursor-pointer"
+                    >
+                      + {'${response.content}'}
+                    </button>
+                    {isStructured &&
+                      schemaFields.slice(0, 3).map((f) => (
+                        <button
+                          key={f.name}
+                          type="button"
+                          onClick={() => handleInsertRefAtCursor(`\${response.${f.name}}`)}
+                          className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 transition-colors cursor-pointer"
+                        >
+                          + {'${response.'}{f.name}{'}'}
+                        </button>
+                      ))}
+                    {stateChannels.slice(0, 2).map((sc) => (
+                      <button
+                        key={sc.key}
+                        type="button"
+                        onClick={() => handleInsertRefAtCursor(`\${state.${sc.key}}`)}
+                        className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 transition-colors cursor-pointer"
+                      >
+                        + {'${state.'}{sc.key}{'}'}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Value Editor: Textarea (JSON / multiline) or LocalInput (single line) */}
+                  {isRowJsonMode ? (
+                    <LocalTextarea
+                      ref={(el) => {
+                        textareaRefs.current[sIdx] = el;
+                      }}
+                      className="min-h-[90px] text-xs bg-background font-mono leading-relaxed p-2.5 border-border focus-visible:ring-purple-500/40 resize-y"
+                      placeholder={`{\n  "field": "\${response.content}"\n}`}
+                      value={su.value ?? ""}
+                      onChange={(e) => handleRawValueChange(e.target.value)}
+                    />
+                  ) : (
+                    <LocalInput
+                      ref={(el) => {
+                        inputRefs.current[sIdx] = el;
+                      }}
+                      className="h-8 text-xs bg-background font-mono px-2.5 w-full"
+                      placeholder={
+                        su.action === "increment" || su.action === "decrement"
+                          ? "1 or state.delta"
+                          : channelMeta.type === "number"
+                            ? "42 or state.count + 1"
+                            : channelMeta.type === "boolean"
+                              ? "true or false"
+                              : isStructured && schemaFields.length > 0
+                                ? "response.field or literal"
+                                : 'response.content or "literal"'
                       }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCustomActionIdxs((prev) => {
-                        const next = { ...prev };
-                        delete next[sIdx];
-                        return next;
-                      });
-                      const updated = [...stateUpdates];
-                      if (updated[sIdx]) {
-                        updated[sIdx] = { ...updated[sIdx]!, action: "default" };
-                        onUpdateAgent({ stateUpdates: updated });
+                      value={
+                        su.value !== undefined
+                          ? su.value
+                          : su.source === "message_content"
+                            ? "response.content"
+                            : su.source === "message_object"
+                              ? "response"
+                              : ""
                       }
-                    }}
-                    className="text-[10px] text-muted-foreground hover:text-foreground px-1"
-                    title="Reset to default action"
-                  >
-                    &times;
-                  </button>
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                        handleRawValueChange(e.target.value);
+                      }}
+                    />
+                  )}
+
+                  {/* Type Mismatch Warning */}
+                  {hasTypeMismatch && (
+                    <div className="flex items-center gap-1.5 text-xs text-amber-300 font-mono bg-amber-500/10 border border-amber-500/30 p-1.5 rounded-md">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>
+                        Type mismatch: Channel is {channelMeta.type}, but mapped field &apos;{matchedSchemaField?.name}&apos; is {matchedSchemaField?.type}.
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Expression or Custom Value Input */}
-              {!isValueless &&
-                (currentSource === "expression" ||
-                  currentSource === "literal" ||
-                  su.action === "increment" ||
-                  su.action === "decrement") && (
-                <div className="flex items-center gap-2 pt-1 border-t border-border/30">
-                  <span className="text-[10px] text-muted-foreground font-mono shrink-0">
-                    {su.action === "increment" || su.action === "decrement"
-                      ? "Amount:"
-                      : currentSource === "expression"
-                        ? "Expr:"
-                        : "Value:"}
-                  </span>
-                  <LocalInput
-                    className="h-6 text-[11px] bg-background font-mono flex-1"
-                    placeholder={
-                      su.action === "increment" || su.action === "decrement"
-                        ? "1 or state.delta"
-                        : currentSource === "expression"
-                          ? "state.count + 1 or state.user_query"
-                          : "Static literal value"
-                    }
-                    value={su.value || ""}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                      const updated = [...stateUpdates];
-                      const current = updated[sIdx];
-                      if (current) {
-                        updated[sIdx] = { ...current, value: e.target.value };
-                        onUpdateAgent({ stateUpdates: updated });
-                      }
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* Feeds / Reducer Contract Hint */}
+              {/* ─── Footer: Preview Contract & Channel Type ─── */}
               <div className="flex items-center justify-between text-[10px] text-muted-foreground/80 px-1 font-mono pt-0.5">
                 <span className="truncate">
                   {su.action && su.action !== "default" ? (
@@ -1111,7 +1318,7 @@ export function AgentStateUpdatesSection({
                   ) : (
                     <>
                       Dispatches:{" "}
-                      <span className="text-purple-300">{valueDisplay}</span> ➔{" "}
+                      <span className="text-purple-300 font-bold">{valueDisplay}</span> ➔{" "}
                       <span className="text-sky-300 font-bold">
                         {channelMeta.reducer}
                       </span>

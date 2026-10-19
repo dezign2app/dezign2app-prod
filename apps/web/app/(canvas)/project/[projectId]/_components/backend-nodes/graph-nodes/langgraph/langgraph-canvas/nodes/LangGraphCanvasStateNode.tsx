@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { NodeProps } from "@xyflow/react";
+import React, { useState, useMemo } from "react";
+import { NodeProps, useReactFlow } from "@xyflow/react";
 import {
   Database,
   Plus,
@@ -10,10 +10,14 @@ import {
   Copy,
   Settings2,
   Lock,
+  Braces,
 } from "lucide-react";
 import {
   type StateGlobalNode,
   type LangGraphStateChannel,
+  type LangGraphCanvasNode,
+  type CustomTypeItem,
+  LANGGRAPH_CANVAS_NODE_TYPES,
   isLangGraphChannelType,
 } from "@workspace/canvas";
 import { Button } from "@workspace/ui/components/button";
@@ -38,6 +42,22 @@ export const LangGraphCanvasStateNode = ({
   data,
   selected,
 }: NodeProps<StateGlobalNode>) => {
+  const { getNodes } = useReactFlow<LangGraphCanvasNode>();
+  const allNodes = getNodes();
+  const availableCustomTypes = useMemo(() => {
+    const types: CustomTypeItem[] = [];
+    allNodes.forEach((n) => {
+      if (n.type === LANGGRAPH_CANVAS_NODE_TYPES && n.data?.types) {
+        n.data.types.forEach((t) => {
+          if (t && t.name && !types.some((existing) => existing.id === t.id)) {
+            types.push(t);
+          }
+        });
+      }
+    });
+    return types;
+  }, [allNodes]);
+
   const channels: LangGraphStateChannel[] =
     data.stateChannels && data.stateChannels.length > 0
       ? data.stateChannels
@@ -203,8 +223,21 @@ export const LangGraphCanvasStateNode = ({
                         Type
                       </span>
                       <Select
-                        value={ch.type}
+                        value={ch.customTypeId ? `custom:${ch.customTypeId}` : ch.type}
                         onValueChange={(val) => {
+                          if (val.startsWith("custom:")) {
+                            const typeId = val.replace("custom:", "");
+                            const targetType = availableCustomTypes.find((t) => t.id === typeId);
+                            handleUpdate(idx, {
+                              type: "object",
+                              reducer: "merge_object",
+                              customTypeId: typeId,
+                              customTypeName: targetType?.name,
+                              customTypeSchema: targetType,
+                            });
+                            return;
+                          }
+
                           if (isLangGraphChannelType(val)) {
                             const defaultReducer =
                               val === "messages"
@@ -217,6 +250,9 @@ export const LangGraphCanvasStateNode = ({
                             handleUpdate(idx, {
                               type: val,
                               reducer: defaultReducer,
+                              customTypeId: undefined,
+                              customTypeName: undefined,
+                              customTypeSchema: undefined,
                             });
                           }
                         }}
@@ -233,8 +269,23 @@ export const LangGraphCanvasStateNode = ({
                           <SelectItem value="number">number</SelectItem>
                           <SelectItem value="boolean">boolean</SelectItem>
                           <SelectItem value="array">array</SelectItem>
-                          <SelectItem value="object">object</SelectItem>
-                          <SelectItem value="json">json</SelectItem>
+                          <SelectItem value="object">object (generic)</SelectItem>
+                          {availableCustomTypes.length > 0 && (
+                            <>
+                              <div className="px-2 py-1 text-[10px] uppercase font-bold text-cyan-400 bg-cyan-500/10 rounded-sm my-1 flex items-center gap-1 font-mono">
+                                <Braces className="w-3 h-3" /> Custom Types
+                              </div>
+                              {availableCustomTypes.map((t) => (
+                                <SelectItem
+                                  key={t.id}
+                                  value={`custom:${t.id}`}
+                                  className="text-xs font-mono text-cyan-300"
+                                >
+                                  {t.name} ({t.kind})
+                                </SelectItem>
+                              ))}
+                            </>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -281,12 +332,22 @@ export const LangGraphCanvasStateNode = ({
                     >
                       {ch.key || "(unnamed)"}
                     </span>
-                    <Badge
-                      variant="outline"
-                      className="text-[9px] px-1 py-0 h-4 border-border/60 text-muted-foreground font-mono font-normal shrink-0"
-                    >
-                      {ch.type}
-                    </Badge>
+                    {ch.customTypeName ? (
+                      <Badge
+                        variant="outline"
+                        className="text-[9px] px-1 py-0 h-4 border-cyan-500/40 bg-cyan-500/10 text-cyan-400 font-mono font-normal shrink-0 flex items-center gap-1"
+                      >
+                        <Braces className="w-2.5 h-2.5" />
+                        {ch.customTypeName}
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="text-[9px] px-1 py-0 h-4 border-border/60 text-muted-foreground font-mono font-normal shrink-0"
+                      >
+                        {ch.type}
+                      </Badge>
+                    )}
                     {isBuiltin && (
                       <Badge
                         variant="outline"

@@ -265,7 +265,6 @@ export function getChannelDefaultValue(
     case "boolean":
       return false;
     case "object":
-    case "json":
       return {};
     case "string":
     default:
@@ -586,7 +585,7 @@ export interface ChannelTestPreset {
  * Channel type-specific presets for incoming state update payloads.
  */
 export const CHANNEL_TYPE_PRESETS: Record<
-  "string" | "number" | "boolean" | "messages" | "array" | "object" | "json",
+  LangGraphStateChannel["type"],
   ChannelTestPreset[]
 > = {
   string: [
@@ -743,30 +742,6 @@ export const CHANNEL_TYPE_PRESETS: Record<
       value: {},
     },
   ],
-  json: [
-    {
-      label: "Status & Timestamp",
-      description: "Standard metadata with status and timestamp",
-      value: {
-        status: "success",
-        lastNode: "agent_executor",
-        timestamp: new Date().toISOString(),
-      },
-    },
-    {
-      label: "Nested Config",
-      description: "Nested configuration dictionary",
-      value: {
-        config: { timeout: 5000, retry: true },
-        active: true,
-      },
-    },
-    {
-      label: "Empty Object",
-      description: "Resets object to empty",
-      value: {},
-    },
-  ],
 };
 
 /**
@@ -776,7 +751,7 @@ export function getPresetsForChannel(
   channel?: LangGraphStateChannel,
 ): ChannelTestPreset[] {
   if (!channel) return CHANNEL_TYPE_PRESETS.string;
-  const channelType = channel.type as keyof typeof CHANNEL_TYPE_PRESETS;
+  const channelType: LangGraphStateChannel["type"] = channel.type;
   const byType = CHANNEL_TYPE_PRESETS[channelType];
   if (byType && byType.length > 0) {
     return byType;
@@ -830,7 +805,7 @@ export function getPlaygroundPresetsForReducer(
         )?.targetField,
   );
 
-  const channelType = (channel?.type || "string") as keyof typeof CHANNEL_TYPE_PRESETS;
+  const channelType: LangGraphStateChannel["type"] = channel?.type || "string";
   const channelKey = channel?.key || "field";
   const typePresets =
     CHANNEL_TYPE_PRESETS[channelType] ?? CHANNEL_TYPE_PRESETS.string;
@@ -887,7 +862,11 @@ export function getPlaygroundPresetsForReducer(
     prev:
       idx === 0
         ? getChannelDefaultValue(
-            channel || { key: channelKey, type: channelType, reducer: "replace" },
+            channel || {
+              key: channelKey,
+              type: channelType,
+              reducer: "replace",
+            },
           )
         : tp.value,
     next: tp.value,

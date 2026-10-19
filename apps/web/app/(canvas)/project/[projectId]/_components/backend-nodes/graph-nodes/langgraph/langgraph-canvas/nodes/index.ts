@@ -18,6 +18,8 @@ import { LangGraphCanvasStateReducerRefNode } from "./LangGraphCanvasStateReduce
 import { LangGraphCanvasAgentRefNode } from "./LangGraphCanvasAgentRefNode";
 import { LangGraphCanvasTransformerNode } from "./LangGraphCanvasTransformerNode";
 import { LangGraphCanvasTransformerRefNode } from "./LangGraphCanvasTransformerRefNode";
+import { LangGraphCanvasTypesNode } from "./LangGraphCanvasTypesNode";
+import { LangGraphCanvasTypesRefNode } from "./LangGraphCanvasTypesRefNode";
 
 import {
   LANGGRAPH_CANVAS_NODE_STEP,
@@ -41,6 +43,8 @@ import {
   LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF,
   LANGGRAPH_CANVAS_NODE_TRANSFORMER,
   LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
+  LANGGRAPH_CANVAS_NODE_TYPES,
+  LANGGRAPH_CANVAS_NODE_TYPES_REF,
 } from "../constants";
 
 export const langGraphCanvasNodeTypes = {
@@ -65,6 +69,8 @@ export const langGraphCanvasNodeTypes = {
   [LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF]: LangGraphCanvasStateReducerRefNode,
   [LANGGRAPH_CANVAS_NODE_TRANSFORMER]: LangGraphCanvasTransformerNode,
   [LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF]: LangGraphCanvasTransformerRefNode,
+  [LANGGRAPH_CANVAS_NODE_TYPES]: LangGraphCanvasTypesNode,
+  [LANGGRAPH_CANVAS_NODE_TYPES_REF]: LangGraphCanvasTypesRefNode,
 };
 
 export {
@@ -88,4 +94,6 @@ export {
   LangGraphCanvasStateReducerRefNode,
   LangGraphCanvasTransformerNode,
   LangGraphCanvasTransformerRefNode,
+  LangGraphCanvasTypesNode,
+  LangGraphCanvasTypesRefNode,
 };

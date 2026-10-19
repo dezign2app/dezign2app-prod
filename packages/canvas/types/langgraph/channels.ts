@@ -1,9 +1,10 @@
+import type { CustomTypeItem } from "../custom-types";
+
 export type LangGraphStateChannel = {
   key: string;
   type:
     | "messages"
     | "string"
-    | "json"
     | "number"
     | "boolean"
     | "array"
@@ -22,6 +23,9 @@ export type LangGraphStateChannel = {
     | Record<string, unknown>
     | unknown[];
   customReducerCode?: string;
+  customTypeId?: string;
+  customTypeName?: string;
+  customTypeSchema?: CustomTypeItem;
 };
 
 export interface LangGraphCustomReducer {
@@ -38,7 +42,6 @@ export function isLangGraphChannelType(
   switch (val) {
     case "messages":
     case "string":
-    case "json":
     case "number":
     case "boolean":
     case "array":
@@ -55,7 +58,6 @@ export type LangGraphInputChannel = {
   type:
     | "string"
     | "messages"
-    | "json"
     | "number"
     | "boolean"
     | "object"

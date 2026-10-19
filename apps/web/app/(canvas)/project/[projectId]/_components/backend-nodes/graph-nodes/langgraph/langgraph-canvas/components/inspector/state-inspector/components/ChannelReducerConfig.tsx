@@ -341,7 +341,7 @@ export function ChannelReducerConfig({
               </>
             )}
 
-            {(ch.type === "object" || ch.type === "json") && (
+            {ch.type === "object" && (
               <>
                 <button
                   type="button"

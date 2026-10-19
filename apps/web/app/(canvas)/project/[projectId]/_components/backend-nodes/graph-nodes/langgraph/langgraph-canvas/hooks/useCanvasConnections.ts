@@ -34,6 +34,8 @@ import {
   LANGGRAPH_CANVAS_NODE_OUTPUT,
   LANGGRAPH_CANVAS_NODE_TRANSFORMER,
   LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
+  LANGGRAPH_CANVAS_NODE_TYPES,
+  LANGGRAPH_CANVAS_NODE_TYPES_REF,
   HANDLE_LLM_IN,
   HANDLE_LLM_OUT,
   HANDLE_TOOL_IN,
@@ -46,6 +48,8 @@ import {
   HANDLE_STATE_OUT,
   HANDLE_TRANSFORMER_IN,
   HANDLE_TRANSFORMER_OUT,
+  HANDLE_TYPES_IN,
+  HANDLE_TYPES_OUT,
   DEFAULT_LLM_PROVIDER,
   DEFAULT_LLM_MODEL,
 } from "../constants";
@@ -498,6 +502,13 @@ export function useCanvasConnections({
             params.source?.startsWith("transformer_") ||
             params.source?.startsWith("transformer_ref_"),
           );
+        const isTypes =
+          params.sourceHandle === HANDLE_TYPES_OUT ||
+          params.targetHandle === HANDLE_TYPES_IN ||
+          Boolean(
+            params.source?.startsWith("types_") ||
+            params.source?.startsWith("types_ref_"),
+          );
 
         const sourceNode = nodes.find(
           (n): n is StepNode =>
@@ -519,7 +530,9 @@ export function useCanvasConnections({
                   ? HANDLE_STATE_OUT
                   : isTransformer
                     ? HANDLE_TRANSFORMER_OUT
-                    : params.sourceHandle;
+                    : isTypes
+                      ? HANDLE_TYPES_OUT
+                      : params.sourceHandle;
         const targetHandle = isLLM
           ? HANDLE_LLM_IN
           : isTool
@@ -532,7 +545,9 @@ export function useCanvasConnections({
                   ? HANDLE_STATE_IN
                   : isTransformer
                     ? HANDLE_TRANSFORMER_IN
-                    : params.targetHandle;
+                    : isTypes
+                      ? HANDLE_TYPES_IN
+                      : params.targetHandle;
 
         const fieldStr = routerBranch?.field
           ? routerBranch.field.startsWith("state.")
@@ -554,13 +569,15 @@ export function useCanvasConnections({
               ? { stroke: "#a855f7", strokeWidth: 2, strokeDasharray: "4 4" }
               : isTransformer
                 ? { stroke: "#a855f7", strokeWidth: 2, strokeDasharray: "4 4" }
-                : isMemory
-                  ? { stroke: "#f59e0b", strokeWidth: 2, strokeDasharray: "4 4" }
-                  : isStateReducer
+                : isTypes
+                  ? { stroke: "#06b6d4", strokeWidth: 2, strokeDasharray: "4 4" }
+                  : isMemory
                     ? { stroke: "#f59e0b", strokeWidth: 2, strokeDasharray: "4 4" }
-                    : routerBranch
-                      ? { stroke: "#38bdf8", strokeWidth: 2 }
-                      : { stroke: "#a1a1aa", strokeWidth: 2 };
+                    : isStateReducer
+                      ? { stroke: "#f59e0b", strokeWidth: 2, strokeDasharray: "4 4" }
+                      : routerBranch
+                        ? { stroke: "#38bdf8", strokeWidth: 2 }
+                        : { stroke: "#a1a1aa", strokeWidth: 2 };
 
         const labelStyle = routerBranch
           ? { fill: "#bae6fd", fontSize: 10, fontWeight: "bold" }
@@ -737,6 +754,30 @@ export function useCanvasConnections({
           );
         }
 
+        if (isTypes) {
+          if (srcNode?.type === LANGGRAPH_CANVAS_NODE_TYPES) {
+            setNodes((nds) =>
+              nds.map((n) => {
+                if (
+                  n.id === params.target &&
+                  n.type === LANGGRAPH_CANVAS_NODE_TYPES_REF
+                ) {
+                  const masterLabel = srcNode.data.label || "Custom Types";
+                  return {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      typesRef: srcNode.id,
+                      label: `${masterLabel} (Ref)`,
+                    },
+                  };
+                }
+                return n;
+              }),
+            );
+          }
+        }
+
         const targetNode = nodes.find((n) => n.id === params.target);
 
         // Auto-set sourceStepId when a step/agent/node connects to an Output node
@@ -768,7 +809,8 @@ export function useCanvasConnections({
         if (
           (isLLM && targetNode?.type === LANGGRAPH_CANVAS_NODE_LLM_REF) ||
           (isTool && targetNode?.type === LANGGRAPH_CANVAS_NODE_TOOL_REF) ||
-          (isMiddleware && targetNode?.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF)
+          (isMiddleware && targetNode?.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF) ||
+          (isTypes && targetNode?.type === LANGGRAPH_CANVAS_NODE_TYPES_REF)
         ) {
           // Reference edge is automatically managed by the Ref node's effect
           return eds;

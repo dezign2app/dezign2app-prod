@@ -31,7 +31,6 @@ interface InputsTabContentProps {
 const TYPE_COLORS: Record<LangGraphInputChannel["type"], string> = {
   string:   "bg-emerald-500/10 text-emerald-400 border-emerald-400/30",
   messages: "bg-primary/10 text-primary border-primary/30",
-  json:     "bg-amber-500/10 text-amber-400 border-amber-400/30",
   number:   "bg-blue-500/10 text-blue-400 border-blue-400/30",
   boolean:  "bg-rose-500/10 text-rose-400 border-rose-400/30",
   object:   "bg-purple-500/10 text-purple-400 border-purple-400/30",
@@ -70,7 +69,7 @@ function ChannelEditor({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {(["string","messages","json","number","boolean","object","array"] as LangGraphInputChannel["type"][]).map((t) => (
+            {(["string","messages","number","boolean","object","array"] as LangGraphInputChannel["type"][]).map((t) => (
               <SelectItem key={t} value={t} className="text-xs font-mono">{t}</SelectItem>
             ))}
           </SelectContent>

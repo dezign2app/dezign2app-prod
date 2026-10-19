@@ -424,6 +424,8 @@ export function useLangGraphCanvasState({
     selectedStartData,
     selectedTransformerData,
     selectedTransformerRefData,
+    selectedTypesData,
+    selectedTypesRefData,
     updateSelectedStep,
     updateSelectedLLM,
     updateSelectedTool,
@@ -432,6 +434,8 @@ export function useLangGraphCanvasState({
     updateSelectedMemory,
     updateSelectedOutput,
     updateSelectedTransformer,
+    updateSelectedTypes,
+    updateSelectedTypesRef,
   } = useSelectedNodeState({ nodes, selectedNodeId, setNodes, setEdges });
 
   const { handleAddStep } = useNodeFactory({
@@ -587,6 +591,8 @@ export function useLangGraphCanvasState({
     selectedStartData,
     selectedTransformerData,
     selectedTransformerRefData,
+    selectedTypesData,
+    selectedTypesRefData,
     onNodesChange,
     onEdgesChange,
     onConnect,
@@ -600,6 +606,8 @@ export function useLangGraphCanvasState({
     updateSelectedMemory,
     updateSelectedOutput,
     updateSelectedTransformer,
+    updateSelectedTypes,
+    updateSelectedTypesRef,
     customReducers,
     setCustomReducers,
     handleAddCustomReducer,

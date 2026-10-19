@@ -312,6 +312,7 @@ export function AgentNodeInspector({
         onToggleEnabled={handleToggleStateUpdatesEnabled}
         stateChannels={stateChannels}
         customReducers={customReducers}
+        nodes={nodes}
       />
     </div>
   );

@@ -183,7 +183,7 @@ export async function executeBrowserLangGraph(
         state[channel.key] = false;
       } else if (channel.type === "array") {
         state[channel.key] = [];
-      } else if (channel.type === "object" || channel.type === "json") {
+      } else if (channel.type === "object") {
         state[channel.key] = {};
       } else {
         state[channel.key] = "";
