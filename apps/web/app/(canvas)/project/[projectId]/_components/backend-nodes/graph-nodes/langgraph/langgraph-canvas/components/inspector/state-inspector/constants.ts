@@ -1,3 +1,5 @@
+import type { CustomTypeItem, CustomTypeField } from "@workspace/canvas";
+
 export interface BuiltInReducer {
   name: string;
   label: string;
@@ -123,101 +125,112 @@ export const REDUCER_CODE_PRESETS = {
   const current = (prev && typeof prev === "object" && !Array.isArray(prev)) ? prev : {};
   const action = next?.action;
 
-  // 1. Default update: when action is undefined, "", or "default" (shallow merges keys)
-  // e.g. dispatch { profile: { status: "active" } }
-  if (!action || action === "" || action === "default") {
-    const incoming = (next?.value && typeof next.value === "object" && !Array.isArray(next.value))
-      ? next.value
-      : (next && typeof next === "object" && !Array.isArray(next) ? next : {});
-    return { ...current, ...incoming };
-  }
-
-  // 2. Action: replace - overwrites entire object
-  // e.g. dispatch { profile: { action: "replace", value: { status: "fresh" } } }
-  if (action === "replace") {
-    const incoming = (next?.value && typeof next.value === "object" && !Array.isArray(next.value))
-      ? next.value
-      : (next && typeof next === "object" && !Array.isArray(next) ? next : {});
-    return { ...incoming };
-  }
-
-  // 3. Action: reset / clear - empties object
+  // 1. Action: reset / clear - empties object
   // e.g. dispatch { profile: { action: "reset" } }
   if (action === "reset" || action === "clear") {
     return {};
   }
 
+  // Extract payload cleanly (stripping action metadata so it never leaks into state)
+  const rawPayload = (next?.value && typeof next.value === "object" && !Array.isArray(next.value))
+    ? next.value
+    : (next && typeof next === "object" && !Array.isArray(next) ? next : {});
+  const { action: _ignored, ...incoming } = rawPayload;
+
+  // 2. Action: replace / set - overwrites entire object
+  // e.g. dispatch { profile: { action: "replace", value: { status: "fresh" } } }
+  if (action === "replace" || action === "set") {
+    return { ...incoming };
+  }
+
+  // 3. Default update: shallow merges keys (when action is undefined, "", "default", "update", "patch")
+  // e.g. dispatch { profile: { status: "active" } }
+  if (!action || action === "" || action === "default" || action === "update" || action === "patch") {
+    return { ...current, ...incoming };
+  }
+
   return current;
 }`,
   number: `(prev, next) => {
-  const current = typeof prev === "number" ? prev : 0;
+  const current = typeof prev === "number" && !Number.isNaN(prev) ? prev : 0;
   const action = next?.action;
+
+  // Extract raw incoming value
+  const rawValue = next !== null && typeof next === "object" && "value" in next
+    ? next.value
+    : next;
+  const numValue = Number(rawValue);
+  const isValidNum = !Number.isNaN(numValue) && rawValue !== undefined && rawValue !== null;
 
   // 1. Default update: when action is undefined, "", or "default" (adds delta or sets value)
   // e.g. dispatch { count: 1 } or { count: { value: 1 } }
   if (!action || action === "" || action === "default") {
-    const val = typeof next === "number" ? next : (next?.value ?? 0);
-    return current + val;
+    return isValidNum ? numValue : current;
   }
 
   // 2. Action: replace - explicitly replaces current number with new value
   // e.g. dispatch { count: { action: "replace", value: 42 } }
-  if (action === "replace") {
-    return typeof next?.value === "number"
-      ? next.value
-      : (typeof next === "number" ? next : current);
+  if (action === "replace" || action === "set") {
+    return isValidNum ? numValue : current;
   }
 
   // 3. Action: increment - adds amount (default 1)
   // e.g. dispatch { count: { action: "increment", amount: 1 } }
-  if (action === "increment") {
-    return current + (next?.amount ?? next?.value ?? 1);
+  if (action === "increment" || action === "add") {
+    const step = isValidNum ? numValue : (Number(next?.amount) || 1);
+    return current + step;
   }
 
   // 4. Action: decrement - subtracts amount (default 1)
   // e.g. dispatch { count: { action: "decrement", amount: 1 } }
-  if (action === "decrement") {
-    return current - (next?.amount ?? next?.value ?? 1);
+  if (action === "decrement" || action === "subtract") {
+    const step = isValidNum ? numValue : (Number(next?.amount) || 1);
+    return current - step;
   }
 
   // 5. Action: reset - resets counter to 0 or target value
   // e.g. dispatch { count: { action: "reset" } }
-  if (action === "reset") {
-    return next?.value ?? 0;
+  if (action === "reset" || action === "clear") {
+    return isValidNum ? numValue : 0;
   }
 
   return current;
 }`,
   counterActions: `(prev, next) => {
-  const current = typeof prev === "number" ? prev : 0;
+  const current = typeof prev === "number" && !Number.isNaN(prev) ? prev : 0;
   const action = next?.action;
+
+  const rawValue = next !== null && typeof next === "object" && "value" in next
+    ? next.value
+    : next;
+  const numValue = Number(rawValue);
+  const isValidNum = !Number.isNaN(numValue) && rawValue !== undefined && rawValue !== null;
 
   // 1. Default update: when action is undefined, "", or "default"
   if (!action || action === "" || action === "default") {
-    const val = typeof next === "number" ? next : (next?.value ?? 0);
-    return current + val;
+    return isValidNum ? numValue : current;
   }
 
   // 2. Action: replace - explicitly replaces current number
-  if (action === "replace") {
-    return typeof next?.value === "number"
-      ? next.value
-      : (typeof next === "number" ? next : current);
+  if (action === "replace" || action === "set") {
+    return isValidNum ? numValue : current;
   }
 
   // 3. Action: increment
-  if (action === "increment") {
-    return current + (next?.amount ?? next?.value ?? 1);
+  if (action === "increment" || action === "add") {
+    const step = isValidNum ? numValue : (Number(next?.amount) || 1);
+    return current + step;
   }
 
   // 4. Action: decrement
-  if (action === "decrement") {
-    return current - (next?.amount ?? next?.value ?? 1);
+  if (action === "decrement" || action === "subtract") {
+    const step = isValidNum ? numValue : (Number(next?.amount) || 1);
+    return current - step;
   }
 
   // 5. Action: reset
-  if (action === "reset") {
-    return next?.value ?? 0;
+  if (action === "reset" || action === "clear") {
+    return isValidNum ? numValue : 0;
   }
 
   return current;
@@ -226,20 +239,33 @@ export const REDUCER_CODE_PRESETS = {
   const current = typeof prev === "string" ? prev : "";
   const action = next?.action;
 
-  // 1. Default update: when action is undefined, "", or "default"
-  // e.g. dispatch { notes: "first line" }
+  // Extract raw incoming string
+  const rawValue = next !== null && typeof next === "object" && "value" in next
+    ? next.value
+    : next;
+  const incoming = rawValue !== undefined && rawValue !== null ? String(rawValue) : "";
+
+  // 1. Default update: appends incoming text (supports optional separator)
+  // e.g. dispatch { notes: "world" }
   if (!action || action === "" || action === "default") {
-    const incoming = next?.value !== undefined ? String(next.value) : (next != null ? String(next) : "");
-    return current ? \`\${current}\\n\${incoming}\` : incoming;
+    const sep = next?.separator !== undefined ? String(next.separator) : "";
+    return current ? \`\${current}\${sep}\${incoming}\` : incoming;
   }
 
-  // 2. Action: replace - explicitly replaces string
-  // e.g. dispatch { notes: { action: "replace", value: "fresh note" } }
+  // 2. Action: prepend - adds incoming text before the current string
+  // e.g. dispatch { notes: { action: "prepend", value: "[INFO] " } }
+  if (action === "prepend") {
+    const sep = next?.separator !== undefined ? String(next.separator) : "";
+    return current ? \`\${incoming}\${sep}\${current}\` : incoming;
+  }
+
+  // 3. Action: replace - explicitly replaces the string
+  // e.g. dispatch { notes: { action: "replace", value: "fresh content" } }
   if (action === "replace") {
-    return next?.value !== undefined ? String(next.value) : (next != null ? String(next) : "");
+    return incoming;
   }
 
-  // 3. Action: reset / clear - clears string
+  // 4. Action: reset / clear - clears the string
   // e.g. dispatch { notes: { action: "reset" } }
   if (action === "reset" || action === "clear") {
     return "";
@@ -259,7 +285,7 @@ export const REDUCER_CODE_PRESETS = {
 
   // 2. Action: replace - explicitly sets boolean value
   // e.g. dispatch { is_active: { action: "replace", value: false } }
-  if (action === "replace") {
+  if (action === "replace" || action === "set") {
     return next?.value !== undefined ? Boolean(next.value) : Boolean(next);
   }
 
@@ -271,7 +297,7 @@ export const REDUCER_CODE_PRESETS = {
 
   // 4. Action: reset - resets to false
   // e.g. dispatch { is_active: { action: "reset" } }
-  if (action === "reset") {
+  if (action === "reset" || action === "clear") {
     return false;
   }
 
@@ -279,7 +305,177 @@ export const REDUCER_CODE_PRESETS = {
 }`,
 };
 
-export function getSuggestedReducerCodeForChannelType(type?: string): string {
+/**
+ * Extracts fields from a CustomTypeItem, supporting:
+ * 1. Explicit fields array
+ * 2. Visual editor custom types
+ * 3. Raw TypeScript interface / type code (regex parser)
+ */
+export function extractFieldsFromCustomType(
+  customType?: CustomTypeItem | null,
+): CustomTypeField[] {
+  if (!customType) return [];
+
+  // 1. Direct fields list from visual editor or package type
+  if (Array.isArray(customType.fields) && customType.fields.length > 0) {
+    return customType.fields.filter((f) => !f.isOmitted);
+  }
+
+  // 2. Parse from rawCode or typeAliasValue (e.g. interface / type definitions)
+  const codeToParse = customType.rawCode || customType.typeAliasValue || "";
+  if (!codeToParse) return [];
+
+  let targetBlock = codeToParse;
+  if (customType.name) {
+    const blockRegex = new RegExp(
+      `(?:interface|type)\\s+${customType.name}\\b[^{=]*[={]([^}]+)\\}?`,
+      "s",
+    );
+    const blockMatch = blockRegex.exec(codeToParse);
+    if (blockMatch && blockMatch[1]) {
+      targetBlock = blockMatch[1];
+    }
+  }
+
+  const fields: CustomTypeField[] = [];
+  const fieldRegex = /([a-zA-Z_$][a-zA-Z0-9_$]*)\s*(\??)\s*:\s*([^;,\n}]+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = fieldRegex.exec(targetBlock)) !== null) {
+    const fieldName = match[1]?.trim();
+    if (
+      !fieldName ||
+      fieldName === "interface" ||
+      fieldName === "type" ||
+      fieldName === "export"
+    ) {
+      continue;
+    }
+    const isOpt = match[2] === "?";
+    const rawType = match[3]?.trim() || "string";
+    fields.push({
+      id: fieldName,
+      name: fieldName,
+      type: rawType,
+      required: !isOpt,
+    });
+  }
+  return fields;
+}
+
+/**
+ * Returns a safe default value literal string for a field based on its type.
+ */
+export function getDefaultValueForField(field: CustomTypeField): string {
+  if (field.defaultValue !== undefined && field.defaultValue !== "") {
+    return field.defaultValue;
+  }
+  if (field.required === false) {
+    return "undefined";
+  }
+  const t = (field.type || "string").toLowerCase().trim();
+  if (field.isArray || t.endsWith("[]") || t.startsWith("array<") || t === "array") {
+    return "[]";
+  }
+  if (t === "number" || t === "float" || t === "int" || t === "integer") {
+    return "0";
+  }
+  if (t === "boolean" || t === "bool") {
+    return "false";
+  }
+  if (t === "string" || t === "text") {
+    return '""';
+  }
+  if (t === "object" || t.startsWith("{") || t.startsWith("record<")) {
+    return "{}";
+  }
+  return '""';
+}
+
+/**
+ * Generates an action-aware, schema-safe reducer for a custom type / interface.
+ * Guarantees required properties exist and never outputs raw {} or leaked action metadata.
+ */
+export function generateSchemaAwareReducerCode(
+  customType: CustomTypeItem,
+): string {
+  const fields = extractFieldsFromCustomType(customType);
+
+  const initialLines = fields.length > 0
+    ? fields.map((f) => `    ${f.name}: ${getDefaultValueForField(f)},`).join("\n") + "\n"
+    : "";
+
+  const replaceLines = fields.length > 0
+    ? fields
+        .map(
+          (f) =>
+            `      ${f.name}: payload.${f.name} !== undefined ? payload.${f.name} : initial.${f.name},`,
+        )
+        .join("\n") + "\n"
+    : "";
+
+  const updateLines = fields.length > 0
+    ? fields
+        .map(
+          (f) =>
+            `      ${f.name}: payload.${f.name} !== undefined ? payload.${f.name} : current.${f.name},`,
+        )
+        .join("\n") + "\n"
+    : "";
+
+  const typeLabel = customType.name ? ` for ${customType.name}` : "";
+
+  return `(prev, next) => {
+  // Initial shape guaranteed by type schema${typeLabel}
+  const initial = {
+${initialLines}  };
+
+  const current = (prev && typeof prev === "object" && !Array.isArray(prev))
+    ? { ...initial, ...prev }
+    : { ...initial };
+
+  const action = next?.action;
+
+  // 1. Action: reset / clear - resets back to typed initial values
+  // e.g. dispatch { action: "reset" }
+  if (action === "reset" || action === "clear") {
+    return { ...initial };
+  }
+
+  // Extract payload cleanly (stripping action metadata so it never leaks into state)
+  const rawPayload = (next?.value && typeof next.value === "object" && !Array.isArray(next.value))
+    ? next.value
+    : (next && typeof next === "object" && !Array.isArray(next) ? next : {});
+  const { action: _action, ...payload } = rawPayload;
+
+  // 2. Action: replace / set - overwrites with incoming values (defaults missing fields)
+  // e.g. dispatch { action: "replace", value: { ... } }
+  if (action === "replace" || action === "set") {
+    return {
+      ...payload,
+${replaceLines}    };
+  }
+
+  // 3. Default update: shallow merges keys while preserving schema integrity
+  // e.g. dispatch { id: "1" } or { action: "update", value: { name: "Alice" } }
+  if (!action || action === "" || action === "default" || action === "update" || action === "patch") {
+    return {
+      ...current,
+      ...payload,
+${updateLines}    };
+  }
+
+  return current;
+}`;
+}
+
+export function getSuggestedReducerCodeForChannelType(
+  type?: string,
+  customTypeSchema?: CustomTypeItem | null,
+): string {
+  if (customTypeSchema) {
+    const schemaCode = generateSchemaAwareReducerCode(customTypeSchema);
+    if (schemaCode) return schemaCode;
+  }
   if (type === "messages") {
     return REDUCER_CODE_PRESETS.chat;
   }
@@ -299,6 +495,78 @@ export function getSuggestedReducerCodeForChannelType(type?: string): string {
     return REDUCER_CODE_PRESETS.boolean;
   }
   return DEFAULT_REDUCER_CODE;
+}
+
+/**
+ * Checks whether a given custom reducer code is compatible with the channel's type.
+ * Used to detect when a channel type changed (e.g. from string to number) so that an
+ * incompatible preset (e.g. string multiline concatenation) is automatically refreshed.
+ */
+export function isReducerCodeCompatibleWithType(
+  code?: string,
+  type?: string,
+): boolean {
+  if (!code || typeof code !== "string" || !code.trim()) return false;
+  if (!type) return true;
+
+  if (type === "number") {
+    // If code has string-specific concatenation or array-specific functions, it's incompatible with number
+    if (
+      code.includes('typeof prev === "string"') ||
+      code.includes("Array.isArray(prev)") ||
+      code.includes("${current}\\n") ||
+      code.includes("Boolean(prev)")
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  if (type === "string") {
+    if (
+      code.includes('typeof prev === "number"') ||
+      code.includes("Array.isArray(prev)") ||
+      code.includes("Boolean(prev)")
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  if (type === "boolean") {
+    if (
+      code.includes('typeof prev === "string"') ||
+      code.includes('typeof prev === "number"') ||
+      code.includes("Array.isArray(prev)")
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  if (type === "array" || type === "messages") {
+    if (
+      code.includes('typeof prev === "string"') ||
+      code.includes('typeof prev === "number"') ||
+      code.includes("Boolean(prev)")
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  if (type === "object" || type === "json") {
+    if (
+      code.includes('typeof prev === "string"') ||
+      code.includes('typeof prev === "number"') ||
+      code.includes("Boolean(prev)")
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  return true;
 }
 
 export interface ReducerActionMeta {
@@ -390,36 +658,13 @@ export function getActionMetadata(
   _channelType?: string,
 ): ReducerActionMeta {
   const isValueless = isValuelessAction(action);
-  let label = action;
+  const hint = isValueless ? "(no value)" : "(value)";
+  let label = `${action} ${hint}`;
   let desc = `Dispatches { action: "${action}" }`;
 
   if (action === "default") {
-    label = "default (Direct)";
+    label = "default (direct)";
     desc = "Standard reducer update passing value directly";
-  } else if (action === "replace") {
-    label = "replace (= Set / Overwrite)";
-    desc = "Explicitly overwrites the current state value";
-  } else if (action === "reset") {
-    label = "reset (Clear)";
-    desc = "Resets state channel (no value needed)";
-  } else if (action === "clear") {
-    label = "clear (Empty)";
-    desc = "Clears state channel (no value needed)";
-  } else if (action === "toggle") {
-    label = "toggle (Flip)";
-    desc = "Inverts boolean state (no value needed)";
-  } else if (action === "increment") {
-    label = "increment (+ Add)";
-    desc = "Adds amount to number";
-  } else if (action === "decrement") {
-    label = "decrement (- Sub)";
-    desc = "Subtracts amount from number";
-  } else if (action === "append") {
-    label = "append (Push)";
-    desc = "Appends item(s) to array";
-  } else if (action === "merge") {
-    label = "merge (Spread)";
-    desc = "Shallow merges keys into object";
   }
 
   return {
@@ -431,12 +676,12 @@ export function getActionMetadata(
 }
 
 /**
- * Returns the list of available actions for a channel, prioritizing auto-detected
- * actions from the channel's custom reducer code.
+ * Returns the list of available actions for a channel.
+ * If custom reducer code is present, it returns ONLY the auto-detected actions (plus default).
  */
 export function getActionsForReducer(
   channelType?: string,
-  _reducerName?: string,
+  reducerName?: string,
   customCode?: string,
 ): ReducerActionMeta[] {
   const actions: ReducerActionMeta[] = [];
@@ -452,20 +697,55 @@ export function getActionsForReducer(
   // 1. Default update action (always first)
   add({
     action: "default",
-    label: "default (Direct)",
+    label: "default (direct)",
     description: "Standard reducer update passing value directly",
     requiresValue: true,
   });
 
-  // 2. Extract actions from custom reducer code if present (HIGH PRIORITY)
-  if (customCode) {
-    const detected = extractActionsFromReducerCode(customCode);
-    for (const act of detected) {
-      add(getActionMetadata(act, channelType));
+  // 2. Extract actions from custom reducer code or preset code for channel type
+  // Extracts THOSE ACTIONS ALONE matching ChannelReducerConfig!
+  const effectiveCode =
+    customCode && typeof customCode === "string" && customCode.trim()
+      ? customCode
+      : getSuggestedReducerCodeForChannelType(channelType);
+
+  if (effectiveCode) {
+    const detected = extractActionsFromReducerCode(effectiveCode);
+    if (detected.length > 0) {
+      for (const act of detected) {
+        add(getActionMetadata(act, channelType));
+      }
+      return actions;
     }
   }
 
-  // 3. Fallback type-specific actions (only if not already added)
+  // 3. Built-in reducers
+  if (reducerName === "replace") {
+    add(getActionMetadata("replace", channelType));
+    return actions;
+  }
+  if (reducerName === "add_messages") {
+    add(getActionMetadata("append", channelType));
+    add(getActionMetadata("replace", channelType));
+    add(getActionMetadata("reset", channelType));
+    return actions;
+  }
+  if (reducerName === "append" || reducerName === "concat_array") {
+    add(getActionMetadata("append", channelType));
+    add(getActionMetadata("replace", channelType));
+    add(getActionMetadata("reset", channelType));
+    add(getActionMetadata("clear", channelType));
+    return actions;
+  }
+  if (reducerName === "merge_object") {
+    add(getActionMetadata("merge", channelType));
+    add(getActionMetadata("replace", channelType));
+    add(getActionMetadata("reset", channelType));
+    add(getActionMetadata("clear", channelType));
+    return actions;
+  }
+
+  // 4. Fallback type-specific actions ONLY if no specific reducer code was found
   if (channelType === "number") {
     add(getActionMetadata("increment", channelType));
     add(getActionMetadata("decrement", channelType));
@@ -480,7 +760,7 @@ export function getActionsForReducer(
     add(getActionMetadata("replace", channelType));
     add(getActionMetadata("reset", channelType));
     add(getActionMetadata("clear", channelType));
-  } else if (channelType === "object" || channelType === "json") {
+  } else if (channelType === "object") {
     add(getActionMetadata("merge", channelType));
     add(getActionMetadata("replace", channelType));
     add(getActionMetadata("reset", channelType));

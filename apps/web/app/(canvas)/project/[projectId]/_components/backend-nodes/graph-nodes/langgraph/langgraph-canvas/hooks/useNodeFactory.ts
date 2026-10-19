@@ -19,6 +19,8 @@ import type {
   LangGraphStateReducerRefNode,
   TransformerCanvasNode,
   TransformerRefCanvasNode,
+  LangGraphTypesNode,
+  LangGraphTypesRefNode,
   LangGraphCanvasNodeAddType,
   LangGraphStateChannel,
 } from "@workspace/canvas";
@@ -41,6 +43,8 @@ import {
   LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF,
   LANGGRAPH_CANVAS_NODE_TRANSFORMER,
   LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
+  LANGGRAPH_CANVAS_NODE_TYPES,
+  LANGGRAPH_CANVAS_NODE_TYPES_REF,
   DEFAULT_MIDDLEWARE_TYPE,
   LLM_PROVIDERS,
   LLM_PROVIDER_PRESETS,
@@ -82,6 +86,8 @@ function getNodeDimensions(type: LangGraphCanvasNodeAddType): {
     case LANGGRAPH_CANVAS_NODE_OUTPUT:
     case LANGGRAPH_CANVAS_NODE_TRANSFORMER:
     case LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF:
+    case LANGGRAPH_CANVAS_NODE_TYPES:
+    case LANGGRAPH_CANVAS_NODE_TYPES_REF:
       return { width: 280, height: 140 };
     case LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF:
       return { width: 260, height: 160 };
@@ -724,6 +730,102 @@ export function useNodeFactory({
           };
 
           return [...nds, newTransformerRefNode];
+        });
+
+        setSelectedNodeId(refId);
+        return;
+      }
+
+      if (type === LANGGRAPH_CANVAS_NODE_TYPES) {
+        const typesId = `types_${Date.now().toString(36).slice(-4)}`;
+        setNodes((nds) => {
+          const position = getCenterPosition(type, nds);
+          const newTypesNode: LangGraphTypesNode = {
+            id: typesId,
+            type: LANGGRAPH_CANVAS_NODE_TYPES,
+            position,
+            data: {
+              label: label || "Custom Types",
+              typesId,
+              types: [
+                {
+                  id: `type_${Date.now().toString(36).slice(-4)}`,
+                  name: "MyType",
+                  kind: "interface",
+                  description: "Custom schema definition",
+                  fields: [
+                    {
+                      id: "field_1",
+                      name: "id",
+                      type: "string",
+                      required: true,
+                    },
+                    {
+                      id: "field_2",
+                      name: "name",
+                      type: "string",
+                      required: true,
+                    },
+                  ],
+                },
+              ],
+              rawTypeScript: "",
+              definitionMode: "visual",
+              onDeleteTypes: () => {
+                setNodes((nodes) => nodes.filter((node) => node.id !== typesId));
+                setEdges((edges) =>
+                  edges.filter(
+                    (edge) => edge.source !== typesId && edge.target !== typesId,
+                  ),
+                );
+                setSelectedNodeId((curr) => (curr === typesId ? null : curr));
+              },
+            },
+          };
+          return [...nds, newTypesNode];
+        });
+        setSelectedNodeId(typesId);
+        setActiveSideTab("inspector");
+        return;
+      }
+
+      if (type === LANGGRAPH_CANVAS_NODE_TYPES_REF) {
+        const refId = `types_ref_${Date.now().toString(36).slice(-4)}`;
+        let preselectedMasterId: string | undefined = undefined;
+        let preselectedMasterLabel = "Custom Types";
+
+        setNodes((nds) => {
+          const master = nds.find(
+            (n): n is LangGraphTypesNode =>
+              n.type === LANGGRAPH_CANVAS_NODE_TYPES,
+          );
+          if (master) {
+            preselectedMasterId = master.id;
+            preselectedMasterLabel = master.data.label || "Custom Types";
+          }
+          const position = getCenterPosition(type, nds);
+
+          const newTypesRefNode: LangGraphTypesRefNode = {
+            id: refId,
+            type: LANGGRAPH_CANVAS_NODE_TYPES_REF,
+            position,
+            data: {
+              label: label || `↩ ${preselectedMasterLabel} (Ref)`,
+              refId,
+              typesRef: preselectedMasterId,
+              onDeleteTypesRef: () => {
+                setNodes((nodes) => nodes.filter((node) => node.id !== refId));
+                setEdges((edges) =>
+                  edges.filter(
+                    (edge) => edge.source !== refId && edge.target !== refId,
+                  ),
+                );
+                setSelectedNodeId((curr) => (curr === refId ? null : curr));
+              },
+            },
+          };
+
+          return [...nds, newTypesRefNode];
         });
 
         setSelectedNodeId(refId);

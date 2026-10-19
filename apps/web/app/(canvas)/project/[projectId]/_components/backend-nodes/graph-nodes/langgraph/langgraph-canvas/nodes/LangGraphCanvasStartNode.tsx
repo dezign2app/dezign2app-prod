@@ -22,7 +22,6 @@ type InputChannelType = LangGraphInputChannel["type"];
 const TYPE_COLORS: Record<InputChannelType, string> = {
   string:   "text-emerald-400 bg-emerald-400/10 border-emerald-400/30",
   messages: "text-primary bg-primary/10 border-primary/30",
-  json:     "text-amber-400 bg-amber-400/10 border-amber-400/30",
   number:   "text-blue-400 bg-blue-400/10 border-blue-400/30",
   boolean:  "text-rose-400 bg-rose-400/10 border-rose-400/30",
   object:   "text-purple-400 bg-purple-400/10 border-purple-400/30",
@@ -36,7 +35,6 @@ const STATE_TYPE_COLORS: Record<string, string> = {
   boolean:  "text-rose-400 bg-rose-400/10 border-rose-400/30",
   array:    "text-orange-400 bg-orange-400/10 border-orange-400/30",
   object:   "text-purple-400 bg-purple-400/10 border-purple-400/30",
-  json:     "text-amber-400 bg-amber-400/10 border-amber-400/30",
 };
 
 // ─── Inline channel row ───────────────────────────────────────────────────────
@@ -107,7 +105,7 @@ function ChannelRow({ ch, idx, stateChannels, onUpdate, onDelete }: ChannelRowPr
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {(["string","messages","json","number","boolean","object","array"] as InputChannelType[]).map((t) => (
+              {(["string","messages","number","boolean","object","array"] as InputChannelType[]).map((t) => (
                 <SelectItem key={t} value={t} className="text-xs font-mono">{t}</SelectItem>
               ))}
             </SelectContent>

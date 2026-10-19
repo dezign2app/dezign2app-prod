@@ -34,7 +34,6 @@ export const langgraphDataSchema = baseNodeDataSchema
           type: z.enum([
             "messages",
             "string",
-            "json",
             "number",
             "boolean",
             "array",
@@ -52,6 +51,9 @@ export const langgraphDataSchema = baseNodeDataSchema
             ])
             .optional(),
           customReducerCode: z.string().optional(),
+          customTypeId: z.string().optional(),
+          customTypeName: z.string().optional(),
+          customTypeSchema: z.record(z.unknown()).optional(),
         }),
       )
       .default([
@@ -211,6 +213,9 @@ export const langgraphDataSchema = baseNodeDataSchema
     customTransformerNodes: z.array(z.any()).optional().default([]),
     customTransformerRefNodes: z.array(z.any()).optional().default([]),
     transformerDefinitions: z.array(z.any()).optional().default([]),
+    customTypesNodes: z.array(z.any()).optional().default([]),
+    customTypesRefNodes: z.array(z.any()).optional().default([]),
+    typesDefinitions: z.array(z.any()).optional().default([]),
     startNodePosition: z.object({ x: z.number(), y: z.number() }).optional(),
     stateNodePosition: z.object({ x: z.number(), y: z.number() }).optional(),
     checkpointerNodePosition: z

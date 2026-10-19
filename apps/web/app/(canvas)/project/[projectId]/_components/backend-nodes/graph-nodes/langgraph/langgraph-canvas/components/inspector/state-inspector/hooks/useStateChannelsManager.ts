@@ -1,5 +1,6 @@
 import React from "react";
 import type { LangGraphStateChannel } from "@/types/canvas";
+import { getSuggestedReducerCodeForChannelType } from "../constants";
 
 interface UseStateChannelsManagerProps {
   stateChannels: LangGraphStateChannel[];
@@ -29,6 +30,7 @@ export function useStateChannelsManager({
       type: "messages",
       reducer: "add_messages",
       defaultValue: [],
+      customReducerCode: getSuggestedReducerCodeForChannelType("messages"),
     };
     setStateChannels([defaultMessagesChannel, ...stateChannels]);
   }, [stateChannels, setStateChannels]);
@@ -39,6 +41,7 @@ export function useStateChannelsManager({
       type: "string",
       reducer: "replace",
       defaultValue: "",
+      customReducerCode: getSuggestedReducerCodeForChannelType("string"),
     };
     setStateChannels([...stateChannels, newChannel]);
   }, [stateChannels, setStateChannels]);

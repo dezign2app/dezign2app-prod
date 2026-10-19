@@ -35,6 +35,8 @@ import type {
   LangGraphAgentRefNode,
   TransformerCanvasNode,
   TransformerRefCanvasNode,
+  LangGraphTypesNode,
+  LangGraphTypesRefNode,
 } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_STEP,
@@ -54,6 +56,8 @@ import {
   LANGGRAPH_CANVAS_NODE_OUTPUT,
   LANGGRAPH_CANVAS_NODE_TRANSFORMER,
   LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
+  LANGGRAPH_CANVAS_NODE_TYPES,
+  LANGGRAPH_CANVAS_NODE_TYPES_REF,
   HANDLE_LLM_IN,
   HANDLE_TOOL_IN,
   HANDLE_MIDDLEWARE_IN,
@@ -197,6 +201,33 @@ export function buildGraphData({
       id: n.id,
       label: n.data.label,
       transformerRef: n.data.transformerRef,
+      position: n.position,
+    }));
+
+  const customTypesNodes = nodes
+    .filter(
+      (n): n is LangGraphTypesNode =>
+        n.type === LANGGRAPH_CANVAS_NODE_TYPES,
+    )
+    .map((n) => ({
+      id: n.id,
+      label: n.data.label || "Custom Types",
+      typesId: n.data.typesId || n.id,
+      types: n.data.types || [],
+      rawTypeScript: n.data.rawTypeScript || "",
+      definitionMode: n.data.definitionMode || "visual",
+      position: n.position,
+    }));
+
+  const customTypesRefNodes = nodes
+    .filter(
+      (n): n is LangGraphTypesRefNode =>
+        n.type === LANGGRAPH_CANVAS_NODE_TYPES_REF,
+    )
+    .map((n) => ({
+      id: n.id,
+      label: n.data.label,
+      typesRef: n.data.typesRef,
       position: n.position,
     }));
 
@@ -560,6 +591,9 @@ export function buildGraphData({
     customTransformerNodes,
     customTransformerRefNodes,
     transformerDefinitions: customTransformerNodes,
+    customTypesNodes,
+    customTypesRefNodes,
+    typesDefinitions: customTypesNodes,
     toolDefinitions,
     middlewareDefinitions,
     memoryDefinitions,

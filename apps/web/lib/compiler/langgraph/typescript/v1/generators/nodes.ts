@@ -80,12 +80,18 @@ export function buildAgentNodeFile(
         val = `response?.${fieldKey}`;
       } else if (su.source === "structured_full") {
         val = `response`;
+      } else if (su.source === "expression" || (su.value && su.value.trim().startsWith("{"))) {
+        val = su.value || `state.${key}`;
+        if (typeof val === "string" && val.includes("${")) {
+          val = val
+            .replace(/["`]\$\{response\.([a-zA-Z0-9_]+)\}["`]/g, "response?.$1")
+            .replace(/["`]\$\{state\.([a-zA-Z0-9_]+)\}["`]/g, "state?.$1")
+            .replace(/["`]\$\{([^}]+)\}["`]/g, "$1");
+        }
       } else if (su.source === "message_content") {
         val = `typeof response?.content === "string" ? response.content : JSON.stringify(response?.content ?? "")`;
       } else if (su.source === "message_object") {
         val = `response`;
-      } else if (su.source === "expression") {
-        val = su.value || `state.${key}`;
       } else if (su.source === "literal") {
         val = JSON.stringify(su.value ?? "");
       } else {

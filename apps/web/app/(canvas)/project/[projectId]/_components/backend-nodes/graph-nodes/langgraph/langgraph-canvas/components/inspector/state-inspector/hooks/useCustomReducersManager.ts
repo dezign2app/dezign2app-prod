@@ -110,14 +110,25 @@ export function useCustomReducersManager({
               : c,
           );
         } else {
+          const inferredType: LangGraphStateChannel["type"] =
+            code.includes('typeof prev === "number"')
+              ? "number"
+              : code.includes("Boolean(prev)")
+                ? "boolean"
+                : code.includes("Array.isArray")
+                  ? "array"
+                  : code.includes('typeof prev === "object"')
+                    ? "object"
+                    : "string";
+
           return [
             ...prev,
             {
               key: trimmedTarget,
-              type: "array",
+              type: inferredType,
               reducer: trimmedName,
               customReducerCode: code,
-              defaultValue: "",
+              defaultValue: inferredType === "number" ? 0 : inferredType === "boolean" ? false : inferredType === "array" ? [] : "",
             },
           ];
         }

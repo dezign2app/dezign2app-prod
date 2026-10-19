@@ -6,6 +6,7 @@ import type {
   AgentNodeData,
   LangGraphStateChannel,
   LangGraphCustomReducer,
+  LangGraphCanvasNode,
 } from "@workspace/canvas";
 import { AgentStateUpdatesSection } from "./AgentStateUpdatesSection";
 
@@ -18,6 +19,7 @@ interface AgentTerminalStateUpdatesProps {
   onToggleEnabled: (enabled: boolean) => void;
   stateChannels?: LangGraphStateChannel[];
   customReducers?: LangGraphCustomReducer[];
+  nodes?: LangGraphCanvasNode[];
 }
 
 export function AgentTerminalStateUpdates({
@@ -29,6 +31,7 @@ export function AgentTerminalStateUpdates({
   onToggleEnabled,
   stateChannels = [],
   customReducers = [],
+  nodes = [],
 }: AgentTerminalStateUpdatesProps) {
   return (
     <div className="flex flex-col gap-2 pt-2.5 border-t border-border/50">
@@ -109,6 +112,7 @@ export function AgentTerminalStateUpdates({
                 onUpdateAgent={onUpdateAgent}
                 stateChannels={stateChannels}
                 customReducers={customReducers}
+                nodes={nodes}
               />
             ) : (
               <div className="py-4 px-3 text-center text-xs text-muted-foreground font-mono bg-secondary/10 rounded-lg border border-border/30">

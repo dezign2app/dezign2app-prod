@@ -1,5 +1,6 @@
-import React, { useState } from "react";
-import { Trash2, Lock, Play, ChevronDown, GitMerge, Code2 } from "lucide-react";
+import React, { useState, useMemo } from "react";
+import { useReactFlow } from "@xyflow/react";
+import { Trash2, Lock, Play, ChevronDown, GitMerge, Code2, Braces } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
@@ -12,7 +13,14 @@ import {
 } from "@workspace/ui/components/select";
 import { LocalInput } from "../../../../../../common";
 import { BUILT_IN_REDUCERS, getSuggestedReducerCodeForChannelType } from "../constants";
-import { isLangGraphChannelType } from "@workspace/canvas";
+import {
+  isLangGraphChannelType,
+  isTypesNode,
+  isTypesRefNode,
+  type LangGraphCanvasNode,
+  type LangGraphTypesNode,
+  type CustomTypeItem,
+} from "@workspace/canvas";
 import { ChannelReducerConfig } from "./ChannelReducerConfig";
 import type { LangGraphStateChannel, LangGraphCustomReducer } from "@/types/canvas";
 
@@ -53,6 +61,33 @@ export function StateChannelItem({
 
   // Collapsible state for this variable's Reducers section (defaults to expanded)
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
+
+  const { getNodes } = useReactFlow<LangGraphCanvasNode>();
+  const allNodes = getNodes();
+  const availableCustomTypes = useMemo(() => {
+    const types: CustomTypeItem[] = [];
+    allNodes.forEach((n) => {
+      if (isTypesNode(n) && n.data.types) {
+        n.data.types.forEach((t) => {
+          if (t && t.name && !types.some((existing) => existing.id === t.id)) {
+            types.push(t);
+          }
+        });
+      } else if (isTypesRefNode(n) && n.data.typesRef) {
+        const master = allNodes.find(
+          (m): m is LangGraphTypesNode => isTypesNode(m) && m.id === n.data.typesRef,
+        );
+        if (master?.data.types) {
+          master.data.types.forEach((t) => {
+            if (t && t.name && !types.some((existing) => existing.id === t.id)) {
+              types.push(t);
+            }
+          });
+        }
+      }
+    });
+    return types;
+  }, [allNodes]);
 
   return (
     <div
@@ -134,9 +169,32 @@ export function StateChannelItem({
             Type
           </Label>
           <Select
-            value={ch.type}
+            value={ch.customTypeId ? `custom:${ch.customTypeId}` : ch.type}
             disabled={isBuiltin}
             onValueChange={(v) => {
+              if (v.startsWith("custom:")) {
+                const typeId = v.replace("custom:", "");
+                const targetType = availableCustomTypes.find((t) => t.id === typeId);
+                const suggestedCode = getSuggestedReducerCodeForChannelType("object", targetType);
+                const reducerName = `${ch.key || targetType?.name || "state"}_reducer`;
+                onUpdateField(idx, {
+                  type: "object",
+                  reducer: reducerName,
+                  customReducerCode: suggestedCode,
+                  customTypeId: typeId,
+                  customTypeName: targetType?.name,
+                  customTypeSchema: targetType,
+                });
+                if (matchedCustom && onUpdateCustomReducer) {
+                  onUpdateCustomReducer(matchedCustom.id, {
+                    name: reducerName,
+                    code: suggestedCode,
+                    targetField: ch.key,
+                  });
+                }
+                return;
+              }
+
               if (isLangGraphChannelType(v)) {
                 const suggestedCode = getSuggestedReducerCodeForChannelType(v);
                 const reducerName = `${ch.key || v}_reducer`;
@@ -144,6 +202,9 @@ export function StateChannelItem({
                   type: v,
                   reducer: reducerName,
                   customReducerCode: suggestedCode,
+                  customTypeId: undefined,
+                  customTypeName: undefined,
+                  customTypeSchema: undefined,
                 });
                 if (matchedCustom && onUpdateCustomReducer) {
                   onUpdateCustomReducer(matchedCustom.id, {
@@ -168,10 +229,33 @@ export function StateChannelItem({
               <SelectItem value="number">number</SelectItem>
               <SelectItem value="boolean">boolean</SelectItem>
               <SelectItem value="array">array</SelectItem>
-              <SelectItem value="object">object</SelectItem>
-              <SelectItem value="json">json</SelectItem>
+              <SelectItem value="object">object (generic)</SelectItem>
+              {availableCustomTypes.length > 0 && (
+                <>
+                  <div className="px-2 py-1 text-[10px] uppercase font-bold text-cyan-400 bg-cyan-500/10 rounded-sm my-1 flex items-center gap-1 font-mono">
+                    <Braces className="w-3 h-3" /> Custom Types
+                  </div>
+                  {availableCustomTypes.map((t) => (
+                    <SelectItem
+                      key={t.id}
+                      value={`custom:${t.id}`}
+                      className="text-xs font-mono text-cyan-300"
+                    >
+                      {t.name} ({t.kind})
+                    </SelectItem>
+                  ))}
+                </>
+              )}
             </SelectContent>
           </Select>
+          {ch.customTypeName && (
+            <Badge
+              variant="secondary"
+              className="text-[9px] h-5 px-1.5 font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shrink-0"
+            >
+              {ch.customTypeName}
+            </Badge>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
@@ -240,9 +324,22 @@ export function StateChannelItem({
         {isExpanded && (
           <div className="animate-in fade-in-50 slide-in-from-top-1 duration-150 pt-1">
             <ChannelReducerConfig
-              channel={ch}
+              channel={
+                ch.customTypeId || ch.customTypeName
+                  ? {
+                      ...ch,
+                      customTypeSchema:
+                        availableCustomTypes.find(
+                          (t) =>
+                            t.id === ch.customTypeId ||
+                            t.name === ch.customTypeName,
+                        ) || ch.customTypeSchema,
+                    }
+                  : ch
+              }
               index={idx}
               customReducers={customReducers}
+              availableCustomTypes={availableCustomTypes}
               onUpdateField={onUpdateField}
               onTestChannel={onTestChannel}
               onAddCustomReducer={onAddCustomReducer}

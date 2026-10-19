@@ -99,12 +99,12 @@ export function TargetVariableCombobox({
                       {fieldKey}
                     </span>
                   </div>
-                  {ch?.type && (
+                  {(ch?.customTypeName || ch?.type) && (
                     <Badge
                       variant="outline"
                       className="text-[9px] px-1 py-0 h-4 text-muted-foreground font-mono shrink-0"
                     >
-                      {ch.type}
+                      {ch.customTypeName || ch.type}
                     </Badge>
                   )}
                 </ComboboxItem>

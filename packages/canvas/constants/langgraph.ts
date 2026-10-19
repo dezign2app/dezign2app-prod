@@ -61,6 +61,8 @@ export const HANDLE_STATE_IN = "state_in" as const;
 export const HANDLE_STATE_OUT = "state_out" as const;
 export const HANDLE_TRANSFORMER_IN = "transformer_in" as const;
 export const HANDLE_TRANSFORMER_OUT = "transformer-out" as const;
+export const HANDLE_TYPES_IN = "types_in" as const;
+export const HANDLE_TYPES_OUT = "types_out" as const;
 
 // ─── LangGraph Canvas React Flow Node Types ────────────────────────────────────
 export const LANGGRAPH_CANVAS_NODE_STEP = "step" as const;
@@ -84,6 +86,8 @@ export const LANGGRAPH_CANVAS_NODE_OUTPUT = "langgraph_output" as const;
 export const LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF = "langgraph_state_reducer_ref" as const;
 export const LANGGRAPH_CANVAS_NODE_TRANSFORMER = "transformer" as const;
 export const LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF = "transformer_ref" as const;
+export const LANGGRAPH_CANVAS_NODE_TYPES = "langgraph_types" as const;
+export const LANGGRAPH_CANVAS_NODE_TYPES_REF = "langgraph_types_ref" as const;
 
 // ─── Tool Sources ─────────────────────────────────────────────────────────────
 export const TOOL_SOURCE_INLINE = "inline" as const;

@@ -123,7 +123,7 @@ export function channelDefault(channel: LangGraphStateChannel): JSONValue {
     return {};
   }
   if (channel.type === "messages" || channel.type === "array") return [];
-  if (channel.type === "object" || channel.type === "json") return {};
+  if (channel.type === "object") return {};
   if (channel.type === "number") return 0;
   if (channel.type === "boolean") return false;
   return "";

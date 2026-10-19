@@ -137,8 +137,12 @@ export function LangGraphStudioView({
     updateSelectedMemory,
     updateSelectedOutput,
     updateSelectedTransformer,
+    updateSelectedTypes,
+    updateSelectedTypesRef,
     selectedTransformerData,
     selectedTransformerRefData,
+    selectedTypesData,
+    selectedTypesRefData,
     handleDeleteStep,
     handleDeleteSelected,
     handleSave,
@@ -941,7 +945,11 @@ export function LangGraphStudioView({
           onUpdateOutput={updateSelectedOutput}
           selectedTransformerData={selectedTransformerData}
           selectedTransformerRefData={selectedTransformerRefData}
+          selectedTypesData={selectedTypesData}
+          selectedTypesRefData={selectedTypesRefData}
           onUpdateTransformer={updateSelectedTransformer}
+          onUpdateTypes={updateSelectedTypes}
+          onUpdateTypesRef={updateSelectedTypesRef}
           onSelectNode={(nodeId) => setSelectedNodeId(nodeId)}
           inputChannels={inputChannels}
           setInputChannels={setInputChannels}

@@ -22,6 +22,10 @@ import {
   TransformerCanvasNode,
   TransformerRefCanvasNode,
   TransformerCanvasNodeData,
+  LangGraphTypesNode,
+  LangGraphTypesRefNode,
+  LangGraphTypesNodeData,
+  LangGraphTypesRefNodeData,
   getStepData,
 } from "@workspace/canvas";
 import {
@@ -36,6 +40,8 @@ import {
   LANGGRAPH_CANVAS_NODE_START,
   LANGGRAPH_CANVAS_NODE_TRANSFORMER,
   LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
+  LANGGRAPH_CANVAS_NODE_TYPES,
+  LANGGRAPH_CANVAS_NODE_TYPES_REF,
 } from "../constants";
 
 interface UseSelectedNodeStateProps {
@@ -132,6 +138,22 @@ export function useSelectedNodeState({
     return found ? found.data : null;
   }, [nodes, selectedNodeId]);
 
+  const selectedTypesData = useMemo((): LangGraphTypesNodeData | null => {
+    const found = nodes.find(
+      (n): n is LangGraphTypesNode =>
+        n.id === selectedNodeId && n.type === LANGGRAPH_CANVAS_NODE_TYPES,
+    );
+    return found ? found.data : null;
+  }, [nodes, selectedNodeId]);
+
+  const selectedTypesRefData = useMemo((): LangGraphTypesRefNodeData | null => {
+    const found = nodes.find(
+      (n): n is LangGraphTypesRefNode =>
+        n.id === selectedNodeId && n.type === LANGGRAPH_CANVAS_NODE_TYPES_REF,
+    );
+    return found ? found.data : null;
+  }, [nodes, selectedNodeId]);
+
   const updateSelectedTransformer = (changes: Partial<TransformerCanvasNodeData>) => {
     if (!selectedNodeId) return;
     setNodes((nds) =>
@@ -139,6 +161,28 @@ export function useSelectedNodeState({
         n.id === selectedNodeId &&
         (n.type === LANGGRAPH_CANVAS_NODE_TRANSFORMER ||
           n.type === LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF)
+          ? { ...n, data: { ...n.data, ...changes } }
+          : n,
+      ),
+    );
+  };
+
+  const updateSelectedTypes = (changes: Partial<LangGraphTypesNodeData>) => {
+    if (!selectedNodeId) return;
+    setNodes((nds) =>
+      nds.map((n) =>
+        n.id === selectedNodeId && n.type === LANGGRAPH_CANVAS_NODE_TYPES
+          ? { ...n, data: { ...n.data, ...changes } }
+          : n,
+      ),
+    );
+  };
+
+  const updateSelectedTypesRef = (changes: Partial<LangGraphTypesRefNodeData>) => {
+    if (!selectedNodeId) return;
+    setNodes((nds) =>
+      nds.map((n) =>
+        n.id === selectedNodeId && n.type === LANGGRAPH_CANVAS_NODE_TYPES_REF
           ? { ...n, data: { ...n.data, ...changes } }
           : n,
       ),
@@ -269,6 +313,8 @@ export function useSelectedNodeState({
     selectedStartData,
     selectedTransformerData,
     selectedTransformerRefData,
+    selectedTypesData,
+    selectedTypesRefData,
     updateSelectedStep,
     updateSelectedLLM,
     updateSelectedTool,
@@ -277,5 +323,7 @@ export function useSelectedNodeState({
     updateSelectedMemory,
     updateSelectedOutput,
     updateSelectedTransformer,
+    updateSelectedTypes,
+    updateSelectedTypesRef,
   };
 }

@@ -75,6 +75,7 @@ export async function executeAgentNode(
   const outputDelta: Record<string, unknown> = {};
   const stepLogs: SimulationStepLogEntry[] = [];
   let latestAssistantResponse: string | undefined;
+  let latestStructuredResponse: Record<string, unknown> | undefined;
 
   const addLog = (
     level: SimulationStepLogLevel,
@@ -421,6 +422,7 @@ export async function executeAgentNode(
           parsed = { raw: responseText };
         }
       }
+      latestStructuredResponse = parsed ?? undefined;
       outputDelta.structuredResponse = parsed;
       outputDelta.messages = [new AIMessage(JSON.stringify(parsed, null, 2))];
       outputDelta.response = JSON.stringify(parsed);
@@ -617,11 +619,29 @@ export async function executeAgentNode(
       const rawFieldKey = update.schemaField || update.value || update.channelKey || "";
       const cleanFieldKey = rawFieldKey.replace(/^structuredResponse\./, "").trim();
 
-      const parsedObj = outputDelta.structuredResponse as
-        | Record<string, unknown>
-        | undefined;
+      const parsedObj = latestStructuredResponse;
 
       let val: unknown;
+
+      let resolvedValue = update.value;
+      if (typeof resolvedValue === "string" && resolvedValue.includes("${")) {
+        resolvedValue = resolvedValue.replace(/\$\{([^}]+)\}/g, (_: string, expr: string): string => {
+          const clean = expr.trim();
+          if (clean === "response.content") return latestAssistantResponse ?? "";
+          if (clean === "response") return JSON.stringify(parsedObj ?? latestAssistantResponse ?? "");
+          if (clean.startsWith("response.")) {
+            const field = clean.replace(/^response\./, "");
+            const resVal = parsedObj ? parsedObj[field] : undefined;
+            return resVal !== undefined && resVal !== null ? String(resVal) : "";
+          }
+          if (clean.startsWith("state.")) {
+            const field = clean.replace(/^state\./, "");
+            const stVal = state[field];
+            return stVal !== undefined && stVal !== null ? String(stVal) : "";
+          }
+          return "";
+        });
+      }
 
       if (update.source === "none") {
         val = undefined;
@@ -632,17 +652,27 @@ export async function executeAgentNode(
       } else if (update.source === "message_content") {
         val = latestAssistantResponse;
       } else if (update.source === "message_object") {
-        const msgs = (outputDelta as Record<string, unknown>).messages;
+        const msgs = outputDelta.messages;
         val = Array.isArray(msgs) && msgs.length > 0 ? msgs[0] : undefined;
       } else if (update.source === "expression" || update.mode === "expression") {
         try {
-          const exprFn = new Function("state", "clone", `return (${update.value});`);
-          val = exprFn(state, clone);
+          const structuredScope =
+            typeof outputDelta.structuredResponse === "object" &&
+            outputDelta.structuredResponse !== null
+              ? outputDelta.structuredResponse
+              : {};
+          const responseScope = {
+            content: latestAssistantResponse,
+            ...structuredScope,
+            ...outputDelta,
+          };
+          const exprFn = new Function("state", "clone", "response", `return (${resolvedValue});`);
+          val = exprFn(state, clone, responseScope);
         } catch {
-          val = update.value;
+          val = resolvedValue;
         }
       } else {
-        val = update.value;
+        val = resolvedValue;
         if (typeof val === "string") {
           if (/\bstate\b/.test(val)) {
             try {
@@ -652,13 +682,15 @@ export async function executeAgentNode(
               // fallback to JSON parse
             }
           }
-          if (typeof val === "string") {
-            try {
-              val = JSON.parse(val);
-            } catch {
-              // plain text
-            }
-          }
+        }
+      }
+
+      if (typeof val === "string") {
+        try {
+          const jsonCompatible = val.replace(/`(\$\{[^`]+\})`/g, '"$1"');
+          val = JSON.parse(jsonCompatible);
+        } catch {
+          // plain text string
         }
       }
 

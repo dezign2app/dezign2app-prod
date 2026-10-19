@@ -78,10 +78,11 @@ export function derivePromptSources(
     for (const ch of stateChannels) {
       if (!ch.key?.trim()) continue;
       const key = ch.key.trim();
+      const typeLabel = ch.customTypeName || ch.type || "string";
       stateFields.push({
         value: key,
-        label: `${key} (${ch.type || "string"})`,
-        type: ch.type || "string",
+        label: `${key} (${typeLabel})`,
+        type: typeLabel,
       });
     }
   } else {

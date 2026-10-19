@@ -13,6 +13,7 @@ import {
   GitMerge,
   RotateCcw,
   Shuffle,
+  Braces,
 } from "lucide-react";
 import type { LangGraphCanvasNodeAddType } from "@workspace/canvas";
 import {
@@ -31,6 +32,8 @@ import {
   LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF,
   LANGGRAPH_CANVAS_NODE_TRANSFORMER,
   LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
+  LANGGRAPH_CANVAS_NODE_TYPES,
+  LANGGRAPH_CANVAS_NODE_TYPES_REF,
   STEP_TYPE_ROUTER,
 } from "../constants";
 
@@ -125,6 +128,18 @@ export const TOOL_PALETTE_ITEMS: ToolPaletteItem[] = [
     label: "State Reducer Ref",
     desc: "Attach to node to mutate state channels (append, overwrite, set)",
     icon: GitMerge,
+  },
+  {
+    type: LANGGRAPH_CANVAS_NODE_TYPES,
+    label: "Types / Schemas",
+    desc: "Define custom TypeScript interfaces, types & schemas",
+    icon: Braces,
+  },
+  {
+    type: LANGGRAPH_CANVAS_NODE_TYPES_REF,
+    label: "Types Ref",
+    desc: "Reference existing Types & Schemas across nodes",
+    icon: Link2,
   },
 ];
 

@@ -215,6 +215,7 @@ export function AgentStepCard({
             onUpdateAgent={onUpdateAgent}
             stateChannels={stateChannels}
             customReducers={customReducers}
+            nodes={nodes}
           />
         );
 

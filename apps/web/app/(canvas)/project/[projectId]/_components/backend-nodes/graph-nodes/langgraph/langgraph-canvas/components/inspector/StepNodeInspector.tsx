@@ -171,7 +171,7 @@ export function StepNodeInspector({
                       .filter((ch) => Boolean(ch.key?.trim()))
                       .map((ch) => (
                         <SelectItem key={ch.key} value={ch.key}>
-                          {ch.key} ({ch.type})
+                          {ch.key} ({ch.customTypeName || ch.type})
                         </SelectItem>
                       ))}
                     {!stateChannels.some((c) => c.key === su.channelKey) &&

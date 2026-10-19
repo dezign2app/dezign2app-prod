@@ -18,6 +18,7 @@ import type {
 } from "./memory";
 import type { LangGraphMiddlewareDefinition } from "./middleware";
 import type { PipelineStepInputBinding } from "../pipeline";
+import type { CustomTypeItem } from "../custom-types";
 
 export type LangGraphEventStreamType =
   | "stream.messages"
@@ -226,6 +227,23 @@ export interface CustomTransformerRefNodeDefinition {
   position?: { x: number; y: number };
 }
 
+export interface CustomTypesNodeDefinition {
+  id: string;
+  label?: string;
+  typesId?: string;
+  types?: CustomTypeItem[];
+  rawTypeScript?: string;
+  definitionMode?: "visual" | "raw";
+  position?: { x: number; y: number };
+}
+
+export interface CustomTypesRefNodeDefinition {
+  id: string;
+  label?: string;
+  typesRef?: string;
+  position?: { x: number; y: number };
+}
+
 /** LangGraph Agent node fields — the parent graph node (canvas type). */
 export interface CanvasLangGraphNodeData {
   label?: string;
@@ -262,6 +280,9 @@ export interface CanvasLangGraphNodeData {
   customTransformerNodes?: CustomTransformerNodeDefinition[];
   customTransformerRefNodes?: CustomTransformerRefNodeDefinition[];
   transformerDefinitions?: CustomTransformerNodeDefinition[];
+  customTypesNodes?: CustomTypesNodeDefinition[];
+  customTypesRefNodes?: CustomTypesRefNodeDefinition[];
+  typesDefinitions?: CustomTypesNodeDefinition[];
   toolDefinitions?: LangGraphToolDefinition[];
   middlewareDefinitions?: LangGraphMiddlewareDefinition[];
   agentDefinitions?: LangGraphAgentDefinition[];
