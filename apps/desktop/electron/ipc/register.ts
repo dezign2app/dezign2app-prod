@@ -1,6 +1,6 @@
 import { ipcMain, shell } from "electron";
 import { getMainWindow } from "../window";
-import { openBrowserLogin } from "../services/auth";
+import { openBrowserLogin, getPendingAuthData, clearPendingAuthData } from "../services/auth";
 import { pickDirectory, writeProject, readProjectFile, CompiledFile, listProjectDirectory, deleteProjectFiles } from "../services/fileWriter";
 import {
   runDockerPreflight,
@@ -49,8 +49,20 @@ export function registerIpcHandlers(): void {
   });
 
   // ── Authentication ─────────────────────────
+  // Opens the default browser to complete web-based login (Google, GitHub, email)
   ipcMain.handle("auth:open-browser-login", async (_event, customUrl?: string) => {
     return openBrowserLogin(customUrl);
+  });
+
+  // Pull-based fallback for renderer to fetch pending auth data on mount or window focus
+  ipcMain.handle("auth:get-pending-callback", async () => {
+    return getPendingAuthData();
+  });
+
+  // Clears cached auth data once consumed by the renderer to prevent duplicate processing
+  ipcMain.handle("auth:clear-pending-callback", async () => {
+    clearPendingAuthData();
+    return { success: true };
   });
 
   // ── File System ────────────────────────────

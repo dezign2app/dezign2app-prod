@@ -117,17 +117,34 @@ export const SignInView = () => {
     );
   };
 
-  // Exchange ticket for Better Auth session inside Electron
+  /**
+   * Concurrency guard: Prevents duplicate or overlapping ticket exchange requests
+   * when both the IPC "auth:callback" push and the window "focus" pull fire at the same time.
+   */
+  const exchangingRef = React.useRef(false);
+
+  /**
+   * Exchanges a one-time desktop authentication ticket for a valid Better Auth session token.
+   *
+   * Flow:
+   * 1. Sanitizes the ticket string (removes whitespace, trailing slashes/quotes from OS redirects).
+   * 2. Checks `exchangingRef` to prevent concurrent redundant exchange requests.
+   * 3. Sends a POST request to `/api/auth/desktop/exchange` with fallback support between
+   *    local dev server and remote production/staging auth endpoints.
+   * 4. Upon success, sets the session cookies (`better-auth.session_token` and `is_electron=1`)
+   *    in `document.cookie` and redirects to `/projects`.
+   */
   const exchangeTicket = async (ticket: string) => {
     if (!ticket) {
       console.warn("[desktop-auth:view] exchangeTicket called with empty ticket");
       return;
     }
-    const cleanTicket = ticket.trim();
-    log("[desktop-auth:view] exchangeTicket started with ticket:", {
-      preview: `${cleanTicket.substring(0, 15)}...`,
-      length: cleanTicket.length,
-    });
+    const cleanTicket = ticket.trim().replace(/[\/'"]+$/, "");
+    if (exchangingRef.current) {
+      log("[desktop-auth:view] exchangeTicket already in progress, skipping duplicate call");
+      return;
+    }
+    exchangingRef.current = true;
     try {
       setIsExchanging(true);
       setError(null);
@@ -225,9 +242,18 @@ export const SignInView = () => {
       setError("Invalid or expired sign-in ticket. Please try again.");
     } finally {
       setIsExchanging(false);
+      exchangingRef.current = false;
     }
   };
 
+  /**
+   * Dual-Channel Authentication Listener Setup (Desktop Mode Only)
+   *
+   * To ensure 100% reliable handoff from external browser back to Electron:
+   * 1. Channel A (Push): Main process emits `auth:callback` IPC event via `onAuthCallback`.
+   * 2. Channel B (Pull): Renderer checks `getPendingAuthCallback()` on mount (for cold-start
+   *    deep links) and on `window.focus` (when user returns to Electron from their browser).
+   */
   useEffect(() => {
     const inElectronMode = isElectron();
     setMounted(true);
@@ -237,14 +263,56 @@ export const SignInView = () => {
     const api = getElectronAPI();
     if (api?.auth) {
       log("[desktop-auth:view] Registering api.auth.onAuthCallback listener...");
+
+      /**
+       * Checks the Electron main process for any unconsumed deep link credentials
+       * that were received while the renderer was blurred, unmounted, or minimized.
+       */
+      const checkPendingAuth = async () => {
+        try {
+          if (api.auth?.getPendingAuthCallback) {
+            const pending = await api.auth.getPendingAuthCallback();
+            if (pending?.ticket || pending?.token) {
+              const ticketToUse = (pending.ticket || pending.token)?.trim();
+              if (ticketToUse && !exchangingRef.current) {
+                log("[desktop-auth:view] Found pending auth ticket via getPendingAuthCallback:", {
+                  preview: `${ticketToUse.substring(0, 15)}...`,
+                });
+                // Clear the cache in main process so we don't re-exchange on subsequent focus events
+                if (api.auth.clearPendingAuthCallback) {
+                  await api.auth.clearPendingAuthCallback();
+                }
+                await exchangeTicket(ticketToUse);
+              }
+            }
+          }
+        } catch (err) {
+          console.warn("[desktop-auth:view] Error checking pending auth callback:", err);
+        }
+      };
+
+      // 1. Check immediately on mount in case the app was launched by a deep link from cold start
+      checkPendingAuth();
+
+      // 2. Check whenever the window regains focus (e.g. user finishes signing in on the browser and switches back)
+      const onFocus = () => {
+        log("[desktop-auth:view] Window focused, polling pending auth data...");
+        checkPendingAuth();
+      };
+      window.addEventListener("focus", onFocus);
+
+      // 3. Listen for push IPC callback from the main process
       const cleanup = api.auth.onAuthCallback(async (data) => {
         log("[desktop-auth:view] onAuthCallback received data:", {
           hasToken: !!data.token,
           hasTicket: !!data.ticket,
           rawUrl: data.rawUrl,
         });
-        const ticketToUse = data.ticket || data.token;
+        const ticketToUse = (data.ticket || data.token)?.trim();
         if (ticketToUse) {
+          if (api.auth.clearPendingAuthCallback) {
+            await api.auth.clearPendingAuthCallback().catch(() => {});
+          }
           log("[desktop-auth:view] Exchanging ticket from deep link callback...");
           await exchangeTicket(ticketToUse);
         } else {
@@ -254,6 +322,7 @@ export const SignInView = () => {
 
       return () => {
         log("[desktop-auth:view] Cleaning up onAuthCallback listener");
+        window.removeEventListener("focus", onFocus);
         cleanup();
       };
     } else {
@@ -261,6 +330,12 @@ export const SignInView = () => {
     }
   }, []);
 
+  /**
+   * Triggers the external browser login flow from the Electron app.
+   * Passes `desktop=true` and sets `redirect_url` to `/auth/desktop` so that once the user
+   * logs in via OAuth/email in the browser, the web page generates the HMAC ticket and redirects
+   * back to `dezign2app://auth?ticket=...`.
+   */
   const handleBrowserLogin = async () => {
     setWaitingForAuth(true);
     setError(null);
@@ -268,7 +343,7 @@ export const SignInView = () => {
     log("[desktop-auth:view] handleBrowserLogin clicked. Electron API available?", !!api?.auth);
     if (api?.auth) {
       const authBaseUrl = getAuthBaseUrl();
-      const loginUrl = `${authBaseUrl}/sign-in?redirect_url=${encodeURIComponent(
+      const loginUrl = `${authBaseUrl}/sign-in?desktop=true&redirect_url=${encodeURIComponent(
         `${authBaseUrl}/auth/desktop`,
       )}`;
       log("[desktop-auth:view] Requesting openBrowserLogin with:", loginUrl);
