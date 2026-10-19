@@ -53,6 +53,25 @@ export const SignInView = () => {
   const { data: session, isPending: isSessionLoading } = useSession();
   const ensureUser = useMutation(api.users.ensureAuthUser);
 
+  const navigateTo = React.useCallback(
+    (url: string) => {
+      if (!url) return;
+      if (url.startsWith("http://") || url.startsWith("https://")) {
+        try {
+          const parsed = new URL(url);
+          if (typeof window !== "undefined" && parsed.origin === window.location.origin) {
+            router.push(parsed.pathname + parsed.search);
+            return;
+          }
+        } catch {}
+        window.location.href = url;
+      } else {
+        router.push(url);
+      }
+    },
+    [router],
+  );
+
   // If already signed in (and not explicitly signed out), ensure user record exists and go directly to /projects or redirectUrl
   useEffect(() => {
     log("[desktop-auth:view] Session state:", {
@@ -86,9 +105,9 @@ export const SignInView = () => {
           console.warn("[desktop-auth:view] ensureUser error:", err);
         });
       }
-      router.push(redirectUrl);
+      navigateTo(redirectUrl);
     }
-  }, [session, router, redirectUrl, ensureUser, isSignedOut, inDesktop, isSessionLoading]);
+  }, [session, navigateTo, redirectUrl, ensureUser, isSignedOut, inDesktop, isSessionLoading]);
 
   const getAuthBaseUrl = () => {
     return (
@@ -282,7 +301,7 @@ export const SignInView = () => {
         setError(res.error.message || "Invalid credentials");
       } else {
         toast.success("Signed in successfully!");
-        router.push(redirectUrl);
+        navigateTo(redirectUrl);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Sign in failed";
@@ -296,9 +315,18 @@ export const SignInView = () => {
     try {
       setSocialLoading(provider);
       setError(null);
+      let targetCallback = redirectUrl;
+      if (targetCallback.startsWith("http://") || targetCallback.startsWith("https://")) {
+        try {
+          const parsed = new URL(targetCallback);
+          if (typeof window !== "undefined" && parsed.origin === window.location.origin) {
+            targetCallback = parsed.pathname + parsed.search;
+          }
+        } catch {}
+      }
       await signIn.social({
         provider,
-        callbackURL: redirectUrl,
+        callbackURL: targetCallback,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : `Failed to sign in with ${provider}`;

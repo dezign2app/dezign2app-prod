@@ -55,6 +55,30 @@ export const listJwks = query({
   },
 });
 
+/**
+ * Builds the Better Auth configuration for Convex backend runtime.
+ *
+ * CRITICAL ENVIRONMENT & ROUTING ARCHITECTURE NOTES:
+ * --------------------------------------------------
+ * 1. `baseURL` determines OAuth Callback Resolution:
+ *    - Better Auth uses `baseURL` to compute OAuth `redirect_uri` for social providers
+ *      (e.g., `<baseURL>/api/auth/callback/github`, `<baseURL>/api/auth/callback/google`).
+ *    - In Development (`neighborly-setter-541`): `BETTER_AUTH_URL` must be set to `http://localhost:46500`.
+ *      If accidentally set to `https://www.dezign2app.com`, social logins in dev will redirect the
+ *      browser to the live production site, abandoning the local dev session and preventing desktop
+ *      ticket generation (`/auth/desktop`).
+ *    - In Production (`gregarious-quail-82`): `BETTER_AUTH_URL` is `https://www.dezign2app.com`.
+ *
+ * 2. Convex Environment Variable Synchronization:
+ *    - Changes in local `.env.local` are NOT automatically uploaded to Convex cloud deployments.
+ *    - To update variables in dev deployment: `npx convex env set <KEY> <VALUE>`
+ *    - To update variables in prod deployment: `npx convex env set <KEY> <VALUE> --prod`
+ *
+ * 3. `trustedOrigins` & Desktop Application Support:
+ *    - `dezign2app://` is required for custom protocol deep-linking back to the Electron app.
+ *    - `http://127.0.0.1:*` and `http://localhost:*` allow local web dev servers and the Electron
+ *      embedded runtime to exchange auth tickets and cookies without CORS / origin rejections.
+ */
 export const createAuthOptions = (
   ctx: GenericCtx<GenericDataModel>,
 ) => {
@@ -67,7 +91,9 @@ export const createAuthOptions = (
     process.env.NEXT_PUBLIC_APP_URL,
     process.env.BETTER_AUTH_URL,
     ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(",").map((s) => s.trim()) || []),
+    // Custom URI scheme for Electron desktop application OAuth redirect handoff
     "dezign2app://",
+    // Allow loopback origins on any port for local development & Electron webview communication
     "http://127.0.0.1:*",
     "http://localhost:*",
     "http://127.0.0.1",

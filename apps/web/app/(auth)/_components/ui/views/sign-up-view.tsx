@@ -47,6 +47,25 @@ export const SignUpView = () => {
     setInDesktop(isElectron());
   }, []);
 
+  const navigateTo = React.useCallback(
+    (url: string) => {
+      if (!url) return;
+      if (url.startsWith("http://") || url.startsWith("https://")) {
+        try {
+          const parsed = new URL(url);
+          if (typeof window !== "undefined" && parsed.origin === window.location.origin) {
+            router.push(parsed.pathname + parsed.search);
+            return;
+          }
+        } catch {}
+        window.location.href = url;
+      } else {
+        router.push(url);
+      }
+    },
+    [router],
+  );
+
   useEffect(() => {
     if (isSignedOut) {
       window.history.replaceState(null, "", "/sign-up");
@@ -63,9 +82,9 @@ export const SignUpView = () => {
           avatarUrl: session.user.image || undefined,
         }).catch(() => {});
       }
-      router.push(redirectUrl);
+      navigateTo(redirectUrl);
     }
-  }, [session, router, redirectUrl, ensureUser, isSignedOut]);
+  }, [session, navigateTo, redirectUrl, ensureUser, isSignedOut]);
 
   // In desktop app, authentication is strictly handled via external browser auth in SignInView.
   // Direct in-app signup/login is disabled in desktop.
@@ -110,7 +129,7 @@ export const SignUpView = () => {
       }
 
       toast.success("Account created successfully!");
-      router.push(redirectUrl);
+      navigateTo(redirectUrl);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Sign up failed";
       setError(message);
@@ -123,9 +142,18 @@ export const SignUpView = () => {
     try {
       setSocialLoading(provider);
       setError(null);
+      let targetCallback = redirectUrl;
+      if (targetCallback.startsWith("http://") || targetCallback.startsWith("https://")) {
+        try {
+          const parsed = new URL(targetCallback);
+          if (typeof window !== "undefined" && parsed.origin === window.location.origin) {
+            targetCallback = parsed.pathname + parsed.search;
+          }
+        } catch {}
+      }
       await signIn.social({
         provider,
-        callbackURL: redirectUrl,
+        callbackURL: targetCallback,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : `Failed to sign up with ${provider}`;
