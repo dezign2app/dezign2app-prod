@@ -16,16 +16,19 @@ import {
   BUILT_IN_REDUCERS,
   REDUCER_CODE_PRESETS,
   getSuggestedReducerCodeForChannelType,
+  generateSchemaAwareReducerCode,
   isReducerCodeCompatibleWithType,
   extractActionsFromReducerCode,
   getActionMetadata,
 } from "../constants";
+import type { CustomTypeItem } from "@workspace/canvas";
 import type { LangGraphStateChannel, LangGraphCustomReducer } from "@/types/canvas";
 
 export interface ChannelReducerConfigProps {
   channel: LangGraphStateChannel;
   index: number;
   customReducers: LangGraphCustomReducer[];
+  availableCustomTypes?: CustomTypeItem[];
   onUpdateField: (
     index: number,
     changes: Partial<LangGraphStateChannel>,
@@ -59,11 +62,22 @@ export function ChannelReducerConfig({
   channel: ch,
   index: idx,
   customReducers,
+  availableCustomTypes,
   onUpdateField,
   onTestChannel,
   onAddCustomReducer,
   onUpdateCustomReducer,
 }: ChannelReducerConfigProps) {
+  const activeSchema = useMemo(() => {
+    if (ch.customTypeSchema) return ch.customTypeSchema;
+    if (availableCustomTypes && (ch.customTypeId || ch.customTypeName)) {
+      return availableCustomTypes.find(
+        (t) => t.id === ch.customTypeId || t.name === ch.customTypeName,
+      );
+    }
+    return undefined;
+  }, [ch.customTypeSchema, ch.customTypeId, ch.customTypeName, availableCustomTypes]);
+
   const matchedCustom = useMemo(() => {
     return customReducers.find(
       (r) => r.name === ch.reducer || r.id === ch.reducer || r.targetField === ch.key,
@@ -72,7 +86,22 @@ export function ChannelReducerConfig({
 
   // Initial code computation: prefer existing code with action support that is compatible with this channel type
   const resolveInitialCode = useCallback(() => {
-    const raw = matchedCustom?.code || ch.customReducerCode;
+    const raw = ch.customReducerCode || matchedCustom?.code;
+    if (activeSchema) {
+      const isSchemaAware = Boolean(
+        raw &&
+          raw.trim().length > 0 &&
+          raw.includes("action") &&
+          isReducerCodeCompatibleWithType(raw, ch.type) &&
+          raw !== REDUCER_CODE_PRESETS.object &&
+          raw.includes("Initial shape guaranteed by type schema"),
+      );
+      if (isSchemaAware && raw) {
+        return raw;
+      }
+      return getSuggestedReducerCodeForChannelType(ch.type, activeSchema);
+    }
+
     if (
       raw &&
       raw.trim().length > 0 &&
@@ -81,14 +110,14 @@ export function ChannelReducerConfig({
     ) {
       return raw;
     }
-    return getSuggestedReducerCodeForChannelType(ch.type);
-  }, [matchedCustom?.code, ch.customReducerCode, ch.type]);
+    return getSuggestedReducerCodeForChannelType(ch.type, activeSchema);
+  }, [ch.customReducerCode, matchedCustom?.code, ch.type, activeSchema]);
 
   const [customName, setCustomName] = useState<string>(
     matchedCustom?.name ||
       (ch.reducer && !BUILT_IN_REDUCERS.some((r) => r.name === ch.reducer)
         ? ch.reducer
-        : `${ch.key || "var"}_reducer`),
+        : `${ch.key || ch.customTypeName || "var"}_reducer`),
   );
   const [customCode, setCustomCode] = useState<string>(resolveInitialCode());
   const [customDesc, setCustomDesc] = useState<string>(
@@ -96,8 +125,13 @@ export function ChannelReducerConfig({
   );
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
 
+  // Tracks whether the user explicitly picked a preset (e.g. Generic Object) or edited code manually
+  const isExplicitPresetOrEditRef = React.useRef(false);
+
   // Keep track of previous channel type to detect when type changes
   const prevTypeRef = React.useRef(ch.type);
+  const prevCustomTypeIdRef = React.useRef(ch.customTypeId);
+  const prevSchemaIdRef = React.useRef(activeSchema?.id);
 
   // Live auto-detected actions extracted from the current reducer code
   const detectedActions = useMemo(() => {
@@ -107,21 +141,45 @@ export function ChannelReducerConfig({
 
   // Auto-migrate legacy, empty, or type-mismatched reducer code to the action-aware template
   useEffect(() => {
-    const typeChanged = prevTypeRef.current !== ch.type;
+    const typeChanged =
+      prevTypeRef.current !== ch.type ||
+      prevCustomTypeIdRef.current !== ch.customTypeId ||
+      prevSchemaIdRef.current !== activeSchema?.id;
     prevTypeRef.current = ch.type;
+    prevCustomTypeIdRef.current = ch.customTypeId;
+    prevSchemaIdRef.current = activeSchema?.id;
 
-    const raw = matchedCustom?.code || ch.customReducerCode;
+    if (typeChanged) {
+      isExplicitPresetOrEditRef.current = false;
+    }
+
+    const raw = ch.customReducerCode || matchedCustom?.code;
     const isLegacyOrEmpty = !raw || !raw.includes("action");
-    const isTypeMismatch = Boolean(raw && !isReducerCodeCompatibleWithType(raw, ch.type));
+    const isTypeMismatch = Boolean(
+      raw && !isReducerCodeCompatibleWithType(raw, ch.type),
+    );
+    const isGenericOnTypedChannel = Boolean(
+      activeSchema &&
+        (!raw ||
+          raw === REDUCER_CODE_PRESETS.object ||
+          !raw.includes("Initial shape guaranteed by type schema")),
+    );
 
-    if (isLegacyOrEmpty || isTypeMismatch || (typeChanged && isTypeMismatch)) {
-      const suggested = getSuggestedReducerCodeForChannelType(ch.type);
+    const shouldRegenerate =
+      !isExplicitPresetOrEditRef.current &&
+      (isLegacyOrEmpty ||
+        isTypeMismatch ||
+        typeChanged ||
+        isGenericOnTypedChannel);
+
+    if (shouldRegenerate) {
+      const suggested = getSuggestedReducerCodeForChannelType(ch.type, activeSchema);
       setCustomCode(suggested);
       const newName =
         matchedCustom?.name ||
         (ch.reducer && !BUILT_IN_REDUCERS.some((r) => r.name === ch.reducer)
           ? ch.reducer
-          : `${ch.key || "var"}_reducer`);
+          : `${ch.key || ch.customTypeName || "var"}_reducer`);
       setCustomName(newName);
       onUpdateField(idx, {
         reducer: newName,
@@ -135,7 +193,9 @@ export function ChannelReducerConfig({
         });
       }
     } else {
-      setCustomCode(raw);
+      if (raw !== undefined) {
+        setCustomCode(raw);
+      }
       if (matchedCustom?.name) {
         setCustomName(matchedCustom.name);
       }
@@ -144,19 +204,23 @@ export function ChannelReducerConfig({
       }
     }
   }, [
-    ch.customReducerCode,
-    ch.key,
-    ch.reducer,
     ch.type,
-    idx,
+    ch.customTypeId,
+    activeSchema,
     matchedCustom,
-    onUpdateCustomReducer,
+    ch.customReducerCode,
+    ch.reducer,
+    ch.key,
+    ch.customTypeName,
+    idx,
     onUpdateField,
+    onUpdateCustomReducer,
   ]);
 
   // Apply a preset template
   const handleApplyPreset = useCallback(
     (presetCode: string) => {
+      isExplicitPresetOrEditRef.current = true;
       setCustomCode(presetCode);
       const targetName = customName || `${ch.key || "var"}_reducer`;
       onUpdateField(idx, {
@@ -198,6 +262,7 @@ export function ChannelReducerConfig({
   // Handle textarea change
   const handleCodeChange = useCallback(
     (newCode: string) => {
+      isExplicitPresetOrEditRef.current = true;
       setCustomCode(newCode);
       const targetName = customName || `${ch.key || "var"}_reducer`;
       onUpdateField(idx, {
@@ -252,7 +317,7 @@ export function ChannelReducerConfig({
         <div className="flex items-center justify-between flex-wrap gap-1">
           <Label className="text-[9px] text-muted-foreground font-mono flex items-center gap-1">
             <Wand2 className="w-2.5 h-2.5 text-purple-400" />
-            Action Templates for {ch.type || "variable"}
+            Action Templates for {ch.customTypeName || activeSchema?.name || ch.type || "variable"}
           </Label>
           <div className="flex items-center gap-1 flex-wrap">
             {ch.type === "number" && (
@@ -376,18 +441,43 @@ export function ChannelReducerConfig({
 
             {ch.type === "object" && (
               <>
-                <button
-                  type="button"
-                  onClick={() => handleApplyPreset(REDUCER_CODE_PRESETS.object)}
-                  className="text-[8px] px-1.5 py-0.5 rounded bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 font-mono transition-colors cursor-pointer border border-purple-500/40 font-semibold"
-                  title="Supports next.action: replace, reset/clear, default merge"
-                >
-                  ⚡ Actions (merge/replace/reset)
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleApplyPreset(`(prev, next) => {
+                {activeSchema ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleApplyPreset(
+                          generateSchemaAwareReducerCode(activeSchema),
+                        )
+                      }
+                      className="text-[8px] px-1.5 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 font-mono transition-colors cursor-pointer border border-emerald-500/40 font-semibold"
+                      title={`Type-safe all-in-one reducer: handles partial merge, replace, and reset with schema integrity`}
+                    >
+                      ⚡ Type-Safe ({ch.customTypeName || activeSchema.name || "schema"})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPreset(REDUCER_CODE_PRESETS.object)}
+                      className="text-[8px] px-1.5 py-0.5 rounded bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 font-mono transition-colors cursor-pointer border border-purple-500/30"
+                      title="Untyped generic dictionary merge fallback"
+                    >
+                      ⚡ Generic Object
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPreset(REDUCER_CODE_PRESETS.object)}
+                      className="text-[8px] px-1.5 py-0.5 rounded bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 font-mono transition-colors cursor-pointer border border-purple-500/40 font-semibold"
+                      title="Supports next.action: replace, reset/clear, default merge"
+                    >
+                      ⚡ Actions (merge/replace/reset)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleApplyPreset(`(prev, next) => {
   const current = (prev && typeof prev === "object" && !Array.isArray(prev)) ? prev : {};
   const action = next?.action;
 
@@ -402,12 +492,14 @@ export function ChannelReducerConfig({
 
   return current;
 }`)
-                  }
-                  className="text-[8px] px-1.5 py-0.5 rounded bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 font-mono transition-colors cursor-pointer border border-purple-500/30"
-                  title="Shallow merge dictionary keys"
-                >
-                  ⚡ Shallow Merge
-                </button>
+                      }
+                      className="text-[8px] px-1.5 py-0.5 rounded bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 font-mono transition-colors cursor-pointer border border-purple-500/30"
+                      title="Shallow merge dictionary keys"
+                    >
+                      ⚡ Shallow Merge
+                    </button>
+                  </>
+                )}
               </>
             )}
 
@@ -493,9 +585,12 @@ export function ChannelReducerConfig({
 
             <button
               type="button"
-              onClick={() =>
-                handleApplyPreset(getSuggestedReducerCodeForChannelType(ch.type))
-              }
+              onClick={() => {
+                isExplicitPresetOrEditRef.current = false;
+                handleApplyPreset(
+                  getSuggestedReducerCodeForChannelType(ch.type, activeSchema),
+                );
+              }}
               className="text-[8px] px-1.5 py-0.5 rounded bg-secondary hover:bg-secondary/80 text-muted-foreground font-mono transition-colors cursor-pointer flex items-center gap-0.5"
               title="Reset code to suggested default action template for this type"
             >

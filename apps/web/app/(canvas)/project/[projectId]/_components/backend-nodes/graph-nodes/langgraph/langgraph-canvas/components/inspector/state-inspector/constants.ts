@@ -1,3 +1,5 @@
+import type { CustomTypeItem, CustomTypeField } from "@workspace/canvas";
+
 export interface BuiltInReducer {
   name: string;
   label: string;
@@ -123,28 +125,28 @@ export const REDUCER_CODE_PRESETS = {
   const current = (prev && typeof prev === "object" && !Array.isArray(prev)) ? prev : {};
   const action = next?.action;
 
-  // 1. Default update: when action is undefined, "", or "default" (shallow merges keys)
-  // e.g. dispatch { profile: { status: "active" } }
-  if (!action || action === "" || action === "default") {
-    const incoming = (next?.value && typeof next.value === "object" && !Array.isArray(next.value))
-      ? next.value
-      : (next && typeof next === "object" && !Array.isArray(next) ? next : {});
-    return { ...current, ...incoming };
-  }
-
-  // 2. Action: replace - overwrites entire object
-  // e.g. dispatch { profile: { action: "replace", value: { status: "fresh" } } }
-  if (action === "replace") {
-    const incoming = (next?.value && typeof next.value === "object" && !Array.isArray(next.value))
-      ? next.value
-      : (next && typeof next === "object" && !Array.isArray(next) ? next : {});
-    return { ...incoming };
-  }
-
-  // 3. Action: reset / clear - empties object
+  // 1. Action: reset / clear - empties object
   // e.g. dispatch { profile: { action: "reset" } }
   if (action === "reset" || action === "clear") {
     return {};
+  }
+
+  // Extract payload cleanly (stripping action metadata so it never leaks into state)
+  const rawPayload = (next?.value && typeof next.value === "object" && !Array.isArray(next.value))
+    ? next.value
+    : (next && typeof next === "object" && !Array.isArray(next) ? next : {});
+  const { action: _ignored, ...incoming } = rawPayload;
+
+  // 2. Action: replace / set - overwrites entire object
+  // e.g. dispatch { profile: { action: "replace", value: { status: "fresh" } } }
+  if (action === "replace" || action === "set") {
+    return { ...incoming };
+  }
+
+  // 3. Default update: shallow merges keys (when action is undefined, "", "default", "update", "patch")
+  // e.g. dispatch { profile: { status: "active" } }
+  if (!action || action === "" || action === "default" || action === "update" || action === "patch") {
+    return { ...current, ...incoming };
   }
 
   return current;
@@ -303,7 +305,177 @@ export const REDUCER_CODE_PRESETS = {
 }`,
 };
 
-export function getSuggestedReducerCodeForChannelType(type?: string): string {
+/**
+ * Extracts fields from a CustomTypeItem, supporting:
+ * 1. Explicit fields array
+ * 2. Visual editor custom types
+ * 3. Raw TypeScript interface / type code (regex parser)
+ */
+export function extractFieldsFromCustomType(
+  customType?: CustomTypeItem | null,
+): CustomTypeField[] {
+  if (!customType) return [];
+
+  // 1. Direct fields list from visual editor or package type
+  if (Array.isArray(customType.fields) && customType.fields.length > 0) {
+    return customType.fields.filter((f) => !f.isOmitted);
+  }
+
+  // 2. Parse from rawCode or typeAliasValue (e.g. interface / type definitions)
+  const codeToParse = customType.rawCode || customType.typeAliasValue || "";
+  if (!codeToParse) return [];
+
+  let targetBlock = codeToParse;
+  if (customType.name) {
+    const blockRegex = new RegExp(
+      `(?:interface|type)\\s+${customType.name}\\b[^{=]*[={]([^}]+)\\}?`,
+      "s",
+    );
+    const blockMatch = blockRegex.exec(codeToParse);
+    if (blockMatch && blockMatch[1]) {
+      targetBlock = blockMatch[1];
+    }
+  }
+
+  const fields: CustomTypeField[] = [];
+  const fieldRegex = /([a-zA-Z_$][a-zA-Z0-9_$]*)\s*(\??)\s*:\s*([^;,\n}]+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = fieldRegex.exec(targetBlock)) !== null) {
+    const fieldName = match[1]?.trim();
+    if (
+      !fieldName ||
+      fieldName === "interface" ||
+      fieldName === "type" ||
+      fieldName === "export"
+    ) {
+      continue;
+    }
+    const isOpt = match[2] === "?";
+    const rawType = match[3]?.trim() || "string";
+    fields.push({
+      id: fieldName,
+      name: fieldName,
+      type: rawType,
+      required: !isOpt,
+    });
+  }
+  return fields;
+}
+
+/**
+ * Returns a safe default value literal string for a field based on its type.
+ */
+export function getDefaultValueForField(field: CustomTypeField): string {
+  if (field.defaultValue !== undefined && field.defaultValue !== "") {
+    return field.defaultValue;
+  }
+  if (field.required === false) {
+    return "undefined";
+  }
+  const t = (field.type || "string").toLowerCase().trim();
+  if (field.isArray || t.endsWith("[]") || t.startsWith("array<") || t === "array") {
+    return "[]";
+  }
+  if (t === "number" || t === "float" || t === "int" || t === "integer") {
+    return "0";
+  }
+  if (t === "boolean" || t === "bool") {
+    return "false";
+  }
+  if (t === "string" || t === "text") {
+    return '""';
+  }
+  if (t === "object" || t.startsWith("{") || t.startsWith("record<")) {
+    return "{}";
+  }
+  return '""';
+}
+
+/**
+ * Generates an action-aware, schema-safe reducer for a custom type / interface.
+ * Guarantees required properties exist and never outputs raw {} or leaked action metadata.
+ */
+export function generateSchemaAwareReducerCode(
+  customType: CustomTypeItem,
+): string {
+  const fields = extractFieldsFromCustomType(customType);
+
+  const initialLines = fields.length > 0
+    ? fields.map((f) => `    ${f.name}: ${getDefaultValueForField(f)},`).join("\n") + "\n"
+    : "";
+
+  const replaceLines = fields.length > 0
+    ? fields
+        .map(
+          (f) =>
+            `      ${f.name}: payload.${f.name} !== undefined ? payload.${f.name} : initial.${f.name},`,
+        )
+        .join("\n") + "\n"
+    : "";
+
+  const updateLines = fields.length > 0
+    ? fields
+        .map(
+          (f) =>
+            `      ${f.name}: payload.${f.name} !== undefined ? payload.${f.name} : current.${f.name},`,
+        )
+        .join("\n") + "\n"
+    : "";
+
+  const typeLabel = customType.name ? ` for ${customType.name}` : "";
+
+  return `(prev, next) => {
+  // Initial shape guaranteed by type schema${typeLabel}
+  const initial = {
+${initialLines}  };
+
+  const current = (prev && typeof prev === "object" && !Array.isArray(prev))
+    ? { ...initial, ...prev }
+    : { ...initial };
+
+  const action = next?.action;
+
+  // 1. Action: reset / clear - resets back to typed initial values
+  // e.g. dispatch { action: "reset" }
+  if (action === "reset" || action === "clear") {
+    return { ...initial };
+  }
+
+  // Extract payload cleanly (stripping action metadata so it never leaks into state)
+  const rawPayload = (next?.value && typeof next.value === "object" && !Array.isArray(next.value))
+    ? next.value
+    : (next && typeof next === "object" && !Array.isArray(next) ? next : {});
+  const { action: _action, ...payload } = rawPayload;
+
+  // 2. Action: replace / set - overwrites with incoming values (defaults missing fields)
+  // e.g. dispatch { action: "replace", value: { ... } }
+  if (action === "replace" || action === "set") {
+    return {
+      ...payload,
+${replaceLines}    };
+  }
+
+  // 3. Default update: shallow merges keys while preserving schema integrity
+  // e.g. dispatch { id: "1" } or { action: "update", value: { name: "Alice" } }
+  if (!action || action === "" || action === "default" || action === "update" || action === "patch") {
+    return {
+      ...current,
+      ...payload,
+${updateLines}    };
+  }
+
+  return current;
+}`;
+}
+
+export function getSuggestedReducerCodeForChannelType(
+  type?: string,
+  customTypeSchema?: CustomTypeItem | null,
+): string {
+  if (customTypeSchema) {
+    const schemaCode = generateSchemaAwareReducerCode(customTypeSchema);
+    if (schemaCode) return schemaCode;
+  }
   if (type === "messages") {
     return REDUCER_CODE_PRESETS.chat;
   }
@@ -330,7 +502,10 @@ export function getSuggestedReducerCodeForChannelType(type?: string): string {
  * Used to detect when a channel type changed (e.g. from string to number) so that an
  * incompatible preset (e.g. string multiline concatenation) is automatically refreshed.
  */
-export function isReducerCodeCompatibleWithType(code?: string, type?: string): boolean {
+export function isReducerCodeCompatibleWithType(
+  code?: string,
+  type?: string,
+): boolean {
   if (!code || typeof code !== "string" || !code.trim()) return false;
   if (!type) return true;
 

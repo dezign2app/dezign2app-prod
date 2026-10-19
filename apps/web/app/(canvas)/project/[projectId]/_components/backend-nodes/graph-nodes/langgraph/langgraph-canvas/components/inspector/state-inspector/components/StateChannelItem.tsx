@@ -15,10 +15,12 @@ import { LocalInput } from "../../../../../../common";
 import { BUILT_IN_REDUCERS, getSuggestedReducerCodeForChannelType } from "../constants";
 import {
   isLangGraphChannelType,
+  isTypesNode,
+  isTypesRefNode,
   type LangGraphCanvasNode,
+  type LangGraphTypesNode,
   type CustomTypeItem,
 } from "@workspace/canvas";
-import { LANGGRAPH_CANVAS_NODE_TYPES } from "../../../../constants";
 import { ChannelReducerConfig } from "./ChannelReducerConfig";
 import type { LangGraphStateChannel, LangGraphCustomReducer } from "@/types/canvas";
 
@@ -65,12 +67,23 @@ export function StateChannelItem({
   const availableCustomTypes = useMemo(() => {
     const types: CustomTypeItem[] = [];
     allNodes.forEach((n) => {
-      if (n.type === LANGGRAPH_CANVAS_NODE_TYPES && n.data?.types) {
+      if (isTypesNode(n) && n.data.types) {
         n.data.types.forEach((t) => {
           if (t && t.name && !types.some((existing) => existing.id === t.id)) {
             types.push(t);
           }
         });
+      } else if (isTypesRefNode(n) && n.data.typesRef) {
+        const master = allNodes.find(
+          (m): m is LangGraphTypesNode => isTypesNode(m) && m.id === n.data.typesRef,
+        );
+        if (master?.data.types) {
+          master.data.types.forEach((t) => {
+            if (t && t.name && !types.some((existing) => existing.id === t.id)) {
+              types.push(t);
+            }
+          });
+        }
       }
     });
     return types;
@@ -162,8 +175,8 @@ export function StateChannelItem({
               if (v.startsWith("custom:")) {
                 const typeId = v.replace("custom:", "");
                 const targetType = availableCustomTypes.find((t) => t.id === typeId);
-                const suggestedCode = getSuggestedReducerCodeForChannelType("object");
-                const reducerName = `${ch.key || "state"}_reducer`;
+                const suggestedCode = getSuggestedReducerCodeForChannelType("object", targetType);
+                const reducerName = `${ch.key || targetType?.name || "state"}_reducer`;
                 onUpdateField(idx, {
                   type: "object",
                   reducer: reducerName,
@@ -311,9 +324,22 @@ export function StateChannelItem({
         {isExpanded && (
           <div className="animate-in fade-in-50 slide-in-from-top-1 duration-150 pt-1">
             <ChannelReducerConfig
-              channel={ch}
+              channel={
+                ch.customTypeId || ch.customTypeName
+                  ? {
+                      ...ch,
+                      customTypeSchema:
+                        availableCustomTypes.find(
+                          (t) =>
+                            t.id === ch.customTypeId ||
+                            t.name === ch.customTypeName,
+                        ) || ch.customTypeSchema,
+                    }
+                  : ch
+              }
               index={idx}
               customReducers={customReducers}
+              availableCustomTypes={availableCustomTypes}
               onUpdateField={onUpdateField}
               onTestChannel={onTestChannel}
               onAddCustomReducer={onAddCustomReducer}

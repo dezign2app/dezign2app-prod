@@ -16,9 +16,11 @@ import {
   type StateGlobalNode,
   type LangGraphStateChannel,
   type LangGraphCanvasNode,
+  type LangGraphTypesNode,
   type CustomTypeItem,
-  LANGGRAPH_CANVAS_NODE_TYPES,
   isLangGraphChannelType,
+  isTypesNode,
+  isTypesRefNode,
 } from "@workspace/canvas";
 import { Button } from "@workspace/ui/components/button";
 import { LocalInput } from "../../../common";
@@ -48,12 +50,23 @@ export const LangGraphCanvasStateNode = ({
   const availableCustomTypes = useMemo(() => {
     const types: CustomTypeItem[] = [];
     allNodes.forEach((n) => {
-      if (n.type === LANGGRAPH_CANVAS_NODE_TYPES && n.data?.types) {
+      if (isTypesNode(n) && n.data.types) {
         n.data.types.forEach((t) => {
           if (t && t.name && !types.some((existing) => existing.id === t.id)) {
             types.push(t);
           }
         });
+      } else if (isTypesRefNode(n) && n.data.typesRef) {
+        const master = allNodes.find(
+          (m): m is LangGraphTypesNode => isTypesNode(m) && m.id === n.data.typesRef,
+        );
+        if (master?.data.types) {
+          master.data.types.forEach((t) => {
+            if (t && t.name && !types.some((existing) => existing.id === t.id)) {
+              types.push(t);
+            }
+          });
+        }
       }
     });
     return types;
@@ -236,8 +249,8 @@ export const LangGraphCanvasStateNode = ({
                           if (val.startsWith("custom:")) {
                             const typeId = val.replace("custom:", "");
                             const targetType = availableCustomTypes.find((t) => t.id === typeId);
-                            const suggestedCode = getSuggestedReducerCodeForChannelType("object");
-                            const reducerName = `${ch.key || "state"}_reducer`;
+                            const suggestedCode = getSuggestedReducerCodeForChannelType("object", targetType);
+                            const reducerName = `${ch.key || targetType?.name || "state"}_reducer`;
                             handleUpdate(idx, {
                               type: "object",
                               reducer: reducerName,

@@ -4,6 +4,7 @@ import {
   BUILT_IN_REDUCERS,
   REDUCER_CODE_PRESETS,
   getSuggestedReducerCodeForChannelType,
+  generateSchemaAwareReducerCode,
   isReducerCodeCompatibleWithType,
 } from "../constants";
 
@@ -153,4 +154,115 @@ describe("State Channel Reducer Configuration", () => {
       expect(fn(10, { action: "clear" })).toBe(0);
     });
   });
+
+  describe("generateSchemaAwareReducerCode", () => {
+    it("generates type-safe reducer for interface { id: string; name: string }", () => {
+      const customType = {
+        id: "type-user-1",
+        name: "User",
+        kind: "interface" as const,
+        fields: [
+          { id: "f1", name: "id", type: "string" },
+          { id: "f2", name: "name", type: "string" },
+        ],
+      };
+
+      const code = generateSchemaAwareReducerCode(customType);
+      expect(code).toContain('id: ""');
+      expect(code).toContain('name: ""');
+      expect(code).toContain('action === "reset"');
+      expect(code).toContain('action === "replace"');
+      expect(code).toContain('payload.id !== undefined ? payload.id : initial.id');
+
+      // Evaluate the generated reducer
+      const fn = new Function("return " + code)();
+
+      // 1. Initial state returns valid typed structure, never raw {}
+      expect(fn(undefined, {})).toEqual({ id: "", name: "" });
+
+      // 2. Partial updates merge cleanly
+      const step1 = fn(undefined, { name: "Alice" });
+      expect(step1).toEqual({ id: "", name: "Alice" });
+
+      const step2 = fn(step1, { id: "user_1" });
+      expect(step2).toEqual({ id: "user_1", name: "Alice" });
+
+      // 3. Replace action overwrites and ensures missing fields get initial defaults
+      const step3 = fn(step2, { action: "replace", value: { name: "Bob" } });
+      expect(step3).toEqual({ id: "", name: "Bob" });
+
+      // 4. Direct action envelope does NOT leak internal action property into the state
+      const step4 = fn(step3, { action: "replace", id: "user_2", name: "Charlie" });
+      expect(step4).toEqual({ id: "user_2", name: "Charlie" });
+      expect((step4 as Record<string, unknown>).action).toBeUndefined();
+
+      // 5. Reset action cleanly restores initial typed fields
+      const step5 = fn(step4, { action: "reset" });
+      expect(step5).toEqual({ id: "", name: "" });
+
+      // 6. Action aliases (set, update, patch, clear)
+      expect(fn(step4, { action: "update", value: { name: "Updated" } })).toEqual({
+        id: "user_2",
+        name: "Updated",
+      });
+      expect(fn(step4, { action: "patch", value: { id: "patched_id" } })).toEqual({
+        id: "patched_id",
+        name: "Charlie",
+      });
+      expect(fn(step4, { action: "clear" })).toEqual({ id: "", name: "" });
+    });
+
+    it("parses fields from raw TypeScript interface code when fields array is empty", () => {
+      const rawType = {
+        id: "type-user-raw",
+        name: "Profile",
+        kind: "interface" as const,
+        rawCode: `interface Profile {
+          id: string;
+          name: string;
+          score?: number;
+        }`,
+      };
+
+      const code = generateSchemaAwareReducerCode(rawType);
+      expect(code).toContain('id: ""');
+      expect(code).toContain('name: ""');
+      expect(code).toContain("score: undefined");
+
+      const fn = new Function("return " + code)();
+      const res = fn(undefined, { id: "p1", name: "User 1", score: 100 });
+      expect(res).toEqual({ id: "p1", name: "User 1", score: 100 });
+    });
+
+    it("suggests schema-aware reducer when customTypeSchema is passed to getSuggestedReducerCodeForChannelType", () => {
+      const customType = {
+        id: "type-user-2",
+        name: "User",
+        kind: "interface" as const,
+        fields: [
+          { id: "f1", name: "id", type: "string" },
+          { id: "f2", name: "name", type: "string" },
+        ],
+      };
+
+      const code = getSuggestedReducerCodeForChannelType("object", customType);
+      expect(code).toContain('id: ""');
+      expect(code).toContain('name: ""');
+      expect(code).toContain("Initial shape guaranteed by type schema for User");
+      expect(code).not.toEqual(REDUCER_CODE_PRESETS.object);
+
+      // Without customTypeSchema, it falls back to generic object preset
+      const genericCode = getSuggestedReducerCodeForChannelType("object");
+      expect(genericCode).toEqual(REDUCER_CODE_PRESETS.object);
+
+      // Both schema-aware reducer and generic preset are compatible with object channel type
+      expect(
+        isReducerCodeCompatibleWithType(REDUCER_CODE_PRESETS.object, "object"),
+      ).toBe(true);
+      expect(
+        isReducerCodeCompatibleWithType(code, "object"),
+      ).toBe(true);
+    });
+  });
 });
+
