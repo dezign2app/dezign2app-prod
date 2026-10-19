@@ -196,11 +196,11 @@ export function buildFlowEdges(
 
       // Collect all downstream targets that the router can route to
       const routerOutEdges = flowEdges.filter((e2) => e2.source === routerId);
-      const uniqueTargets = [
+      const uniqueTargets: string[] = [
         ...new Set(
           routerOutEdges
             .map((e2) => resolveNodeName(e2.target, ctx, nodeMetaMap))
-            .filter(Boolean) as string[],
+            .filter((x): x is string => Boolean(x)),
         ),
       ];
 

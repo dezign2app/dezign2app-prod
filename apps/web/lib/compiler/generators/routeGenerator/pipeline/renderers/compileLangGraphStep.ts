@@ -178,10 +178,10 @@ export function renderLangGraphInvokeStep(
         `  const [messageChunk, metadata] = Array.isArray(chunk) ? chunk : [chunk, undefined];`,
       );
       rawLines.push(
-        `  const token = messageChunk?.content ?? (typeof chunk === "string" ? chunk : (chunk as { content?: string })?.content ?? chunk);`,
+        `  const token = (typeof messageChunk === "object" && messageChunk !== null && "content" in messageChunk && messageChunk.content !== undefined ? messageChunk.content : undefined) ?? (typeof chunk === "string" ? chunk : (typeof chunk === "object" && chunk !== null && "content" in chunk && chunk.content !== undefined ? chunk.content : chunk));`,
       );
       rawLines.push(
-        `  const nodeName = (metadata as { langgraph_node?: string } | undefined)?.langgraph_node;`,
+        `  const nodeName = typeof metadata === "object" && metadata !== null && "langgraph_node" in metadata ? metadata.langgraph_node : undefined;`,
       );
       if (langGraphStreamingFields.length > 0) {
         const allowedFields = JSON.stringify(langGraphStreamingFields);
@@ -217,10 +217,10 @@ export function renderLangGraphInvokeStep(
         `  const [messageChunk, metadata] = Array.isArray(chunk) ? chunk : [chunk, undefined];`,
       );
       rawLines.push(
-        `  const token = messageChunk?.content ?? (typeof chunk === "string" ? chunk : (chunk as { content?: string })?.content ?? chunk);`,
+        `  const token = (typeof messageChunk === "object" && messageChunk !== null && "content" in messageChunk && messageChunk.content !== undefined ? messageChunk.content : undefined) ?? (typeof chunk === "string" ? chunk : (typeof chunk === "object" && chunk !== null && "content" in chunk && chunk.content !== undefined ? chunk.content : chunk));`,
       );
       rawLines.push(
-        `  const nodeName = (metadata as { langgraph_node?: string } | undefined)?.langgraph_node;`,
+        `  const nodeName = typeof metadata === "object" && metadata !== null && "langgraph_node" in metadata ? metadata.langgraph_node : undefined;`,
       );
       if (langGraphStreamingFields.length > 0) {
         const allowedFields = JSON.stringify(langGraphStreamingFields);
@@ -259,10 +259,10 @@ export function renderLangGraphInvokeStep(
         `  const [messageChunk, metadata] = Array.isArray(chunk) ? chunk : [chunk, undefined];`,
       );
       rawLines.push(
-        `  const token = messageChunk?.content ?? (typeof chunk === "string" ? chunk : (chunk as { content?: string })?.content ?? chunk);`,
+        `  const token = (typeof messageChunk === "object" && messageChunk !== null && "content" in messageChunk && messageChunk.content !== undefined ? messageChunk.content : undefined) ?? (typeof chunk === "string" ? chunk : (typeof chunk === "object" && chunk !== null && "content" in chunk && chunk.content !== undefined ? chunk.content : chunk));`,
       );
       rawLines.push(
-        `  const nodeName = (metadata as { langgraph_node?: string } | undefined)?.langgraph_node;`,
+        `  const nodeName = typeof metadata === "object" && metadata !== null && "langgraph_node" in metadata ? metadata.langgraph_node : undefined;`,
       );
       if (langGraphStreamingFields.length > 0) {
         const allowedFields = JSON.stringify(langGraphStreamingFields);
@@ -302,10 +302,10 @@ export function renderLangGraphInvokeStep(
         `  const [messageChunk, metadata] = Array.isArray(chunk) ? chunk : [chunk, undefined];`,
       );
       rawLines.push(
-        `  const token = messageChunk?.content ?? (typeof chunk === "string" ? chunk : (chunk as { content?: string })?.content ?? chunk);`,
+        `  const token = (typeof messageChunk === "object" && messageChunk !== null && "content" in messageChunk && messageChunk.content !== undefined ? messageChunk.content : undefined) ?? (typeof chunk === "string" ? chunk : (typeof chunk === "object" && chunk !== null && "content" in chunk && chunk.content !== undefined ? chunk.content : chunk));`,
       );
       rawLines.push(
-        `  const nodeName = (metadata as { langgraph_node?: string } | undefined)?.langgraph_node;`,
+        `  const nodeName = typeof metadata === "object" && metadata !== null && "langgraph_node" in metadata ? metadata.langgraph_node : undefined;`,
       );
       if (langGraphStreamingFields.length > 0) {
         const allowedFields = JSON.stringify(langGraphStreamingFields);

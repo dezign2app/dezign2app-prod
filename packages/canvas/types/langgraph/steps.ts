@@ -15,6 +15,12 @@ export type LangGraphRouterBranchOperator =
   | "has_tool_calls"
   | "expression";
 
+export type LangGraphRouterBranchCondition = {
+  field?: string;
+  operator?: LangGraphRouterBranchOperator | string;
+  value?: string;
+};
+
 export type LangGraphRouterBranch = {
   id: string;
   label: string;
@@ -22,11 +28,13 @@ export type LangGraphRouterBranch = {
   operator: LangGraphRouterBranchOperator;
   value?: string;
   isDefault?: boolean;
+  conditions?: LangGraphRouterBranchCondition[];
   targetId?: string;
 };
 
 export type LangGraphRouterConfig = {
   branches: LangGraphRouterBranch[];
+  defaultBranchId?: string;
 };
 
 export type LangGraphStepConfig = {

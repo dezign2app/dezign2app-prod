@@ -32,39 +32,58 @@ import type {
   NodeMeta,
   ToolMeta,
 } from "./types";
+import type {
+  LangGraphCanvasNode,
+  LangGraphLLMNode,
+  ToolNode,
+  CanvasNode,
+  StepNode,
+  MemoryNode,
+  MiddlewareNode,
+} from "@workspace/canvas";
 import { toIdentifier, getProviderPackage } from "./utils";
+
+function isLLMNode(n: LangGraphCanvasNode): n is LangGraphLLMNode {
+  return n.type === LANGGRAPH_CANVAS_NODE_LLM;
+}
+
+function isToolNode(n: LangGraphCanvasNode): n is ToolNode {
+  return n.type === LANGGRAPH_CANVAS_NODE_TOOL;
+}
+
+function isAgentNode(n: LangGraphCanvasNode): n is CanvasNode {
+  return (
+    n.type === LANGGRAPH_CANVAS_NODE_NODE ||
+    n.type === LANGGRAPH_CANVAS_NODE_AGENT
+  );
+}
+
+function isStepNode(n: LangGraphCanvasNode): n is StepNode {
+  return n.type === LANGGRAPH_CANVAS_NODE_STEP;
+}
+
+function isMemoryNode(n: LangGraphCanvasNode): n is MemoryNode {
+  return n.type === LANGGRAPH_CANVAS_NODE_MEMORY;
+}
+
+function isMiddlewareNode(n: LangGraphCanvasNode): n is MiddlewareNode {
+  return n.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE;
+}
 
 export function buildContext(input: CompileLangGraphInput): CompileContext {
   const { nodes, edges } = input;
 
-  const llmNodes = nodes.filter(
-    (n) => n.type === LANGGRAPH_CANVAS_NODE_LLM,
-  ) as Array<{ id: string; data: LangGraphLLMNodeData }>;
+  const llmNodes = nodes.filter(isLLMNode);
   const seenToolIds = new Set<string>();
-  const toolNodes = (
-    nodes.filter((n) => n.type === LANGGRAPH_CANVAS_NODE_TOOL) as Array<{
-      id: string;
-      data: ToolNodeData;
-    }>
-  ).filter((n) => {
+  const toolNodes = nodes.filter(isToolNode).filter((n) => {
     if (seenToolIds.has(n.id)) return false;
     seenToolIds.add(n.id);
     return true;
   });
-  const agentNodes = nodes.filter(
-    (n) =>
-      n.type === LANGGRAPH_CANVAS_NODE_NODE ||
-      n.type === LANGGRAPH_CANVAS_NODE_AGENT,
-  ) as Array<{ id: string; data: CanvasNodeData }>;
-  const stepNodes = nodes.filter(
-    (n) => n.type === LANGGRAPH_CANVAS_NODE_STEP,
-  ) as Array<{ id: string; data: StepNodeData }>;
-  const memoryNodes = nodes.filter(
-    (n) => n.type === LANGGRAPH_CANVAS_NODE_MEMORY,
-  ) as Array<{ id: string; data: MemoryNodeData }>;
-  const middlewareNodes = nodes.filter(
-    (n) => n.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
-  ) as Array<{ id: string; data: MiddlewareNodeData }>;
+  const agentNodes = nodes.filter(isAgentNode);
+  const stepNodes = nodes.filter(isStepNode);
+  const memoryNodes = nodes.filter(isMemoryNode);
+  const middlewareNodes = nodes.filter(isMiddlewareNode);
 
   const agentLLMMap = new Map<string, string>();
   const agentToolsMap = new Map<string, string[]>();
@@ -74,29 +93,17 @@ export function buildContext(input: CompileLangGraphInput): CompileContext {
   const resolveSourceId = (srcId: string): string => {
     const srcNode = nodes.find((n) => n.id === srcId);
     if (!srcNode) return srcId;
-    if (
-      srcNode.type === LANGGRAPH_CANVAS_NODE_LLM_REF &&
-      (srcNode.data as Record<string, unknown>)?.llmRef
-    ) {
-      return (srcNode.data as Record<string, unknown>).llmRef as string;
+    if (srcNode.type === LANGGRAPH_CANVAS_NODE_LLM_REF) {
+      return srcNode.data.llmRef || srcId;
     }
-    if (
-      srcNode.type === LANGGRAPH_CANVAS_NODE_TOOL_REF &&
-      (srcNode.data as Record<string, unknown>)?.toolRef
-    ) {
-      return (srcNode.data as Record<string, unknown>).toolRef as string;
+    if (srcNode.type === LANGGRAPH_CANVAS_NODE_TOOL_REF) {
+      return srcNode.data.toolRef || srcId;
     }
-    if (
-      srcNode.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF &&
-      (srcNode.data as Record<string, unknown>)?.middlewareRef
-    ) {
-      return (srcNode.data as Record<string, unknown>).middlewareRef as string;
+    if (srcNode.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF) {
+      return srcNode.data.middlewareRef || srcId;
     }
-    if (
-      srcNode.type === LANGGRAPH_CANVAS_NODE_MEMORY_REF &&
-      (srcNode.data as Record<string, unknown>)?.memoryRef
-    ) {
-      return (srcNode.data as Record<string, unknown>).memoryRef as string;
+    if (srcNode.type === LANGGRAPH_CANVAS_NODE_MEMORY_REF) {
+      return srcNode.data.memoryRef || srcId;
     }
     return srcId;
   };

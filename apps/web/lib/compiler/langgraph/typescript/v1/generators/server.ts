@@ -191,7 +191,7 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
         route.responseOutputMode === "selected" &&
         route.responseFields &&
         route.responseFields.length > 0
-          ? `{\n${route.responseFields.map((f) => `        ${JSON.stringify(f)}: (result && typeof result === "object" && ${JSON.stringify(f)} in result) ? (result as Record<string, string | number | boolean | object>)[${JSON.stringify(f)}] : undefined`).join(",\n")}\n      }`
+          ? `{\n${route.responseFields.map((f) => `        ${JSON.stringify(f)}: (result && typeof result === "object") ? Reflect.get(result, ${JSON.stringify(f)}) : undefined`).join(",\n")}\n      }`
           : "result";
 
       return `
@@ -243,8 +243,8 @@ app.get("/api/threads/:threadId/history", async (req: Request, res: Response) =>
   try {
     const { threadId } = req.params;
     const snapshot = await ${graphVarName}.getState({ configurable: { thread_id: threadId } });
-    const messages = (snapshot.values && typeof snapshot.values === "object" && "messages" in snapshot.values)
-      ? (snapshot.values as Record<string, unknown>).messages
+    const messages = (snapshot.values && typeof snapshot.values === "object")
+      ? Reflect.get(snapshot.values, "messages") ?? []
       : [];
     res.json({
       ok: true,
