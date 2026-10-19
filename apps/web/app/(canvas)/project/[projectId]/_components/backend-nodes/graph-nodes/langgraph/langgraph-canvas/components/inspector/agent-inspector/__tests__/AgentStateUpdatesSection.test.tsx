@@ -78,6 +78,7 @@ import {
   AgentStateUpdatesSection,
   extractActionsFromReducerCode,
   getActionsForReducer,
+  generateDispatchBodyForChannel,
 } from "../AgentStateUpdatesSection";
 import type {
   AgentNodeData,
@@ -219,7 +220,7 @@ describe("AgentStateUpdatesSection Component", () => {
       />,
     );
 
-    expect(screen.getByText("No value required")).toBeDefined();
+    expect(screen.getByText(/No value required/)).toBeDefined();
   });
 
   it("adds a new state update with default action and reducer", () => {
@@ -279,8 +280,9 @@ describe("AgentStateUpdatesSection Component", () => {
     // Map button should be present
     expect(screen.getByText("Map")).toBeDefined();
 
-    // Type a new value inline
+    // Type a new value inline and blur to flush LocalInput debounce
     fireEvent.change(input, { target: { value: "10" } });
+    fireEvent.blur(input);
     expect(onUpdateAgent).toHaveBeenCalledWith(
       expect.objectContaining({
         stateUpdates: expect.arrayContaining([
@@ -329,10 +331,10 @@ describe("AgentStateUpdatesSection Component", () => {
     expect(screen.getByText("JSON Active")).toBeDefined();
 
     // Reference insertion helper button should be present
-    expect(screen.getByText(/Insert/)).toBeDefined();
+    expect(screen.getAllByText(/Insert/).length).toBeGreaterThan(0);
   });
 
-  it("supports custom type channel with fields in reference steps mapping", () => {
+  it("supports custom type channel with fields in reference steps mapping and identifies custom type", () => {
     const onUpdateAgent = vi.fn();
     const customUserType: CustomTypeItem = {
       id: "type_user",
@@ -373,6 +375,123 @@ describe("AgentStateUpdatesSection Component", () => {
     );
 
     expect(screen.getByRole("textbox")).toBeDefined();
-    expect(screen.getByText(/Insert/)).toBeDefined();
+    expect(screen.getAllByText(/Insert/).length).toBeGreaterThan(0);
+
+    // Channel dropdown should identify custom type UserProfile instead of generic [object]
+    expect(screen.getByText("[UserProfile]")).toBeDefined();
+
+    // Footer contract should show channel: UserProfile
+    expect(screen.getByText("UserProfile")).toBeDefined();
+
+    // Textarea placeholder should contain fields from UserProfile
+    expect(screen.getByPlaceholderText(/userId/)).toBeDefined();
+  });
+
+  it("generateDispatchBodyForChannel creates formatted JSON matching schema fields and types", () => {
+    const customUserType: CustomTypeItem = {
+      id: "type_user",
+      name: "UserProfile",
+      kind: "interface",
+      fields: [
+        { id: "f1", name: "userId", type: "string" },
+        { id: "f2", name: "email", type: "string" },
+        { id: "f3", name: "age", type: "number" },
+        { id: "f4", name: "isAdmin", type: "boolean" },
+        { id: "f5", name: "roles", type: "string[]" },
+      ],
+    };
+
+    const channel: LangGraphStateChannel = {
+      key: "currentUser",
+      type: "object",
+      reducer: "replace",
+      customTypeSchema: customUserType,
+    };
+
+    const schemaFields = [
+      { name: "userId", type: "string" },
+    ];
+
+    const body = generateDispatchBodyForChannel(
+      channel,
+      [customUserType],
+      schemaFields,
+      [],
+      "response.content",
+    );
+
+    expect(body).toContain('"userId": `${response.userId}`');
+    expect(body).toContain('"email": `${response.email}`');
+    expect(body).toContain('"age": 0');
+    expect(body).toContain('"isAdmin": false');
+    expect(body).toContain('"roles": []');
+
+    const evalFn = new Function("response", `return (${body});`);
+    const evaluated = evalFn({ userId: "u123", email: "test@example.com" });
+    expect(evaluated.userId).toBe("u123");
+    expect(evaluated.email).toBe("test@example.com");
+    expect(evaluated.age).toBe(0);
+    expect(evaluated.isAdmin).toBe(false);
+    expect(evaluated.roles).toEqual([]);
+  });
+
+  it("renders auto-generate body helper when textarea is empty and populates body on click", () => {
+    const onUpdateAgent = vi.fn();
+    const customUserType: CustomTypeItem = {
+      id: "type_user",
+      name: "UserProfile",
+      kind: "interface",
+      fields: [
+        { id: "f1", name: "id", type: "string" },
+        { id: "f2", name: "name", type: "string" },
+      ],
+    };
+
+    render(
+      <AgentStateUpdatesSection
+        selectedAgentData={{
+          ...dummyAgentData,
+          stateUpdates: [
+            {
+              channelKey: "demo",
+              reducer: "demo_reducer",
+              action: "default",
+              value: "",
+              source: "literal",
+            },
+          ],
+        }}
+        onUpdateAgent={onUpdateAgent}
+        stateChannels={[
+          {
+            key: "demo",
+            type: "object",
+            reducer: "demo_reducer",
+            customTypeName: "UserProfile",
+            customTypeSchema: customUserType,
+          },
+        ]}
+      />,
+    );
+
+    // Empty banner should be present
+    expect(
+      screen.getByText(/Dispatch body is empty. Generate template for/),
+    ).toBeDefined();
+
+    // Auto-Generate Body buttons should be present in toolbar, banner, and quick chips
+    const generateButtons = screen.getAllByRole("button", { name: /Generate/i });
+    expect(generateButtons.length).toBeGreaterThan(0);
+
+    // Click the Auto-Generate Body button
+    fireEvent.click(generateButtons[0]!);
+
+    expect(onUpdateAgent).toHaveBeenCalled();
+    const lastCall = onUpdateAgent.mock.calls[onUpdateAgent.mock.calls.length - 1]![0];
+    const updatedValue = lastCall.stateUpdates[0].value;
+    const evalFn = new Function("response", `return (${updatedValue});`);
+    const parsed = evalFn({ id: "123", name: "test" });
+    expect(parsed.id).toBe("123");
+    expect(parsed.name).toBe("test");
   });
 });

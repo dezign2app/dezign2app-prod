@@ -190,7 +190,7 @@ export function RouterNodeInspector({
                           state.{ch.key}
                         </span>
                         <span className="text-[10px] text-muted-foreground ml-2">
-                          ({ch.type})
+                          ({ch.customTypeName || ch.type})
                         </span>
                       </SelectItem>
                     ))}

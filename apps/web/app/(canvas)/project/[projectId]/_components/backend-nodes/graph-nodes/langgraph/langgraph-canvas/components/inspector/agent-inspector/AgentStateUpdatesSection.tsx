@@ -15,6 +15,7 @@ import {
   Check,
   CheckCircle2,
   Shuffle,
+  Braces,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
@@ -53,7 +54,13 @@ import type {
   LangGraphCanvasNode,
   CustomTypeItem,
 } from "@workspace/canvas";
-import { LANGGRAPH_CANVAS_NODE_TYPES } from "@workspace/canvas";
+import {
+  LANGGRAPH_CANVAS_NODE_TYPES,
+  LANGGRAPH_CANVAS_NODE_TYPES_REF,
+  isTypesNode,
+  isTypesRefNode,
+  type LangGraphTypesNode,
+} from "@workspace/canvas";
 import type { Parameter } from "@/types/canvas";
 import { parseSchemaJsonToFields } from "./AgentStructuredOutputSection";
 
@@ -72,6 +79,7 @@ import {
   getActionsForReducer,
   getActionMetadata,
   getSuggestedReducerCodeForChannelType,
+  extractFieldsFromCustomType,
   type ReducerActionMeta,
 } from "../state-inspector/constants";
 
@@ -81,8 +89,228 @@ export {
   getActionsForReducer,
   getActionMetadata,
   getSuggestedReducerCodeForChannelType,
+  extractFieldsFromCustomType,
 };
 export type { ReducerActionMeta };
+
+/**
+ * Extracts all available custom types across canvas nodes and embedded state channel schemas.
+ */
+export function extractAvailableCustomTypes(
+  nodes: LangGraphCanvasNode[] = [],
+  stateChannels: LangGraphStateChannel[] = [],
+): CustomTypeItem[] {
+  const types: CustomTypeItem[] = [];
+
+  const addType = (t?: CustomTypeItem | null) => {
+    if (
+      t &&
+      t.name &&
+      !types.some((existing) => existing.id === t.id || existing.name === t.name)
+    ) {
+      types.push(t);
+    }
+  };
+
+  if (Array.isArray(nodes)) {
+    nodes.forEach((n) => {
+      if (!n) return;
+      if (isTypesNode(n) && n.data?.types) {
+        n.data.types.forEach(addType);
+      } else if (isTypesRefNode(n) && n.data?.typesRef) {
+        const master = nodes.find(
+          (m): m is LangGraphTypesNode => isTypesNode(m) && m.id === n.data.typesRef,
+        );
+        if (master?.data?.types) {
+          master.data.types.forEach(addType);
+        }
+      } else if (
+        typeof n === "object" &&
+        "data" in n &&
+        n.data &&
+        typeof n.data === "object" &&
+        "types" in n.data &&
+        Array.isArray((n.data as { types?: CustomTypeItem[] }).types)
+      ) {
+        (n.data as { types?: CustomTypeItem[] }).types?.forEach(addType);
+      }
+    });
+  }
+
+  if (Array.isArray(stateChannels)) {
+    stateChannels.forEach((ch) => {
+      if (ch.customTypeSchema) {
+        addType(ch.customTypeSchema);
+      }
+    });
+  }
+
+  return types;
+}
+
+/**
+ * Resolves the CustomTypeItem matching a given state channel if configured with a custom type.
+ */
+export function resolveCustomTypeForChannel(
+  channel: LangGraphStateChannel | undefined,
+  availableCustomTypes: CustomTypeItem[] = [],
+): CustomTypeItem | undefined {
+  if (!channel) return undefined;
+  if (channel.customTypeSchema) return channel.customTypeSchema;
+  if (channel.customTypeId) {
+    const byId = availableCustomTypes.find((t) => t.id === channel.customTypeId);
+    if (byId) return byId;
+  }
+  if (channel.customTypeName) {
+    const byName = availableCustomTypes.find((t) => t.name === channel.customTypeName);
+    if (byName) return byName;
+  }
+  return undefined;
+}
+
+/**
+ * Returns user-facing type label for a channel (e.g. "MyType" instead of generic "object").
+ */
+export function getChannelDisplayType(
+  channel: LangGraphStateChannel | undefined,
+  availableCustomTypes: CustomTypeItem[] = [],
+): string {
+  if (!channel) return "string";
+  if (channel.customTypeName) return channel.customTypeName;
+  const resolved = resolveCustomTypeForChannel(channel, availableCustomTypes);
+  if (resolved?.name) return resolved.name;
+  return channel.type || "string";
+}
+
+export interface TransformerStepFieldLike {
+  name: string;
+  type?: string;
+  required?: boolean;
+  description?: string;
+}
+
+export interface TransformerStepLike {
+  id: string;
+  outputVariable?: string;
+  outputSchema?: TransformerStepFieldLike[];
+  functionRef?: { returnSchema?: TransformerStepFieldLike[] };
+}
+
+/**
+ * Auto-generates a formatted dispatch JSON body (or scalar value) matching the channel's type/schema.
+ * Intelligently binds fields to structured output fields (`response.<field>`), transformer outputs,
+ * or active references (`${response.content}`).
+ */
+type DispatchFieldValue =
+  | string
+  | number
+  | boolean
+  | Array<string | number | boolean>;
+
+export interface SchemaFieldLike {
+  name: string;
+  type?: string;
+  required?: boolean;
+  description?: string;
+}
+
+export function generateDispatchBodyForChannel(
+  channel: LangGraphStateChannel | undefined,
+  availableCustomTypes: CustomTypeItem[] = [],
+  schemaFields: SchemaFieldLike[] = [],
+  transformerSteps: TransformerStepLike[] = [],
+  fallbackRef: string = "response.content",
+): string {
+  if (!channel) return "";
+
+  const customSchema = resolveCustomTypeForChannel(channel, availableCustomTypes);
+  const fields = extractFieldsFromCustomType(customSchema);
+
+  if (fields.length > 0) {
+    const obj: Record<string, DispatchFieldValue> = {};
+    fields.forEach((f) => {
+      const cleanFieldName = f.name.toLowerCase();
+
+      // 1. Check if structured output has a matching field
+      const matchedSchema = schemaFields.find(
+        (sf) => sf.name.toLowerCase() === cleanFieldName,
+      );
+      if (matchedSchema) {
+        obj[f.name] = `\${response.${matchedSchema.name}}`;
+        return;
+      }
+
+      // 2. Check if any transformer step has a matching return field
+      for (const ts of transformerSteps) {
+        const outVar = ts.outputVariable || ts.id;
+        const returnSchema = ts.outputSchema || ts.functionRef?.returnSchema || [];
+        const rf = returnSchema.find((r) => r.name.toLowerCase() === cleanFieldName);
+        if (rf) {
+          obj[f.name] = `\${${outVar}.${rf.name}}`;
+          return;
+        }
+      }
+
+      // 3. Fallback based on field type
+      const fType = (f.type || "").toLowerCase();
+      if (fType === "number" || fType === "int" || fType === "float") {
+        obj[f.name] = 0;
+      } else if (fType === "boolean" || fType === "bool") {
+        obj[f.name] = false;
+      } else if (fType === "array" || fType.endsWith("[]")) {
+        obj[f.name] = [];
+      } else {
+        // Map to ${response.<fieldName>} matching this property's name, not generic response.content!
+        const isCustomFallback = Boolean(
+          fallbackRef &&
+            fallbackRef !== "response.content" &&
+            fallbackRef !== "${response.content}",
+        );
+        obj[f.name] = isCustomFallback
+          ? (fallbackRef.startsWith("${") && fallbackRef.endsWith("}")
+              ? fallbackRef
+              : `\${${fallbackRef}}`)
+          : `\${response.${f.name}}`;
+      }
+    });
+
+    const jsonStr = JSON.stringify(obj, null, 2);
+    return jsonStr.replace(/"(\$\{[^"]+\})"/g, "`$1`");
+  }
+
+  // Generic object channel without custom type schema
+  if (channel.type === "object" || channel.reducer === "merge_object") {
+    if (schemaFields.length > 0) {
+      const obj: Record<string, string> = {};
+      schemaFields.forEach((sf) => {
+        obj[sf.name] = `\${response.${sf.name}}`;
+      });
+      return JSON.stringify(obj, null, 2).replace(/"(\$\{[^"]+\})"/g, "`$1`");
+    }
+    const cleanRef =
+      fallbackRef.startsWith("${") && fallbackRef.endsWith("}")
+        ? fallbackRef
+        : `\${${fallbackRef || "response.content"}}`;
+    return `{\n  "field": \`${cleanRef}\`\n}`;
+  }
+
+  // Array channel
+  if (channel.type === "array") {
+    const cleanRef =
+      fallbackRef.startsWith("${") && fallbackRef.endsWith("}")
+        ? fallbackRef
+        : `\${${fallbackRef || "response.content"}}`;
+    return `[\n  \`${cleanRef}\`\n]`;
+  }
+
+  // Primitives
+  if (channel.type === "number") return "0";
+  if (channel.type === "boolean") return "true";
+
+  return fallbackRef.startsWith("${") && fallbackRef.endsWith("}")
+    ? fallbackRef
+    : `\${${fallbackRef || "response.content"}}`;
+}
 
 export function AgentStateUpdatesSection({
   selectedAgentData,
@@ -94,6 +322,11 @@ export function AgentStateUpdatesSection({
 }: AgentStateUpdatesSectionProps) {
   const stateUpdates: LangGraphStateUpdateItem[] =
     selectedAgentData.stateUpdates || [];
+
+  const availableCustomTypes = useMemo(
+    () => extractAvailableCustomTypes(nodes, stateChannels),
+    [nodes, stateChannels],
+  );
 
   const [customActionIdxs, setCustomActionIdxs] = React.useState<
     Record<number, boolean>
@@ -123,6 +356,58 @@ export function AgentStateUpdatesSection({
       (s) => s.type === "transformer" || s.type === "transform",
     );
   }, [selectedAgentData.pipelineSteps]);
+
+  // Auto-heal uninitialized or legacy scalar state updates that target object / custom type channels
+  React.useEffect(() => {
+    let hasChanges = false;
+    const updated: LangGraphStateUpdateItem[] = stateUpdates.map(
+      (su): LangGraphStateUpdateItem => {
+        const channel = stateChannels.find((c) => c.key === su.channelKey);
+        const isCustom = Boolean(
+          channel?.customTypeName ||
+            resolveCustomTypeForChannel(channel, availableCustomTypes),
+        );
+        const expectsJson =
+          channel?.type === "object" ||
+          channel?.reducer === "merge_object" ||
+          isCustom;
+
+        const hasDoubleQuotedTemplates = Boolean(
+          su.value && su.value.includes('"${'),
+        );
+
+        if (
+          expectsJson &&
+          (su.value === "response.content" ||
+            !su.value?.trim() ||
+            su.source === "message_content" ||
+            hasDoubleQuotedTemplates)
+        ) {
+          hasChanges = true;
+          const generatedBody =
+            hasDoubleQuotedTemplates && su.value
+              ? su.value.replace(/"(\$\{[^"]+\})"/g, "`$1`")
+              : generateDispatchBodyForChannel(
+                  channel,
+                  availableCustomTypes,
+                  schemaFields,
+                  transformerSteps,
+                );
+          return {
+            ...su,
+            value: generatedBody,
+            source: "expression",
+            mode: "expression",
+          };
+        }
+        return su;
+      },
+    );
+
+    if (hasChanges) {
+      onUpdateAgent({ stateUpdates: updated });
+    }
+  }, [stateUpdates, stateChannels, availableCustomTypes, schemaFields, transformerSteps, onUpdateAgent]);
 
   // Available reference steps and fields for insertion
   const availableReferenceSteps = useMemo(() => {
@@ -252,52 +537,7 @@ export function AgentStateUpdatesSection({
       });
     });
 
-    // 3. Upstream Canvas Nodes
-    if (nodes && nodes.length > 0) {
-      nodes.forEach((n) => {
-        if (!n || n.id === selectedAgentData.id) return;
-        const nodeData = n.data;
-        let nodeName: string = n.id;
-        let nodeVar: string = n.id;
 
-        if (typeof nodeData === "object" && nodeData !== null) {
-          if ("label" in nodeData && typeof nodeData.label === "string" && nodeData.label.trim()) {
-            nodeName = nodeData.label.trim();
-          } else if ("name" in nodeData && typeof nodeData.name === "string" && nodeData.name.trim()) {
-            nodeName = nodeData.name.trim();
-          }
-
-          if ("outputVariable" in nodeData && typeof nodeData.outputVariable === "string" && nodeData.outputVariable.trim()) {
-            nodeVar = nodeData.outputVariable.trim();
-          }
-        }
-
-        steps.push({
-          id: `node_${n.id}`,
-          label: `Node: ${nodeName}`,
-          fields: [
-            {
-              path: `${nodeVar}.content`,
-              label: "content (text)",
-              short: `${nodeVar}.content`,
-              type: "string",
-            },
-            {
-              path: `${nodeVar}.output`,
-              label: "output (data)",
-              short: `${nodeVar}.output`,
-              type: "object",
-            },
-            {
-              path: nodeVar,
-              label: `${nodeVar} (whole)`,
-              short: nodeVar,
-              type: "object",
-            },
-          ],
-        });
-      });
-    }
 
     // 4. Graph State Variables
     if (stateChannels.length > 0) {
@@ -306,7 +546,7 @@ export function AgentStateUpdatesSection({
       stateChannels
         .filter((c) => Boolean(c.key?.trim()))
         .forEach((c) => {
-          const typeLabel = c.customTypeName ? c.customTypeName : c.type;
+          const typeLabel = getChannelDisplayType(c, availableCustomTypes);
           stateFields.push({
             path: `state.${c.key}`,
             label: `state.${c.key} (${typeLabel})`,
@@ -315,34 +555,11 @@ export function AgentStateUpdatesSection({
           });
 
           // Check if custom type schema has fields
-          let schema: CustomTypeItem | undefined = c.customTypeSchema;
-          if (!schema && c.customTypeId && nodes && nodes.length > 0) {
-            for (const n of nodes) {
-              if (
-                n &&
-                n.type === LANGGRAPH_CANVAS_NODE_TYPES &&
-                n.data &&
-                typeof n.data === "object" &&
-                "types" in n.data &&
-                Array.isArray(n.data.types)
-              ) {
-                const found = n.data.types.find(
-                  (t) =>
-                    t &&
-                    typeof t === "object" &&
-                    "id" in t &&
-                    t.id === c.customTypeId,
-                );
-                if (found) {
-                  schema = found;
-                  break;
-                }
-              }
-            }
-          }
+          const schema = resolveCustomTypeForChannel(c, availableCustomTypes);
+          const fields = extractFieldsFromCustomType(schema);
 
-          if (schema && schema.fields && Array.isArray(schema.fields)) {
-            schema.fields.forEach((f) => {
+          if (fields.length > 0) {
+            fields.forEach((f) => {
               if (f && f.name && !f.isOmitted) {
                 const fieldTypeStr = f.isArray ? `${f.type}[]` : f.type;
                 stateFields.push({
@@ -364,12 +581,17 @@ export function AgentStateUpdatesSection({
     }
 
     return steps;
-  }, [isStructured, schemaFields, selectedAgentData.pipelineSteps, selectedAgentData.id, stateChannels, nodes]);
+  }, [isStructured, schemaFields, selectedAgentData.pipelineSteps, selectedAgentData.id, stateChannels, availableCustomTypes]);
 
   // Helper to get channel details and its active reducer
   const getChannelMeta = (channelKey: string) => {
     const channel = stateChannels.find((c) => c.key === channelKey);
     const channelType = channel?.type || "string";
+    const customType = resolveCustomTypeForChannel(channel, availableCustomTypes);
+    const customTypeName = channel?.customTypeName || customType?.name;
+    const customTypeSchema = channel?.customTypeSchema || customType;
+    const displayType = customTypeName || channelType;
+
     const reducerName =
       channel?.reducer ||
       (channelType === "messages" ? "add_messages" : "replace");
@@ -381,11 +603,15 @@ export function AgentStateUpdatesSection({
     const effectiveCode =
       matchedCustom?.code ||
       channel?.customReducerCode ||
-      getSuggestedReducerCodeForChannelType(channelType);
+      getSuggestedReducerCodeForChannelType(channelType, customTypeSchema);
 
     return {
       channel,
       type: channelType,
+      customTypeName,
+      customTypeSchema,
+      customTypeId: channel?.customTypeId || customType?.id,
+      displayType,
       reducer: reducerName,
       isCustom: Boolean(matchedCustom || channel?.customReducerCode),
       customCode: effectiveCode,
@@ -554,11 +780,31 @@ export function AgentStateUpdatesSection({
                 stateChannels[0];
               const defaultKey = defaultChannel?.key || "status";
               const defaultReducer = defaultChannel?.reducer || "replace";
-              const defaultSource: StateUpdateSource =
-                isStructured && schemaFields.length > 0
-                  ? "structured_field"
-                  : "message_content";
-              const defaultField = schemaFields[0]?.name || "";
+              const defMeta = getChannelMeta(defaultKey);
+              const isDefCustom = Boolean(defMeta.customTypeName || defMeta.customTypeSchema);
+              const defExpectsJson = defMeta.type === "object" || defMeta.reducer === "merge_object" || isDefCustom;
+
+              let defaultSource: StateUpdateSource = "literal";
+              let defaultField = "";
+              let defaultValue: string | undefined = undefined;
+
+              if (defExpectsJson) {
+                defaultValue = generateDispatchBodyForChannel(
+                  defaultChannel,
+                  availableCustomTypes,
+                  schemaFields,
+                  transformerSteps,
+                  "response.content",
+                );
+                defaultSource = "expression";
+              } else if (isStructured && schemaFields.length > 0) {
+                defaultSource = "structured_field";
+                defaultField = schemaFields[0]?.name || "";
+                defaultValue = defaultField;
+              } else {
+                defaultSource = "message_content";
+                defaultValue = "response.content";
+              }
 
               onUpdateAgent({
                 stateUpdates: [
@@ -568,9 +814,9 @@ export function AgentStateUpdatesSection({
                     reducer: defaultReducer,
                     action: "default",
                     source: defaultSource,
-                    schemaField: defaultField,
-                    mode: "set",
-                    value: defaultField,
+                    schemaField: defaultSource === "structured_field" ? defaultField : undefined,
+                    mode: defaultSource === "expression" ? "expression" : "set",
+                    value: defaultValue,
                   },
                 ],
               });
@@ -660,13 +906,24 @@ export function AgentStateUpdatesSection({
         {/* State Updates List */}
         {stateUpdates.map((su: LangGraphStateUpdateItem, sIdx: number) => {
           const channelMeta = getChannelMeta(su.channelKey);
+          const channelDisplayType = channelMeta.displayType;
+          const isCustomChannel = Boolean(channelMeta.customTypeName || channelMeta.customTypeSchema);
+          const customFields = extractFieldsFromCustomType(channelMeta.customTypeSchema);
+
+          const expectsJson =
+            channelMeta.type === "object" ||
+            channelMeta.reducer === "merge_object" ||
+            isCustomChannel;
+
           const currentSource: StateUpdateSource =
             su.source ||
             (isStructured && su.schemaField
               ? "structured_field"
               : su.mode === "expression"
                 ? "expression"
-                : "message_content");
+                : expectsJson
+                  ? "expression"
+                  : "message_content");
 
           const matchedSchemaField = schemaFields.find(
             (f) => f.name === (su.schemaField || su.value),
@@ -676,13 +933,16 @@ export function AgentStateUpdatesSection({
           const hasTypeMismatch = Boolean(
             currentSource === "structured_field" &&
               matchedSchemaField &&
-              channelMeta.type !== "object" &&
-              matchedSchemaField.type &&
-              !matchedSchemaField.type.startsWith(channelMeta.type) &&
-              !(
-                channelMeta.type === "array" &&
-                matchedSchemaField.type.endsWith("[]")
-              ),
+              (isCustomChannel
+                ? matchedSchemaField.type !== channelMeta.customTypeName &&
+                  matchedSchemaField.type !== "object"
+                : channelMeta.type !== "object" &&
+                  matchedSchemaField.type &&
+                  !matchedSchemaField.type.startsWith(channelMeta.type) &&
+                  !(
+                    channelMeta.type === "array" &&
+                    matchedSchemaField.type.endsWith("[]")
+                  )),
           );
 
           // Available actions for this channel and reducer (auto-detected only!)
@@ -701,11 +961,6 @@ export function AgentStateUpdatesSection({
             isValuelessAction(su.action) ||
             currentActionMeta?.requiresValue === false;
 
-          // Check if channel expects object/JSON or user toggled JSON mode
-          const expectsJson =
-            channelMeta.type === "object" ||
-            channelMeta.reducer === "merge_object";
-
           const isRowJsonMode =
             rowJsonOverrides[sIdx] !== undefined
               ? rowJsonOverrides[sIdx]
@@ -719,17 +974,24 @@ export function AgentStateUpdatesSection({
 
           // Format value description for preview
           const displayVal =
-            su.value !== undefined && su.value !== ""
+            su.value !== undefined && su.value !== "" && (expectsJson ? su.value !== "response.content" : true)
               ? su.value
-              : currentSource === "structured_field"
-                ? (su.schemaField ? `response.${su.schemaField}` : (su.value || ""))
-                : currentSource === "structured_full"
-                  ? "response"
-                  : currentSource === "message_content"
-                    ? "response.content"
-                    : currentSource === "message_object"
-                      ? "response"
-                      : "";
+              : expectsJson
+                ? generateDispatchBodyForChannel(
+                    channelMeta.channel,
+                    availableCustomTypes,
+                    schemaFields,
+                    transformerSteps,
+                  )
+                : currentSource === "structured_field"
+                  ? (su.schemaField ? `response.${su.schemaField}` : (su.value || ""))
+                  : currentSource === "structured_full"
+                    ? "response"
+                    : currentSource === "message_content"
+                      ? "response.content"
+                      : currentSource === "message_object"
+                        ? "response"
+                        : "";
 
           const valueDisplay = displayVal || (isValueless ? "" : '""');
 
@@ -823,11 +1085,41 @@ export function AgentStateUpdatesSection({
                         const current = updated[sIdx];
                         if (current) {
                           const chMeta = getChannelMeta(v);
+                          const isCustom = Boolean(chMeta.customTypeName || chMeta.customTypeSchema);
+                          const expectsJson = chMeta.type === "object" || chMeta.reducer === "merge_object" || isCustom;
+
+                          let nextValue = current.value;
+                          let nextSource = current.source;
+                          let nextMode = current.mode;
+
+                          // Auto-generate dispatch body when selecting an object / custom type channel if value is empty or simple scalar default
+                          if (
+                            expectsJson &&
+                            (!nextValue ||
+                              nextValue === "response.content" ||
+                              nextValue === "response" ||
+                              nextValue === current.schemaField ||
+                              !nextValue.trim().startsWith("{"))
+                          ) {
+                            nextValue = generateDispatchBodyForChannel(
+                              chMeta.channel,
+                              availableCustomTypes,
+                              schemaFields,
+                              transformerSteps,
+                              activeFieldPath,
+                            );
+                            nextSource = "expression";
+                            nextMode = "expression";
+                          }
+
                           updated[sIdx] = {
                             ...current,
                             channelKey: v,
                             reducer: chMeta.reducer,
                             action: "default",
+                            value: nextValue,
+                            source: nextSource,
+                            mode: nextMode,
                           };
                           onUpdateAgent({ stateUpdates: updated });
                         }
@@ -843,14 +1135,29 @@ export function AgentStateUpdatesSection({
                           </SelectLabel>
                           {stateChannels
                             .filter((ch: LangGraphStateChannel) => Boolean(ch.key?.trim()))
-                            .map((ch: LangGraphStateChannel) => (
-                              <SelectItem key={ch.key} value={ch.key}>
-                                <div className="flex items-center gap-1.5 font-mono">
-                                  <span className="font-semibold text-foreground">{ch.key}</span>
-                                  <span className="text-[9px] text-muted-foreground font-sans">[{ch.type}]</span>
-                                </div>
-                              </SelectItem>
-                            ))}
+                            .map((ch: LangGraphStateChannel) => {
+                              const dispType = getChannelDisplayType(ch, availableCustomTypes);
+                              const isCustom = Boolean(
+                                ch.customTypeName ||
+                                  resolveCustomTypeForChannel(ch, availableCustomTypes),
+                              );
+                              return (
+                                <SelectItem key={ch.key} value={ch.key}>
+                                  <div className="flex items-center gap-1.5 font-mono">
+                                    <span className="font-semibold text-foreground">{ch.key}</span>
+                                    <span
+                                      className={`text-[9px] ${
+                                        isCustom
+                                          ? "text-cyan-400 font-semibold"
+                                          : "text-muted-foreground font-sans"
+                                      }`}
+                                    >
+                                      [{dispType}]
+                                    </span>
+                                  </div>
+                                </SelectItem>
+                              );
+                            })}
                           {!stateChannels.some((c: LangGraphStateChannel) => c.key === su.channelKey) && su.channelKey && (
                             <SelectItem value={su.channelKey}>
                               <span className="font-mono font-semibold">{su.channelKey}</span>
@@ -890,6 +1197,14 @@ export function AgentStateUpdatesSection({
                               nextSource = "structured_field";
                               nextField = schemaFields[0]?.name;
                               nextValue = nextField ? `response.${nextField}` : undefined;
+                            } else if (expectsJson) {
+                              nextSource = "expression";
+                              nextValue = generateDispatchBodyForChannel(
+                                channelMeta.channel,
+                                availableCustomTypes,
+                                schemaFields,
+                                transformerSteps,
+                              );
                             } else {
                               nextSource = channelMeta.type === "messages" ? "message_object" : "message_content";
                               nextValue = channelMeta.type === "messages" ? "response" : "response.content";
@@ -1052,16 +1367,50 @@ export function AgentStateUpdatesSection({
                         size="sm"
                         variant="ghost"
                         className="h-6 px-1.5 text-[10px] font-mono text-muted-foreground hover:text-foreground cursor-pointer"
-                        onClick={() =>
-                          handleRawValueChange(
-                            isRowJsonMode
-                              ? `{\n  "${activeFieldObj?.short?.split(".").pop() || "field"}": "\${${activeFieldPath}}"\n}`
-                              : activeFieldPath,
-                          )
-                        }
+                        onClick={() => {
+                          if (isRowJsonMode) {
+                            if (customFields.length > 1) {
+                              const body = generateDispatchBodyForChannel(
+                                channelMeta.channel,
+                                availableCustomTypes,
+                                schemaFields,
+                                transformerSteps,
+                                activeFieldPath,
+                              );
+                              handleRawValueChange(body);
+                            } else {
+                              const fieldKey = activeFieldObj?.short?.split(".").pop() || "field";
+                              handleRawValueChange(`{\n  "${fieldKey}": \`\${${activeFieldPath}}\`\n}`);
+                            }
+                          } else {
+                            handleRawValueChange(activeFieldPath);
+                          }
+                        }}
                         title={`Set whole value directly to ${activeFieldPath}`}
                       >
                         Set Value
+                      </Button>
+
+                      {/* Auto-Generate Body */}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-6 px-2 text-[10px] font-mono gap-1 border-purple-500/40 bg-purple-500/10 text-purple-300 hover:text-purple-100 hover:bg-purple-500/20 cursor-pointer"
+                        onClick={() => {
+                          const body = generateDispatchBodyForChannel(
+                            channelMeta.channel,
+                            availableCustomTypes,
+                            schemaFields,
+                            transformerSteps,
+                            activeFieldPath,
+                          );
+                          handleRawValueChange(body);
+                        }}
+                        title={`Auto-generate dispatch JSON body matching ${channelDisplayType} schema`}
+                      >
+                        <Sparkles className="w-2.5 h-2.5 text-purple-400" />
+                        <span>Auto-Generate Body</span>
                       </Button>
 
                       {/* Map picker dropdown */}
@@ -1180,16 +1529,37 @@ export function AgentStateUpdatesSection({
                                 </DropdownMenuLabel>
                                 {stateChannels
                                   .filter((ch) => ch.key?.trim())
-                                  .map((ch) => (
-                                    <DropdownMenuItem
-                                      key={ch.key}
-                                      className="cursor-pointer flex items-center justify-between text-xs text-sky-300"
-                                      onClick={() => handleRawValueChange(`state.${ch.key}`)}
-                                    >
-                                      <span>state.{ch.key}</span>
-                                      <span className="text-[9px] text-muted-foreground font-sans">({ch.type || "string"})</span>
-                                    </DropdownMenuItem>
-                                  ))}
+                                  .map((ch) => {
+                                    const dispType = getChannelDisplayType(ch, availableCustomTypes);
+                                    const schema = resolveCustomTypeForChannel(ch, availableCustomTypes);
+                                    const fields = extractFieldsFromCustomType(schema);
+
+                                    return (
+                                      <React.Fragment key={ch.key}>
+                                        <DropdownMenuItem
+                                          className="cursor-pointer flex items-center justify-between text-xs text-sky-300"
+                                          onClick={() => handleRawValueChange(`state.${ch.key}`)}
+                                        >
+                                          <span>state.{ch.key}</span>
+                                          <span className="text-[9px] text-muted-foreground font-sans">
+                                            ({dispType})
+                                          </span>
+                                        </DropdownMenuItem>
+                                        {fields.map((f) => (
+                                          <DropdownMenuItem
+                                            key={`${ch.key}.${f.name}`}
+                                            className="cursor-pointer flex items-center justify-between text-xs text-sky-300 pl-4"
+                                            onClick={() => handleRawValueChange(`state.${ch.key}.${f.name}`)}
+                                          >
+                                            <span>state.{ch.key}.{f.name}</span>
+                                            <span className="text-[9px] text-muted-foreground font-sans">
+                                              ({f.type || "string"})
+                                            </span>
+                                          </DropdownMenuItem>
+                                        ))}
+                                      </React.Fragment>
+                                    );
+                                  })}
                               </DropdownMenuGroup>
                             </>
                           )}
@@ -1201,6 +1571,26 @@ export function AgentStateUpdatesSection({
                   {/* Quick Click Reference Chips */}
                   <div className="flex items-center gap-1 flex-wrap px-0.5">
                     <span className="text-[9px] text-muted-foreground/70 font-mono">Quick:</span>
+                    {(isRowJsonMode || isCustomChannel) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const body = generateDispatchBodyForChannel(
+                            channelMeta.channel,
+                            availableCustomTypes,
+                            schemaFields,
+                            transformerSteps,
+                            activeFieldPath,
+                          );
+                          handleRawValueChange(body);
+                        }}
+                        className="text-[9px] font-mono px-2 py-0.5 rounded border border-purple-500/40 bg-purple-500/15 hover:bg-purple-500/25 text-purple-200 transition-colors cursor-pointer flex items-center gap-1 font-semibold"
+                        title={`Auto-generate dispatch body for ${channelDisplayType}`}
+                      >
+                        <Sparkles className="w-2.5 h-2.5 text-purple-300" />
+                        <span>+ Generate {channelDisplayType} Body</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => handleInsertRefAtCursor("${response.content}")}
@@ -1231,6 +1621,37 @@ export function AgentStateUpdatesSection({
                     ))}
                   </div>
 
+                  {/* Empty Textarea Helper Banner */}
+                  {isRowJsonMode && (!su.value || !su.value.trim()) && (
+                    <div className="flex items-center justify-between px-2.5 py-1.5 rounded-md bg-purple-950/30 border border-purple-500/30 text-[11px] text-purple-200">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                        <span>
+                          Dispatch body is empty. Generate template for <strong className="font-mono text-purple-300">{channelDisplayType}</strong>?
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-5 px-2 text-[10px] font-mono bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border-purple-500/40 gap-1 cursor-pointer"
+                        onClick={() => {
+                          const body = generateDispatchBodyForChannel(
+                            channelMeta.channel,
+                            availableCustomTypes,
+                            schemaFields,
+                            transformerSteps,
+                            activeFieldPath,
+                          );
+                          handleRawValueChange(body);
+                        }}
+                      >
+                        <Sparkles className="w-2.5 h-2.5 text-purple-300" />
+                        Generate Body
+                      </Button>
+                    </div>
+                  )}
+
                   {/* Value Editor: Textarea (JSON / multiline) or LocalInput (single line) */}
                   {isRowJsonMode ? (
                     <LocalTextarea
@@ -1238,7 +1659,17 @@ export function AgentStateUpdatesSection({
                         textareaRefs.current[sIdx] = el;
                       }}
                       className="min-h-[90px] text-xs bg-background font-mono leading-relaxed p-2.5 border-border focus-visible:ring-purple-500/40 resize-y"
-                      placeholder={`{\n  "field": "\${response.content}"\n}`}
+                      placeholder={
+                        generateDispatchBodyForChannel(
+                          channelMeta.channel,
+                          availableCustomTypes,
+                          schemaFields,
+                          transformerSteps,
+                        ) ||
+                        (customFields.length > 0
+                          ? `{\n${customFields.map((f) => `  "${f.name}": \`\${response.${f.name}}\``).join(",\n")}\n}`
+                          : `{\n  "field": \`\${response.content}\`\n}`)
+                      }
                       value={su.value ?? ""}
                       onChange={(e) => handleRawValueChange(e.target.value)}
                     />
@@ -1255,18 +1686,22 @@ export function AgentStateUpdatesSection({
                             ? "42 or state.count + 1"
                             : channelMeta.type === "boolean"
                               ? "true or false"
-                              : isStructured && schemaFields.length > 0
-                                ? "response.field or literal"
-                                : 'response.content or "literal"'
+                              : isCustomChannel
+                                ? `e.g. response or { ... } for ${channelDisplayType}`
+                                : isStructured && schemaFields.length > 0
+                                  ? "response.field or literal"
+                                  : 'response.content or "literal"'
                       }
                       value={
                         su.value !== undefined
                           ? su.value
-                          : su.source === "message_content"
-                            ? "response.content"
-                            : su.source === "message_object"
-                              ? "response"
-                              : ""
+                          : expectsJson
+                            ? ""
+                            : su.source === "message_content"
+                              ? "response.content"
+                              : su.source === "message_object"
+                                ? "response"
+                                : ""
                       }
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                         handleRawValueChange(e.target.value);
@@ -1279,7 +1714,7 @@ export function AgentStateUpdatesSection({
                     <div className="flex items-center gap-1.5 text-xs text-amber-300 font-mono bg-amber-500/10 border border-amber-500/30 p-1.5 rounded-md">
                       <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                       <span>
-                        Type mismatch: Channel is {channelMeta.type}, but mapped field &apos;{matchedSchemaField?.name}&apos; is {matchedSchemaField?.type}.
+                        Type mismatch: Channel is {channelDisplayType}, but mapped field &apos;{matchedSchemaField?.name}&apos; is {matchedSchemaField?.type}.
                       </span>
                     </div>
                   )}
@@ -1325,8 +1760,16 @@ export function AgentStateUpdatesSection({
                     </>
                   )}
                 </span>
-                <span className="text-[9px] text-muted-foreground/60 shrink-0 ml-2">
-                  channel: {channelMeta.type}
+                <span className="text-[9px] text-muted-foreground/60 shrink-0 ml-2 flex items-center gap-1 font-mono">
+                  <span>channel:</span>
+                  {channelMeta.customTypeName ? (
+                    <span className="text-cyan-400 font-semibold flex items-center gap-0.5">
+                      <Braces className="w-2.5 h-2.5" />
+                      {channelMeta.customTypeName}
+                    </span>
+                  ) : (
+                    <span>{channelMeta.type}</span>
+                  )}
                 </span>
               </div>
             </div>
