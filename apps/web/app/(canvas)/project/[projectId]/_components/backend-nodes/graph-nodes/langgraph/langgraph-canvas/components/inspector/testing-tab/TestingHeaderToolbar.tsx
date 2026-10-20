@@ -3,12 +3,10 @@ import {
   Play,
   RotateCcw,
   Loader2,
-  Key,
   Plus,
   AlertCircle,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
-import { Label } from "@workspace/ui/components/label";
 import {
   Select,
   SelectContent,
@@ -22,9 +20,7 @@ import type { LangGraphMemoryConfig } from "@workspace/canvas";
 import {
   ExecutionMode,
   LLMProvider,
-  PROVIDER_MODELS,
 } from "./types";
-import { LocalInput } from "../../../../../common";
 
 export interface TestingHeaderToolbarProps {
   executionMode: ExecutionMode;
@@ -37,14 +33,14 @@ export interface TestingHeaderToolbarProps {
   setThreadId: (tid: string) => void;
   knownThreads: string[];
   handleNewThread: () => void;
-  provider: LLMProvider;
-  handleProviderChange: (p: LLMProvider) => void;
-  modelName: string;
-  setModelName: (m: string) => void;
-  apiKey: string;
-  handleSaveApiKey: (k: string) => void;
-  showKeyInput: boolean;
-  setShowKeyInput: React.Dispatch<React.SetStateAction<boolean>>;
+  provider?: LLMProvider;
+  handleProviderChange?: (p: LLMProvider) => void;
+  modelName?: string;
+  setModelName?: (m: string) => void;
+  apiKey?: string;
+  handleSaveApiKey?: (k: string) => void;
+  showKeyInput?: boolean;
+  setShowKeyInput?: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export function TestingHeaderToolbar({
@@ -58,14 +54,14 @@ export function TestingHeaderToolbar({
   setThreadId,
   knownThreads,
   handleNewThread,
-  provider,
-  handleProviderChange,
-  modelName,
-  setModelName,
-  apiKey,
-  handleSaveApiKey,
-  showKeyInput,
-  setShowKeyInput,
+  provider: _provider,
+  handleProviderChange: _handleProviderChange,
+  modelName: _modelName,
+  setModelName: _setModelName,
+  apiKey: _apiKey,
+  handleSaveApiKey: _handleSaveApiKey,
+  showKeyInput: _showKeyInput,
+  setShowKeyInput: _setShowKeyInput,
 }: TestingHeaderToolbarProps) {
   return (
     <div className="p-3.5 border-b border-border/60 bg-background/50 flex flex-col gap-2.5 shrink-0">
@@ -222,89 +218,30 @@ export function TestingHeaderToolbar({
         )}
 
       {/* ── Thread & Memory Config ── */}
-      <div className="grid grid-cols-2 gap-2 pt-1">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-            <span className="font-mono uppercase font-semibold">Thread ID (Memory)</span>
-            <button
-              onClick={handleNewThread}
-              className="text-primary hover:underline flex items-center gap-0.5 text-[9px]"
-            >
-              <Plus className="w-2.5 h-2.5" /> New
-            </button>
-          </div>
-          <Select value={threadId} onValueChange={setThreadId}>
-            <SelectTrigger className="h-7 text-xs bg-background/80 font-mono">
-              <SelectValue placeholder="Thread ID" />
-            </SelectTrigger>
-            <SelectContent>
-              {knownThreads.map((t) => (
-                <SelectItem key={t} value={t} className="font-mono text-xs">
-                  {t}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-            <span className="font-mono uppercase font-semibold">LLM Provider</span>
-            <button
-              onClick={() => setShowKeyInput((prev) => !prev)}
-              className="text-muted-foreground hover:text-foreground flex items-center gap-0.5 text-[9px]"
-            >
-              <Key className="w-2.5 h-2.5" /> {showKeyInput ? "Hide Key" : "API Key"}
-            </button>
-          </div>
-          <Select value={provider} onValueChange={handleProviderChange}>
-            <SelectTrigger className="h-7 text-xs bg-background/80 font-medium">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="groq">Groq (Ultra-fast LPU)</SelectItem>
-              <SelectItem value="openai">OpenAI</SelectItem>
-              <SelectItem value="anthropic">Anthropic Claude</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Model selection */}
-      <div className="flex flex-col gap-1 pt-0.5">
+      <div className="flex flex-col gap-1 pt-1">
         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-          <span className="font-mono uppercase font-semibold">Active Model</span>
-          <span className="text-[9px] text-emerald-400 font-mono font-medium">Live In-Browser API</span>
+          <span className="font-mono uppercase font-semibold">Thread ID (Memory)</span>
+          <button
+            type="button"
+            onClick={handleNewThread}
+            className="text-primary hover:underline flex items-center gap-0.5 text-[9px] cursor-pointer"
+          >
+            <Plus className="w-2.5 h-2.5" /> New
+          </button>
         </div>
-        <Select value={modelName} onValueChange={setModelName}>
+        <Select value={threadId} onValueChange={setThreadId}>
           <SelectTrigger className="h-7 text-xs bg-background/80 font-mono">
-            <SelectValue />
+            <SelectValue placeholder="Thread ID" />
           </SelectTrigger>
           <SelectContent>
-            {PROVIDER_MODELS[provider]?.map((m) => (
-              <SelectItem key={m.id} value={m.id} className="text-xs font-mono">
-                {m.label} ({m.id})
+            {knownThreads.map((t) => (
+              <SelectItem key={t} value={t} className="font-mono text-xs">
+                {t}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
-
-      {/* API Key Drawer */}
-      {showKeyInput && (
-        <div className="p-2.5 rounded-lg border border-primary/20 bg-primary/5 flex flex-col gap-1.5 animate-in fade-in duration-200">
-          <Label className="text-[10px] text-muted-foreground font-mono">
-            {provider.toUpperCase()} API Key (Stored in browser localStorage)
-          </Label>
-          <LocalInput
-            type="password"
-            placeholder={`Enter ${provider} api key...`}
-            value={apiKey}
-            onChange={(e) => handleSaveApiKey(e.target.value)}
-            className="h-7 text-xs font-mono bg-background"
-          />
-        </div>
-      )}
     </div>
   );
 }

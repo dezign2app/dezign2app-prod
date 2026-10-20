@@ -83,10 +83,6 @@ export function AgentStateUpdatesSection({
     [nodes, stateChannels],
   );
 
-  const [customActionIdxs, setCustomActionIdxs] = useState<
-    Record<number, boolean>
-  >({});
-
   // Reference insertion step & field per row
   const [rowRefStep, setRowRefStep] = useState<Record<number, string>>({});
   const [rowRefField, setRowRefField] = useState<Record<number, string>>({});
@@ -117,7 +113,13 @@ export function AgentStateUpdatesSection({
     let hasChanges = false;
     const updated: LangGraphStateUpdateItem[] = stateUpdates.map(
       (su): LangGraphStateUpdateItem => {
-        const channel = stateChannels.find((c) => c.key === su.channelKey);
+        let currentItem = su;
+        if (currentItem.action === "custom") {
+          hasChanges = true;
+          currentItem = { ...currentItem, action: "default" };
+        }
+
+        const channel = stateChannels.find((c) => c.key === currentItem.channelKey);
         const isCustom = Boolean(
           channel?.customTypeName ||
             resolveCustomTypeForChannel(channel, availableCustomTypes),
@@ -128,20 +130,20 @@ export function AgentStateUpdatesSection({
           isCustom;
 
         const hasDoubleQuotedTemplates = Boolean(
-          su.value && su.value.includes('"${'),
+          currentItem.value && currentItem.value.includes('"${'),
         );
 
         if (
           expectsJson &&
-          (su.value === "response.content" ||
-            !su.value?.trim() ||
-            su.source === "message_content" ||
+          (currentItem.value === "response.content" ||
+            !currentItem.value?.trim() ||
+            currentItem.source === "message_content" ||
             hasDoubleQuotedTemplates)
         ) {
           hasChanges = true;
           const generatedBody =
-            hasDoubleQuotedTemplates && su.value
-              ? su.value.replace(/"(\$\{[^"]+\})"/g, "`$1`")
+            hasDoubleQuotedTemplates && currentItem.value
+              ? currentItem.value.replace(/"(\$\{[^"]+\})"/g, "`$1`")
               : generateDispatchBodyForChannel(
                   channel,
                   availableCustomTypes,
@@ -149,13 +151,13 @@ export function AgentStateUpdatesSection({
                   transformerSteps,
                 );
           return {
-            ...su,
+            ...currentItem,
             value: generatedBody,
             source: "expression",
             mode: "expression",
           };
         }
-        return su;
+        return currentItem;
       },
     );
 
@@ -522,13 +524,6 @@ export function AgentStateUpdatesSection({
               transformerSteps={transformerSteps}
               availableReferenceSteps={availableReferenceSteps}
               isStructured={isStructured}
-              isCustomAction={Boolean(customActionIdxs[sIdx])}
-              onToggleCustomAction={() => {
-                setCustomActionIdxs((prev) => ({
-                  ...prev,
-                  [sIdx]: !prev[sIdx],
-                }));
-              }}
               activeRefStep={activeStepId}
               onChangeRefStep={(sid) => {
                 setRowRefStep((prev) => ({ ...prev, [sIdx]: sid }));
