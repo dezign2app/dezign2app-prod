@@ -1,25 +1,7 @@
 import { useEffect } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { BackendCanvasView } from "@/types/canvas";
-
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!target || !(target instanceof HTMLElement)) return false;
-
-  const tagName = target.tagName.toLowerCase();
-  if (tagName === "input" || tagName === "textarea" || tagName === "select") {
-    return true;
-  }
-
-  if (target.isContentEditable) {
-    return true;
-  }
-
-  if (target.closest(".monaco-editor") || target.closest("[contenteditable='true']")) {
-    return true;
-  }
-
-  return false;
-}
+import { isTypingActive } from "./useAutoLayoutShortcut";
 
 export function useCanvasKeyboardShortcuts(
   enabled = true,
@@ -29,7 +11,7 @@ export function useCanvasKeyboardShortcuts(
     if (!enabled) return;
 
     const handleKeyDown = (e: KeyboardEvent): void => {
-      if (isEditableTarget(e.target)) {
+      if (isTypingActive(e)) {
         return;
       }
 

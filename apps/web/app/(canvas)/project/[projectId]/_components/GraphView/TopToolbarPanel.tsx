@@ -18,16 +18,16 @@ export const TopToolbarPanel: React.FC<TopToolbarPanelProps> = ({
   const simulation = useSimulationStore();
   const personas = useTestUsersStore((s) => s.personas);
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
-  const aiPanelOpen = useSidebarStore((s) => s.aiPanelOpen);
-  const aiPanelWidth = useSidebarStore((s) => s.aiPanelWidth);
+  const paletteOpen = useSidebarStore((s) => s.paletteOpen);
+  const paletteWidth = useSidebarStore((s) => s.paletteWidth);
 
   return (
     <Panel
-      position="top-right"
+      position="top-left"
       className="pointer-events-auto select-none transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-10"
       style={{
-        top: "70px",
-        right: aiPanelOpen ? `${aiPanelWidth + 16}px` : "168px",
+        top: "68px",
+        left: paletteOpen ? `${paletteWidth + 16}px` : "124px",
       }}
     >
       <div className="flex items-center gap-1 p-1 rounded-xl bg-sidebar/95 backdrop-blur-md border border-sidebar-border shadow-lg">
@@ -36,10 +36,13 @@ export const TopToolbarPanel: React.FC<TopToolbarPanelProps> = ({
           size="sm"
           className="h-7 px-2.5 text-xs text-sidebar-foreground hover:bg-sidebar-accent gap-1.5"
           onClick={() => onLayout("LR")}
-          title="Auto-arrange nodes in left-to-right flow"
+          title="Auto-arrange nodes in left-to-right flow (Shift + A)"
         >
           <LayoutTemplate className="w-3.5 h-3.5 text-primary" />
           <span>Auto layout</span>
+          <kbd className="hidden sm:inline-flex items-center text-[10px] font-mono font-medium text-muted-foreground/80 bg-sidebar-accent/80 border border-sidebar-border px-1 py-0.5 rounded leading-none ml-0.5">
+            ⇧A
+          </kbd>
         </Button>
 
         <div className="w-px h-4 bg-sidebar-border mx-0.5" />

@@ -21,6 +21,7 @@ import {
 } from "@workspace/canvas";
 import { useCanvasHandlers } from "./hooks/useCanvasHandlers";
 import { useSchemaAutoLayout } from "./hooks/useAutoLayout";
+import { useAutoLayoutShortcut } from "./hooks/useAutoLayoutShortcut";
 import { LayoutTemplate, AlertTriangle } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
@@ -52,6 +53,7 @@ export function SchemaView({ projectId }: SchemaViewProps) {
   } = useCanvasHandlers(projectId, "schema");
   const { fitView } = useReactFlow();
   const { handleLayout } = useSchemaAutoLayout();
+  useAutoLayoutShortcut(React.useCallback(() => handleLayout("LR"), [handleLayout]));
   const aiPanelOpen = useSidebarStore((s) => s.aiPanelOpen);
   const aiPanelWidth = useSidebarStore((s) => s.aiPanelWidth);
   const terminalOpen = useSidebarStore((s) => s.terminalOpen);
@@ -233,13 +235,13 @@ export function SchemaView({ projectId }: SchemaViewProps) {
           }}
         />
 
-        {/* Floating Top-Right Auto Layout Panel */}
+        {/* Floating Top-Left Auto Layout Panel */}
         <Panel
-          position="top-right"
+          position="top-left"
           className="pointer-events-auto select-none transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-10"
           style={{
-            top: "70px",
-            right: aiPanelOpen ? `${aiPanelWidth + 16}px` : "168px",
+            top: "68px",
+            left: paletteOpen ? `${paletteWidth + 16}px` : "124px",
           }}
         >
           <div className="flex items-center gap-1 p-1 rounded-xl bg-sidebar/95 backdrop-blur-md border border-sidebar-border shadow-lg">
@@ -248,10 +250,13 @@ export function SchemaView({ projectId }: SchemaViewProps) {
               size="sm"
               className="h-7 px-2.5 text-xs text-sidebar-foreground hover:bg-sidebar-accent gap-1.5"
               onClick={() => handleLayout("LR")}
-              title="Auto-arrange schema tables in left-to-right flow"
+              title="Auto-arrange schema tables in left-to-right flow (Shift + A)"
             >
               <LayoutTemplate className="w-3.5 h-3.5 text-primary" />
               <span>Auto layout</span>
+              <kbd className="hidden sm:inline-flex items-center text-[10px] font-mono font-medium text-muted-foreground/80 bg-sidebar-accent/80 border border-sidebar-border px-1 py-0.5 rounded leading-none ml-0.5">
+                ⇧A
+              </kbd>
             </Button>
           </div>
         </Panel>
@@ -261,7 +266,7 @@ export function SchemaView({ projectId }: SchemaViewProps) {
           <Panel
             position="top-center"
             className="pointer-events-auto select-none transition-all duration-300 z-20"
-            style={{ top: "16px" }}
+            style={{ top: "68px" }}
           >
             <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-destructive/15 text-destructive border border-destructive/30 backdrop-blur-md shadow-lg text-xs font-medium">
               <AlertTriangle className="w-4 h-4 shrink-0 text-destructive" />

@@ -23,6 +23,7 @@ import {
 import { isValidConnection, WebAppZone } from "@workspace/canvas";
 import { useCanvasHandlers } from "../hooks/useCanvasHandlers";
 import { useGraphAutoLayout, getGraphFlowNodes } from "../hooks/useAutoLayout";
+import { useAutoLayoutShortcut } from "../hooks/useAutoLayoutShortcut";
 import { TopToolbarPanel } from "./TopToolbarPanel";
 import { TestCaseDialogs } from "./TestCaseDialogs";
 import { sortZonePages } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/nodes/gateway/web-page";
@@ -210,6 +211,10 @@ export function GraphView({ projectId }: GraphViewProps) {
     nodes: graphNodes,
     edges: graphEdges,
   });
+
+  useAutoLayoutShortcut(
+    React.useCallback(() => handleLayout("LR"), [handleLayout]),
+  );
 
   const flowNodesToFit = React.useMemo(() => {
     const flowNodes = getGraphFlowNodes(graphNodes, graphEdges);

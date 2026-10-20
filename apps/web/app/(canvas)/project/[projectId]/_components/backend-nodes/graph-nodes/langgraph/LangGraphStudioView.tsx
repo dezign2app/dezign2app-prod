@@ -25,6 +25,7 @@ import {
   useLangGraphAutoLayout,
   getLangGraphFlowNodes,
 } from "../../../hooks/useAutoLayout";
+import { useAutoLayoutShortcut } from "../../../hooks/useAutoLayoutShortcut";
 import { langGraphCanvasNodeTypes } from "./langgraph-canvas/nodes";
 import { useLangGraphCanvasState } from "./langgraph-canvas/hooks/useLangGraphCanvasState";
 import { LangGraphCanvasHeader } from "./langgraph-canvas/components/LangGraphCanvasHeader";
@@ -206,6 +207,10 @@ export function LangGraphStudioView({
     edges,
     onNodesChange,
   });
+
+  useAutoLayoutShortcut(
+    useCallback(() => handleLayout("LR"), [handleLayout]),
+  );
 
   const connectedLLMId = useMemo(() => {
     if (!selectedNodeId) return null;
@@ -865,10 +870,13 @@ export function LangGraphStudioView({
                 size="sm"
                 className="h-7 text-xs gap-1.5 font-semibold hover:bg-accent text-foreground"
                 onClick={() => handleLayout("LR")}
-                title="Auto Layout Left to Right"
+                title="Auto Layout Left to Right (Shift + A)"
               >
                 <Layout className="w-3.5 h-3.5 text-primary" />
-                Auto Layout
+                <span>Auto Layout</span>
+                <kbd className="hidden sm:inline-flex items-center text-[10px] font-mono font-medium text-muted-foreground/80 bg-accent/80 border border-border px-1 py-0.5 rounded leading-none ml-0.5">
+                  ⇧A
+                </kbd>
               </Button>
             </Panel>
           </ReactFlow>
