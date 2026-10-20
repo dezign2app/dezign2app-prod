@@ -1,6 +1,6 @@
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { Endpoint, UIEventItem, PageSection, NodeConnectionDetail, EndpointTraceResult } from "@workspace/canvas/types";
-import { deduplicateTraces, cleanPath } from "./utils";
+import { deduplicateTraces, cleanPath, isPageNodeAuthenticated } from "./utils";
 import {
   formatDatabaseColumnsContext,
   formatRedisSchemaContext,
@@ -44,7 +44,9 @@ export function resolveEndpointTrace(
       (epName && th.includes(epName)) ||
       th.startsWith("endpoint-in") ||
       th.startsWith("endpoints-in") ||
-      th.startsWith("events-in")
+      th.startsWith("events-in") ||
+      th === "service-in" ||
+      !th
     );
   });
 
@@ -53,17 +55,15 @@ export function resolveEndpointTrace(
     if (!srcNode) return;
 
     const srcName = srcNode.data?.label || srcNode.id;
-    const srcTypeStr = srcNode.type as string;
 
     // A. WebPage Node
     if (srcNode.type === "webPage") {
       let eventDetail = "UI Action / Link";
-      const sections: PageSection[] =
-        (srcNode.data?.sections as PageSection[]) || [];
+      const sections: PageSection[] = srcNode.data?.sections || [];
       const srcEvents: UIEventItem[] =
         sections.length > 0
           ? sections.flatMap((s) => s.actions || [])
-          : (srcNode.data?.events as UIEventItem[]) || [];
+          : srcNode.data?.events || [];
       const sh = edge.sourceHandle || "";
       const matchedEvt = srcEvents.find(
         (evt) => sh.includes(evt.id) || (evt.name && sh.includes(evt.name)),
@@ -72,45 +72,8 @@ export function resolveEndpointTrace(
         eventDetail = `Trigger Event "${matchedEvt.name || "Action"}" (${matchedEvt.event || "click"})`;
       }
 
-      // Check if WebClient page is in a protected zone
-      let isProtected = false;
-      const wcData = srcNode.data;
-      if (wcData?.useZoneDefault === false && wcData?.protectionOverride) {
-        isProtected = wcData.protectionOverride.accessType === "protected";
-      } else {
-        const webAppEdge = allEdges.find(
-          (e) =>
-            (e.target === srcNode.id || e.source === srcNode.id) &&
-            allNodes.find(
-              (n) =>
-                n.id === (e.target === srcNode.id ? e.source : e.target) &&
-                n.type === "webApp",
-            ),
-        );
-        if (webAppEdge) {
-          const webAppNode = allNodes.find(
-            (n) =>
-              n.type === "webApp" &&
-              (n.id === webAppEdge.source || n.id === webAppEdge.target),
-          );
-          const handleId =
-            webAppEdge.source === webAppNode?.id
-              ? webAppEdge.sourceHandle
-              : webAppEdge.targetHandle;
-          const zones = webAppNode?.data?.zones || [
-            { handleId: "public-in", name: "Public Section", accessType: "public" },
-            { handleId: "private-in", name: "Private Section", accessType: "protected" },
-          ];
-          const matchedZone = zones.find((z) => z.handleId === handleId);
-          if (matchedZone) {
-            isProtected =
-              matchedZone.accessType === "protected" ||
-              matchedZone.handleId === "private-in";
-          } else if (handleId === "private-in") {
-            isProtected = true;
-          }
-        }
-      }
+      // Check if WebClient page is an authenticated page
+      const isProtected = isPageNodeAuthenticated(srcNode, allNodes, allEdges);
 
       if (isProtected) {
         eventDetail += " (Protected Page - Requires Auth Token)";
@@ -129,8 +92,8 @@ export function resolveEndpointTrace(
     else if (
       srcNode.type === "entity" ||
       srcNode.type === "db_ref" ||
-      srcTypeStr === "db" ||
-      srcTypeStr === "database"
+      String(srcNode.type) === "db" ||
+      String(srcNode.type) === "database"
     ) {
       const tableName =
         srcNode.data?.tableName ||
@@ -179,7 +142,7 @@ export function resolveEndpointTrace(
     ) {
       const bucketName = srcNode.data?.bucketName || srcNode.data?.label || "bucket";
       const provider = srcNode.data?.storageProvider || "s3";
-      const rawOps = (srcNode.data?.storageOperations as Array<{ kind?: string; name?: string }> | undefined) || [];
+      const rawOps = srcNode.data?.storageOperations || [];
       const ops = rawOps.map((op) => op.kind || op.name).filter(Boolean).join(", ") || "presign_upload";
       incoming.push({
         nodeId: srcNode.id,
@@ -231,7 +194,6 @@ export function resolveEndpointTrace(
 
     const tgtName = tgtNode.data?.label || tgtNode.id;
     const nodeData = tgtNode.data;
-    const nodeTypeStr = tgtNode.type as string;
 
     // A. Redis Cache Node
     if (
@@ -251,8 +213,8 @@ export function resolveEndpointTrace(
     else if (
       tgtNode.type === "entity" ||
       tgtNode.type === "db_ref" ||
-      nodeTypeStr === "db" ||
-      nodeTypeStr === "database"
+      String(tgtNode.type) === "db" ||
+      String(tgtNode.type) === "database"
     ) {
       const tableName =
         nodeData?.tableName ||
@@ -295,7 +257,7 @@ export function resolveEndpointTrace(
         "pubsub",
         "eventstream",
         "queue",
-      ].includes(nodeTypeStr)
+      ].includes(tgtNode.type)
     ) {
       outgoing.push({
         nodeId: tgtNode.id,

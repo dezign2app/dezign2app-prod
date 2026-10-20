@@ -8,7 +8,7 @@ import { Endpoint, AnyMessagingResource, CompiledFile, ReusableFunction } from "
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { parseSchemaJson, deriveRouteFileName, cleanUnusedImports, normalizeEndpointRequestBody } from "../../utils";
 import { parametersToTsInterface, schemaToTsInterface } from "../schemaToTypeScript";
-import { resolveEndpointTrace } from "../../traceResolver";
+import { resolveEndpointTrace, isRouteConnectedToAuthenticatedPage } from "../../traceResolver";
 import { pickDbFunctionsForEndpoint } from "./dbResolver";
 import { pickKafkaPublishFunction } from "./kafkaResolver";
 import { buildResponsePayloadCode } from "./responseBuilder";
@@ -109,7 +109,18 @@ export function generateEndpointRouteHandler(
       .replace(/^[a-z]/, (chr) => chr.toUpperCase());
   }
 
-  classifyEndpointShape(ep, allNodes, allEdges);
+  const shape = classifyEndpointShape(ep, allNodes, allEdges);
+  const isHealth =
+    shape.kind === "health" ||
+    path === "/health" ||
+    path.endsWith("/health") ||
+    rawPath === "/health" ||
+    rawPath.endsWith("/health") ||
+    ep.name === "/health" ||
+    ep.name === "health";
+  const isConnectedToAuthPage = serviceNode
+    ? isRouteConnectedToAuthenticatedPage(serviceNode, ep, allNodes, allEdges)
+    : false;
 
   const parsedResSchema = parseSchemaJson(ep.responseBody?.rawJson);
   let responseData: string;
@@ -211,7 +222,11 @@ export function generateEndpointRouteHandler(
   let routeHandlerCode = preambleCode;
 
   // 2. Auth Resolution
-  const { requiresAuth, authOptions } = resolveEndpointAuth(ep, trace);
+  const { requiresAuth: baseRequiresAuth, authOptions } = resolveEndpointAuth(ep, trace);
+  const requiresAuth = baseRequiresAuth || isConnectedToAuthPage;
+  if (isHealth && requiresAuth && !parsedResSchema && (!ep.responseBody?.fields || ep.responseBody.fields.length === 0)) {
+    responseData = `{\n      message: "Successfully executed ${ep.type || "GET"} ${path}",\n      status: "ok",\n      service: "${serviceName}",\n      timestamp: new Date().toISOString(),\n      user: req.user\n    }`;
+  }
 
   // 3. Validation Checks
   const hasValidatedBody = bodyTypeRes.hasContent;

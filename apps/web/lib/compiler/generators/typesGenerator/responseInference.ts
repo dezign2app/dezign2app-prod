@@ -558,6 +558,19 @@ export function generateResponseInterface(
     const code =
       `export interface ${interfaceName} {\n` +
       `  message: string;\n` +
+      `  status?: string;\n` +
+      `  service?: string;\n` +
+      `  timestamp?: string;\n` +
+      `  user?: {\n` +
+      `    id: string;\n` +
+      `    userId?: string;\n` +
+      `    username?: string;\n` +
+      `    role: string;\n` +
+      `    email?: string;\n` +
+      `    name?: string;\n` +
+      `    sessionToken?: string;\n` +
+      `    [key: string]: string | number | boolean | null | undefined;\n` +
+      `  } | null;\n` +
       `}\n`;
     return { code, entityImports };
   }

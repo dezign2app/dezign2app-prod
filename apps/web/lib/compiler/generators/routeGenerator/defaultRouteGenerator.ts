@@ -3,43 +3,55 @@ import { CompiledFile, ReusableFunction } from "@workspace/canvas/types";
 export function generateDefaultRoute(
   serviceName: string,
   _dbFunctions: ReusableFunction[] = [],
+  requiresAuth: boolean = false,
 ): { files: CompiledFile[]; routeImports: string[]; routeRegistrations: string[] } {
   const healthRouteCode = `import { Request, Response } from "express";
 import { createLogger } from "@workspace/logger";
 
 const logger = createLogger("${serviceName}:HealthRoute");
 
-export type HealthRequest =
-  | Request
-  | {
-      headers?: Record<string, string | string[] | undefined>;
-      user?: {
-        id: string;
-        userId?: string;
-        username?: string;
-        role: string;
-        email?: string;
-        name?: string;
-        sessionToken?: string;
-        [key: string]: string | number | boolean | null | undefined;
-      };
-    };
+export type HealthUser = {
+  id: string;
+  userId?: string;
+  username?: string;
+  role: string;
+  email?: string;
+  name?: string;
+  sessionToken?: string;
+  [key: string]: string | number | boolean | null | undefined;
+};
+
+export type HealthRequest = Request & {
+  user?: HealthUser;
+};
 
 export type HealthResponseContext =
   | Response
   | {
-      status: (code: number) => { json: (data: { status: string; service: string; timestamp: string }) => void };
-      json: (data: { status: string; service: string; timestamp: string }) => void;
+      status: (code: number) => {
+        json: (data: {
+          status: string;
+          service: string;
+          timestamp: string;
+          user?: HealthUser | null;
+        }) => void;
+      };
+      json: (data: {
+        status: string;
+        service: string;
+        timestamp: string;
+        user?: HealthUser | null;
+      }) => void;
       setHeader?: (name: string, value: string | number | readonly string[]) => void | Response;
       header?: (name: string, value?: string | number | readonly string[]) => void | Response;
     };
 
-export async function healthHandler(_req: HealthRequest, res: HealthResponseContext) {
+export async function healthHandler(${requiresAuth ? "req: HealthRequest" : "_req: HealthRequest"}, res: HealthResponseContext) {
   logger.info("Executing health check handler");
   return res.status(200).json({
     status: "ok",
     service: "${serviceName}",
-    timestamp: new Date().toISOString(),
+    timestamp: new Date().toISOString(),${requiresAuth ? "\n    user: req.user || null," : ""}
   });
 }
 
@@ -55,6 +67,10 @@ export const defaultHandler = healthHandler;
       },
     ],
     routeImports: [`import { healthHandler } from "./healthRoute";`],
-    routeRegistrations: [`router.get("/health", healthHandler);`],
+    routeRegistrations: [
+      requiresAuth
+        ? `router.get("/health", requireAuth(), healthHandler);`
+        : `router.get("/health", healthHandler);`,
+    ],
   };
 }
