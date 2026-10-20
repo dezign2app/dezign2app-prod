@@ -286,7 +286,6 @@ export const ADDABLE_LANGGRAPH_STEP_TYPES: readonly LangGraphNodeStepType[] = [
   "external_call",
   "service_call",
   "variable",
-  "custom_code",
   "condition",
   "try_catch",
   "push_to_client",
@@ -330,18 +329,14 @@ export function deriveInitialPipelineSteps(
         });
       } else if (s === "custom_code") {
         codeIndex++;
-        const customCodeLabel =
-          codeIndex === 1 && !steps.some((st) => st.type === "llm_call")
-            ? "Pre-processing"
-            : `Custom Code ${codeIndex}`;
         steps.push({
-          id: `step_code_${codeIndex}`,
-          type: "custom_code",
-          label: customCodeLabel,
-          name: customCodeLabel,
-          customCode:
-            data.customCode?.body ||
-            "// TypeScript logic: (state, clone) => Partial<State>\nreturn {\n  // mutate channels\n};\n",
+          id: `step_trans_${codeIndex}`,
+          type: "transformer",
+          label: `Transformer ${codeIndex}`,
+          name: `Transformer ${codeIndex}`,
+          outputVariable: `transformedData_${codeIndex}`,
+          outputSchema: [{ name: "result", type: "string", required: true }],
+          inputBindings: [],
         });
       } else if (
         s === "llm_call" ||
@@ -401,11 +396,13 @@ export function deriveInitialPipelineSteps(
 
   if (data.customCode?.body && data.customCode.body.trim().length > 0) {
     steps.push({
-      id: "step_code_1",
-      type: "custom_code",
-      label: steps.length > 0 ? "Post-processing" : "Custom Code",
-      name: steps.length > 0 ? "Post-processing" : "Custom Code",
-      customCode: data.customCode.body,
+      id: `step_trans_${steps.length + 1}`,
+      type: "transformer",
+      label: steps.length > 0 ? "Response Transform" : "Transformer",
+      name: steps.length > 0 ? "Response Transform" : "Transformer",
+      outputVariable: `transformedData_${steps.length + 1}`,
+      outputSchema: [{ name: "result", type: "string", required: true }],
+      inputBindings: [],
     });
   }
 

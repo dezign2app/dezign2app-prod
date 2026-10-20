@@ -137,7 +137,6 @@ export const ADDABLE_STEP_TYPES: readonly StepType[] = [
   "kafka_publish",
   "service_call",
   "external_call",
-  "custom_code",
   "condition",
   "try_catch",
   "switch",

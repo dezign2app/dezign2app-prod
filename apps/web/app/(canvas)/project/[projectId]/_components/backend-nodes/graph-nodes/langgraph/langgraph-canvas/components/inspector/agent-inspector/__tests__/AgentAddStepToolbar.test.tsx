@@ -28,13 +28,13 @@ describe("AgentAddStepToolbar", () => {
     expect(screen.getByText("External API Call")).toBeDefined();
     expect(screen.getByText("Service Call")).toBeDefined();
     expect(screen.getByText("Variable")).toBeDefined();
-    expect(screen.getByText("Custom Code")).toBeDefined();
+    expect(screen.queryByText("Custom Code")).toBeNull();
     expect(screen.getByText("If / Else")).toBeDefined();
     expect(screen.getByText("Try / Catch")).toBeDefined();
     expect(screen.getByText("Push to Client")).toBeDefined();
 
     // Verify total count matches ADDABLE_LANGGRAPH_STEP_TYPES
-    expect(ADDABLE_LANGGRAPH_STEP_TYPES.length).toBeGreaterThanOrEqual(13);
+    expect(ADDABLE_LANGGRAPH_STEP_TYPES.length).toBeGreaterThanOrEqual(12);
   });
 
   it("calls onAddStep with the correct type when clicked", () => {

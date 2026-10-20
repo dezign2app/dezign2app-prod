@@ -150,7 +150,7 @@ export function useStepRowState({
   extraSources = [],
   onChange,
 }: UseStepRowStateProps) {
-  const meta = STEP_TYPE_META[step.type] || STEP_TYPE_META.custom_code;
+  const meta = STEP_TYPE_META[step.type] || STEP_TYPE_META.transform;
 
   // Available sources (request body, params, query, headers, env, prior steps, or event payload/metadata)
   const availableSources = useMemo(
