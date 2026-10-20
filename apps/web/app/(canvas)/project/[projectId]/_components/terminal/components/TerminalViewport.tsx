@@ -8,6 +8,10 @@ import {
   Code2,
   Trash,
   ChevronRight,
+  Copy,
+  Check,
+  ClipboardPaste,
+  CheckSquare,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import {
@@ -18,17 +22,28 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@workspace/ui/components/dropdown-menu";
-import { XTermTerminal, XTermTerminalHandle } from "@/components/terminal";
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+} from "@workspace/ui/components/context-menu";
+import { XTermTerminal, XTermTerminalHandle, copyToClipboard } from "@/components/terminal";
 import { isElectron } from "@/lib/electron";
 import { TerminalSession, TerminalType } from "../types";
 import { getShellPrompt } from "../hooks/useDynamicTerminalSessions";
+import { toast } from "sonner";
 
 interface TerminalViewportProps {
   projectId?: string;
   outputDir?: string;
   sessions: TerminalSession[];
   activeSessionId: string | null;
-  terminalRefs: React.MutableRefObject<Map<string, XTermTerminalHandle | null>>;
+  terminalRefs:
+    | React.MutableRefObject<Map<string, XTermTerminalHandle | null>>
+    | React.RefObject<Map<string, XTermTerminalHandle | null>>;
   onTerminalInput: (sessionId: string, data: string) => void;
   onTerminalResize: (sessionId: string, cols: number, rows: number) => void;
   onNewTab: (type?: TerminalType, shell?: string, title?: string) => void;
@@ -56,11 +71,77 @@ export function TerminalViewport({
     (navigator.platform?.includes("Win") ||
       navigator.userAgent?.includes("Windows"));
 
+  const [selectedText, setSelectedText] = React.useState<string>("");
+  const [copied, setCopied] = React.useState<boolean>(false);
+
+  // Clear selection state on active session change
+  React.useEffect(() => {
+    setSelectedText("");
+    setCopied(false);
+  }, [activeSessionId]);
+
+  const handleCopySelection = React.useCallback(async () => {
+    const activeHandle = activeSessionId ? terminalRefs.current?.get(activeSessionId) : null;
+    const textToCopy = activeHandle?.getSelection() || selectedText;
+    if (textToCopy && textToCopy.trim()) {
+      const ok = await copyToClipboard(textToCopy);
+      if (ok) {
+        setCopied(true);
+        toast.success("Selection copied to clipboard!");
+        setTimeout(() => setCopied(false), 2000);
+      }
+    } else {
+      toast.info("No text selected. Highlight terminal text first, or use 'Copy All'.");
+    }
+  }, [activeSessionId, terminalRefs, selectedText]);
+
+  const handleCopyAll = React.useCallback(async () => {
+    const activeHandle = activeSessionId ? terminalRefs.current?.get(activeSessionId) : null;
+    const textToCopy = activeHandle?.getText();
+    if (textToCopy && textToCopy.trim()) {
+      const ok = await copyToClipboard(textToCopy);
+      if (ok) {
+        setCopied(true);
+        toast.success("Terminal output copied to clipboard!");
+        setTimeout(() => setCopied(false), 2000);
+      }
+    } else {
+      toast.info("Terminal buffer is empty");
+    }
+  }, [activeSessionId, terminalRefs]);
+
+  const handlePaste = React.useCallback(async () => {
+    if (!activeSessionId) return;
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          onTerminalInput(activeSessionId, text);
+          toast.success("Pasted into terminal");
+        }
+      }
+    } catch {
+      toast.error("Clipboard access was denied");
+    }
+  }, [activeSessionId, onTerminalInput]);
+
+  const handleSelectAll = React.useCallback(() => {
+    const activeHandle = activeSessionId ? terminalRefs.current?.get(activeSessionId) : null;
+    activeHandle?.selectAll?.();
+  }, [activeSessionId, terminalRefs]);
+
+  const handleClearActiveTerminal = React.useCallback(() => {
+    const activeHandle = activeSessionId ? terminalRefs.current?.get(activeSessionId) : null;
+    activeHandle?.clear?.();
+    setSelectedText("");
+    toast.info("Terminal buffer cleared");
+  }, [activeSessionId, terminalRefs]);
+
   // Auto-fit and focus the active terminal session on session change
   React.useEffect(() => {
     if (!activeSessionId) return;
     const timer = setTimeout(() => {
-      const handle = terminalRefs.current.get(activeSessionId);
+      const handle = terminalRefs.current?.get(activeSessionId);
       handle?.fit?.();   // recompute cols after panel/tab resize
       handle?.focus?.();
       onReplayMissedLogs?.(activeSessionId);
@@ -142,49 +223,169 @@ export function TerminalViewport({
   return (
     <div className="w-full h-full flex flex-row flex-1 min-h-0 bg-[#090d13] relative overflow-hidden">
       {/* Left: Active Terminal Viewports */}
-      <div className="flex-1 h-full min-w-0 relative overflow-hidden bg-[#090d13]">
-        {sessions.map((session) => {
-          const isActive = session.id === activeSessionId;
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div className="flex-1 h-full min-w-0 relative overflow-hidden bg-[#090d13] select-text">
+            {/* Quick Action Floating Bar in Top-Right Corner */}
+            <div className="absolute top-2 right-3 z-30 flex items-center gap-1.5 pointer-events-auto select-none">
+              {selectedText.trim().length > 0 && (
+                <Button
+                  size="sm"
+                  onClick={handleCopySelection}
+                  className="h-6 px-2.5 text-[11px] font-mono gap-1.5 bg-sky-600 hover:bg-sky-500 text-white shadow-md shadow-sky-500/20 border border-sky-400/40 rounded transition-all animate-in fade-in zoom-in-95"
+                  title="Copy selected text to clipboard (Ctrl+C)"
+                >
+                  {copied ? (
+                    <Check className="w-3 h-3 text-emerald-300" />
+                  ) : (
+                    <Copy className="w-3 h-3" />
+                  )}
+                  <span>
+                    {copied
+                      ? "Copied!"
+                      : `Copy Selection (${
+                          selectedText.length > 20
+                            ? selectedText.slice(0, 16) + "..."
+                            : selectedText.length + " chars"
+                        })`}
+                  </span>
+                </Button>
+              )}
 
-          return (
-            <div
-              key={session.id}
-              className={`absolute inset-0 w-full h-full transition-opacity duration-100 ${
-                isActive
-                  ? "opacity-100 z-10 pointer-events-auto"
-                  : "opacity-0 z-0 pointer-events-none"
-              }`}
-            >
-              <XTermTerminal
-                ref={(el) => {
-                  if (el) {
-                    terminalRefs.current.set(session.id, el);
-                  } else {
-                    terminalRefs.current.delete(session.id);
+              <div className="flex items-center rounded bg-slate-900/85 backdrop-blur-md border border-slate-700/60 p-0.5 shadow-sm opacity-80 hover:opacity-100 transition-opacity">
+                <button
+                  type="button"
+                  onClick={selectedText.trim() ? handleCopySelection : handleCopyAll}
+                  className="px-2 py-1 flex items-center gap-1 text-[11px] font-mono text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                  title={
+                    selectedText.trim()
+                      ? "Copy Selection (Ctrl+C)"
+                      : "Copy All Output (Ctrl+Shift+C)"
                   }
-                }}
-                onReady={() => {
-                  const handle = terminalRefs.current.get(session.id);
-                  if (inElectron) {
-                    onReplayMissedLogs?.(session.id, true);
-                  } else {
-                    const targetDir = outputDir || `/workspace/${projectId || "dezign2app"}`;
-                    const prompt = getShellPrompt(session.shell, targetDir);
-                    handle?.write(
-                      `\x1b[36mDezign2App Monorepo Terminal: ${session.title || "Main Terminal"} [Web Preview]\x1b[0m\r\n\x1b[90mWorkspace: ${targetDir}\x1b[0m\r\n\x1b[90mType commands like "help", "pnpm dev", "pnpm build", "docker compose", "clear".\x1b[0m\r\n\r\n${prompt}`,
-                    );
-                  }
-                  handle?.fit?.();
-                  handle?.focus?.();
-                }}
-                interactive={true}
-                onData={(data) => onTerminalInput(session.id, data)}
-                onResize={(cols, rows) => onTerminalResize(session.id, cols, rows)}
-              />
+                >
+                  {copied ? (
+                    <Check className="w-3 h-3 text-emerald-400" />
+                  ) : (
+                    <Copy className="w-3 h-3 text-slate-400" />
+                  )}
+                  <span>{selectedText.trim() ? "Copy Sel" : "Copy"}</span>
+                </button>
+                <div className="w-px h-3 bg-slate-700/80 my-auto" />
+                <button
+                  type="button"
+                  onClick={handleClearActiveTerminal}
+                  className="p-1 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded transition-colors"
+                  title="Clear Terminal Buffer"
+                >
+                  <Trash className="w-3 h-3" />
+                </button>
+              </div>
             </div>
-          );
-        })}
-      </div>
+
+            {sessions.map((session) => {
+              const isActive = session.id === activeSessionId;
+
+              return (
+                <div
+                  key={session.id}
+                  className={`absolute inset-0 w-full h-full transition-opacity duration-100 select-text ${
+                    isActive
+                      ? "opacity-100 z-10 pointer-events-auto"
+                      : "opacity-0 z-0 pointer-events-none"
+                  }`}
+                >
+                  <XTermTerminal
+                    ref={(el) => {
+                      if (el) {
+                        terminalRefs.current?.set(session.id, el);
+                      } else {
+                        terminalRefs.current?.delete(session.id);
+                      }
+                    }}
+                    onReady={() => {
+                      const handle = terminalRefs.current?.get(session.id);
+                      if (inElectron) {
+                        onReplayMissedLogs?.(session.id, true);
+                      } else {
+                        const targetDir =
+                          outputDir || `/workspace/${projectId || "dezign2app"}`;
+                        const prompt = getShellPrompt(session.shell, targetDir);
+                        handle?.write(
+                          `\x1b[36mDezign2App Monorepo Terminal: ${session.title || "Main Terminal"} [Web Preview]\x1b[0m\r\n\x1b[90mWorkspace: ${targetDir}\x1b[0m\r\n\x1b[90mType commands like "help", "pnpm dev", "pnpm build", "docker compose", "clear".\x1b[0m\r\n\r\n${prompt}`,
+                        );
+                      }
+                      handle?.fit?.();
+                      handle?.focus?.();
+                    }}
+                    interactive={true}
+                    onSelectionChange={(sel) => {
+                      if (session.id === activeSessionId) {
+                        setSelectedText(sel);
+                      }
+                    }}
+                    onData={(data) => onTerminalInput(session.id, data)}
+                    onResize={(cols, rows) => onTerminalResize(session.id, cols, rows)}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </ContextMenuTrigger>
+
+        <ContextMenuContent className="w-56 bg-[#161b22] border-slate-700 text-slate-200 text-xs shadow-2xl p-1 z-50">
+          <ContextMenuItem
+            onClick={handleCopySelection}
+            disabled={!selectedText.trim()}
+            className="gap-2 cursor-pointer"
+          >
+            <Copy className="w-3.5 h-3.5 text-sky-400" />
+            <span className="flex-1">Copy Selection</span>
+            <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
+          </ContextMenuItem>
+
+          <ContextMenuItem onClick={handleCopyAll} className="gap-2 cursor-pointer">
+            <CheckSquare className="w-3.5 h-3.5 text-slate-400" />
+            <span className="flex-1">Copy All Output</span>
+            <ContextMenuShortcut>Ctrl+Shift+C</ContextMenuShortcut>
+          </ContextMenuItem>
+
+          <ContextMenuSeparator className="bg-slate-700/60" />
+
+          <ContextMenuItem onClick={handlePaste} className="gap-2 cursor-pointer">
+            <ClipboardPaste className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="flex-1">Paste into Terminal</span>
+            <ContextMenuShortcut>Ctrl+V</ContextMenuShortcut>
+          </ContextMenuItem>
+
+          <ContextMenuItem onClick={handleSelectAll} className="gap-2 cursor-pointer">
+            <span className="w-3.5" />
+            <span className="flex-1">Select All</span>
+            <ContextMenuShortcut>Ctrl+Shift+A</ContextMenuShortcut>
+          </ContextMenuItem>
+
+          <ContextMenuSeparator className="bg-slate-700/60" />
+
+          <ContextMenuItem
+            onClick={handleClearActiveTerminal}
+            className="gap-2 cursor-pointer text-red-300 hover:text-red-200"
+          >
+            <Trash className="w-3.5 h-3.5 text-red-400" />
+            <span className="flex-1">Clear Buffer</span>
+          </ContextMenuItem>
+
+          <ContextMenuSeparator className="bg-slate-700/60" />
+
+          <ContextMenuItem
+            onClick={() =>
+              onNewTab("shell", undefined, `Terminal ${sessions.length + 1}`)
+            }
+            className="gap-2 cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5 text-primary" />
+            <span className="flex-1">New Terminal Tab</span>
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
 
       {/* Right: Terminal Sessions List Sidebar & Add Terminal */}
       <div className="w-48 sm:w-56 h-full shrink-0 border-l border-border/40 bg-[#0d1117]/95 flex flex-col font-sans select-none z-20">

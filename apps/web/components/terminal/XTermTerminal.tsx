@@ -11,6 +11,8 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
+import { copyToClipboard } from "./terminalUtils";
+import { toast } from "sonner";
 
 export interface XTermTerminalHandle {
   write: (data: string) => void;
@@ -20,6 +22,11 @@ export interface XTermTerminalHandle {
   fit: () => void;
   getText: () => string;
   getSelection: () => string;
+  hasSelection: () => boolean;
+  clearSelection: () => void;
+  selectAll: () => void;
+  paste: (data: string) => void;
+  copySelection: () => Promise<boolean>;
 }
 
 export interface XTermTerminalProps {
@@ -28,6 +35,7 @@ export interface XTermTerminalProps {
   onData?: (data: string) => void;
   onResize?: (cols: number, rows: number) => void;
   onReady?: () => void;
+  onSelectionChange?: (selectedText: string) => void;
   className?: string;
   interactive?: boolean;
   rawStream?: boolean;
@@ -76,6 +84,7 @@ export const XTermTerminal = forwardRef<XTermTerminalHandle, XTermTerminalProps>
       onData,
       onResize,
       onReady,
+      onSelectionChange,
       className = "",
       interactive = true,
       rawStream = false,
@@ -92,10 +101,12 @@ export const XTermTerminal = forwardRef<XTermTerminalHandle, XTermTerminalProps>
     const onDataRef = useRef(onData);
     const onResizeRef = useRef(onResize);
     const onReadyRef = useRef(onReady);
+    const onSelectionChangeRef = useRef(onSelectionChange);
     const interactiveRef = useRef(interactive);
     onDataRef.current = onData;
     onResizeRef.current = onResize;
     onReadyRef.current = onReady;
+    onSelectionChangeRef.current = onSelectionChange;
     interactiveRef.current = interactive;
 
     useEffect(() => {
@@ -113,6 +124,9 @@ export const XTermTerminal = forwardRef<XTermTerminalHandle, XTermTerminalProps>
         scrollback: 5000,
         // PTY already sends CRLF — do NOT double-convert
         convertEol: false,
+        rightClickSelectsWord: false,
+        macOptionIsMeta: true,
+        wordSeparator: " ()[]{}',\"`",
       });
 
       const fitAddon = new FitAddon();
@@ -123,6 +137,73 @@ export const XTermTerminal = forwardRef<XTermTerminalHandle, XTermTerminalProps>
 
       termRef.current = term;
       fitAddonRef.current = fitAddon;
+
+      // Handle keyboard shortcuts (Ctrl+C to copy selection, Ctrl+Shift+C, Ctrl+Shift+V, etc.)
+      term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+        const isCtrlOrCmd = event.ctrlKey || event.metaKey;
+
+        if (event.type === "keydown") {
+          const isC = event.key === "c" || event.key === "C" || event.code === "KeyC";
+          // 1. Copy: If text is selected in xterm, Ctrl+C / Cmd+C MUST copy to clipboard and NOT send \x03
+          if (isCtrlOrCmd && isC) {
+            if (term.hasSelection()) {
+              const selectedText = term.getSelection();
+              if (selectedText) {
+                copyToClipboard(selectedText).then((ok) => {
+                  if (ok) {
+                    toast.success("Selection copied to clipboard");
+                  }
+                });
+              }
+              return false; // Prevent xterm from sending \x03 to shell
+            }
+
+            // Ctrl+Shift+C: always copy selection if present
+            if (event.shiftKey) {
+              const selectedText = term.getSelection();
+              if (selectedText) {
+                copyToClipboard(selectedText).then((ok) => {
+                  if (ok) {
+                    toast.success("Copied to clipboard");
+                  }
+                });
+              }
+              return false;
+            }
+
+            // If no selection and no shift, let Ctrl+C send SIGINT (\x03)
+            return true;
+          }
+
+          // 2. Paste shortcut: Ctrl+Shift+V
+          const isV = event.key === "v" || event.key === "V" || event.code === "KeyV";
+          if (isCtrlOrCmd && event.shiftKey && isV) {
+            if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
+              navigator.clipboard.readText().then((text) => {
+                if (text && interactiveRef.current) {
+                  onDataRef.current?.(text);
+                }
+              }).catch(() => {});
+            }
+            return false;
+          }
+
+          // 3. Select all shortcut: Ctrl+Shift+A
+          const isA = event.key === "a" || event.key === "A" || event.code === "KeyA";
+          if (isCtrlOrCmd && event.shiftKey && isA) {
+            term.selectAll();
+            return false;
+          }
+        }
+
+        return true;
+      });
+
+      // Forward text selection changes to parent component
+      const selectionDispose = term.onSelectionChange(() => {
+        const sel = term.getSelection();
+        onSelectionChangeRef.current?.(sel);
+      });
 
       // If initial logs were passed to monitor terminal, write them
       if (logs && logs.length > 0) {
@@ -169,6 +250,7 @@ export const XTermTerminal = forwardRef<XTermTerminalHandle, XTermTerminalProps>
 
       return () => {
         ro.disconnect();
+        selectionDispose.dispose();
         dataDispose.dispose();
         resizeDispose.dispose();
         term.dispose();
@@ -273,20 +355,81 @@ export const XTermTerminal = forwardRef<XTermTerminalHandle, XTermTerminalProps>
       return termRef.current?.getSelection() ?? "";
     }, []);
 
+    const hasSelection = useCallback(() => {
+      return Boolean(termRef.current?.hasSelection());
+    }, []);
+
+    const clearSelection = useCallback(() => {
+      termRef.current?.clearSelection();
+    }, []);
+
+    const selectAll = useCallback(() => {
+      termRef.current?.selectAll();
+    }, []);
+
+    const paste = useCallback((data: string) => {
+      if (!data) return;
+      if (interactiveRef.current && onDataRef.current) {
+        onDataRef.current(data);
+      } else {
+        termRef.current?.paste(data);
+      }
+    }, []);
+
+    const copySelection = useCallback(async () => {
+      const term = termRef.current;
+      if (!term) return false;
+      const sel = term.getSelection();
+      if (sel) {
+        const ok = await copyToClipboard(sel);
+        if (ok) {
+          toast.success("Selection copied to clipboard");
+        }
+        return ok;
+      }
+      return false;
+    }, []);
+
     useImperativeHandle(
       forwardedRef,
-      () => ({ write, clear, focus, resize, fit, getText, getSelection }),
-      [write, clear, focus, resize, fit, getText, getSelection]
+      () => ({
+        write,
+        clear,
+        focus,
+        resize,
+        fit,
+        getText,
+        getSelection,
+        hasSelection,
+        clearSelection,
+        selectAll,
+        paste,
+        copySelection,
+      }),
+      [
+        write,
+        clear,
+        focus,
+        resize,
+        fit,
+        getText,
+        getSelection,
+        hasSelection,
+        clearSelection,
+        selectAll,
+        paste,
+        copySelection,
+      ]
     );
 
     return (
       <div
         ref={containerRef}
-        className={`relative w-full h-full overflow-hidden ${className}`}
+        className={`relative w-full h-full overflow-hidden select-text ${className}`}
         style={{ background: "#090d13" }}
       >
         {Boolean(placeholder) && (!logs || logs.length === 0) && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-zinc-500 text-xs italic z-10 px-4 text-center">
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-zinc-500 text-xs italic z-10 px-4 text-center select-none">
             {placeholder}
           </div>
         )}

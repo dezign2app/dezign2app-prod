@@ -2,7 +2,11 @@
 
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Resizable } from "re-resizable";
-import { XTermTerminalHandle, cleanTerminalText } from "@/components/terminal";
+import {
+  XTermTerminalHandle,
+  cleanTerminalText,
+  copyToClipboard,
+} from "@/components/terminal";
 import { useDynamicTerminalSessions } from "../../_components/terminal/hooks/useDynamicTerminalSessions";
 import { usePortMonitor } from "../../_components/terminal/hooks/usePortMonitor";
 import { isElectron } from "@/lib/electron";
@@ -195,7 +199,7 @@ export function TerminalPanel({
     });
   }, [logs]);
 
-  const handleCopyCurrentTab = () => {
+  const handleCopyCurrentTab = async () => {
     let content = "";
     if (selectedTab === "output") {
       content = outputLogs.join("\n");
@@ -216,9 +220,11 @@ export function TerminalPanel({
         .join("\n");
     }
     if (!content) return;
-    navigator.clipboard.writeText(content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const ok = await copyToClipboard(content);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   const handleClearCurrentTab = () => {
@@ -271,7 +277,7 @@ export function TerminalPanel({
       handleClasses={{
         top: "h-1 bg-border/50 hover:bg-primary cursor-row-resize transition-colors z-30",
       }}
-      className="border-t border-border/50 flex flex-col shrink-0 font-sans text-xs select-none bg-[#090d13] relative overflow-hidden z-20"
+      className="border-t border-border/50 flex flex-col shrink-0 font-sans text-xs bg-[#090d13] relative overflow-hidden z-20"
     >
       {/* VS Code Bottom Panel Header */}
       <TerminalPanelHeader
@@ -291,7 +297,7 @@ export function TerminalPanel({
       />
 
       {/* Tab View Content - Preserved in DOM to retain active process & terminal buffer */}
-      <div className="w-full h-full flex flex-col flex-1 min-h-0 bg-[#090d13] relative overflow-hidden font-mono text-xs">
+      <div className="w-full h-full flex flex-col flex-1 min-h-0 bg-[#090d13] relative overflow-hidden font-mono text-xs select-text">
         <div
           className={`w-full h-full flex flex-col flex-1 min-h-0 ${
             selectedTab === "terminal" ? "flex" : "hidden"

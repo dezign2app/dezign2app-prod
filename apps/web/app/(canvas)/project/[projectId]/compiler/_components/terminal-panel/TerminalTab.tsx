@@ -35,7 +35,7 @@ export function TerminalTab({
   formattedLogs,
 }: TerminalTabProps) {
   return (
-    <div className="w-full h-full flex flex-col flex-1 min-h-0 relative overflow-hidden bg-[#090d13]">
+    <div className="w-full h-full flex flex-col flex-1 min-h-0 relative overflow-hidden bg-[#090d13] select-text">
       {projectId ? (
         <TerminalViewport
           projectId={projectId}
@@ -54,9 +54,9 @@ export function TerminalTab({
         <XTermTerminal
           ref={(el) => {
             if (el) {
-              terminalRefs.current.set("standalone", el);
+              terminalRefs.current?.set("standalone", el);
             } else {
-              terminalRefs.current.delete("standalone");
+              terminalRefs.current?.delete("standalone");
             }
           }}
           interactive={true}
