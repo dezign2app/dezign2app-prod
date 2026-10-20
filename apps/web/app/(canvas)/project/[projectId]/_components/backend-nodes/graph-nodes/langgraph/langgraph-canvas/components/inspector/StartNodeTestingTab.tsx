@@ -70,11 +70,10 @@ export function StartNodeTestingTab({
   const [knownThreads, setKnownThreads] = useState<string[]>(["session-1"]);
   const [activeSubTab, setActiveSubTab] = useState<ActiveSubTab>("trace");
 
-  // LLM Config
+  // LLM Config (default runtime fallback)
   const [provider, setProvider] = useState<LLMProvider>("groq");
   const [modelName, setModelName] = useState<string>("openai/gpt-oss-120b");
   const [apiKey, setApiKey] = useState("");
-  const [showKeyInput, setShowKeyInput] = useState(false);
 
   // Inputs state
   const [inputValues, setInputValues] = useState<Record<string, unknown>>({});
@@ -154,27 +153,6 @@ export function StartNodeTestingTab({
     }
   };
 
-  const handleSaveApiKey = (key: string) => {
-    setApiKey(key);
-    if (typeof window !== "undefined") {
-      localStorage.setItem(`dezign2app_lg_key_${provider}`, key);
-      localStorage.setItem("dezign2app_lg_provider", provider);
-    }
-  };
-
-  const handleProviderChange = (val: LLMProvider) => {
-    setProvider(val);
-    const newDefaultModel = PROVIDER_MODELS[val]?.[0]?.id || "";
-    setModelName(newDefaultModel);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("dezign2app_lg_provider", val);
-      let k = localStorage.getItem(`dezign2app_lg_key_${val}`) || "";
-      if (!k && val === "groq" && process.env.NEXT_PUBLIC_GROQ_API_KEY) {
-        k = process.env.NEXT_PUBLIC_GROQ_API_KEY;
-      }
-      setApiKey(k);
-    }
-  };
 
   const handleNewThread = () => {
     const newTid = `session-${Math.floor(Math.random() * 900 + 100)}`;
@@ -495,14 +473,6 @@ export function StartNodeTestingTab({
         setThreadId={setThreadId}
         knownThreads={knownThreads}
         handleNewThread={handleNewThread}
-        provider={provider}
-        handleProviderChange={handleProviderChange}
-        modelName={modelName}
-        setModelName={setModelName}
-        apiKey={apiKey}
-        handleSaveApiKey={handleSaveApiKey}
-        showKeyInput={showKeyInput}
-        setShowKeyInput={setShowKeyInput}
       />
 
       {/* ── Scrollable Body ── */}

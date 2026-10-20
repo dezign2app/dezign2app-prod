@@ -7,7 +7,6 @@ import {
   Code2,
   Info,
   AlertTriangle,
-  ArrowLeft,
   ArrowRight,
   Check,
   CheckCircle2,
@@ -71,8 +70,8 @@ export interface AgentStateUpdateRowProps {
   transformerSteps: TransformerStepLike[];
   availableReferenceSteps: ReferenceStep[];
   isStructured: boolean;
-  isCustomAction: boolean;
-  onToggleCustomAction: () => void;
+  isCustomAction?: boolean;
+  onToggleCustomAction?: () => void;
   activeRefStep: string;
   onChangeRefStep: (stepId: string) => void;
   activeRefField: string;
@@ -96,8 +95,8 @@ export function AgentStateUpdateRow({
   transformerSteps,
   availableReferenceSteps,
   isStructured,
-  isCustomAction,
-  onToggleCustomAction,
+  isCustomAction: _isCustomAction,
+  onToggleCustomAction: _onToggleCustomAction,
   activeRefStep,
   onChangeRefStep,
   activeRefField,
@@ -272,11 +271,20 @@ export function AgentStateUpdateRow({
       nextMode = "expression";
     }
 
+    const chActions = getActionsForReducer(
+      chMeta.type,
+      chMeta.reducer,
+      chMeta.customCode,
+    );
+    const validAction = chActions.some((a) => a.action === su.action)
+      ? su.action
+      : (chActions[0]?.action || "default");
+
     onUpdateRow((current) => ({
       ...current,
       channelKey: v,
       reducer: chMeta.reducer,
-      action: chMeta.isCustom ? "custom" : "replace",
+      action: validAction,
       value: nextValue,
       source: nextSource,
       mode: nextMode,
@@ -284,11 +292,6 @@ export function AgentStateUpdateRow({
   };
 
   const handleActionSelect = (val: string) => {
-    if (val === "custom") {
-      onToggleCustomAction();
-      return;
-    }
-
     const valueless = isValuelessAction(val);
 
     onUpdateRow((current) => {
@@ -367,62 +370,37 @@ export function AgentStateUpdateRow({
             </Select>
           </div>
 
-          {/* 2. Reducer Action Dropdown / Custom Action Input */}
+          {/* 2. Reducer Action Dropdown */}
           <div className="w-[170px] shrink-0">
-            {isCustomAction ? (
-              <div className="flex items-center gap-1">
-                <LocalInput
-                  value={su.action === "custom" || !su.action ? "" : su.action}
-                  placeholder="Action name..."
-                  className="h-8 text-xs font-mono bg-background"
-                  onChange={(e) => {
-                    const rawVal = e.target.value;
-                    onUpdateRow((current) => ({ ...current, action: rawVal }));
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
-                  onClick={onToggleCustomAction}
-                  title="Switch to dropdown list"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            ) : (
-              <Select value={su.action || "default"} onValueChange={handleActionSelect}>
-                <SelectTrigger className="h-8 text-xs bg-background font-mono truncate border-border/80">
-                  <SelectValue placeholder="Action..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectLabel className="text-[10px] font-sans text-muted-foreground">
-                      Detected Actions ({channelMeta.reducer})
-                    </SelectLabel>
-                    {availableActions.map((act) => (
-                      <SelectItem key={act.action} value={act.action} className="text-xs font-mono">
-                        <div className="flex items-center justify-between w-full gap-2">
-                          <span className="flex items-center gap-1 font-semibold text-foreground">
-                            {act.action !== "default" && <span className="text-amber-500">⚡</span>}
-                            <span>{act.label}</span>
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                    <SelectSeparator key="custom-separator" />
-                    <SelectItem
-                      key="custom"
-                      value="custom"
-                      className="text-xs font-mono text-purple-400 font-semibold"
-                    >
-                      <span>✏️ Custom Action...</span>
+            <Select
+              value={
+                su.action && su.action !== "custom" && availableActions.some((a) => a.action === su.action)
+                  ? su.action
+                  : (availableActions[0]?.action || "default")
+              }
+              onValueChange={handleActionSelect}
+            >
+              <SelectTrigger className="h-8 text-xs bg-background font-mono truncate border-border/80">
+                <SelectValue placeholder="Action..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectLabel className="text-[10px] font-sans text-muted-foreground">
+                    Detected Actions ({channelMeta.reducer})
+                  </SelectLabel>
+                  {availableActions.map((act) => (
+                    <SelectItem key={act.action} value={act.action} className="text-xs font-mono">
+                      <div className="flex items-center justify-between w-full gap-2">
+                        <span className="flex items-center gap-1 font-semibold text-foreground">
+                          {act.action !== "default" && <span className="text-amber-500">⚡</span>}
+                          <span>{act.label}</span>
+                        </span>
+                      </div>
                     </SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            )}
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Valueless indicator badge */}
