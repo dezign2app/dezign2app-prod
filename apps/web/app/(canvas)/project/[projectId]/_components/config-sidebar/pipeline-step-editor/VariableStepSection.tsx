@@ -100,6 +100,8 @@ export const VariableStepSection: React.FC<VariableStepSectionProps> = ({
         sourceStr = source.field ? `req.params.${source.field}` : `req.params`;
       } else if (source.kind === "req_query") {
         sourceStr = source.field ? `req.query.${source.field}` : `req.query`;
+      } else if (source.kind === "auth") {
+        sourceStr = source.field ? `auth?.${source.field}` : `auth`;
       } else if (source.kind === "env") {
         sourceStr = `process.env.${source.field || "ENV_VAR"}`;
       } else if (source.kind === "step_output") {

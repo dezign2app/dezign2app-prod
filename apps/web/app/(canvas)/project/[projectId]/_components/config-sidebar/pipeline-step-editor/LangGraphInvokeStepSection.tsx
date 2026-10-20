@@ -61,6 +61,9 @@ function stepSourceToAccessor(
   if (source.kind === "req_headers") {
     return source.field ? `headers.${source.field}` : "headers";
   }
+  if (source.kind === "auth") {
+    return source.field ? `auth.${source.field}` : "auth";
+  }
   if (source.kind === "env") {
     return source.field ? `env.${source.field}` : "env";
   }
@@ -84,6 +87,9 @@ function accessorToStepSource(
   const trimmed = (accessor || "").trim();
   if (!trimmed) {
     return { kind: "req_body", field: "" };
+  }
+  if (trimmed.startsWith("auth.") || trimmed === "auth") {
+    return { kind: "auth", field: trimmed === "auth" ? "" : trimmed.slice(5) };
   }
   if (trimmed.startsWith("body.") || trimmed === "body") {
     return { kind: "req_body", field: trimmed === "body" ? "" : trimmed.slice(5) };
@@ -669,6 +675,7 @@ export const LangGraphInvokeStepSection: React.FC<
           src.kind === "req_params" ||
           src.kind === "req_query" ||
           src.kind === "req_headers" ||
+          src.kind === "auth" ||
           src.kind === "env"
         ) {
           matchedSource = { kind: src.kind, field: foundPath.path };
@@ -755,6 +762,7 @@ export const LangGraphInvokeStepSection: React.FC<
             src.kind === "req_params" ||
             src.kind === "req_query" ||
             src.kind === "req_headers" ||
+            src.kind === "auth" ||
             src.kind === "env"
           ) {
             matchedSource = { kind: src.kind, field: foundPath.path };
@@ -809,6 +817,7 @@ export const LangGraphInvokeStepSection: React.FC<
             src.kind === "req_params" ||
             src.kind === "req_query" ||
             src.kind === "req_headers" ||
+            src.kind === "auth" ||
             src.kind === "env"
           ) {
             matchedThreadSource = { kind: src.kind, field: found.path };

@@ -924,7 +924,8 @@ export function useStepRowState({
             src.kind === "req_body" ||
             src.kind === "req_params" ||
             src.kind === "req_query" ||
-            src.kind === "req_headers"
+            src.kind === "req_headers" ||
+            src.kind === "auth"
           ) {
             defaultSource = { kind: src.kind, field: match.path };
           }

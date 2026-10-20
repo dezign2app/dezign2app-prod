@@ -169,6 +169,7 @@ export function computeDbOpBindings(
   );
   const reqParamsSource = availableSources.find((s) => s.kind === "req_params");
   const reqQuerySource = availableSources.find((s) => s.kind === "req_query");
+  const authSource = availableSources.find((s) => s.kind === "auth");
   const stepSources = availableSources.filter((s) => s.kind === "step_output");
 
   const mappedBindings: StepBinding[] = expectedArgs.map((arg) => {
@@ -217,6 +218,15 @@ export function computeDbOpBindings(
       return {
         argName: arg.name,
         source: { kind: "req_body", field: matchBody.path },
+      };
+    }
+
+    // 6. Check auth session
+    const matchAuth = authSource?.paths.find((p) => isPathMatchInternal(p.path, arg.name));
+    if (matchAuth) {
+      return {
+        argName: arg.name,
+        source: { kind: "auth", field: matchAuth.path },
       };
     }
 

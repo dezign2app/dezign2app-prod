@@ -124,6 +124,22 @@ export function resolveInputValue(
       }
       return ctx.state;
     }
+    case "auth": {
+      const authObj = ctx.state?.auth || ctx.state?.user || {
+        username: "johndoe",
+        id: "usr_mock_123",
+        userId: "usr_mock_123",
+        email: "john@example.com",
+        role: "user",
+        name: "John Doe",
+        sessionToken: "sess_mock_token_abc",
+        expiresAt: Date.now() + 86400000,
+      };
+      if (source.field) {
+        return getNestedValue(authObj, source.field);
+      }
+      return authObj;
+    }
     case "env": {
       if (source.field && typeof process !== "undefined" && process.env) {
         return process.env[source.field];

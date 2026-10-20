@@ -25,7 +25,16 @@ ${buildImports(strategy)}
 declare global {
   namespace Express {
     interface Request {
-      user?: { id: string; role: string };
+      user?: {
+        id: string;
+        userId?: string;
+        username?: string;
+        role: string;
+        email?: string;
+        name?: string;
+        sessionToken?: string;
+        [key: string]: string | number | boolean | null | undefined;
+      };
     }
   }
 }
@@ -113,6 +122,7 @@ function buildDbSessionBlock(): string {
       const secret = process.env.BETTER_AUTH_SECRET ?? "default_super_secret_key_change_in_production";
       let resolvedUserId: string | undefined;
       let resolvedRole: string = "user";
+      let resolvedUserClaims: Record<string, string | number | boolean | null | undefined> = {};
 
       try {
         const parts = token.split(".");
@@ -136,6 +146,7 @@ function buildDbSessionBlock(): string {
                 if (sub) {
                   resolvedUserId = String(sub);
                   resolvedRole = String(payload.role ?? "user");
+                  resolvedUserClaims = { ...payload };
                   logger.info("Auth: token resolved via stateless HS256 JWT verification", { userId: resolvedUserId, role: resolvedRole });
                 }
               }
@@ -201,17 +212,17 @@ function buildDbSessionBlock(): string {
           return res.status(401).json({ error: "Unauthorized: Session has expired" });
         }
 
-        type UserRecord = { role?: string };
+        type UserRecord = { role?: string; email?: string; name?: string; username?: string };
         let userRecord: UserRecord | undefined;
         if (typeof dbAny.prepare === "function") {
           try {
             userRecord = dbAny
-              .prepare('SELECT "role" FROM "user" WHERE "id" = ?')
+              .prepare('SELECT "role", "email", "name" FROM "user" WHERE "id" = ?')
               .get(resolvedUserId) as UserRecord | undefined;
           } catch (_userErr) {
             try {
               userRecord = dbAny
-                .prepare('SELECT role FROM "user" WHERE id = ?')
+                .prepare('SELECT role, email, name FROM "user" WHERE id = ?')
                 .get(resolvedUserId) as UserRecord | undefined;
             } catch {
               // Non-fatal if role query fails; defaults to 'user'
@@ -220,7 +231,7 @@ function buildDbSessionBlock(): string {
         } else if (typeof dbAny.query === "function") {
           try {
             const pgUserRes = await dbAny.query(
-              'SELECT "role" FROM "user" WHERE "id" = $1 LIMIT 1',
+              'SELECT "role", "email", "name" FROM "user" WHERE "id" = $1 LIMIT 1',
               [resolvedUserId]
             );
             userRecord = pgUserRes.rows?.[0] as UserRecord | undefined;
@@ -234,8 +245,14 @@ function buildDbSessionBlock(): string {
       }
 
       req.user = {
+        ...resolvedUserClaims,
         id: String(resolvedUserId),
+        userId: String(resolvedUserId),
+        username: String(resolvedUserClaims.username ?? userRecord?.username ?? resolvedUserClaims.name ?? userRecord?.name ?? resolvedUserId),
         role: resolvedRole,
+        ...(resolvedUserClaims.email ? { email: String(resolvedUserClaims.email) } : userRecord?.email ? { email: String(userRecord.email) } : {}),
+        ...(resolvedUserClaims.name ? { name: String(resolvedUserClaims.name) } : userRecord?.name ? { name: String(userRecord.name) } : {}),
+        sessionToken: token,
       };`;
 }
 
@@ -244,17 +261,32 @@ function buildJwksSessionBlock(): string {
       const authServerUrl =
         process.env.AUTH_SERVER_URL ?? process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
       const JWKS = createRemoteJWKSet(new URL(\`\${authServerUrl}/api/auth/jwks\`));
-      const { payload } = await jwtVerify(token, JWKS);
+      const verifyResult = await jwtVerify(token, JWKS);
+      const payload = verifyResult.payload;
 
-      const sub = payload.sub ?? (payload as Record<string, unknown>)["id"] ?? (payload as Record<string, unknown>)["userId"];
-      if (!sub) {
+      const sub = typeof payload.sub === "string" ? payload.sub : undefined;
+      const payloadId = "id" in payload && typeof payload.id === "string" ? payload.id : undefined;
+      const payloadUserId = "userId" in payload && typeof payload.userId === "string" ? payload.userId : undefined;
+      const resolvedSub = sub ?? payloadId ?? payloadUserId;
+      if (!resolvedSub) {
         logger.warn("Auth failed: JWT payload has no subject");
         return res.status(401).json({ error: "Unauthorized: Invalid token payload" });
       }
 
+      const payloadUsername = "username" in payload && typeof payload.username === "string" ? payload.username : undefined;
+      const payloadName = "name" in payload && typeof payload.name === "string" ? payload.name : undefined;
+      const payloadRole = "role" in payload && typeof payload.role === "string" ? payload.role : "user";
+      const payloadEmail = "email" in payload && typeof payload.email === "string" ? payload.email : undefined;
+
       req.user = {
-        id: String(sub),
-        role: String((payload as Record<string, unknown>)["role"] ?? "user"),
+        ...payload,
+        id: resolvedSub,
+        userId: resolvedSub,
+        username: payloadUsername ?? payloadName ?? resolvedSub,
+        role: payloadRole,
+        email: payloadEmail,
+        name: payloadName,
+        sessionToken: token,
       };
 
       logger.info("Auth: session resolved via JWKS", { userId: req.user.id, role: req.user.role });`;
@@ -284,20 +316,27 @@ function buildHttpSessionBlock(): string {
         return res.status(401).json({ error: "Unauthorized: Invalid auth server response" });
       }
 
-      const data = (await authRes.json()) as Record<string, unknown> & {
-        user?: { id?: string; role?: string };
+      interface BetterAuthSessionResponse {
+        user?: { id?: string; role?: string; email?: string; name?: string; username?: string };
         session?: { userId?: string };
-      };
+      }
+      const data: BetterAuthSessionResponse = await authRes.json();
 
-      const userId = data?.user?.id ?? data?.session?.userId;
+      const userId = data.user?.id ?? data.session?.userId;
       if (!userId) {
         logger.warn("Auth failed: no userId in auth server response");
         return res.status(401).json({ error: "Unauthorized: User not found" });
       }
 
       req.user = {
+        ...(data.user || {}),
         id: String(userId),
-        role: String(data?.user?.role ?? "user"),
+        userId: String(userId),
+        username: String(data.user?.username ?? data.user?.name ?? userId),
+        role: String(data.user?.role ?? "user"),
+        email: data.user?.email,
+        name: data.user?.name,
+        sessionToken: token,
       };
 
       logger.info("Auth: session resolved via HTTP get-session", { userId: req.user.id, role: req.user.role });`;

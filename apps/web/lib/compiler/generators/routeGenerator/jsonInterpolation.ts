@@ -137,7 +137,21 @@ export function resolveTemplateToken(
     return `(req.headers["${field}"] as string)`;
   }
 
-  // 5. Environment Variables
+  // 5. Auth Session
+  if (token === "auth" || token === "req.user" || token === "user") {
+    return "auth";
+  }
+  if (token.startsWith("auth.")) {
+    return token;
+  }
+  if (token.startsWith("req.user.")) {
+    return `auth.${token.slice("req.user.".length)}`;
+  }
+  if (token.startsWith("user.")) {
+    return `auth.${token.slice("user.".length)}`;
+  }
+
+  // 6. Environment Variables
   if (token.startsWith("process.env.")) {
     return token;
   }

@@ -42,8 +42,8 @@ export function isBindingSourceConfigured(
     return false;
   }
 
-  if (source.kind === "req_body") {
-    // If binding whole object arg (e.g. payload, body, data), field can be empty. Otherwise field must be specified.
+  if (source.kind === "req_body" || source.kind === "auth") {
+    // If binding whole object arg (e.g. payload, body, data, auth, user), field can be empty. Otherwise field must be specified.
     if (isWholeObjectArg) return true;
     return Boolean(source.field !== undefined && String(source.field).trim().length > 0);
   }

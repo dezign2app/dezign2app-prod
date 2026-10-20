@@ -231,6 +231,14 @@ export function inferBindingType(
     return "Record<string, string | number | boolean | null>";
   }
 
+  if (source.kind === "auth") {
+    if (source.field) {
+      if (source.field === "expiresAt") return "number";
+      return "string";
+    }
+    return "{ id: string; userId: string; username: string; email?: string; role?: string; name?: string; sessionToken?: string; expiresAt?: number }";
+  }
+
   if (source.kind === "req_param") {
     if (source.field) {
       const p = [...(ep?.pathParams || []), ...(ep?.queryParams || [])].find(
