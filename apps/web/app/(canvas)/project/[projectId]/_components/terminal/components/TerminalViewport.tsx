@@ -18,7 +18,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@workspace/ui/components/dropdown-menu";
-import { WTermTerminal, WTermTerminalHandle } from "@/components/terminal";
+import { XTermTerminal, XTermTerminalHandle } from "@/components/terminal";
 import { isElectron } from "@/lib/electron";
 import { TerminalSession, TerminalType } from "../types";
 import { getShellPrompt } from "../hooks/useDynamicTerminalSessions";
@@ -28,7 +28,7 @@ interface TerminalViewportProps {
   outputDir?: string;
   sessions: TerminalSession[];
   activeSessionId: string | null;
-  terminalRefs: React.MutableRefObject<Map<string, WTermTerminalHandle | null>>;
+  terminalRefs: React.MutableRefObject<Map<string, XTermTerminalHandle | null>>;
   onTerminalInput: (sessionId: string, data: string) => void;
   onTerminalResize: (sessionId: string, cols: number, rows: number) => void;
   onNewTab: (type?: TerminalType, shell?: string, title?: string) => void;
@@ -56,31 +56,17 @@ export function TerminalViewport({
     (navigator.platform?.includes("Win") ||
       navigator.userAgent?.includes("Windows"));
 
-  // Auto-focus the active terminal session whenever the active session ID changes & replay any missed logs
+  // Auto-fit and focus the active terminal session on session change
   React.useEffect(() => {
     if (!activeSessionId) return;
     const timer = setTimeout(() => {
       const handle = terminalRefs.current.get(activeSessionId);
+      handle?.fit?.();   // recompute cols after panel/tab resize
       handle?.focus?.();
       onReplayMissedLogs?.(activeSessionId);
     }, 40);
     return () => clearTimeout(timer);
   }, [activeSessionId, terminalRefs, onReplayMissedLogs]);
-
-  // Re-focus active terminal session when the browser tab / desktop window regains focus
-  React.useEffect(() => {
-    const handleFocus = () => {
-      if (activeSessionId) {
-        terminalRefs.current.get(activeSessionId)?.focus();
-      }
-    };
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleFocus);
-    return () => {
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleFocus);
-    };
-  }, [activeSessionId, terminalRefs]);
 
   // Empty State: No active terminals open
   if (sessions.length === 0) {
@@ -169,7 +155,7 @@ export function TerminalViewport({
                   : "opacity-0 z-0 pointer-events-none"
               }`}
             >
-              <WTermTerminal
+              <XTermTerminal
                 ref={(el) => {
                   if (el) {
                     terminalRefs.current.set(session.id, el);
@@ -188,11 +174,10 @@ export function TerminalViewport({
                       `\x1b[36mDezign2App Monorepo Terminal: ${session.title || "Main Terminal"} [Web Preview]\x1b[0m\r\n\x1b[90mWorkspace: ${targetDir}\x1b[0m\r\n\x1b[90mType commands like "help", "pnpm dev", "pnpm build", "docker compose", "clear".\x1b[0m\r\n\r\n${prompt}`,
                     );
                   }
+                  handle?.fit?.();
                   handle?.focus?.();
                 }}
-                rawStream={true}
                 interactive={true}
-                autoScroll={false}
                 onData={(data) => onTerminalInput(session.id, data)}
                 onResize={(cols, rows) => onTerminalResize(session.id, cols, rows)}
               />

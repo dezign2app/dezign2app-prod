@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useTerminalSessionStore } from "../stores/terminalSessionStore";
+import {
+  useTerminalSessionStore,
+  appendToLogBuffer,
+  getLogBuffer,
+  clearLogBuffer,
+} from "../stores/terminalSessionStore";
 
 describe("terminalSessionStore", () => {
   const projectId = "test-project-123";
@@ -10,6 +15,9 @@ describe("terminalSessionStore", () => {
       sessionsByProject: {},
       activeSessionIdByProject: {},
     });
+    clearLogBuffer("term-1");
+    clearLogBuffer("term-2");
+    clearLogBuffer("term-buf");
   });
 
   it("starts with 0 sessions for a fresh project", () => {
@@ -25,7 +33,6 @@ describe("terminalSessionStore", () => {
       title: "PowerShell 1",
       type: "powershell" as const,
       shell: "powershell.exe",
-      logs: [],
       status: "running" as const,
       detectedPorts: [],
       createdAt: Date.now(),
@@ -51,7 +58,7 @@ describe("terminalSessionStore", () => {
     };
 
     store.addSession(projectId, session);
-    store.appendLog(
+    store.appendDetectedPorts(
       projectId,
       "term-1",
       "Next.js ready on http://localhost:3000\r\nAPI listening on http://127.0.0.1:8080\r\n",
@@ -111,21 +118,11 @@ describe("terminalSessionStore", () => {
     expect(updated.getActiveSessionId(projectId)).toBe("term-1");
   });
 
-  it("retains output buffer in session.logs across multiple appendLog calls", () => {
-    const store = useTerminalSessionStore.getState();
-    store.addSession(projectId, {
-      id: "term-buf",
-      title: "Buffer Terminal",
-      type: "shell",
-      status: "running",
-      createdAt: Date.now(),
-    });
+  it("retains output buffer in sessionLogBuffer across multiple appendToLogBuffer calls", () => {
+    appendToLogBuffer("term-buf", "chunk 1\r\n");
+    appendToLogBuffer("term-buf", "chunk 2\r\n");
 
-    store.appendLog(projectId, "term-buf", "chunk 1\r\n");
-    store.appendLog(projectId, "term-buf", "chunk 2\r\n");
-
-    const active = store.getActiveSession(projectId);
-    expect(active?.logs).toEqual(["chunk 1\r\n", "chunk 2\r\n"]);
+    expect(getLogBuffer("term-buf")).toEqual(["chunk 1\r\n", "chunk 2\r\n"]);
   });
 
   it("clears all sessions and active session id for a project with clearSessions", () => {
@@ -155,4 +152,3 @@ describe("terminalSessionStore", () => {
     expect(updated.getActiveSessionId(projectId)).toBeNull();
   });
 });
-

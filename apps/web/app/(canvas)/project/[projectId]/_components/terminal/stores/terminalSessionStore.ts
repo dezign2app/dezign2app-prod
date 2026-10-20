@@ -3,6 +3,40 @@
 import { create } from "zustand";
 import { TerminalSession, DetectedPort } from "../types";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Non-reactive log buffer
+// Keyed by sessionId. Lives outside Zustand so PTY data chunks never trigger
+// React re-renders. Components call getLogBuffer() for replay on mount.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _sessionLogBuffer = new Map<string, string[]>();
+
+/** Append a raw chunk to the non-reactive log buffer for a session. */
+export function appendToLogBuffer(sessionId: string, chunk: string): void {
+  if (!chunk) return;
+  const existing = _sessionLogBuffer.get(sessionId) ?? [];
+  // Cap at 5 000 chunks to bound memory (~5 000 * avg 80 bytes ≈ 400 KB)
+  const updated =
+    existing.length >= 5000
+      ? [...existing.slice(-4999), chunk]
+      : [...existing, chunk];
+  _sessionLogBuffer.set(sessionId, updated);
+}
+
+/** Read the buffered chunks for a session (for replay on terminal mount). */
+export function getLogBuffer(sessionId: string): string[] {
+  return _sessionLogBuffer.get(sessionId) ?? [];
+}
+
+/** Delete the log buffer for a session (called on close / clear). */
+export function clearLogBuffer(sessionId: string): void {
+  _sessionLogBuffer.delete(sessionId);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Port extraction helper (used by appendDetectedPorts)
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * Extracts any newly opened HTTP/TCP ports or URLs from raw terminal stdout stream.
  */
@@ -47,6 +81,10 @@ function extractPortsFromLog(rawLog: string): DetectedPort[] {
   return ports;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Zustand store — metadata only, no log arrays
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface TerminalStoreState {
   sessionsByProject: Record<string, TerminalSession[]>;
   activeSessionIdByProject: Record<string, string | null>;
@@ -62,7 +100,16 @@ interface TerminalStoreState {
     sessionId: string,
     updates: Partial<TerminalSession>,
   ) => void;
-  appendLog: (projectId: string, sessionId: string, logChunk: string) => void;
+  /**
+   * appendDetectedPorts — the ONLY Zustand update called on PTY data.
+   * Extracts port numbers from the raw chunk and stores them reactively.
+   * Does NOT store the raw log chunk (use appendToLogBuffer for that).
+   */
+  appendDetectedPorts: (
+    projectId: string,
+    sessionId: string,
+    rawChunk: string,
+  ) => void;
   removeSession: (projectId: string, sessionId: string) => void;
   clearSessions: (projectId: string) => void;
   renameSession: (projectId: string, sessionId: string, newTitle: string) => void;
@@ -134,9 +181,11 @@ export const useTerminalSessionStore = create<TerminalStoreState>((set, get) => 
     });
   },
 
-  appendLog: (projectId: string, sessionId: string, logChunk: string) => {
-    if (!logChunk) return;
-    const newPorts = extractPortsFromLog(logChunk);
+  appendDetectedPorts: (projectId: string, sessionId: string, rawChunk: string) => {
+    if (!rawChunk) return;
+    const newPorts = extractPortsFromLog(rawChunk);
+    // Skip expensive Zustand update if no new ports found
+    if (newPorts.length === 0) return;
 
     set((state) => {
       const current = state.sessionsByProject[projectId] || [];
@@ -145,24 +194,17 @@ export const useTerminalSessionStore = create<TerminalStoreState>((set, get) => 
           ...state.sessionsByProject,
           [projectId]: current.map((s) => {
             if (s.id !== sessionId) return s;
-
-            // Merge detected ports without duplicates
-            let mergedPorts = s.detectedPorts || [];
-            if (newPorts.length > 0) {
-              const existingPortNumbers = new Set(mergedPorts.map((p) => p.port));
-              const additions = newPorts.filter((p) => !existingPortNumbers.has(p.port));
-              mergedPorts = [...mergedPorts, ...additions];
-            }
-
-            // Append log chunks while capping to recent 500 entries to bound memory usage
-            const prevLogs = s.logs || [];
-            const updatedLogs = [...prevLogs, logChunk].slice(-500);
-
+            const existingPortNumbers = new Set(
+              (s.detectedPorts || []).map((p) => p.port),
+            );
+            const additions = newPorts.filter(
+              (p) => !existingPortNumbers.has(p.port),
+            );
+            if (additions.length === 0) return s;
             return {
               ...s,
-              logs: updatedLogs,
-              detectedPorts: mergedPorts,
-              status: "running",
+              detectedPorts: [...(s.detectedPorts || []), ...additions],
+              status: "running" as const,
             };
           }),
         },

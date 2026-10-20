@@ -4,7 +4,12 @@ import { useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { isElectron, getElectronAPI } from "@/lib/electron";
 import { TerminalSession, TerminalType } from "../types";
-import { useTerminalSessionStore } from "../stores/terminalSessionStore";
+import {
+  useTerminalSessionStore,
+  appendToLogBuffer,
+  getLogBuffer,
+  clearLogBuffer,
+} from "../stores/terminalSessionStore";
 
 // Active IPC subscriptions tracker to prevent duplicate listeners across renders
 const activeListeners = new Map<
@@ -170,12 +175,12 @@ function simulateCommand(rawCmd: string, targetDir: string): string {
   return `\x1b[90mExecuted: ${cmd}\x1b[0m\r\n\x1b[32m✔ Process finished with exit code 0\x1b[0m`;
 }
 
-import { WTermTerminalHandle } from "@/components/terminal";
+import { XTermTerminalHandle } from "@/components/terminal";
 
 interface UseDynamicTerminalSessionsProps {
   projectId: string;
   outputDir: string;
-  terminalRefs?: React.RefObject<Map<string, WTermTerminalHandle | null>>;
+  terminalRefs?: React.RefObject<Map<string, XTermTerminalHandle | null>>;
 }
 
 export function useDynamicTerminalSessions({
@@ -214,14 +219,14 @@ export function useDynamicTerminalSessions({
       if (activeListeners.has(sessionId)) return;
 
       const dataCleanup = api.terminal.onData(sessionId, (data: string) => {
-        // Stream directly to the active terminal instance if mounted
-        const term = terminalRefs?.current?.get(sessionId);
-        if (term) {
-          term.write(data);
-          const currentCount = writtenLogCountRef.current.get(sessionId) || 0;
-          writtenLogCountRef.current.set(sessionId, currentCount + 1);
-        }
-        store.appendLog(projectId, sessionId, data);
+        // 1. Write directly to the xterm instance — zero React re-renders
+        terminalRefs?.current?.get(sessionId)?.write(data);
+        // 2. Buffer for replay (non-reactive, no Zustand)
+        appendToLogBuffer(sessionId, data);
+        const currentCount = writtenLogCountRef.current.get(sessionId) || 0;
+        writtenLogCountRef.current.set(sessionId, currentCount + 1);
+        // 3. Only trigger Zustand for port detection (rare — only when a URL/port is found)
+        store.appendDetectedPorts(projectId, sessionId, data);
       });
 
       const exitCleanup = api.terminal.onExit(sessionId, (exitCode: number) => {
@@ -242,25 +247,27 @@ export function useDynamicTerminalSessions({
       const term = terminalRefs?.current?.get(sessionId);
       if (!term) return;
 
-      const sessions = store.getSessions(projectId);
-      const session = sessions.find((s) => s.id === sessionId);
-      if (!session || !session.logs || session.logs.length === 0) return;
+      // Read from the non-reactive module-level log buffer
+      const logs = getLogBuffer(sessionId);
+      if (!logs.length) return;
 
       if (fullReset) {
         term.clear?.();
-        term.write(session.logs.join(""));
-        writtenLogCountRef.current.set(sessionId, session.logs.length);
+        term.write(logs.join(""));
+        writtenLogCountRef.current.set(sessionId, logs.length);
         return;
       }
 
       const alreadyWritten = writtenLogCountRef.current.get(sessionId) || 0;
-      if (alreadyWritten < session.logs.length) {
-        const missed = session.logs.slice(alreadyWritten);
+      if (alreadyWritten < logs.length) {
+        const missed = logs.slice(alreadyWritten);
         term.write(missed.join(""));
-        writtenLogCountRef.current.set(sessionId, session.logs.length);
+        writtenLogCountRef.current.set(sessionId, logs.length);
       }
     },
-    [projectId, store, terminalRefs],
+    // Intentionally stable: only depends on terminalRefs (a persistent ref object)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [terminalRefs],
   );
 
   // Re-attach IPC listeners on mount for any existing sessions in Electron (keyed on session IDs only)
@@ -409,7 +416,7 @@ export function useDynamicTerminalSessions({
         const newPrompt = getShellPrompt(s.shell, cleanDir);
         const msg = `\r\n\x1b[90m[Workspace connected: ${folderName}]\x1b[0m\r\n${newPrompt}`;
         termHandle?.write?.(msg);
-        store.appendLog(projectId, s.id, msg);
+        appendToLogBuffer(s.id, msg);
       });
       return;
     }
@@ -454,6 +461,7 @@ export function useDynamicTerminalSessions({
       inputBuffersRef.current.delete(sessionId);
       commandHistoryRef.current.delete(sessionId);
       writtenLogCountRef.current.delete(sessionId);
+      clearLogBuffer(sessionId);
 
       // 1. Clean up IPC listeners
       if (activeListeners.has(sessionId)) {
@@ -526,10 +534,12 @@ export function useDynamicTerminalSessions({
           const output = simulateCommand(cmd, targetDir);
           const response = `\r\n${output}\r\n\r\n${prompt}`;
           termHandle?.write(response);
-          store.appendLog(projectId, sessionId, response);
+          appendToLogBuffer(sessionId, response);
+          store.appendDetectedPorts(projectId, sessionId, response);
         } else {
-          termHandle?.write(`\r\n${prompt}`);
-          store.appendLog(projectId, sessionId, `\r\n${prompt}`);
+          const newlinePrompt = `\r\n${prompt}`;
+          termHandle?.write(newlinePrompt);
+          appendToLogBuffer(sessionId, newlinePrompt);
         }
         return;
       }
@@ -615,6 +625,7 @@ export function useDynamicTerminalSessions({
     (sessionId: string) => {
       inputBuffersRef.current.set(sessionId, "");
       writtenLogCountRef.current.set(sessionId, 0);
+      clearLogBuffer(sessionId);
       const termHandle = terminalRefs?.current?.get(sessionId);
       if (inElectron) {
         const api = getElectronAPI();

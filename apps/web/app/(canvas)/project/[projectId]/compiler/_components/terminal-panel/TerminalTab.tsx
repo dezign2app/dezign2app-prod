@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { WTermTerminal, WTermTerminalHandle } from "@/components/terminal";
+import { XTermTerminal, XTermTerminalHandle } from "@/components/terminal";
 import { TerminalViewport } from "../../../_components/terminal/components/TerminalViewport";
 import { TerminalSession, TerminalType } from "../../../_components/terminal/types";
 
@@ -10,7 +10,7 @@ interface TerminalTabProps {
   outputDir?: string;
   sessions: TerminalSession[];
   activeSessionId: string | null;
-  terminalRefs: React.RefObject<Map<string, WTermTerminalHandle | null>>;
+  terminalRefs: React.RefObject<Map<string, XTermTerminalHandle | null>>;
   onTerminalInput: (sessionId: string, data: string) => void;
   onTerminalResize: (sessionId: string, cols: number, rows: number) => void;
   onCreateSession: (type?: TerminalType, shell?: string, title?: string) => void;
@@ -51,7 +51,7 @@ export function TerminalTab({
           onReplayMissedLogs={onReplayMissedLogs}
         />
       ) : (
-        <WTermTerminal
+        <XTermTerminal
           ref={(el) => {
             if (el) {
               terminalRefs.current.set("standalone", el);
@@ -59,9 +59,7 @@ export function TerminalTab({
               terminalRefs.current.delete("standalone");
             }
           }}
-          logs={formattedLogs}
           interactive={true}
-          autoScroll={true}
         />
       )}
     </div>
