@@ -281,19 +281,19 @@ export function Terminal({
             <Resizable
               size={{
                 width: "100%",
-                height: isExpanded ? "80vh" : terminalHeight,
+                height: isExpanded ? "90vh" : terminalHeight,
               }}
               onResizeStop={(e, direction, ref, d) => {
                 const maxH =
                   typeof window !== "undefined"
-                    ? Math.floor(window.innerHeight * 0.8)
+                    ? Math.floor(window.innerHeight * 0.9)
                     : 1200;
                 setTerminalHeight((prev: number) =>
                   Math.max(140, Math.min(maxH, prev + d.height)),
                 );
               }}
               minHeight={140}
-              maxHeight="80vh"
+              maxHeight="90vh"
               enable={{ top: !isExpanded }}
               handleClasses={{
                 top: "h-1 bg-border/50 hover:bg-primary cursor-row-resize transition-colors z-30",

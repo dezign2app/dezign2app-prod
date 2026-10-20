@@ -129,7 +129,7 @@ export const useSidebarStore = create<SidebarState>()(
           const val = typeof height === "function" ? height(state.terminalHeight) : height;
           const maxH =
             typeof window !== "undefined"
-              ? Math.floor(window.innerHeight * 0.8)
+              ? Math.floor(window.innerHeight * 0.9)
               : 1200;
           return { terminalHeight: Math.max(140, Math.min(maxH, val)) };
         }),
