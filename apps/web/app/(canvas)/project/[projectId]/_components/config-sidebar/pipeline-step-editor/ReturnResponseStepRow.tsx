@@ -207,6 +207,10 @@ export const ReturnResponseStepRow = ({
           const field = source.field ? source.field.trim() : "";
           return field ? `req.headers["${field}"]` : "req.headers";
         }
+        case "auth": {
+          const field = source.field ? source.field.trim() : "";
+          return field ? `auth?.${field}` : "auth";
+        }
         case "env": {
           const field = source.field ? source.field.trim() : "";
           return field ? `process.env.${field}` : "process.env";

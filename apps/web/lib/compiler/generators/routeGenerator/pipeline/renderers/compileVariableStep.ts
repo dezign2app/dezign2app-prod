@@ -97,7 +97,8 @@ export function renderVariableStep(
     variableSource?.kind === "req_body" ||
     variableSource?.kind === "req_query" ||
     variableSource?.kind === "req_params" ||
-    variableSource?.kind === "req_headers";
+    variableSource?.kind === "req_headers" ||
+    variableSource?.kind === "auth";
 
   // Widen primitive types from req_body/req_query/req_params/req_headers sources
   // to include `| undefined` so optional fields don't cause TS2322 errors.

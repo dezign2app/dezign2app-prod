@@ -74,11 +74,148 @@ export function createEnvExtraSource(
 }
 
 /**
+ * Resolves available properties on the auth session by inspecting:
+ * 1. The canvas Auth node (authNode / AuthConfig):
+ *    - authNode.data.session.claims (configured custom session claims)
+ *    - authNode.data.plugins (e.g. organization -> orgId, orgRole; phoneNumber; payments -> plan, creemCustomerId)
+ *    - authNode.data.betterAuthTableMapping.userEntityId (or userEntityId / userSchemaId)
+ * 2. The User Entity node on the canvas (linked in AuthConfig or named "user"/"users") with its schema columns
+ * 3. Standard built-in session token claims (sessionToken, expiresAt, id, userId, username, email, role, name)
+ */
+export function resolveAuthSessionPaths(allNodes: BackendNode[] = []): AvailablePath[] {
+  const nodesToScan =
+    allNodes && allNodes.length > 0
+      ? allNodes
+      : typeof window !== "undefined"
+      ? useBackendCanvasStore.getState().nodes || []
+      : [];
+
+  const pathMap = new Map<string, AvailablePath>();
+
+  const addPath = (path: string, type: string, description: string) => {
+    if (!path || pathMap.has(path)) return;
+    pathMap.set(path, { path, type, description });
+  };
+
+  // 1. Core authentication & token envelope claims
+  addPath("username", "string", "Authenticated username");
+  addPath("id", "string", "Authenticated user ID (sub)");
+  addPath("userId", "string", "Authenticated user ID");
+  addPath("email", "string", "Authenticated user email");
+  addPath("role", "string", "User authorization role");
+  addPath("name", "string", "User display name");
+  addPath("sessionToken", "string", "Decrypted session token string");
+  addPath("expiresAt", "number", "Session expiration timestamp (ms)");
+
+  // Find Auth Node
+  const authNode = nodesToScan.find((n) => n.type === "auth" || n.type === "identity_provider");
+  const authData = authNode?.data;
+
+  // 2. User Entity columns mapped in AuthConfig (AuthCoreEntitiesSection) or named "user" / "users"
+  const userEntityId =
+    authData?.tableMappings?.userEntityId ||
+    authData?.userEntityId ||
+    authData?.userSchemaId;
+
+  const userEntity = userEntityId
+    ? nodesToScan.find((n) => n.id === userEntityId && n.type === "entity")
+    : nodesToScan.find(
+        (n) =>
+          n.type === "entity" &&
+          (n.data?.label?.toLowerCase() === "user" ||
+            n.data?.label?.toLowerCase() === "users" ||
+            n.data?.tableName?.toLowerCase() === "user" ||
+            n.data?.tableName?.toLowerCase() === "users"),
+      );
+
+  if (userEntity?.data?.columns && Array.isArray(userEntity.data.columns)) {
+    userEntity.data.columns.forEach((col) => {
+      if (col?.name) {
+        const colType = (col.type || "string").toLowerCase();
+        let tsType = "string";
+        if (
+          colType === "number" ||
+          colType === "int" ||
+          colType === "integer" ||
+          colType === "float" ||
+          colType === "bigint"
+        ) {
+          tsType = "number";
+        } else if (colType === "boolean" || colType === "bool") {
+          tsType = "boolean";
+        } else if (
+          colType === "json" ||
+          colType === "jsonb" ||
+          colType === "object"
+        ) {
+          tsType = "Record<string, string | number | boolean | null>";
+        } else if (
+          colType === "date" ||
+          colType === "datetime" ||
+          colType === "timestamp"
+        ) {
+          tsType = "Date | string";
+        }
+        addPath(
+          col.name,
+          tsType,
+          col.description ||
+            `User entity column (${userEntity.data?.label || "user"}.${col.name})`,
+        );
+      }
+    });
+  }
+
+  // 3. Configured Session Claims from AuthConfig (AuthSessionSection)
+  const configuredClaims = authData?.session?.claims;
+  if (Array.isArray(configuredClaims)) {
+    configuredClaims.forEach((claim) => {
+      const key = claim?.key || claim?.targetValue;
+      if (key) {
+        addPath(
+          key,
+          "string",
+          `Configured session claim (${claim.source || "authNode.session"})`,
+        );
+      }
+    });
+  }
+
+  // 4. Auth Plugins (Organization, Payments, Phone, etc.)
+  const plugins = authData?.plugins;
+  const pluginList: string[] = Array.isArray(plugins) ? plugins : [];
+  const org = authData?.organization;
+  if (pluginList.includes("organization") || org?.enabled) {
+    addPath("activeOrganizationId", "string", "Active workspace / organization ID");
+    addPath("orgId", "string", "Organization ID alias");
+    addPath("orgRole", "string", "Organization role (e.g. owner, admin, member)");
+  }
+
+  if (pluginList.includes("phoneNumber")) {
+    addPath("phoneNumber", "string", "User verified phone number");
+    addPath("phoneNumberVerified", "boolean", "Phone number verification status");
+  }
+
+  if (pluginList.includes("twoFactor")) {
+    addPath("twoFactorEnabled", "boolean", "Two-factor authentication enabled status");
+  }
+
+  if (authData?.paymentsPlugin) {
+    addPath("plan", "string", "Active payment subscription plan");
+    addPath("creemCustomerId", "string", "Payment processor customer ID");
+    addPath("subscriptionStatus", "string", "Active subscription status");
+  }
+
+  return Array.from(pathMap.values());
+}
+
+/**
  * Collects inbound endpoint / event payload sources (body, params, query, headers, event payload).
  */
 export function getEndpointSources(
   endpoint?: Endpoint,
   consumedEvent?: AnyMessagingResource,
+  allNodes: BackendNode[] = [],
 ): AvailableSource[] {
   const sources: AvailableSource[] = [];
 
@@ -246,6 +383,28 @@ export function getEndpointSources(
       rootVariableName: "req.headers",
       paths: headerPaths,
     });
+
+    // 5. Authenticated Session / User (auth)
+    const isAuth =
+      endpoint?.requireAuth !== false ||
+      Boolean(endpoint?.authRuleId) ||
+      Boolean(
+        endpoint?.headers?.some(
+          (h) =>
+            h.name?.toLowerCase() === "authorization" ||
+            h.id === "auth-bearer-header",
+        ),
+      );
+
+    if (isAuth) {
+      sources.push({
+        id: "auth",
+        label: "Auth Session (auth)",
+        kind: "auth",
+        rootVariableName: "auth",
+        paths: resolveAuthSessionPaths(allNodes),
+      });
+    }
   }
 
   return sources;

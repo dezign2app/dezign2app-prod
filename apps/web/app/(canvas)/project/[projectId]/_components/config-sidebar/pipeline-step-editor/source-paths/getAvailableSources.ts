@@ -25,7 +25,7 @@ export function getAvailableSources(
   const sources: AvailableSource[] = [];
 
   // 1-4. Inbound Endpoint / Event sources (body, params, query, headers, event payload)
-  sources.push(...getEndpointSources(endpoint, consumedEvent));
+  sources.push(...getEndpointSources(endpoint, consumedEvent, allNodes));
 
   // 5. Environment Variables (.env)
   const hasEnvInExtra = extraSources.some(

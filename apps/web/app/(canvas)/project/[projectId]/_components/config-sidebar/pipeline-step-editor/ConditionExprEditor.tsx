@@ -270,6 +270,8 @@ const SourcePicker = ({
       onChange({ kind: "req_query", field: "" });
     } else if (selectedId === "req_headers") {
       onChange({ kind: "req_headers", field: "" });
+    } else if (selectedId === "auth") {
+      onChange({ kind: "auth", field: "" });
     } else if (selectedId === "env") {
       onChange({ kind: "env", field: "" });
     } else if (selectedId === "inline") {

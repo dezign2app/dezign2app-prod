@@ -35,6 +35,10 @@ export function resolveSource(
       const field = source.field ? source.field.trim() : "";
       return field ? `req.headers["${field}"]` : "req.headers";
     }
+    case "auth": {
+      const field = source.field ? source.field.trim() : "";
+      return field ? `auth?.${field}` : "auth";
+    }
     case "env": {
       const field = cleanEnvVarName(source.field);
       if (!field) return "process.env";

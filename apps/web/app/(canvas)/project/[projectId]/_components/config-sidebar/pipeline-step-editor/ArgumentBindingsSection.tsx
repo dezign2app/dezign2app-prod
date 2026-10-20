@@ -71,6 +71,7 @@ export const ArgumentBindingsSection = ({
               src.kind === "req_params" ||
               src.kind === "req_query" ||
               src.kind === "req_headers" ||
+              src.kind === "auth" ||
               src.kind === "env"
             ) {
               updated = {

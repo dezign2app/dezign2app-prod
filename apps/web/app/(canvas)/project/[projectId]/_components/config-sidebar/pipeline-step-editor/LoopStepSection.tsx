@@ -80,6 +80,8 @@ export const LoopStepSection = ({
       onChange({ ...step, loopSource: { kind: "req_query", field: "" } });
     } else if (selectedId === "req_headers") {
       onChange({ ...step, loopSource: { kind: "req_headers", field: "" } });
+    } else if (selectedId === "auth") {
+      onChange({ ...step, loopSource: { kind: "auth", field: "" } });
     } else if (selectedId === "inline") {
       onChange({ ...step, loopSource: { kind: "inline", value: "5" } });
     }

@@ -377,6 +377,21 @@ export function getExpectedResponseBody(
             obj[key] = header?.defaultValue || header?.value || generateFakeDataForField(key);
             break;
           }
+          case "auth": {
+            const field = source.field;
+            const fakeAuth: Record<string, string | number> = {
+              username: "johndoe",
+              id: "usr_mock_123",
+              userId: "usr_mock_123",
+              email: "john@example.com",
+              role: "user",
+              name: "John Doe",
+              sessionToken: "sess_mock_token_abc",
+              expiresAt: Date.now() + 86400000,
+            };
+            obj[key] = field ? (fakeAuth[field] ?? generateFakeDataForField(key)) : fakeAuth;
+            break;
+          }
           case "env": {
             const envKey = source.field || key;
             const envVars = (actualServiceNode?.data?.envVars as any[]) || [];

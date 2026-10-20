@@ -77,6 +77,8 @@ export const SwitchStepSection = ({
       onChange({ ...step, switchSource: { kind: "req_query", field: "" } });
     } else if (selectedId === "req_headers") {
       onChange({ ...step, switchSource: { kind: "req_headers", field: "" } });
+    } else if (selectedId === "auth") {
+      onChange({ ...step, switchSource: { kind: "auth", field: "" } });
     } else if (selectedId === "env") {
       onChange({ ...step, switchSource: { kind: "env", field: "" } });
     } else if (selectedId === "inline") {
