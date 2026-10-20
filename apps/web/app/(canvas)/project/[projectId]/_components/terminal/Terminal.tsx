@@ -284,12 +284,16 @@ export function Terminal({
                 height: isExpanded ? "80vh" : terminalHeight,
               }}
               onResizeStop={(e, direction, ref, d) => {
+                const maxH =
+                  typeof window !== "undefined"
+                    ? Math.floor(window.innerHeight * 0.8)
+                    : 1200;
                 setTerminalHeight((prev: number) =>
-                  Math.max(140, Math.min(800, prev + d.height)),
+                  Math.max(140, Math.min(maxH, prev + d.height)),
                 );
               }}
               minHeight={140}
-              maxHeight={800}
+              maxHeight="80vh"
               enable={{ top: !isExpanded }}
               handleClasses={{
                 top: "h-1 bg-border/50 hover:bg-primary cursor-row-resize transition-colors z-30",

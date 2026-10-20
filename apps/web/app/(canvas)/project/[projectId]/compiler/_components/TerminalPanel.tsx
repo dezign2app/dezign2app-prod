@@ -76,7 +76,8 @@ export function TerminalPanel({
         const saved = localStorage.getItem(key);
         if (saved) {
           const parsed = parseInt(saved, 10);
-          if (!isNaN(parsed) && parsed >= 100 && parsed <= 700) {
+          const maxH = Math.floor(window.innerHeight * 0.8);
+          if (!isNaN(parsed) && parsed >= 100 && parsed <= maxH) {
             return parsed;
           }
         }
@@ -258,10 +259,14 @@ export function TerminalPanel({
 
   return (
     <Resizable
-      size={{ width: "100%", height: isMaximized ? "85%" : terminalHeight }}
+      size={{ width: "100%", height: isMaximized ? "80vh" : terminalHeight }}
       onResizeStop={(e, direction, ref, d) => {
         setTerminalHeight((prev) => {
-          const next = Math.max(100, Math.min(700, prev + d.height));
+          const maxH =
+            typeof window !== "undefined"
+              ? Math.floor(window.innerHeight * 0.8)
+              : 1200;
+          const next = Math.max(100, Math.min(maxH, prev + d.height));
           try {
             const key = projectId
               ? `compiler_terminal_height_${projectId}`
@@ -272,7 +277,7 @@ export function TerminalPanel({
         });
       }}
       minHeight={100}
-      maxHeight={700}
+      maxHeight="80vh"
       enable={{ top: !isMaximized }}
       handleClasses={{
         top: "h-1 bg-border/50 hover:bg-primary cursor-row-resize transition-colors z-30",
