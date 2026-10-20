@@ -150,7 +150,7 @@ export function useStepRowState({
   extraSources = [],
   onChange,
 }: UseStepRowStateProps) {
-  const meta = STEP_TYPE_META[step.type] || STEP_TYPE_META.custom_code;
+  const meta = STEP_TYPE_META[step.type] || STEP_TYPE_META.transform;
 
   // Available sources (request body, params, query, headers, env, prior steps, or event payload/metadata)
   const availableSources = useMemo(
@@ -514,15 +514,51 @@ export function useStepRowState({
         const targetNode =
           allNodes.find((n) => n.id === step.langGraphTargetNodeId && n.type === "langgraph") ||
           allNodes.find((n) => n.type === "langgraph");
-        const channels = targetNode?.data?.stateChannels;
-        if (Array.isArray(channels) && channels.length > 0) {
-          return channels.map((ch) => ({
-            name: ch.key,
-            type: ch.type || "string",
-            required: true,
-          }));
+        const inChannels = targetNode?.data?.inputChannels;
+        const stateChannels = targetNode?.data?.stateChannels;
+        const memoryConfig = targetNode?.data?.memoryConfig;
+        const hasMemory = Boolean(
+          memoryConfig && memoryConfig.enabled !== false && memoryConfig.checkpointer,
+        );
+
+        const args: ExpectedArg[] = [];
+
+        if (Array.isArray(inChannels) && inChannels.length > 0) {
+          for (const ch of inChannels) {
+            if (ch && ch.key) {
+              args.push({
+                name: ch.key,
+                type: ch.type || "string",
+                required: ch.required ?? (ch.key === "messages"),
+                description: ch.description || `Input channel: ${ch.key}`,
+              });
+            }
+          }
+        } else if (Array.isArray(stateChannels) && stateChannels.length > 0) {
+          for (const ch of stateChannels) {
+            if (ch && ch.key) {
+              args.push({
+                name: ch.key,
+                type: ch.type || "string",
+                required: ch.key === "messages",
+                description: `State channel: ${ch.key}`,
+              });
+            }
+          }
+        } else {
+          args.push({ name: "messages", type: "BaseMessage[]", required: true });
         }
-        return [{ name: "messages", type: "BaseMessage[]", required: true }];
+
+        if (hasMemory && !args.some((a) => a.name === "thread_id" || a.name === "threadId")) {
+          args.push({
+            name: "thread_id",
+            type: "string",
+            required: true,
+            description: "Session thread ID for checkpointer memory",
+          });
+        }
+
+        return args;
       }
 
       return [];

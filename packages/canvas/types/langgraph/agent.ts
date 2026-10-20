@@ -17,8 +17,8 @@ import type {
   LangGraphMemoryDefinition,
 } from "./memory";
 import type { LangGraphMiddlewareDefinition } from "./middleware";
-import type { PipelineStepInputBinding } from "../pipeline";
 import type { CustomTypeItem } from "../custom-types";
+
 
 export type LangGraphEventStreamType =
   | "stream.messages"
@@ -88,42 +88,21 @@ export interface LangGraphAgentMemoryConfig {
   saveMessages?: boolean;
 }
 
+import type { PipelineStepType } from "../../schemas/shared";
+import type { PipelineStepDraft } from "../pipeline";
+
 export type LangGraphNodeStepType =
+  | PipelineStepType
   | "state_updates"
   | "llm_call"
-  | "custom_code"
   | "transformer"
-  | "transform"
   | "tools"
   | "structured_output"
   | "middleware"
   | "streaming";
 
-export interface LangGraphNodePipelineStep {
-  id: string;
+export interface LangGraphNodePipelineStep extends Omit<PipelineStepDraft, "type"> {
   type: LangGraphNodeStepType;
-  label?: string;
-  customCode?: {
-    body?: string;
-  };
-  llmConfig?: {
-    enabled?: boolean;
-    provider?: string;
-    model?: string;
-    temperature?: number;
-  };
-  systemPrompt?: string;
-  transformerNodeId?: string;
-  transformerRef?: string;
-  functionRef?: {
-    name?: string;
-    importPath?: string;
-    inputSchema?: Array<{ name: string; type: string; required?: boolean; description?: string }>;
-    returnSchema?: Array<{ name: string; type: string; required?: boolean; description?: string }>;
-  };
-  outputVariable?: string;
-  outputSchema?: Array<{ name: string; type: string; required?: boolean; description?: string }>;
-  inputBindings?: PipelineStepInputBinding[];
 }
 
 export interface LangGraphAgentDefinition {

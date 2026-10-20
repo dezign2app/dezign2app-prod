@@ -101,4 +101,43 @@ export function resolveLangGraphStepPaths(
       description: "Complete final graph state dictionary",
     });
   }
+
+  // Streaming transport metadata
+  if (step.langGraphStreamingEnabled) {
+    if (!stepPaths.some((p) => p.path === "streamed")) {
+      stepPaths.push({
+        path: "streamed",
+        type: "boolean",
+        description: "Indicates real-time token stream was active",
+      });
+    }
+    if (!stepPaths.some((p) => p.path === "protocol")) {
+      stepPaths.push({
+        path: "protocol",
+        type: "string",
+        description: `Streaming transport protocol (${step.langGraphStreamingProtocol || "sse"})`,
+      });
+    }
+    if (step.langGraphStreamingProtocol === "websocket" && !stepPaths.some((p) => p.path === "room")) {
+      stepPaths.push({
+        path: "room",
+        type: "string",
+        description: "Target WebSocket broadcast room",
+      });
+    }
+    if (step.langGraphStreamingProtocol === "kafka" && !stepPaths.some((p) => p.path === "topic")) {
+      stepPaths.push({
+        path: "topic",
+        type: "string",
+        description: "Target Kafka topic for streaming tokens",
+      });
+    }
+    if (step.langGraphStreamingProtocol === "redis_stream" && !stepPaths.some((p) => p.path === "streamKey")) {
+      stepPaths.push({
+        path: "streamKey",
+        type: "string",
+        description: "Target Redis stream key for streaming tokens",
+      });
+    }
+  }
 }

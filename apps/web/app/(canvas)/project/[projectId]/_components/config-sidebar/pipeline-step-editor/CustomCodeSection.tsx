@@ -19,7 +19,7 @@ export const CustomCodeSection = ({
       <Label className="text-[10px] text-muted-foreground">TypeScript code</Label>
       <BufferedTextarea
         className="text-xs font-mono bg-background/60 border border-border/60 rounded-md p-2 min-h-[80px] resize-y text-foreground/90 focus:outline-none focus:ring-1 focus:ring-primary/40"
-        value={step.customCode ?? ""}
+        value={typeof step.customCode === "string" ? step.customCode : ""}
         onCommit={(val) => onChange({ ...step, customCode: val })}
         placeholder="// raw TypeScript to inline at this step&#10;const result = someValue;"
       />

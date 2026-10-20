@@ -12,7 +12,7 @@ import {
   STEP_TYPE_EVALUATOR,
   STEP_TYPE_SUMMARIZER,
   STEP_TYPE_HUMAN_GATE,
-  STEP_TYPE_CUSTOM_CODE,
+  STEP_TYPE_TRANSFORMER,
   STEP_TYPE_VECTOR_SEARCH,
   STEP_TYPE_ROUTER,
 } from "@workspace/canvas/constants";
@@ -41,7 +41,7 @@ export const LangGraphStepTypeSelector: React.FC<
           <SelectItem value={STEP_TYPE_EVALUATOR}>Evaluator</SelectItem>
           <SelectItem value={STEP_TYPE_SUMMARIZER}>Summarizer</SelectItem>
           <SelectItem value={STEP_TYPE_HUMAN_GATE}>Human Gate</SelectItem>
-          <SelectItem value={STEP_TYPE_CUSTOM_CODE}>Custom Code</SelectItem>
+          <SelectItem value={STEP_TYPE_TRANSFORMER}>Transformer</SelectItem>
           <SelectItem value={STEP_TYPE_VECTOR_SEARCH}>Vector Search</SelectItem>
         </SelectContent>
       </Select>

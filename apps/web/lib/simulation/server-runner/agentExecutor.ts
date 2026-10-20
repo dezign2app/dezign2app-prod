@@ -478,7 +478,7 @@ export async function executeAgentNode(
     const trDef = findTransformerNode(node.id, step, nodes, edges);
     const code =
       trDef?.code ||
-      step.customCode?.body ||
+      step.customCode ||
       "";
     const trName =
       trDef?.name ||
@@ -585,7 +585,7 @@ export async function executeAgentNode(
       if (step.type === "transformer" || step.type === "transform") {
         await runTransformerStep(step, step.label || "Transformer");
       } else if (step.type === "custom_code") {
-        await runCustomCodeStep(step.customCode?.body, step.label || "Custom Code");
+        await runCustomCodeStep(step.customCode, step.label || "Custom Code");
         if (step.outputVariable && outputDelta[step.outputVariable]) {
           stepOutputs.set(step.outputVariable, outputDelta[step.outputVariable] as StepStateValue);
         }

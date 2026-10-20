@@ -8,11 +8,26 @@ import {
   Wrench,
   Shield,
   Shuffle,
+  Database,
+  HardDrive,
+  Globe,
+  Cloud,
+  Variable,
+  GitBranch,
+  ShieldAlert,
+  MonitorSmartphone,
+  GitFork,
+  Layers,
+  Repeat,
+  Send,
+  LogOut,
+  Network,
 } from "lucide-react";
 import type {
   AgentNodeData,
   LangGraphNodeStepType,
   LangGraphNodePipelineStep,
+  PipelineStepDraft,
 } from "@workspace/canvas";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -111,16 +126,169 @@ export const LANGGRAPH_STEP_META: Record<LangGraphNodeStepType, LangGraphStepMet
     badgeBg: "bg-purple-500/10 text-purple-300 border-purple-500/25",
     description: "Compute node for data transformation & custom TypeScript logic",
   },
+  db_operation: {
+    type: "db_operation",
+    label: "DB Operation",
+    icon: Database,
+    color: "text-emerald-400",
+    borderColor: "border-emerald-500/40",
+    badgeBg: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25",
+    description: "Execute database query, mutation, or transaction",
+  },
+  redis_operation: {
+    type: "redis_operation",
+    label: "Redis",
+    icon: Zap,
+    color: "text-red-400",
+    borderColor: "border-red-500/40",
+    badgeBg: "bg-red-500/10 text-red-300 border-red-500/25",
+    description: "Read/write cache or Redis streams",
+  },
+  storage_operation: {
+    type: "storage_operation",
+    label: "Storage",
+    icon: HardDrive,
+    color: "text-amber-400",
+    borderColor: "border-amber-500/40",
+    badgeBg: "bg-amber-500/10 text-amber-300 border-amber-500/25",
+    description: "S3 / Blob storage upload, download, or presigned URLs",
+  },
+  kafka_publish: {
+    type: "kafka_publish",
+    label: "Kafka Publish",
+    icon: Radio,
+    color: "text-orange-400",
+    borderColor: "border-orange-500/40",
+    badgeBg: "bg-orange-500/10 text-orange-300 border-orange-500/25",
+    description: "Publish events to Kafka topics or message queues",
+  },
+  external_call: {
+    type: "external_call",
+    label: "External API Call",
+    icon: Globe,
+    color: "text-emerald-400",
+    borderColor: "border-emerald-500/40",
+    badgeBg: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25",
+    description: "Send HTTP REST / GraphQL requests to 3rd party APIs",
+  },
+  service_call: {
+    type: "service_call",
+    label: "Service Call",
+    icon: Cloud,
+    color: "text-blue-400",
+    borderColor: "border-blue-500/40",
+    badgeBg: "bg-blue-500/10 text-blue-300 border-blue-500/25",
+    description: "Call another internal microservice endpoint",
+  },
+  variable: {
+    type: "variable",
+    label: "Variable",
+    icon: Variable,
+    color: "text-blue-400",
+    borderColor: "border-blue-500/40",
+    badgeBg: "bg-blue-500/10 text-blue-300 border-blue-500/25",
+    description: "Declare or reassign local execution variable",
+  },
+  condition: {
+    type: "condition",
+    label: "If / Else",
+    icon: GitBranch,
+    color: "text-yellow-400",
+    borderColor: "border-yellow-500/40",
+    badgeBg: "bg-yellow-500/10 text-yellow-300 border-yellow-500/25",
+    description: "Conditional branch based on state or prior step output",
+  },
+  try_catch: {
+    type: "try_catch",
+    label: "Try / Catch",
+    icon: ShieldAlert,
+    color: "text-rose-400",
+    borderColor: "border-rose-500/40",
+    badgeBg: "bg-rose-500/10 text-rose-300 border-rose-500/25",
+    description: "Catch errors and execute fallback steps",
+  },
+  switch: {
+    type: "switch",
+    label: "Switch",
+    icon: GitFork,
+    color: "text-indigo-400",
+    borderColor: "border-indigo-500/40",
+    badgeBg: "bg-indigo-500/10 text-indigo-300 border-indigo-500/25",
+    description: "Multi-way branch on value match",
+  },
+  parallel: {
+    type: "parallel",
+    label: "Parallel",
+    icon: Layers,
+    color: "text-violet-400",
+    borderColor: "border-violet-500/40",
+    badgeBg: "bg-violet-500/10 text-violet-300 border-violet-500/25",
+    description: "Execute branches concurrently with Promise.all",
+  },
+  loop: {
+    type: "loop",
+    label: "Loop",
+    icon: Repeat,
+    color: "text-pink-400",
+    borderColor: "border-pink-500/40",
+    badgeBg: "bg-pink-500/10 text-pink-300 border-pink-500/25",
+    description: "Iterate over collection or repeat execution",
+  },
+  push_to_client: {
+    type: "push_to_client",
+    label: "Push to Client",
+    icon: MonitorSmartphone,
+    color: "text-cyan-400",
+    borderColor: "border-cyan-500/40",
+    badgeBg: "bg-cyan-500/10 text-cyan-300 border-cyan-500/25",
+    description: "Deliver processed result to connected client",
+  },
+  return_response: {
+    type: "return_response",
+    label: "Return Response",
+    icon: Send,
+    color: "text-emerald-400",
+    borderColor: "border-emerald-500/40",
+    badgeBg: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25",
+    description: "Send HTTP response and terminate pipeline",
+  },
+  early_return: {
+    type: "early_return",
+    label: "Early Return",
+    icon: LogOut,
+    color: "text-amber-400",
+    borderColor: "border-amber-500/40",
+    badgeBg: "bg-amber-500/10 text-amber-300 border-amber-500/25",
+    description: "Conditionally terminate execution early",
+  },
+  langgraph_invoke: {
+    type: "langgraph_invoke",
+    label: "Invoke Subgraph",
+    icon: Network,
+    color: "text-sky-400",
+    borderColor: "border-sky-500/40",
+    badgeBg: "bg-sky-500/10 text-sky-300 border-sky-500/25",
+    description: "Invoke another LangGraph agent or subgraph",
+  },
 };
 
 /**
  * Primary Addable Node Execution Steps
- * (Tools, Structured Output, Middleware, and Event Streaming are grouped inside LLM Agent;
- *  State Updates is the pinned terminal return step)
+ * Includes all pipeline step operations available in PipelineStepEditor
  */
 export const ADDABLE_LANGGRAPH_STEP_TYPES: readonly LangGraphNodeStepType[] = [
   "llm_call",
   "transformer",
+  "db_operation",
+  "redis_operation",
+  "storage_operation",
+  "kafka_publish",
+  "external_call",
+  "service_call",
+  "variable",
+  "condition",
+  "try_catch",
+  "push_to_client",
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -154,6 +322,7 @@ export function deriveInitialPipelineSteps(
           id: `step_trans_${codeIndex}`,
           type: "transformer",
           label: `Transformer ${codeIndex}`,
+          name: `Transformer ${codeIndex}`,
           outputVariable: `transformedData_${codeIndex}`,
           outputSchema: [{ name: "result", type: "string", required: true }],
           inputBindings: [],
@@ -161,15 +330,13 @@ export function deriveInitialPipelineSteps(
       } else if (s === "custom_code") {
         codeIndex++;
         steps.push({
-          id: `step_code_${codeIndex}`,
-          type: "custom_code",
-          label:
-            codeIndex === 1 && !steps.some((st) => st.type === "llm_call")
-              ? "Pre-processing"
-              : `Custom Code ${codeIndex}`,
-          customCode: data.customCode || {
-            body: "// TypeScript logic: (state, clone) => Partial<State>\nreturn {\n  // mutate channels\n};\n",
-          },
+          id: `step_trans_${codeIndex}`,
+          type: "transformer",
+          label: `Transformer ${codeIndex}`,
+          name: `Transformer ${codeIndex}`,
+          outputVariable: `transformedData_${codeIndex}`,
+          outputSchema: [{ name: "result", type: "string", required: true }],
+          inputBindings: [],
         });
       } else if (
         s === "llm_call" ||
@@ -184,6 +351,7 @@ export function deriveInitialPipelineSteps(
             id: `step_llm_${llmIndex}`,
             type: "llm_call",
             label: "LLM Agent",
+            name: "LLM Agent",
           });
         }
       }
@@ -222,17 +390,42 @@ export function deriveInitialPipelineSteps(
       id: "step_llm_1",
       type: "llm_call",
       label: "LLM Agent",
+      name: "LLM Agent",
     });
   }
 
   if (data.customCode?.body && data.customCode.body.trim().length > 0) {
     steps.push({
-      id: "step_code_1",
-      type: "custom_code",
-      label: steps.length > 0 ? "Post-processing" : "Custom Code",
-      customCode: data.customCode,
+      id: `step_trans_${steps.length + 1}`,
+      type: "transformer",
+      label: steps.length > 0 ? "Response Transform" : "Transformer",
+      name: steps.length > 0 ? "Response Transform" : "Transformer",
+      outputVariable: `transformedData_${steps.length + 1}`,
+      outputSchema: [{ name: "result", type: "string", required: true }],
+      inputBindings: [],
     });
   }
 
   return steps;
+}
+
+/**
+ * Type guard to check if a LangGraph pipeline step is a standard generic pipeline step.
+ * Returns true for DB operations, Redis, Kafka, External call, Service call, Variable,
+ * Condition, TryCatch, Switch, Parallel, Loop, PushToClient, etc.
+ */
+export function isGenericPipelineStep(
+  step: LangGraphNodePipelineStep,
+): step is PipelineStepDraft {
+  return (
+    step.type !== "state_updates" &&
+    step.type !== "llm_call" &&
+    step.type !== "custom_code" &&
+    step.type !== "transformer" &&
+    step.type !== "transform" &&
+    step.type !== "streaming" &&
+    step.type !== "tools" &&
+    step.type !== "structured_output" &&
+    step.type !== "middleware"
+  );
 }

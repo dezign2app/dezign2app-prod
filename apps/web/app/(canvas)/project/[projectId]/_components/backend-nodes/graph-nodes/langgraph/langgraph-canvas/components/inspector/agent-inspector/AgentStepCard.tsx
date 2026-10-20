@@ -26,11 +26,12 @@ import type {
   LangGraphCanvasNode,
 } from "@workspace/canvas";
 
-import { LANGGRAPH_STEP_META } from "./stepTypes";
+import { LANGGRAPH_STEP_META, isGenericPipelineStep } from "./stepTypes";
 import { AgentLlmStepContent } from "./AgentLlmStepContent";
 import { AgentTransformerStepSection } from "./AgentTransformerStepSection";
 import { AgentStateUpdatesSection } from "./AgentStateUpdatesSection";
 import { AgentEventStreamingSection } from "./AgentEventStreamingSection";
+import { AgentGenericPipelineStepContent } from "./AgentGenericPipelineStepContent";
 
 interface AgentStepCardProps {
   step: LangGraphNodePipelineStep;
@@ -165,7 +166,7 @@ export function AgentStepCard({
       }
       case "custom_code": {
         const body =
-          step.customCode?.body?.trim() ??
+          step.customCode?.trim() ??
           selectedAgentData.customCode?.body?.trim();
         return (
           <span className="text-emerald-300/90 font-mono truncate">
@@ -197,6 +198,115 @@ export function AgentStepCard({
             {streamConfig.enabled !== false
               ? `${streamConfig.version || "v3"} Active (Standard SSE)`
               : "Disabled"}
+          </span>
+        );
+      }
+      case "db_operation": {
+        const opName = step.operationId || step.functionRef?.name || "DB Query";
+        const outVar = step.outputVariable ? ` → ${step.outputVariable}` : "";
+        return (
+          <span className="text-emerald-300/90 font-mono truncate">
+            {opName}
+            {outVar}
+          </span>
+        );
+      }
+      case "redis_operation": {
+        const op = step.operationId || "cache";
+        const outVar = step.outputVariable ? ` → ${step.outputVariable}` : "";
+        return (
+          <span className="text-red-300/90 font-mono truncate">
+            redis.{op}
+            {outVar}
+          </span>
+        );
+      }
+      case "storage_operation": {
+        const op = step.operationId || "storage";
+        const outVar = step.outputVariable ? ` → ${step.outputVariable}` : "";
+        return (
+          <span className="text-amber-300/90 font-mono truncate">
+            storage.{op}
+            {outVar}
+          </span>
+        );
+      }
+      case "kafka_publish": {
+        const topic = step.messagingResourceId || step.operationId || "event";
+        return (
+          <span className="text-orange-300/90 font-mono truncate">
+            kafka.publish({topic})
+          </span>
+        );
+      }
+      case "external_call": {
+        const target = step.functionRef?.name || step.externalEndpointId || "HTTP Request";
+        const outVar = step.outputVariable ? ` → ${step.outputVariable}` : "";
+        return (
+          <span className="text-emerald-300/90 font-mono truncate">
+            api.{target}
+            {outVar}
+          </span>
+        );
+      }
+      case "service_call": {
+        const service = step.serviceId || "service";
+        const outVar = step.outputVariable ? ` → ${step.outputVariable}` : "";
+        return (
+          <span className="text-blue-300/90 font-mono truncate">
+            {service}.call()
+            {outVar}
+          </span>
+        );
+      }
+      case "variable": {
+        const op = step.variableOperation || "declare";
+        const varName = step.outputVariable || "var";
+        return (
+          <span className="text-blue-300/90 font-mono truncate">
+            {op === "declare" ? `${step.declarationKind || "const"} ${varName}` : `${varName} = ...`}
+          </span>
+        );
+      }
+      case "condition": {
+        return (
+          <span className="text-yellow-300/90 font-mono truncate">
+            if / else branch
+          </span>
+        );
+      }
+      case "try_catch": {
+        return (
+          <span className="text-rose-300/90 font-mono truncate">
+            try / catch block
+          </span>
+        );
+      }
+      case "switch": {
+        return (
+          <span className="text-indigo-300/90 font-mono truncate">
+            switch case
+          </span>
+        );
+      }
+      case "parallel": {
+        return (
+          <span className="text-violet-300/90 font-mono truncate">
+            Promise.all
+          </span>
+        );
+      }
+      case "loop": {
+        return (
+          <span className="text-pink-300/90 font-mono truncate">
+            loop ({step.loopKind || "for_each"})
+          </span>
+        );
+      }
+      case "push_to_client": {
+        return (
+          <span className="text-cyan-300/90 font-mono truncate">
+            push({step.pushProtocol || "sse"})
           </span>
         );
       }
@@ -264,7 +374,7 @@ export function AgentStepCard({
               </span>
             </div>
             <LocalTextarea
-              value={step.customCode?.body ?? (selectedAgentData.customCode?.body || "")}
+              value={typeof step.customCode === "string" ? step.customCode : ""}
               onChange={(e) => onUpdateCode(e.target.value)}
               className="text-xs min-h-[120px] font-mono bg-background/60 border border-border/60 rounded-md p-2.5 resize-y leading-relaxed"
               placeholder={`// Example: mutate or compute fields on state\nreturn {\n  count: (state.count || 0) + 1,\n  timestamp: Date.now()\n};`}
@@ -299,6 +409,18 @@ export function AgentStepCard({
         );
 
       default:
+        if (isGenericPipelineStep(step)) {
+          return (
+            <AgentGenericPipelineStepContent
+              step={step}
+              index={index}
+              priorSteps={priorSteps.filter(isGenericPipelineStep)}
+              allSteps={selectedAgentData.pipelineSteps?.filter(isGenericPipelineStep)}
+              stateChannels={stateChannels}
+              onUpdateStep={onUpdateStep}
+            />
+          );
+        }
         return null;
     }
   };

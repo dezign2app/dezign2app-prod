@@ -7,6 +7,7 @@ import {
   Code2,
   Database,
   GitBranch,
+  Shuffle,
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
@@ -17,6 +18,7 @@ import {
   STEP_TYPE_LLM_CALL,
   STEP_TYPE_TOOL_NODE,
   STEP_TYPE_CUSTOM_CODE,
+  STEP_TYPE_TRANSFORMER,
   STEP_TYPE_VECTOR_SEARCH,
   STEP_TYPE_ROUTER,
 } from "@workspace/canvas/constants";
@@ -69,8 +71,8 @@ export const LangGraphStepHeader: React.FC<LangGraphStepHeaderProps> = ({
           {stepType === STEP_TYPE_TOOL_NODE && (
             <Wrench className="w-3.5 h-3.5" />
           )}
-          {stepType === STEP_TYPE_CUSTOM_CODE && (
-            <Code2 className="w-3.5 h-3.5" />
+          {(stepType === STEP_TYPE_TRANSFORMER || stepType === STEP_TYPE_CUSTOM_CODE) && (
+            <Shuffle className="w-3.5 h-3.5" />
           )}
           {stepType === STEP_TYPE_VECTOR_SEARCH && (
             <Database className="w-3.5 h-3.5" />
@@ -80,6 +82,7 @@ export const LangGraphStepHeader: React.FC<LangGraphStepHeaderProps> = ({
           )}
           {stepType !== STEP_TYPE_LLM_CALL &&
             stepType !== STEP_TYPE_TOOL_NODE &&
+            stepType !== STEP_TYPE_TRANSFORMER &&
             stepType !== STEP_TYPE_CUSTOM_CODE &&
             stepType !== STEP_TYPE_VECTOR_SEARCH &&
             stepType !== STEP_TYPE_ROUTER && <Brain className="w-3.5 h-3.5" />}

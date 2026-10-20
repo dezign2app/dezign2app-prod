@@ -75,6 +75,7 @@ describe("AgentLlmStepContent Prompt Variable Insertion", () => {
   const dummyPriorSteps: LangGraphNodePipelineStep[] = [
     {
       id: "step_trans_1",
+      name: "Transformer 1",
       type: "transformer",
       outputVariable: "step1Result",
       outputSchema: [{ name: "field1", type: "string" }],

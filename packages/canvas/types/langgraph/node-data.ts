@@ -43,6 +43,8 @@ export interface CanvasLangGraphStepNodeData {
     | "tool_node"
     | "evaluator"
     | "summarizer"
+    | "transformer"
+    | "transform"
     | "custom_code"
     | "human_gate"
     | "interrupt"
