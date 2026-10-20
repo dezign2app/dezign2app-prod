@@ -203,7 +203,7 @@ describe("compileNextjsV16WebClient with Bearer token & headers", () => {
     expect(pageFile?.content).not.toContain("pageLoadLoading");
   });
 
-  it("should include Page Load Data section only when pageLoad event is configured", () => {
+  it("should route pageLoad event data to Output Log and not render separate Page Load Data card", () => {
     const webPageWithLoad: BackendNode = {
       id: "node-client-load",
       type: "webPage",
@@ -253,7 +253,10 @@ describe("compileNextjsV16WebClient with Bearer token & headers", () => {
       f.filename.includes("products/page.tsx"),
     );
     expect(pageWithLoad).toBeDefined();
-    expect(pageWithLoad?.content).toContain("Page Load Data");
+    expect(pageWithLoad?.content).not.toContain("Page Load Data");
+    expect(pageWithLoad?.content).toContain("Output Log");
+    expect(pageWithLoad?.content).toContain("setTriggerLogs");
+    expect(pageWithLoad?.content).toContain("fetchProducts");
     expect(pageWithLoad?.content).toContain("setPageLoadData");
     expect(pageWithLoad?.content).toContain("useState<JSONValue>(null)");
     expect(pageWithLoad?.content).toContain("const results: Record<string, JSONValue> = {};");
@@ -273,6 +276,7 @@ describe("compileNextjsV16WebClient with Bearer token & headers", () => {
     );
     expect(pageWithoutLoad).toBeDefined();
     expect(pageWithoutLoad?.content).not.toContain("Page Load Data");
+    expect(pageWithoutLoad?.content).not.toContain("Output Log");
     expect(pageWithoutLoad?.content).not.toContain("setPageLoadData");
     expect(pageWithoutLoad?.content).not.toContain("pageLoadData");
   });

@@ -75,7 +75,7 @@ export function generatePageCode(
 
   const mediaCaps = resolveWebRtcMediaCapabilities(webrtcConnections);
   const hasRealtime = hasSse || hasWs || hasWebRtc;
-  const hasLogsSection = hasApiActions || hasRealtime;
+  const hasLogsSection = hasApiActions || hasRealtime || hasPageLoad;
   const hasUnmount = Boolean(unmountCleanups && unmountCleanups.trim());
 
   const hooksList: string[] = [];
@@ -138,7 +138,7 @@ export function generatePageCode(
   if (cardComponentsNeeded) {
     uiImports.push(`import { Card, CardHeader, CardTitle, CardContent } from "@workspace/ui/components/card";`);
   }
-  if (hasPageLoad || hasRealtime) {
+  if (hasRealtime) {
     uiImports.push(`import { Badge } from "@workspace/ui/components/badge";`);
   }
   if (hasAuth && (hasPageLoad || hasWs || hasWebRtc)) {
