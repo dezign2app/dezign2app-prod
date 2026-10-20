@@ -41,6 +41,9 @@ import {
   buildLibPackageJson,
   buildLibTsConfig,
   buildLibReadme,
+  buildKafkaHelperFile,
+  buildRedisHelperFile,
+  buildDbHelperFile,
 } from "./generators/lib";
 import { buildServerFile, buildExpressDtsFile } from "./generators/server";
 import { buildLangGraphScenariosFile } from "./generators/scenarios";
@@ -203,6 +206,31 @@ export function compileLangGraph(input: CompileLangGraphInput): CompiledFile[] {
       filename: "src/tests/langgraph-scenarios.ts",
       language: "typescript",
       content: buildLangGraphScenariosFile(input.testCases),
+    });
+  }
+
+  // ── src/lib/ client helpers (when pipeline steps use Kafka, Redis, or DB) ──
+  if (ctx.usesKafka && !isPackageMode) {
+    files.push({
+      filename: "src/lib/kafka.ts",
+      language: "typescript",
+      content: buildKafkaHelperFile(),
+    });
+  }
+
+  if (ctx.usesRedis && !isPackageMode && !input.redisPackageName) {
+    files.push({
+      filename: "src/lib/redis.ts",
+      language: "typescript",
+      content: buildRedisHelperFile(),
+    });
+  }
+
+  if (ctx.usesDb && !isPackageMode && !input.dbPackageName) {
+    files.push({
+      filename: "src/lib/db.ts",
+      language: "typescript",
+      content: buildDbHelperFile(input.dbEngine),
     });
   }
 

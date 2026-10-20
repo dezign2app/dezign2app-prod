@@ -103,4 +103,8 @@ export interface CompileContext {
   agentMemoryMap: Map<string, string[]>;
   routerStepIds: Set<string>;
   graphId: string;
+  usesKafka?: boolean;
+  usesRedis?: boolean;
+  usesDb?: boolean;
+  usesStorage?: boolean;
 }

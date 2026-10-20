@@ -13,6 +13,8 @@ import {
   indent,
 } from "../utils";
 
+import { renderAgentPipelineSteps } from "./agentPipelineSteps";
+
 export function buildAgentNodeFile(
   agentNode: { id: string; data: CanvasNodeData },
   ctx: CompileContext,
@@ -31,39 +33,67 @@ export function buildAgentNodeFile(
   const llmMeta = llmId ? llmMetaMap.get(llmId) : null;
   const llmVar = llmMeta ? llmMeta.varName : null;
 
-  const imports: string[] = [`import { ${schemaName}Type } from "../state";`];
+  const importMap = new Map<string, Set<string>>();
+  const addImport = (source: string, specifiers: string[]) => {
+    if (!importMap.has(source)) importMap.set(source, new Set());
+    const set = importMap.get(source)!;
+    specifiers.forEach((s) => set.add(s));
+  };
+
+  addImport("../state", [`${schemaName}Type`]);
 
   const systemPrompt = d.systemPrompt?.trim();
-  if (systemPrompt && llmVar) {
-    imports.push(`import { SystemMessage } from "@langchain/core/messages";`);
-  }
 
-  if (llmVar && llmMeta) {
-    imports.push(`import { ${llmVar} } from "../llm/${llmMeta.fileName}";`);
-  }
+  const pipelineSteps = d.pipelineSteps;
+  const hasConfiguredSteps = Array.isArray(pipelineSteps) && pipelineSteps.length > 0;
 
-  const bodyLines: string[] = [];
+  let bodyLines: string[] = [];
+  let responseVar = "response";
+  let hasLLM = false;
 
-  if (systemPrompt && llmVar) {
-    bodyLines.push(`  const messages = [`);
-    bodyLines.push(
-      `    new SystemMessage(\`${escapeTemplateLiteral(systemPrompt)}\`),`,
-    );
-    bodyLines.push(`    ...state.messages,`);
-    bodyLines.push(`  ];`);
-    bodyLines.push(`  const response = await ${llmVar}.invoke(messages);`);
-  } else if (llmVar) {
-    bodyLines.push(
-      `  const response = await ${llmVar}.invoke(state.messages);`,
-    );
+  if (hasConfiguredSteps) {
+    if (llmVar && llmMeta) {
+      addImport(`../llm/${llmMeta.fileName}`, [llmVar]);
+    }
+
+    const rendered = renderAgentPipelineSteps(pipelineSteps, d, ctx, llmVar);
+    bodyLines = rendered.bodyLines;
+    responseVar = rendered.llmOutputVar;
+    hasLLM = rendered.hasLLMCall;
+
+    for (const imp of rendered.imports) {
+      addImport(imp.source, imp.specifiers);
+    }
   } else {
-    bodyLines.push(`  // Node without LLM execution logic`);
-    bodyLines.push(`  const response: Record<string, string | undefined> = {};`);
+    // Legacy fallback without pipelineSteps array
+    if (llmVar && llmMeta) {
+      addImport(`../llm/${llmMeta.fileName}`, [llmVar]);
+    }
+
+    if (systemPrompt && llmVar) {
+      addImport("@langchain/core/messages", ["SystemMessage"]);
+      bodyLines.push(`  const messages = [`);
+      bodyLines.push(
+        `    new SystemMessage(\`${escapeTemplateLiteral(systemPrompt)}\`),`,
+      );
+      bodyLines.push(`    ...state.messages,`);
+      bodyLines.push(`  ];`);
+      bodyLines.push(`  const response = await ${llmVar}.invoke(messages);`);
+      hasLLM = true;
+    } else if (llmVar) {
+      bodyLines.push(
+        `  const response = await ${llmVar}.invoke(state.messages);`,
+      );
+      hasLLM = true;
+    } else {
+      bodyLines.push(`  // Node without LLM execution logic`);
+      bodyLines.push(`  const response: Record<string, string | undefined> = {};`);
+    }
   }
 
   const stateUpdates = d.stateUpdates || [];
   const returnEntries: string[] = [];
-  if (llmVar) returnEntries.push(`    messages: [response],`);
+  if (hasLLM) returnEntries.push(`    messages: [${responseVar}],`);
 
   for (const su of stateUpdates) {
     if (su.channelKey === "messages") continue;
@@ -77,21 +107,21 @@ export function buildAgentNodeFile(
     if (!isValueless) {
       if (su.source === "structured_field" || su.schemaField) {
         const fieldKey = su.schemaField || su.value;
-        val = `response?.${fieldKey}`;
+        val = `${responseVar}?.${fieldKey}`;
       } else if (su.source === "structured_full") {
-        val = `response`;
+        val = responseVar;
       } else if (su.source === "expression" || (su.value && su.value.trim().startsWith("{"))) {
         val = su.value || `state.${key}`;
         if (typeof val === "string" && val.includes("${")) {
           val = val
-            .replace(/["`]\$\{response\.([a-zA-Z0-9_]+)\}["`]/g, "response?.$1")
+            .replace(/["`]\$\{response\.([a-zA-Z0-9_]+)\}["`]/g, `${responseVar}?.$1`)
             .replace(/["`]\$\{state\.([a-zA-Z0-9_]+)\}["`]/g, "state?.$1")
             .replace(/["`]\$\{([^}]+)\}["`]/g, "$1");
         }
       } else if (su.source === "message_content") {
-        val = `typeof response?.content === "string" ? response.content : JSON.stringify(response?.content ?? "")`;
+        val = `typeof ${responseVar}?.content === "string" ? ${responseVar}.content : JSON.stringify(${responseVar}?.content ?? "")`;
       } else if (su.source === "message_object") {
-        val = `response`;
+        val = responseVar;
       } else if (su.source === "literal") {
         val = JSON.stringify(su.value ?? "");
       } else {
@@ -114,7 +144,11 @@ export function buildAgentNodeFile(
   bodyLines.push(...returnEntries);
   bodyLines.push(`  };`);
 
-  return `${imports.join("\n")}
+  const importStatements = Array.from(importMap.entries())
+    .map(([source, specifiers]) => `import { ${Array.from(specifiers).join(", ")} } from "${source}";`)
+    .join("\n");
+
+  return `${importStatements}
 
 export async function ${fnName}(state: ${schemaName}Type) {
 ${bodyLines.join("\n")}
