@@ -6,7 +6,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { isElectron, getElectronAPI } from "@/lib/electron";
 import { downloadMonorepoZip } from "./utils/terminalExportUtils";
 import { toast } from "sonner";
-import { XTermTerminalHandle, cleanTerminalText } from "@/components/terminal";
+import {
+  XTermTerminalHandle,
+  cleanTerminalText,
+  copyToClipboard,
+} from "@/components/terminal";
 import { TerminalProps, TerminalType } from "./types";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
 
@@ -212,7 +216,7 @@ export function Terminal({
     ];
   }, [formattedProjectName, files.length, serviceEndpoints.length, inElectron, outputDir, projectId]);
 
-  const handleCopyCurrentTab = () => {
+  const handleCopyCurrentTab = async () => {
     let content = "";
     if (selectedTab === "output") {
       content = outputLogs.join("\n");
@@ -229,10 +233,12 @@ export function Terminal({
         .join("\n");
     }
     if (!content) return;
-    navigator.clipboard.writeText(content);
-    setCopied(true);
-    toast.success("Copied to clipboard!");
-    setTimeout(() => setCopied(false), 2000);
+    const ok = await copyToClipboard(content);
+    if (ok) {
+      setCopied(true);
+      toast.success("Copied to clipboard!");
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   const handleClearCurrentTab = () => {
@@ -275,20 +281,24 @@ export function Terminal({
             <Resizable
               size={{
                 width: "100%",
-                height: isExpanded ? "80vh" : terminalHeight,
+                height: isExpanded ? "90vh" : terminalHeight,
               }}
               onResizeStop={(e, direction, ref, d) => {
+                const maxH =
+                  typeof window !== "undefined"
+                    ? Math.floor(window.innerHeight * 0.9)
+                    : 1200;
                 setTerminalHeight((prev: number) =>
-                  Math.max(140, Math.min(800, prev + d.height)),
+                  Math.max(140, Math.min(maxH, prev + d.height)),
                 );
               }}
               minHeight={140}
-              maxHeight={800}
+              maxHeight="90vh"
               enable={{ top: !isExpanded }}
               handleClasses={{
                 top: "h-1 bg-border/50 hover:bg-primary cursor-row-resize transition-colors z-30",
               }}
-              className="w-full flex flex-col bg-[#090d13] border-t border-border/50 shadow-2xl overflow-hidden font-sans text-xs select-none relative"
+              className="w-full flex flex-col bg-[#090d13] border-t border-border/50 shadow-2xl overflow-hidden font-sans text-xs relative"
             >
               {/* VS Code Bottom Panel Header */}
               <TerminalPanelHeader
@@ -314,7 +324,7 @@ export function Terminal({
               />
 
               {/* Tab View Content - Preserved in DOM to retain active process & terminal buffer */}
-              <div className="w-full h-full flex flex-col flex-1 min-h-0 bg-[#090d13] relative overflow-hidden font-mono text-xs">
+              <div className="w-full h-full flex flex-col flex-1 min-h-0 bg-[#090d13] relative overflow-hidden font-mono text-xs select-text">
                 <div
                   className={`w-full h-full flex flex-col flex-1 min-h-0 ${
                     selectedTab === "terminal" ? "flex" : "hidden"

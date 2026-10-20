@@ -29,3 +29,46 @@ export function cleanTerminalText(text: string): string {
       .replace(/\r/g, "\n")
   );
 }
+
+/**
+ * Copies text to the user's system clipboard with robust fallback support
+ * for modern navigator.clipboard and document.execCommand('copy').
+ * ANSI styling codes and control characters are stripped cleanly before copying.
+ */
+export async function copyToClipboard(text: string): Promise<boolean> {
+  if (!text) return false;
+
+  const clean = cleanTerminalText(text);
+  if (!clean) return false;
+
+  try {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(clean);
+      return true;
+    }
+  } catch (err) {
+    console.warn("navigator.clipboard.writeText failed, attempting execCommand fallback:", err);
+  }
+
+  try {
+    if (typeof document !== "undefined") {
+      const textarea = document.createElement("textarea");
+      textarea.value = clean;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      textarea.style.top = "-9999px";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      const successful = document.execCommand("copy");
+      document.body.removeChild(textarea);
+      return successful;
+    }
+  } catch (fallbackErr) {
+    console.error("execCommand fallback failed:", fallbackErr);
+  }
+
+  return false;
+}
