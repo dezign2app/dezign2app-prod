@@ -172,3 +172,94 @@ ${envVars.length > 0 ? `## Environment Variables\n\nCreate a \`.env\` file:\n\`\
 - **LLM Providers:** ${[...new Set(ctx.llmNodes.map((l) => l.data.provider))].join(", ") || "Default"}
 `;
 }
+
+export function buildKafkaHelperFile(): string {
+  return `import { Kafka, Producer } from "kafkajs";
+
+let producer: Producer | null = null;
+
+export async function getKafkaProducer(): Promise<Producer> {
+  if (!producer) {
+    const brokers = (process.env.KAFKA_BROKERS || "localhost:9092").split(",");
+    const clientId = process.env.KAFKA_CLIENT_ID || "langgraph-agent";
+    const kafka = new Kafka({ clientId, brokers });
+    producer = kafka.producer();
+    await producer.connect();
+  }
+  return producer;
+}
+
+export async function publishKafkaEvent(
+  topic: string,
+  message: Record<string, unknown>,
+  key?: string | null,
+): Promise<void> {
+  const p = await getKafkaProducer();
+  await p.send({
+    topic,
+    messages: [
+      {
+        key: key ?? undefined,
+        value: typeof message === "string" ? message : JSON.stringify(message),
+      },
+    ],
+  });
+}
+`;
+}
+
+export function buildRedisHelperFile(): string {
+  return `import { createClient } from "redis";
+
+let redisClient: ReturnType<typeof createClient> | null = null;
+
+export async function getRedisClient() {
+  if (!redisClient) {
+    const url = process.env.REDIS_URL || "redis://localhost:6379";
+    redisClient = createClient({ url });
+    await redisClient.connect();
+  }
+  return redisClient;
+}
+`;
+}
+
+export function buildDbHelperFile(dbEngine?: string): string {
+  if (dbEngine === "sqlite") {
+    return `import Database from "better-sqlite3";
+
+let dbInstance: Database.Database | null = null;
+
+export function getDb() {
+  if (!dbInstance) {
+    const filename = process.env.DATABASE_URL || "sqlite.db";
+    dbInstance = new Database(filename);
+  }
+  return dbInstance;
+}
+
+export const db = {
+  query: (sql: string, ...params: unknown[]) => getDb().prepare(sql).all(...params),
+};
+`;
+  }
+
+  return `import { Pool } from "pg";
+
+let pool: Pool | null = null;
+
+export function getDbPool(): Pool {
+  if (!pool) {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL || "postgres://postgres:postgres@localhost:5432/postgres",
+    });
+  }
+  return pool;
+}
+
+export const db = {
+  query: (text: string, params?: unknown[]) => getDbPool().query(text, params),
+};
+`;
+}
+

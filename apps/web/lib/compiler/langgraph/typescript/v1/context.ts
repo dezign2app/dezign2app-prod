@@ -163,6 +163,10 @@ export function buildContext(input: CompileLangGraphInput): CompileContext {
     agentMemoryMap,
     routerStepIds,
     graphId: input.graphLabel || "agent",
+    usesKafka: agentNodes.some((a) => a.data?.pipelineSteps?.some((s) => s.type === "kafka_publish")),
+    usesRedis: agentNodes.some((a) => a.data?.pipelineSteps?.some((s) => s.type === "redis_operation")),
+    usesDb: agentNodes.some((a) => a.data?.pipelineSteps?.some((s) => s.type === "db_operation")),
+    usesStorage: agentNodes.some((a) => a.data?.pipelineSteps?.some((s) => s.type === "storage_operation")),
   };
 }
 
@@ -317,6 +321,30 @@ export function buildDependencies(ctx: CompileContext): Record<string, string> {
     if (ctx.input.redisPackageName && ctx.input.outputMode === "package") {
       deps[ctx.input.redisPackageName] = "workspace:*";
     }
+  }
+
+  // Pipeline step dependencies
+  if (ctx.usesKafka) {
+    deps["kafkajs"] = "^2.2.4";
+  }
+
+  if (ctx.usesRedis && !deps["redis"]) {
+    deps["redis"] = "^4.7.0";
+    if (ctx.input.redisPackageName && ctx.input.outputMode === "package") {
+      deps[ctx.input.redisPackageName] = "workspace:*";
+    }
+  }
+
+  if (ctx.usesDb) {
+    if (ctx.input.dbPackageName && ctx.input.outputMode === "package") {
+      deps[ctx.input.dbPackageName] = "workspace:*";
+    } else if (!deps["pg"] && ctx.input.dbEngine !== "sqlite") {
+      deps["pg"] = "^8.13.1";
+    }
+  }
+
+  if (ctx.usesStorage) {
+    deps["@aws-sdk/client-s3"] = "^3.670.0";
   }
 
   return deps;

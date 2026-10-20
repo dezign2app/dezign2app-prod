@@ -598,6 +598,69 @@ export async function executeAgentNode(
           stepOutputs.set(step.outputVariable, llmOut);
           outputDelta[step.outputVariable] = llmOut;
         }
+      } else if (step.type === "kafka_publish") {
+        const topicBinding = step.inputBindings?.find((b) => b.argName === "topic");
+        const keyBinding = step.inputBindings?.find((b) => b.argName === "key");
+        const topic = topicBinding
+          ? String(resolveInputValue(topicBinding.source, { state, stepOutputs }) || "")
+          : (step.name || "agent-events");
+        const key = keyBinding
+          ? String(resolveInputValue(keyBinding.source, { state, stepOutputs }) || "")
+          : undefined;
+        const payloadBindings = step.inputBindings?.filter((b) => b.argName !== "topic" && b.argName !== "key") || [];
+        const payload: StepStateRecord = {};
+        for (const b of payloadBindings) {
+          payload[b.argName] = resolveInputValue(b.source, { state, stepOutputs });
+        }
+        const result: StepStateValue = { published: true, topic, key, payload, timestamp: Date.now() };
+        addLog("info", `[Simulation] Published Kafka event to "${topic}"`, result);
+        const outVar = step.outputVariable || step.id;
+        stepOutputs.set(step.id, result);
+        stepOutputs.set(outVar, result);
+        outputDelta[outVar] = result;
+      } else if (step.type === "db_operation") {
+        const op = step.operationId || step.functionRef?.name || "findMany";
+        const table = step.tableNodeId || step.name || "entity";
+        const result: StepStateValue = { success: true, table, operation: op, count: 1, rows: [{ id: "sim_1", status: "active" }] };
+        addLog("info", `[Simulation] Executed DB operation "${op}" on "${table}"`, result);
+        const outVar = step.outputVariable || step.id;
+        stepOutputs.set(step.id, result);
+        stepOutputs.set(outVar, result);
+        outputDelta[outVar] = result;
+      } else if (step.type === "redis_operation") {
+        const command = (step.operationId || step.functionRef?.name || "get").toLowerCase();
+        const result: StepStateValue = command === "get" ? "cached_value" : { status: "OK" };
+        addLog("info", `[Simulation] Executed Redis command "${command}"`, { command, result });
+        const outVar = step.outputVariable || step.id;
+        stepOutputs.set(step.id, result);
+        stepOutputs.set(outVar, result);
+        outputDelta[outVar] = result;
+      } else if (step.type === "storage_operation") {
+        const op = step.operationId || step.functionRef?.name || "uploadObject";
+        const result: StepStateValue = { success: true, operation: op, url: "https://storage.simulation.local/file.bin" };
+        addLog("info", `[Simulation] Storage operation "${op}"`, result);
+        const outVar = step.outputVariable || step.id;
+        stepOutputs.set(step.id, result);
+        stepOutputs.set(outVar, result);
+        outputDelta[outVar] = result;
+      } else if (step.type === "external_call" || step.type === "service_call") {
+        const result: StepStateValue = { status: 200, data: { simulated: true } };
+        addLog("info", `[Simulation] Call to "${step.label || step.name}"`, result);
+        const outVar = step.outputVariable || step.id;
+        stepOutputs.set(step.id, result);
+        stepOutputs.set(outVar, result);
+        outputDelta[outVar] = result;
+      } else if (step.type === "variable") {
+        const valBinding = step.inputBindings?.find((b) => b.argName === "value" || b.argName === "val");
+        const source = valBinding?.source || step.variableSource;
+        const val: StepStateValue = source ? resolveInputValue(source, { state, stepOutputs }) : null;
+        const outVar = step.outputVariable || step.id;
+        stepOutputs.set(step.id, val);
+        stepOutputs.set(outVar, val);
+        outputDelta[outVar] = val;
+        addLog("info", `[Simulation] Set variable "${outVar}"`, { value: val });
+      } else if (step.type === "push_to_client") {
+        addLog("info", `[Simulation] Push to client event "${step.label || "client"}"`);
       }
     }
   } else {
