@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Resizable } from "re-resizable";
-import { WTermTerminalHandle, cleanTerminalText } from "@/components/terminal";
+import { XTermTerminalHandle, cleanTerminalText } from "@/components/terminal";
 import { useDynamicTerminalSessions } from "../../_components/terminal/hooks/useDynamicTerminalSessions";
 import { usePortMonitor } from "../../_components/terminal/hooks/usePortMonitor";
 import { isElectron } from "@/lib/electron";
@@ -32,7 +32,7 @@ export function TerminalPanel({
   ports = [],
   outputLogs = [],
 }: TerminalPanelProps) {
-  const terminalRefs = useRef<Map<string, WTermTerminalHandle | null>>(new Map());
+  const terminalRefs = useRef<Map<string, XTermTerminalHandle | null>>(new Map());
   const inElectron = isElectron();
   const hasCreatedInitialRef = useRef(false);
 

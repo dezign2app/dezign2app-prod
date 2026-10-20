@@ -12,7 +12,6 @@ import {
 import { ConvexBetterAuthProvider } from "@/providers/convex-auth-provider";
 import { authClient, useSession } from "@/lib/auth-client";
 import { api } from "@workspace/backend/_generated/api";
-import "@/lib/utils/patchResizeObserver";
 import { log } from "@/lib/logger";
 import { Toaster } from "@workspace/ui/components/sonner";
 

@@ -1,2 +1,2 @@
-export * from "./WTermTerminal";
+export * from "./XTermTerminal";
 export * from "./terminalUtils";

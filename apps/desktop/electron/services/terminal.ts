@@ -70,7 +70,7 @@ export async function createTerminal(
       D2A_PARENT_PID: String(process.pid),
     },
     useConpty: true,
-    conptyInheritCursor: false,
+    conptyInheritCursor: true, // prevents initial full-screen repaint flicker on Windows
   });
 
   ptyProcess.onData((data: string) => {

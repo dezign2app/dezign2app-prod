@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { isElectron, getElectronAPI } from "@/lib/electron";
 import { downloadMonorepoZip } from "./utils/terminalExportUtils";
 import { toast } from "sonner";
-import { WTermTerminalHandle, cleanTerminalText } from "@/components/terminal";
+import { XTermTerminalHandle, cleanTerminalText } from "@/components/terminal";
 import { TerminalProps, TerminalType } from "./types";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
 
@@ -36,7 +36,7 @@ export function Terminal({
   onPickDirectory: propOnPickDirectory,
 }: TerminalProps) {
   const inElectron = isElectron();
-  const terminalRefs = useRef<Map<string, WTermTerminalHandle | null>>(new Map());
+  const terminalRefs = useRef<Map<string, XTermTerminalHandle | null>>(new Map());
   const hasCreatedInitialRef = useRef(false);
 
   // Drawer UI state from local store
@@ -248,6 +248,7 @@ export function Terminal({
         ? terminalRefs.current.get(activeSessionId)
         : terminalRefs.current.values().next().value;
       const timer = setTimeout(() => {
+        activeRef?.fit?.();   // recompute cols after panel opens/resizes
         activeRef?.focus?.();
         if (activeSessionId) {
           replayMissedLogs(activeSessionId);

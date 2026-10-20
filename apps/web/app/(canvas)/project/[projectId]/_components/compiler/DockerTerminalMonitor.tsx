@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { openExternalUrl } from "@/lib/electron";
-import { WTermTerminal, cleanTerminalText } from "@/components/terminal";
+import { XTermTerminal, cleanTerminalText } from "@/components/terminal";
 
 export interface ServiceEndpointInfo {
   name: string;
@@ -196,9 +196,9 @@ export function DockerTerminalMonitor({
         </div>
       )}
 
-      {/* wterm Viewport */}
+      {/* XTerm Viewport */}
       <div className="flex-1 min-h-0 bg-[#090d13] relative">
-        <WTermTerminal
+        <XTermTerminal
           logs={logs}
           placeholder={
             isElectron
