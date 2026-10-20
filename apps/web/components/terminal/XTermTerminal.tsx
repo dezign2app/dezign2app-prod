@@ -12,6 +12,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import { copyToClipboard } from "./terminalUtils";
+import { openExternalUrl } from "@/lib/electron";
 import { toast } from "sonner";
 
 export interface XTermTerminalHandle {
@@ -36,6 +37,7 @@ export interface XTermTerminalProps {
   onResize?: (cols: number, rows: number) => void;
   onReady?: () => void;
   onSelectionChange?: (selectedText: string) => void;
+  onLinkClick?: (url: string, event?: MouseEvent) => void;
   className?: string;
   interactive?: boolean;
   rawStream?: boolean;
@@ -85,6 +87,7 @@ export const XTermTerminal = forwardRef<XTermTerminalHandle, XTermTerminalProps>
       onResize,
       onReady,
       onSelectionChange,
+      onLinkClick,
       className = "",
       interactive = true,
       rawStream = false,
@@ -102,11 +105,13 @@ export const XTermTerminal = forwardRef<XTermTerminalHandle, XTermTerminalProps>
     const onResizeRef = useRef(onResize);
     const onReadyRef = useRef(onReady);
     const onSelectionChangeRef = useRef(onSelectionChange);
+    const onLinkClickRef = useRef(onLinkClick);
     const interactiveRef = useRef(interactive);
     onDataRef.current = onData;
     onResizeRef.current = onResize;
     onReadyRef.current = onReady;
     onSelectionChangeRef.current = onSelectionChange;
+    onLinkClickRef.current = onLinkClick;
     interactiveRef.current = interactive;
 
     useEffect(() => {
@@ -130,7 +135,26 @@ export const XTermTerminal = forwardRef<XTermTerminalHandle, XTermTerminalProps>
       });
 
       const fitAddon = new FitAddon();
-      const webLinksAddon = new WebLinksAddon();
+      const handleLinkActivation = (event: MouseEvent, uri: string) => {
+        if (onLinkClickRef.current) {
+          onLinkClickRef.current(uri, event);
+        } else {
+          openExternalUrl(uri, event);
+        }
+      };
+
+      const webLinksAddon = new WebLinksAddon(handleLinkActivation, {
+        hover: () => {
+          if (containerRef.current) {
+            containerRef.current.style.cursor = "pointer";
+          }
+        },
+        leave: () => {
+          if (containerRef.current) {
+            containerRef.current.style.cursor = "";
+          }
+        },
+      });
       term.loadAddon(fitAddon);
       term.loadAddon(webLinksAddon);
       term.open(containerRef.current);
@@ -253,6 +277,7 @@ export const XTermTerminal = forwardRef<XTermTerminalHandle, XTermTerminalProps>
         selectionDispose.dispose();
         dataDispose.dispose();
         resizeDispose.dispose();
+        webLinksAddon.dispose();
         term.dispose();
         termRef.current = null;
         fitAddonRef.current = null;

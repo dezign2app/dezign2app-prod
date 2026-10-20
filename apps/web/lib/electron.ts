@@ -25,18 +25,46 @@ export function getElectronAPI() {
  * Works seamlessly whether running inside the Electron Desktop app
  * or inside a standard web browser.
  */
-export function openExternalUrl(url: string, e?: React.MouseEvent | React.SyntheticEvent) {
+export function openExternalUrl(
+  url: string,
+  e?: React.MouseEvent | React.SyntheticEvent | MouseEvent
+) {
   if (e) {
-    e.preventDefault();
-    e.stopPropagation();
+    try {
+      e.preventDefault?.();
+      e.stopPropagation?.();
+    } catch {}
   }
   if (!url) return;
 
+  const targetUrl = /^[a-zA-Z]+:\/\//.test(url) ? url : `http://${url}`;
+
   const api = getElectronAPI();
   if (api?.shell?.openExternal) {
-    api.shell.openExternal(url);
-  } else if (typeof window !== "undefined") {
-    window.open(url, "_blank", "noopener,noreferrer");
+    api.shell.openExternal(targetUrl);
+    return;
+  }
+
+  if (typeof window !== "undefined") {
+    try {
+      const win = window.open(targetUrl, "_blank", "noopener,noreferrer");
+      if (win) return;
+    } catch {
+      /* popup blocker */
+    }
+
+    // Fallback: programmatic anchor click
+    try {
+      const a = document.createElement("a");
+      a.href = targetUrl;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      console.warn("Failed to open URL in browser:", err);
+    }
   }
 }
 
