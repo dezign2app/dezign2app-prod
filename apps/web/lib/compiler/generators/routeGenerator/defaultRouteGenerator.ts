@@ -13,6 +13,16 @@ export type HealthRequest =
   | Request
   | {
       headers?: Record<string, string | string[] | undefined>;
+      user?: {
+        id: string;
+        userId?: string;
+        username?: string;
+        role: string;
+        email?: string;
+        name?: string;
+        sessionToken?: string;
+        [key: string]: string | number | boolean | null | undefined;
+      };
     };
 
 export type HealthResponseContext =

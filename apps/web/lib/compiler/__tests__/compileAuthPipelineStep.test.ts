@@ -219,7 +219,7 @@ describe("Auth Session Tokens in Pipeline Steps", () => {
       usedFileNames: new Set<string>(),
     });
 
-    expect(result.file.content).toContain("const auth = req.user;");
+    expect(result.file.content).toContain("const auth = req.user!;");
     expect(result.file.content).toContain("auth?.username");
     expect(result.file.content).toContain("auth?.id");
   });

@@ -249,7 +249,7 @@ export function generateEndpointRouteHandler(
       allNodes,
     });
     if (pipelineLines.some((line) => /\bauth\b/.test(line))) {
-      routeHandlerCode += `    const auth = req.user;\n`;
+      routeHandlerCode += `    const auth = req.user!;\n`;
     }
     pipelineLines.forEach((line) => {
       routeHandlerCode += `    ${line}\n`;
