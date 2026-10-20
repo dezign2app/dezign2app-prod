@@ -26,7 +26,21 @@ export function generatePageLoadEffect(
         ${pageLoadFetchStatements}
       } catch (err) {
         if (isMounted) {
-          setPageLoadError(err instanceof Error ? err.message : "Failed to load page data");
+          const errorMessage = err instanceof Error ? err.message : "Failed to load page data";
+          setPageLoadError(errorMessage);
+          setTriggerLogs((prev) => [
+            {
+              id: Math.random().toString(36).substring(2, 9),
+              eventName: "pageLoad",
+              eventType: "pageLoad",
+              timestamp: new Date().toLocaleTimeString(),
+              url: "N/A",
+              method: "LOAD",
+              error: errorMessage,
+              data: null,
+            },
+            ...prev,
+          ]);
         }
       } finally {
         if (isMounted) {
@@ -54,33 +68,8 @@ ${cleanupBlock}
 }
 
 export function generatePageLoadSection(hasPageLoad: boolean): string {
-  if (!hasPageLoad) return "";
-  return `        {/* Section: Page Load Data */}
-        <Card className="border-border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-            <div>
-              <CardTitle className="text-lg font-bold text-card-foreground">Page Load Data</CardTitle>
-            </div>
-            <Badge variant="secondary" className="font-mono text-xs">
-              {pageLoadLoading ? "Loading..." : pageLoadError ? "Error" : "Loaded"}
-            </Badge>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-muted/50 border border-border rounded-lg p-4 font-mono text-sm text-foreground overflow-x-auto shadow-inner min-h-[120px]">
-              <pre className="whitespace-pre-wrap font-mono">
-                {pageLoadLoading
-                  ? "// Loading page data from API endpoint..."
-                  : pageLoadError
-                  ? "// Error: " + pageLoadError
-                  : pageLoadData !== null
-                  ? JSON.stringify(pageLoadData, null, 2)
-                  : "// No pageLoad data available."}
-              </pre>
-            </div>
-          </CardContent>
-        </Card>
-
-`;
+  // Page load data is now presented in the Output Log section
+  return "";
 }
 
 export function generateJsonValueTypeDecl(hasPageLoad: boolean): string {

@@ -541,6 +541,9 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
   next();
 });
 
+// --- Mount Routes ---
+app.use("/", apiRouter);
+
 // --- Health Check ---
 app.get("/health", (_req: Request, res: Response) => {
   logger.debug("Health check invoked");
@@ -556,8 +559,6 @@ ${hasSse ? `
 app.get("/events", handleSseConnection);
 app.get("/sse", handleSseConnection);
 ` : ""}
-// --- Mount Routes ---
-app.use("/", apiRouter);
 
 // --- Initialize Event Consumers ---
 initConsumers().catch((err: unknown) => {

@@ -254,6 +254,7 @@ export function generatePageAndComponentFiles({
 
       const statements: string[] = [];
       const usedSuffixes = new Set<string>();
+      const evtSuffixMap = new Map<string, string>();
 
       pageLoadEvents.forEach((evt) => {
         const link = resolveLinkedEndpoint(
@@ -297,6 +298,7 @@ export function generatePageAndComponentFiles({
           }
           usedSuffixes.add(suffix);
         }
+        evtSuffixMap.set(evt.id, suffix);
 
         if (link) {
           const requireAuth = (Boolean(effectiveAuthNode) || isPageProtected) && link.requireAuth !== false;
@@ -406,14 +408,53 @@ export function generatePageAndComponentFiles({
         pageLoadFetchStatements = `${statements.join("\n        ")}
         if (isMounted) {
           setPageLoadData(data);
-          ${storePopulationLines ? `${storePopulationLines}` : ""}
+          ${storePopulationLines ? `${storePopulationLines}\n          ` : ""}setTriggerLogs((prev) => [
+            {
+              id: Math.random().toString(36).substring(2, 9),
+              eventName: "${pageLoadEvents[0]?.name || "pageLoad"}",
+              eventType: "pageLoad",
+              timestamp: new Date().toLocaleTimeString(),
+              url: "${firstPageLoadLink?.fullUrl || "N/A"}",
+              method: "${firstPageLoadLink?.method || "GET"}",
+              status: res.status,
+              data: data,
+            },
+            ...prev,
+          ]);
         }`;
       } else {
+        const logEntries = pageLoadEvents
+          .map((evt) => {
+            const link = resolveLinkedEndpoint(
+              node.id,
+              evt.id,
+              allNodes,
+              allEdges,
+              endpoints,
+            );
+            const evtKey = evt.name || "pageLoad";
+            const suffix = evtSuffixMap.get(evt.id) || "";
+            return `{
+              id: Math.random().toString(36).substring(2, 9),
+              eventName: "${evt.name || "pageLoad"}",
+              eventType: "pageLoad",
+              timestamp: new Date().toLocaleTimeString(),
+              url: "${link?.fullUrl || "N/A"}",
+              method: "${link?.method || "LOAD"}",
+              ${link ? `status: res${suffix}.status,` : ""}
+              data: results["${evtKey}"],
+            }`;
+          })
+          .join(",\n            ");
+
         pageLoadFetchStatements = `const results: Record<string, JSONValue> = {};
         ${statements.join("\n        ")}
         if (isMounted) {
-          setPageLoadData(${pageLoadDataExpr} as unknown as ${pageLoadDataType});
-          ${storePopulationLines ? `${storePopulationLines}` : ""}
+          setPageLoadData(${pageLoadDataExpr} ?? null);
+          ${storePopulationLines ? `${storePopulationLines}\n          ` : ""}setTriggerLogs((prev) => [
+            ${logEntries},
+            ...prev,
+          ]);
         }`;
       }
     }

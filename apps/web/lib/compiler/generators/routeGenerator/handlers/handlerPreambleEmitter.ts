@@ -158,6 +158,7 @@ export type ${pascalName}Request =
       params: ${pascalName}Params;
       query: ${pascalName}Query;
       body?: ${pascalName}Body;
+      user?: Express.Request["user"];
     };
 
 ${hasStreamingStep ? `export type ${pascalName}ResponseContext = Response;\n` : `export type ${pascalName}ResponseContext =

@@ -27,12 +27,13 @@ declare global {
     interface Request {
       user?: {
         id: string;
-        userId?: string;
-        username?: string;
+        userId: string;
+        username: string;
         role: string;
         email?: string;
         name?: string;
         sessionToken?: string;
+        expiresAt?: number;
         [key: string]: string | number | boolean | null | undefined;
       };
     }
@@ -101,7 +102,7 @@ ${sessionBlock}
 
 function buildImports(strategy: AuthStrategy): string {
   if (strategy === "db") {
-    return `import { db } from "@workspace/db";
+    return `import { findAuthSessionByToken, findAuthUserById } from "@workspace/db";
 import crypto from "node:crypto";`;
   }
   if (strategy === "jwks") {
@@ -123,6 +124,7 @@ function buildDbSessionBlock(): string {
       let resolvedUserId: string | undefined;
       let resolvedRole: string = "user";
       let resolvedUserClaims: Record<string, string | number | boolean | null | undefined> = {};
+      let resolvedUserRecord: { role?: string; email?: string; name?: string; username?: string } | null | undefined;
 
       try {
         const parts = token.split(".");
@@ -159,46 +161,10 @@ function buildDbSessionBlock(): string {
 
       // Fallback path: direct session lookup via shared @workspace/db (better-auth v1.6 schema)
       if (!resolvedUserId) {
-        type SessionRecord = { userId?: string; userid?: string; expiresAt?: string; expiresat?: string };
-        let session: SessionRecord | undefined;
-        const dbAny = db as any;
+        const session = await findAuthSessionByToken(token);
 
-        if (typeof dbAny.prepare === "function") {
-          try {
-            session = dbAny
-              .prepare('SELECT "userId", "expiresAt" FROM "session" WHERE "token" = ?')
-              .get(token) as SessionRecord | undefined;
-          } catch (_quoteErr) {
-            try {
-              session = dbAny
-                .prepare('SELECT userid as "userId", expiresat as "expiresAt" FROM "session" WHERE token = ?')
-                .get(token) as SessionRecord | undefined;
-            } catch {
-              throw _quoteErr;
-            }
-          }
-        } else if (typeof dbAny.query === "function") {
-          try {
-            const pgRes = await dbAny.query(
-              'SELECT "userId", "expiresAt" FROM "session" WHERE "token" = $1 LIMIT 1',
-              [token]
-            );
-            session = pgRes.rows?.[0] as SessionRecord | undefined;
-          } catch (_quoteErr) {
-            try {
-              const pgRes = await dbAny.query(
-                'SELECT userid as "userId", expiresat as "expiresAt" FROM "session" WHERE token = $1 LIMIT 1',
-                [token]
-              );
-              session = pgRes.rows?.[0] as SessionRecord | undefined;
-            } catch {
-              throw _quoteErr;
-            }
-          }
-        }
-
-        resolvedUserId = session?.userId ?? session?.userid;
-        const resolvedExpiresAt = session?.expiresAt ?? session?.expiresat;
+        resolvedUserId = session?.userId;
+        const resolvedExpiresAt = session?.expiresAt;
 
         if (!resolvedUserId) {
           logger.warn("Auth failed: session not found and JWT invalid", {
@@ -208,39 +174,12 @@ function buildDbSessionBlock(): string {
         }
 
         if (resolvedExpiresAt && new Date(resolvedExpiresAt).getTime() < Date.now()) {
-          logger.warn("Auth failed: session expired", { expiresAt: resolvedExpiresAt });
+          logger.warn("Auth failed: session expired", { expiresAt: String(resolvedExpiresAt) });
           return res.status(401).json({ error: "Unauthorized: Session has expired" });
         }
 
-        type UserRecord = { role?: string; email?: string; name?: string; username?: string };
-        let userRecord: UserRecord | undefined;
-        if (typeof dbAny.prepare === "function") {
-          try {
-            userRecord = dbAny
-              .prepare('SELECT "role", "email", "name" FROM "user" WHERE "id" = ?')
-              .get(resolvedUserId) as UserRecord | undefined;
-          } catch (_userErr) {
-            try {
-              userRecord = dbAny
-                .prepare('SELECT role, email, name FROM "user" WHERE id = ?')
-                .get(resolvedUserId) as UserRecord | undefined;
-            } catch {
-              // Non-fatal if role query fails; defaults to 'user'
-            }
-          }
-        } else if (typeof dbAny.query === "function") {
-          try {
-            const pgUserRes = await dbAny.query(
-              'SELECT "role", "email", "name" FROM "user" WHERE "id" = $1 LIMIT 1',
-              [resolvedUserId]
-            );
-            userRecord = pgUserRes.rows?.[0] as UserRecord | undefined;
-          } catch {
-            // Non-fatal if role query fails; defaults to 'user'
-          }
-        }
-
-        resolvedRole = String(userRecord?.role ?? "user");
+        resolvedUserRecord = await findAuthUserById(resolvedUserId);
+        resolvedRole = String(resolvedUserRecord?.role ?? "user");
         logger.info("Auth: session resolved via shared DB", { userId: resolvedUserId, role: resolvedRole });
       }
 
@@ -248,10 +187,10 @@ function buildDbSessionBlock(): string {
         ...resolvedUserClaims,
         id: String(resolvedUserId),
         userId: String(resolvedUserId),
-        username: String(resolvedUserClaims.username ?? userRecord?.username ?? resolvedUserClaims.name ?? userRecord?.name ?? resolvedUserId),
+        username: String(resolvedUserClaims.username ?? resolvedUserRecord?.username ?? resolvedUserClaims.name ?? resolvedUserRecord?.name ?? resolvedUserId),
         role: resolvedRole,
-        ...(resolvedUserClaims.email ? { email: String(resolvedUserClaims.email) } : userRecord?.email ? { email: String(userRecord.email) } : {}),
-        ...(resolvedUserClaims.name ? { name: String(resolvedUserClaims.name) } : userRecord?.name ? { name: String(userRecord.name) } : {}),
+        ...(resolvedUserClaims.email ? { email: String(resolvedUserClaims.email) } : resolvedUserRecord?.email ? { email: String(resolvedUserRecord.email) } : {}),
+        ...(resolvedUserClaims.name ? { name: String(resolvedUserClaims.name) } : resolvedUserRecord?.name ? { name: String(resolvedUserRecord.name) } : {}),
         sessionToken: token,
       };`;
 }

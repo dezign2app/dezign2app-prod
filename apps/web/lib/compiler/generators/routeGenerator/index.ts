@@ -1,6 +1,7 @@
 import { Endpoint, AnyMessagingResource, CompiledFile, ReusableFunction } from "@workspace/canvas/types";
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { toVarName, toPascalCase, deriveRouteFileName } from "../../utils";
+import { isRouteConnectedToAuthenticatedPage } from "../../traceResolver";
 import { generateDefaultRoute } from "./defaultRouteGenerator";
 import { generateEndpointRouteHandler } from "./endpointHandlerGenerator";
 import { generateRequireAuthMiddleware } from "../auth-providers/better-auth/v1.6/generateRequireAuthMiddleware";
@@ -37,7 +38,10 @@ export function generateRoutes(
   const serviceFolderName = toVarName(nameForTypes);
 
   if (nodeEndpoints.length === 0) {
-    const defaultRouteResult = generateDefaultRoute(serviceName, dbFunctions);
+    const isProtected = serviceNode
+      ? isRouteConnectedToAuthenticatedPage(serviceNode, undefined, allNodes, allEdges)
+      : false;
+    const defaultRouteResult = generateDefaultRoute(serviceName, dbFunctions, isProtected);
     files.push(...defaultRouteResult.files);
     routeImports.push(...defaultRouteResult.routeImports);
     routeRegistrations.push(...defaultRouteResult.routeRegistrations);

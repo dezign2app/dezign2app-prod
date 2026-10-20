@@ -135,7 +135,11 @@ export function generateTriggerLogsSection(options: {
                     <div className="flex items-center justify-between text-muted-foreground border-b border-border pb-2">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-foreground">{log.eventName}</span>
-                        {log.eventType === "SSE" ? (
+                        {log.eventType === "pageLoad" ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30">
+                            PAGE LOAD
+                          </span>
+                        ) : log.eventType === "SSE" ? (
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
                             SSE
                           </span>
@@ -150,6 +154,11 @@ export function generateTriggerLogsSection(options: {
                         ) : (
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-primary/10 text-primary border border-primary/20">
                             {log.method || "API"}
+                          </span>
+                        )}
+                        {log.status && (
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {log.status}
                           </span>
                         )}
                       </div>

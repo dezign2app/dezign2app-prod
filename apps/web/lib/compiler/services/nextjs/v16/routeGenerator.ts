@@ -1,6 +1,7 @@
 import { Endpoint, AnyMessagingResource, CompiledFile, ReusableFunction } from "@workspace/canvas/types";
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { toVarName, toPascalCase } from "../../../utils";
+import { isRouteConnectedToAuthenticatedPage } from "../../../traceResolver";
 
 export interface NormalizedRoutePath {
   filePath: string;
@@ -80,12 +81,55 @@ export function generateNextjsRoutes(params: GenerateNextjsRoutesParams): Compil
 
   const files: CompiledFile[] = [];
 
+  const isConnectedToAuthPage = serviceNode
+    ? isRouteConnectedToAuthenticatedPage(serviceNode, undefined, allNodes, allEdges)
+    : false;
+
   // Fallback: If no endpoints exist, generate a default health-check route
   if (nodeEndpoints.length === 0) {
-    files.push({
-      filename: "app/api/health/route.ts",
-      language: "typescript",
-      content: `import { NextResponse } from "next/server";
+    const healthContent = isConnectedToAuthPage
+      ? `import { NextRequest, NextResponse } from "next/server";
+import { createLogger } from "@workspace/logger";
+
+const logger = createLogger("${serviceName}:health");
+
+export const dynamic = "force-dynamic";
+
+export type HealthUserPayload = {
+  id: string;
+  name?: string;
+  email?: string;
+  role?: string;
+  token?: string;
+  [key: string]: string | number | boolean | null | undefined;
+};
+
+export async function GET(request: NextRequest) {
+  logger.info("Health check endpoint called");
+  let user: HealthUserPayload | null = null;
+  const authHeader = request.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.substring(7).trim();
+    try {
+      const parts = token.split(".");
+      if (parts.length === 3) {
+        user = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf-8"));
+      } else {
+        user = JSON.parse(Buffer.from(token, "base64").toString("utf-8"));
+      }
+    } catch {
+      user = { id: "authenticated-user", token };
+    }
+  }
+  return NextResponse.json({
+    status: "healthy",
+    service: "${serviceName}",
+    timestamp: new Date().toISOString(),
+    user,
+  });
+}
+`
+      : `import { NextResponse } from "next/server";
 import { createLogger } from "@workspace/logger";
 
 const logger = createLogger("${serviceName}:health");
@@ -100,7 +144,12 @@ export async function GET() {
     timestamp: new Date().toISOString(),
   });
 }
-`,
+`;
+
+    files.push({
+      filename: "app/api/health/route.ts",
+      language: "typescript",
+      content: healthContent,
     });
     return files;
   }
@@ -183,7 +232,7 @@ export async function ${method}(
       handlerCode += `    const searchParams = Object.fromEntries(request.nextUrl.searchParams.entries());\n`;
 
       if (isBodyMethod) {
-        handlerCode += `    let body: Record<string, unknown> = {};
+        handlerCode += `    let body: Record<string, string | number | boolean | null | undefined | Record<string, string | number | boolean | null | undefined>> = {};
     try {
       body = await request.json();
     } catch {
@@ -196,6 +245,15 @@ export async function ${method}(
         handlerCode += `\n    // AI CODING AGENT DIRECTIVE: ${promptText}\n`;
       }
 
+      const isHealth =
+        normalized.urlPath === "/health" ||
+        normalized.urlPath === "/api/health" ||
+        ep.name === "/health" ||
+        ep.name === "health";
+      const isEpConnectedToAuthPage = serviceNode
+        ? isRouteConnectedToAuthenticatedPage(serviceNode, ep, allNodes, allEdges)
+        : false;
+
       // Build sample response payload
       const responseDataProps: string[] = [
         `message: "Successfully executed ${method} ${normalized.urlPath}"`,
@@ -205,6 +263,27 @@ export async function ${method}(
       }
       if (isBodyMethod) {
         responseDataProps.push(`body`);
+      }
+      if (isHealth && (isEpConnectedToAuthPage || ep.requireAuth === true)) {
+        handlerCode += `    let user: HealthUserPayload | null = null;
+    const authHeader = request.headers.get("authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.substring(7).trim();
+      try {
+        const parts = token.split(".");
+        if (parts.length === 3) {
+          user = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf-8"));
+        } else {
+          user = JSON.parse(Buffer.from(token, "base64").toString("utf-8"));
+        }
+      } catch {
+        user = { id: "authenticated-user", token };
+      }
+    }\n`;
+        responseDataProps.push(`user`);
+        responseDataProps.push(`status: "healthy"`);
+        responseDataProps.push(`service: "${serviceName}"`);
+        responseDataProps.push(`timestamp: new Date().toISOString()`);
       }
 
       handlerCode += `
@@ -245,9 +324,28 @@ export async function ${method}(
 `);
     }
 
+    const hasAuthHealth = endpoints.some((ep) => {
+      const isHealth =
+        normalized.urlPath === "/health" ||
+        normalized.urlPath === "/api/health" ||
+        ep.name === "/health" ||
+        ep.name === "health";
+      const isEpConnected = serviceNode
+        ? isRouteConnectedToAuthenticatedPage(serviceNode, ep, allNodes, allEdges)
+        : false;
+      return isHealth && (isEpConnected || ep.requireAuth === true);
+    });
+
     const fileContent = `import { NextRequest, NextResponse } from "next/server";
 import { createLogger } from "@workspace/logger";
-${fileUsesDb ? `import { db } from "@workspace/db";\n` : ""}
+${fileUsesDb ? `import { db } from "@workspace/db";\n` : ""}${hasAuthHealth ? `\nexport type HealthUserPayload = {
+  id: string;
+  name?: string;
+  email?: string;
+  role?: string;
+  token?: string;
+  [key: string]: string | number | boolean | null | undefined;
+};\n` : ""}
 const logger = createLogger("${serviceName}:${normalized.urlPath.replace(/[^a-zA-Z0-9]/g, "_")}");
 
 export const dynamic = "force-dynamic";

@@ -143,6 +143,8 @@ describe("Custom Test Accounts Seeding Integration", () => {
     expect(dbConn!.content).toContain("Manager Jane");
     expect(dbConn!.content).toContain("jane@company.com");
     expect(dbConn!.content).toContain("eyJhbGciOiJIUzI1NiJ9.custom_manager_jwt.sig");
+    expect(dbConn!.content).toContain("export async function findAuthSessionByToken");
+    expect(dbConn!.content).toContain("export async function findAuthUserById");
   });
 
   it("generates type-safe requireAuth middleware with timingSafeEqual and valid variable scoping", async () => {
@@ -163,5 +165,12 @@ describe("Custom Test Accounts Seeding Integration", () => {
 
     // Verify stateless fast-path does NOT execute write operations to "user" table
     expect(middlewareCode).not.toContain('INSERT INTO "user"');
+
+    // Verify engine-agnostic DB auth helpers and complete elimination of 'any'
+    expect(middlewareCode).toContain('import { findAuthSessionByToken, findAuthUserById } from "@workspace/db";');
+    expect(middlewareCode).toContain("const session = await findAuthSessionByToken(token);");
+    expect(middlewareCode).toContain("resolvedUserRecord = await findAuthUserById(resolvedUserId);");
+    expect(middlewareCode).not.toContain("as any");
+    expect(middlewareCode).not.toContain("dbAny");
   });
 });
