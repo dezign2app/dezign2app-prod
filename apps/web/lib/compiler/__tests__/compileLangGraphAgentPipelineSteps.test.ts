@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { compileLangGraph } from "../langgraph/typescript/v1";
+import { compileLangGraphNode } from "../compileLangGraphNode";
+import type { BackendNode } from "@/types/canvas";
 import type { CompileLangGraphInput } from "../langgraph/typescript/v1/types";
 import {
   LANGGRAPH_CANVAS_NODE_NODE,
@@ -182,5 +184,131 @@ describe("compileLangGraph Agent Pipeline Steps", () => {
     const pkg = JSON.parse(files.find((f) => f.filename === "package.json")!.content);
     expect(pkg.dependencies.kafkajs).toBeDefined();
     expect(pkg.dependencies.pg).toBeDefined();
+  });
+
+  it("compiles db_operation step with functionRef in an agent node and emits state updates", () => {
+    const dbStep: LangGraphNodePipelineStep = {
+      id: "db_step_1",
+      name: "findAllConversations",
+      type: "db_operation",
+      label: "DB Operation 1",
+      outputVariable: "findAllConversationsResult",
+      tableNodeId: "conversations",
+      operationId: "findAllConversations",
+      functionRef: {
+        name: "findAllConversations",
+        importPath: "@workspace/db/helpers/conversations",
+        signature: "findAllConversations(limit?: number, offset?: number): Promise<Conversations[]>",
+      },
+      inputBindings: [],
+    };
+
+    const input: CompileLangGraphInput = {
+      graphLabel: "demo-graph",
+      stateChannels: [
+        { key: "messages", type: "messages", reducer: "add_messages", defaultValue: [] },
+        { key: "count", type: "number", reducer: "replace", defaultValue: 0 },
+      ],
+      inputChannels: [],
+      nodes: [
+        {
+          id: "agent_node",
+          type: LANGGRAPH_CANVAS_NODE_NODE,
+          position: { x: 200, y: 100 },
+          data: {
+            label: "Agent Node",
+            name: "agentNode",
+            pipelineSteps: [dbStep],
+            stateUpdates: [
+              {
+                channelKey: "count",
+                action: "increment",
+                value: "1",
+              },
+            ],
+          },
+        },
+      ],
+      edges: [
+        { id: "e1", source: NODE_ID_START, target: "agent_node" },
+        { id: "e2", source: "agent_node", target: NODE_ID_END },
+      ],
+    };
+
+    const files = compileLangGraph(input);
+    const agentFile = files.find((f) => f.filename === "src/nodes/agentNode.ts");
+    expect(agentFile).toBeDefined();
+    expect(agentFile!.content).toContain('import { findAllConversations } from "@workspace/db/helpers/conversations";');
+    expect(agentFile!.content).toContain("const findAllConversationsResult = await findAllConversations();");
+    expect(agentFile!.content).not.toContain("Node without LLM execution logic");
+    expect(agentFile!.content).toContain('count: { action: "increment", value: 1 },');
+  });
+
+  it("compiles canvas BackendNode with agentDefinitions containing pipelineSteps via reconstructNodes", () => {
+    const backendNode: BackendNode = {
+      id: "node_lg_1",
+      type: "langgraph",
+      fractionalIndex:"a0",
+      position: { x: 100, y: 100 },
+      data: {
+        label: "Conversation Service",
+        stateChannels: [
+          { key: "messages", type: "messages", reducer: "add_messages", defaultValue: [] },
+          { key: "count", type: "number", reducer: "replace", defaultValue: 0 },
+        ],
+        agentDefinitions: [
+          {
+            id: "node_agent_1",
+            name: "Agent Node",
+            position: { x: 420, y: 160 },
+            pipelineSteps: [
+              {
+                id: "step_db_1",
+                name: "findAllConversations",
+                type: "db_operation",
+                label: "DB Operation 1",
+                outputVariable: "findAllConversationsResult",
+                tableNodeId: "conversations",
+                operationId: "findAllConversations",
+                functionRef: {
+                  name: "findAllConversations",
+                  importPath: "@workspace/db/helpers/conversations",
+                  signature: "findAllConversations(): Promise<Conversations[]>",
+                },
+                inputBindings: [],
+              },
+            ],
+            stateUpdates: [
+              {
+                channelKey: "count",
+                action: "increment",
+                value: "1",
+              },
+            ],
+          },
+        ],
+        graphSteps: [],
+        graphEdges: [
+          {
+            id: "e1",
+            source: NODE_ID_START,
+            targets: [{ id: "node_agent_1", kind: "step" }],
+          },
+          {
+            id: "e2",
+            source: "node_agent_1",
+            targets: [{ id: NODE_ID_END, kind: "end" }],
+          },
+        ],
+      },
+    };
+
+    const result = compileLangGraphNode(backendNode);
+    const agentFile = result.files.find((f) => f.filename === "src/nodes/agentNode.ts");
+    expect(agentFile).toBeDefined();
+    expect(agentFile!.content).toContain('import { findAllConversations } from "@workspace/db/helpers/conversations";');
+    expect(agentFile!.content).toContain("const findAllConversationsResult = await findAllConversations();");
+    expect(agentFile!.content).not.toContain("Node without LLM execution logic");
+    expect(agentFile!.content).toContain('count: { action: "increment", value: 1 },');
   });
 });

@@ -314,6 +314,15 @@ export function deriveInitialPipelineSteps(
     const steps: LangGraphNodePipelineStep[] = [];
     let codeIndex = 0;
     let llmIndex = 0;
+    let dbIndex = 0;
+    let redisIndex = 0;
+    let storageIndex = 0;
+    let kafkaIndex = 0;
+    let apiIndex = 0;
+    let serviceIndex = 0;
+    let varIndex = 0;
+    let genericIndex = 0;
+
     for (let i = 0; i < data.nodeSteps.length; i++) {
       const s = data.nodeSteps[i];
       if (s === "transformer" || s === "transform") {
@@ -354,6 +363,93 @@ export function deriveInitialPipelineSteps(
             name: "LLM Agent",
           });
         }
+      } else if (s === "db_operation") {
+        dbIndex++;
+        steps.push({
+          id: `step_db_${dbIndex}`,
+          type: "db_operation",
+          label: `DB Operation ${dbIndex}`,
+          name: `DB Operation ${dbIndex}`,
+          outputVariable: `dbResult_${dbIndex}`,
+          declarationKind: "const",
+          inputBindings: [],
+        });
+      } else if (s === "redis_operation") {
+        redisIndex++;
+        steps.push({
+          id: `step_redis_${redisIndex}`,
+          type: "redis_operation",
+          label: `Redis ${redisIndex}`,
+          name: `Redis ${redisIndex}`,
+          outputVariable: `cachedData_${redisIndex}`,
+          declarationKind: "const",
+          inputBindings: [],
+        });
+      } else if (s === "storage_operation") {
+        storageIndex++;
+        steps.push({
+          id: `step_storage_${storageIndex}`,
+          type: "storage_operation",
+          label: `Storage ${storageIndex}`,
+          name: `Storage ${storageIndex}`,
+          outputVariable: `storageResult_${storageIndex}`,
+          declarationKind: "const",
+          inputBindings: [],
+        });
+      } else if (s === "kafka_publish") {
+        kafkaIndex++;
+        steps.push({
+          id: `step_kafka_${kafkaIndex}`,
+          type: "kafka_publish",
+          label: `Kafka Publish ${kafkaIndex}`,
+          name: `Kafka Publish ${kafkaIndex}`,
+          outputVariable: `publishResult_${kafkaIndex}`,
+          declarationKind: "const",
+          inputBindings: [],
+        });
+      } else if (s === "external_call") {
+        apiIndex++;
+        steps.push({
+          id: `step_api_${apiIndex}`,
+          type: "external_call",
+          label: `External API ${apiIndex}`,
+          name: `External API ${apiIndex}`,
+          outputVariable: `apiResponse_${apiIndex}`,
+          declarationKind: "const",
+          inputBindings: [],
+        });
+      } else if (s === "service_call") {
+        serviceIndex++;
+        steps.push({
+          id: `step_service_${serviceIndex}`,
+          type: "service_call",
+          label: `Service Call ${serviceIndex}`,
+          name: `Service Call ${serviceIndex}`,
+          outputVariable: `serviceResponse_${serviceIndex}`,
+          declarationKind: "const",
+          inputBindings: [],
+        });
+      } else if (s === "variable") {
+        varIndex++;
+        steps.push({
+          id: `step_var_${varIndex}`,
+          type: "variable",
+          label: `Variable ${varIndex}`,
+          name: `Variable ${varIndex}`,
+          outputVariable: `myVar_${varIndex}`,
+          variableOperation: "declare",
+          declarationKind: "const",
+          variableDataType: "string",
+        });
+      } else if (s) {
+        genericIndex++;
+        steps.push({
+          id: `step_gen_${genericIndex}`,
+          type: s as LangGraphNodeStepType,
+          label: `Step ${genericIndex}`,
+          name: `Step ${genericIndex}`,
+          enabled: true,
+        });
       }
     }
     return steps;

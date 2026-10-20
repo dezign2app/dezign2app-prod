@@ -163,10 +163,18 @@ export function buildContext(input: CompileLangGraphInput): CompileContext {
     agentMemoryMap,
     routerStepIds,
     graphId: input.graphLabel || "agent",
-    usesKafka: agentNodes.some((a) => a.data?.pipelineSteps?.some((s) => s.type === "kafka_publish")),
-    usesRedis: agentNodes.some((a) => a.data?.pipelineSteps?.some((s) => s.type === "redis_operation")),
-    usesDb: agentNodes.some((a) => a.data?.pipelineSteps?.some((s) => s.type === "db_operation")),
-    usesStorage: agentNodes.some((a) => a.data?.pipelineSteps?.some((s) => s.type === "storage_operation")),
+    usesKafka:
+      agentNodes.some((a) => a.data?.pipelineSteps?.some((s) => s.type === "kafka_publish")) ||
+      stepNodes.some((s) => s.data?.pipelineSteps?.some((p) => p.type === "kafka_publish")),
+    usesRedis:
+      agentNodes.some((a) => a.data?.pipelineSteps?.some((s) => s.type === "redis_operation")) ||
+      stepNodes.some((s) => s.data?.pipelineSteps?.some((p) => p.type === "redis_operation")),
+    usesDb:
+      agentNodes.some((a) => a.data?.pipelineSteps?.some((s) => s.type === "db_operation")) ||
+      stepNodes.some((s) => s.data?.pipelineSteps?.some((p) => p.type === "db_operation")),
+    usesStorage:
+      agentNodes.some((a) => a.data?.pipelineSteps?.some((s) => s.type === "storage_operation")) ||
+      stepNodes.some((s) => s.data?.pipelineSteps?.some((p) => p.type === "storage_operation")),
   };
 }
 

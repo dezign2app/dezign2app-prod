@@ -53,6 +53,8 @@ import {
   HANDLE_MIDDLEWARE_OUT,
   HANDLE_MEMORY_IN,
   HANDLE_MEMORY_OUT,
+  HANDLE_TRANSFORMER_IN,
+  HANDLE_TRANSFORMER_OUT,
   TARGET_KIND_END,
   TARGET_KIND_PORT,
 } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/langgraph/langgraph-canvas/constants";
@@ -282,9 +284,13 @@ export function reconstructNodes(
         responseFormat: agDef.responseFormat,
         memoryConfig: agDef.memoryConfig,
         stateUpdates: agDef.stateUpdates || [],
+        pipelineSteps: agDef.pipelineSteps,
+        nodeSteps: agDef.nodeSteps,
+        customCode: agDef.customCode,
         availableStateChannels: stateChannels,
         tools: agDef.tools || [],
         middleware: agDef.middleware || [],
+        transformers: agDef.transformers || [],
         memory: agDef.memory || [],
       },
     };
@@ -308,6 +314,12 @@ export function reconstructNodes(
         humanGateConfig: step.humanGateConfig,
         customCode: step.customCode,
         routerConfig: step.routerConfig,
+        pipelineSteps: step.pipelineSteps,
+        inputBindings: step.inputBindings,
+        outputVariable: step.outputVariable,
+        transformerNodeId: step.transformerNodeId,
+        transformerRef: step.transformerRef,
+        functionRef: step.functionRef,
         stateUpdates: step.stateUpdates || [],
         availableStateChannels: stateChannels,
       },
@@ -476,6 +488,18 @@ export function reconstructEdges(
         target: agId,
         sourceHandle: HANDLE_MIDDLEWARE_OUT,
         targetHandle: HANDLE_MIDDLEWARE_IN,
+        animated: true,
+      });
+    });
+
+    (ag.transformers || []).forEach((tId) => {
+      if (!reconstructedNodeIds.has(tId)) return;
+      resourceEdges.push({
+        id: `edge_${tId}_${agId}`,
+        source: tId,
+        target: agId,
+        sourceHandle: HANDLE_TRANSFORMER_OUT,
+        targetHandle: HANDLE_TRANSFORMER_IN,
         animated: true,
       });
     });

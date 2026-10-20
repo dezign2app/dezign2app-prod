@@ -160,6 +160,7 @@ export function AgentNodeInspector({
     handleDragEnd,
     handleUpdateStepCode,
     handleUpdateStepLabel,
+    handleUpdateStep,
   } = useAgentPipelineSteps({
     selectedAgentData,
     onUpdateAgent,
@@ -249,15 +250,7 @@ export function AgentNodeInspector({
                       onDelete={() => handleDeleteStep(step.id)}
                       onUpdateLabel={(label) => handleUpdateStepLabel(step.id, label)}
                       onUpdateCode={(body) => handleUpdateStepCode(step.id, body)}
-                      onUpdateStep={(updatedStep) => {
-                        const next = activePipelineSteps.map((s) =>
-                          s.id === step.id ? updatedStep : s,
-                        );
-                        onUpdateAgent({
-                          pipelineSteps: next,
-                          nodeSteps: next.map((st) => st.type),
-                        });
-                      }}
+                      onUpdateStep={handleUpdateStep}
                       priorSteps={priorSteps}
                       selectedAgentData={selectedAgentData}
                       onUpdateAgent={onUpdateAgent}

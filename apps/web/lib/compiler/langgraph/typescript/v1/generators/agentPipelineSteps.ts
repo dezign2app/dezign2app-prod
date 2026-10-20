@@ -13,6 +13,7 @@ import type {
 import type { CompileContext } from "../types";
 import {
   toCamelCase,
+  toIdentifier,
   escapeTemplateLiteral,
   indent,
 } from "../utils";
@@ -88,6 +89,20 @@ export function resolveLangGraphBinding(
 }
 
 /**
+ * Extracts parameter names from a function signature string like "findAllConversations(limit?: number, offset?: number)"
+ */
+export function extractSigParamNames(signature?: string): string[] {
+  if (!signature) return [];
+  const match = signature.match(/\((.*?)\)/);
+  const paramList = match?.[1];
+  if (!paramList || !paramList.trim()) return [];
+  return paramList
+    .split(",")
+    .map((p) => (p.trim().split(/[:=]/)[0] ?? "").replace(/^\.\.\./, "").replace(/\?$/, "").trim())
+    .filter(Boolean);
+}
+
+/**
  * Renders a single pipeline step into TypeScript lines inside an Agent node function.
  */
 function renderSinglePipelineStep(
@@ -105,6 +120,9 @@ function renderSinglePipelineStep(
     step.outputVariable?.trim() ||
     toCamelCase(step.label || `${step.type}_${index + 1}`);
   stepOutputVars.set(step.id, outVar);
+  if (step.outputVariable) {
+    stepOutputVars.set(step.outputVariable.trim(), outVar);
+  }
 
   const decl =
     step.declarationKind === "reassign"
@@ -168,20 +186,91 @@ function renderSinglePipelineStep(
     }
 
     case "db_operation": {
-      const table = toCamelCase(step.tableNodeId || step.name || "entity");
-      const op = step.operationId || step.functionRef?.name || "findMany";
-      const argsList = (step.inputBindings || [])
-        .map((b) => `    ${b.argName}: ${resolveLangGraphBinding(b, stepOutputVars)},`)
-        .join("\n");
-      const argsExpr = argsList ? `{\n${argsList}\n  }` : "";
+      const functionRef = step.functionRef;
+      if (functionRef && functionRef.name) {
+        const fnName = functionRef.name.trim() || toIdentifier(step.name || "dbOperation");
+        let importSource =
+          functionRef.importPath ||
+          (ctx.input.dbPackageName
+            ? `${ctx.input.dbPackageName}/helpers`
+            : "../lib/db");
+        if (ctx.input.dbPackageName && importSource.startsWith("@workspace/db")) {
+          importSource = importSource.replace("@workspace/db", ctx.input.dbPackageName);
+        }
 
-      const dbImportSource = ctx.input.dbPackageName || "../lib/db";
-      imports.push({
-        source: dbImportSource,
-        specifiers: ["db"],
-      });
+        imports.push({
+          source: importSource,
+          specifiers: [fnName],
+        });
 
-      bodyLines.push(`  ${decl}${outVar} = await db.${table}.${op}(${argsExpr});`);
+        // Resolve arguments
+        const sigParams = extractSigParamNames(functionRef.signature);
+        const isDestructuredOrObject = Boolean(
+          functionRef.signature &&
+            (functionRef.signature.includes("({") ||
+              functionRef.signature.includes("(data:") ||
+              functionRef.signature.includes("(payload:")),
+        );
+
+        let argsExpr = "";
+        const bindings = step.inputBindings || [];
+        if (bindings.length > 0) {
+          if (!isDestructuredOrObject && sigParams.length > 0) {
+            // Positional parameter call
+            const resolvedList: string[] = [];
+            for (const param of sigParams) {
+              const bound = bindings.find(
+                (b) =>
+                  b.argName.replace(/\?$/, "").toLowerCase() ===
+                  param.toLowerCase(),
+              );
+              if (bound && bound.source) {
+                resolvedList.push(
+                  resolveLangGraphBinding(bound, stepOutputVars),
+                );
+              } else {
+                resolvedList.push("undefined");
+              }
+            }
+            while (
+              resolvedList.length > 0 &&
+              resolvedList[resolvedList.length - 1] === "undefined"
+            ) {
+              resolvedList.pop();
+            }
+            argsExpr = resolvedList.join(", ");
+          } else if (isDestructuredOrObject) {
+            const argsList = bindings
+              .map(
+                (b) =>
+                  `    ${b.argName}: ${resolveLangGraphBinding(b, stepOutputVars)},`,
+              )
+              .join("\n");
+            argsExpr = argsList ? `{\n${argsList}\n  }` : "{}";
+          } else {
+            argsExpr = bindings
+              .map((b) => resolveLangGraphBinding(b, stepOutputVars))
+              .join(", ");
+          }
+        }
+
+        bodyLines.push(`  ${decl}${outVar} = await ${fnName}(${argsExpr});`);
+      } else {
+        const table = toCamelCase(step.tableNodeId || step.name || "entity");
+        const op = step.operationId || "findMany";
+        const argsList = (step.inputBindings || [])
+          .map((b) => `    ${b.argName}: ${resolveLangGraphBinding(b, stepOutputVars)},`)
+          .join("\n");
+        const argsExpr = argsList ? `{\n${argsList}\n  }` : "";
+
+        const dbImportSource = ctx.input.dbPackageName || "../lib/db";
+        imports.push({
+          source: dbImportSource,
+          specifiers: ["db"],
+        });
+
+        bodyLines.push(`  ${decl}${outVar} = await db.${table}.${op}(${argsExpr});`);
+      }
       break;
     }
 
