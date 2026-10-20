@@ -48,6 +48,7 @@ describe("AgentPromptVariablePicker logic", () => {
     const priorSteps: LangGraphNodePipelineStep[] = [
       {
         id: "step_trans_1",
+        name: "Data Prep",
         type: "transformer",
         label: "Data Prep",
         outputVariable: "step1Result",

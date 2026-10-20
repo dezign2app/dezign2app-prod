@@ -461,3 +461,99 @@ describe("pipeline-validation: transformer with empty / unconfigured input schem
   });
 });
 
+describe("pipeline-validation: isStepInputUnconfigured for langgraph_invoke", () => {
+  const mockAgentNode = {
+    id: "agent-1",
+    type: "langgraph",
+    data: {
+      label: "Support Agent",
+      inputChannels: [
+        { key: "query", type: "string", required: true, description: "User query" },
+        { key: "session_context", type: "string", required: false },
+      ],
+      stateChannels: [
+        { key: "messages", type: "BaseMessage[]" },
+      ],
+    },
+  } as any;
+
+  it("returns true (unconfigured) when targetNodeId is missing", () => {
+    const step: PipelineStepDraft = {
+      id: "step-lg-1",
+      name: "runAgent",
+      type: "langgraph_invoke",
+      enabled: true,
+      langGraphTargetNodeId: "",
+    };
+    expect(isStepInputUnconfigured(step, [mockAgentNode])).toBe(true);
+  });
+
+  it("returns true (unconfigured) when target node does not exist in allNodes", () => {
+    const step: PipelineStepDraft = {
+      id: "step-lg-1",
+      name: "runAgent",
+      type: "langgraph_invoke",
+      enabled: true,
+      langGraphTargetNodeId: "non-existent-agent",
+    };
+    expect(isStepInputUnconfigured(step, [mockAgentNode])).toBe(true);
+  });
+
+  it("returns true (unconfigured) when required inputChannel is not mapped", () => {
+    const step: PipelineStepDraft = {
+      id: "step-lg-1",
+      name: "runAgent",
+      type: "langgraph_invoke",
+      enabled: true,
+      langGraphTargetNodeId: "agent-1",
+      inputBindings: [
+        { argName: "session_context", source: { kind: "req_body", field: "ctx" } },
+      ],
+    };
+    expect(isStepInputUnconfigured(step, [mockAgentNode])).toBe(true);
+  });
+
+  it("returns false (configured) when required inputChannel is mapped in inputBindings", () => {
+    const step: PipelineStepDraft = {
+      id: "step-lg-1",
+      name: "runAgent",
+      type: "langgraph_invoke",
+      enabled: true,
+      langGraphTargetNodeId: "agent-1",
+      inputBindings: [
+        { argName: "query", source: { kind: "req_body", field: "userQuery" } },
+      ],
+    };
+    expect(isStepInputUnconfigured(step, [mockAgentNode])).toBe(false);
+  });
+
+  it("returns false (configured) when required inputChannel is mapped in langGraphStateMapping", () => {
+    const step: PipelineStepDraft = {
+      id: "step-lg-1",
+      name: "runAgent",
+      type: "langgraph_invoke",
+      enabled: true,
+      langGraphTargetNodeId: "agent-1",
+      langGraphStateMapping: {
+        query: "body.userQuery",
+      },
+    };
+    expect(isStepInputUnconfigured(step, [mockAgentNode])).toBe(false);
+  });
+
+  it("returns true (unconfigured) when an input binding has an incomplete source", () => {
+    const step: PipelineStepDraft = {
+      id: "step-lg-1",
+      name: "runAgent",
+      type: "langgraph_invoke",
+      enabled: true,
+      langGraphTargetNodeId: "agent-1",
+      inputBindings: [
+        { argName: "query", source: { kind: "step_output", stepId: "", field: "query" } },
+      ],
+    };
+    expect(isStepInputUnconfigured(step, [mockAgentNode])).toBe(true);
+  });
+});
+
+

@@ -104,15 +104,28 @@ export function useAgentPipelineSteps({
 
   const handleAddStep = useCallback(
     (type: LangGraphNodeStepType) => {
-      const prefix =
-        type === "transformer" || type === "transform"
-          ? "trans"
-          : type === "custom_code"
-            ? "code"
-            : "llm";
-      const newStepId = `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      let prefix = "step";
+      if (type === "transformer" || type === "transform") prefix = "trans";
+      else if (type === "custom_code") prefix = "code";
+      else if (type === "llm_call") prefix = "llm";
+      else if (type === "db_operation") prefix = "db";
+      else if (type === "redis_operation") prefix = "redis";
+      else if (type === "storage_operation") prefix = "storage";
+      else if (type === "kafka_publish") prefix = "kafka";
+      else if (type === "external_call") prefix = "api";
+      else if (type === "service_call") prefix = "service";
+      else if (type === "variable") prefix = "var";
+      else if (type === "condition") prefix = "cond";
+      else if (type === "try_catch") prefix = "try";
+      else if (type === "switch") prefix = "switch";
+      else if (type === "parallel") prefix = "parallel";
+      else if (type === "loop") prefix = "loop";
+      else if (type === "push_to_client") prefix = "push";
 
-      let defaultLabel = "Step";
+      const newStepId = `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const typeCount = activePipelineSteps.filter((s) => s.type === type).length + 1;
+
+      let defaultLabel = `Step ${activePipelineSteps.length + 1}`;
       if (type === "transformer" || type === "transform") {
         const hasLLM = activePipelineSteps.some((s) => s.type === "llm_call");
         const existingTransCount = activePipelineSteps.filter(
@@ -138,35 +151,111 @@ export function useAgentPipelineSteps({
           defaultLabel = `Custom Code ${existingCodeCount + 1}`;
         }
       } else if (type === "llm_call") {
-        const existingLlmCount = activePipelineSteps.filter(
-          (s) => s.type === "llm_call",
-        ).length;
-        if (existingLlmCount > 0) {
-          defaultLabel = `LLM Agent ${existingLlmCount + 1}`;
-        } else {
-          defaultLabel = "LLM Agent";
-        }
+        defaultLabel = typeCount > 1 ? `LLM Agent ${typeCount}` : "LLM Agent";
+      } else if (type === "db_operation") {
+        defaultLabel = `DB Operation ${typeCount}`;
+      } else if (type === "redis_operation") {
+        defaultLabel = `Redis ${typeCount}`;
+      } else if (type === "storage_operation") {
+        defaultLabel = `Storage ${typeCount}`;
+      } else if (type === "kafka_publish") {
+        defaultLabel = `Kafka Publish ${typeCount}`;
+      } else if (type === "external_call") {
+        defaultLabel = `External API ${typeCount}`;
+      } else if (type === "service_call") {
+        defaultLabel = `Service Call ${typeCount}`;
+      } else if (type === "variable") {
+        defaultLabel = `Variable ${typeCount}`;
+      } else if (type === "condition") {
+        defaultLabel = `If / Else ${typeCount}`;
+      } else if (type === "try_catch") {
+        defaultLabel = `Try / Catch ${typeCount}`;
+      } else if (type === "push_to_client") {
+        defaultLabel = `Push to Client ${typeCount}`;
+      }
+
+      let stepSpecificProps: Partial<LangGraphNodePipelineStep> = {};
+      if (type === "transformer" || type === "transform") {
+        stepSpecificProps = {
+          outputVariable: `transformedData_${activePipelineSteps.length + 1}`,
+          outputSchema: [{ name: "result", type: "string", required: true }],
+          inputBindings: [],
+        };
+      } else if (type === "custom_code") {
+        stepSpecificProps = {
+          customCode: "// TypeScript logic: (state, clone) => Partial<State>\nreturn {\n  // mutate channels\n};\n",
+        };
+      } else if (type === "llm_call") {
+        stepSpecificProps = {
+          llmConfig: { enabled: true },
+        };
+      } else if (type === "db_operation") {
+        stepSpecificProps = {
+          outputVariable: `dbResult_${typeCount}`,
+          declarationKind: "const",
+          inputBindings: [],
+        };
+      } else if (type === "redis_operation") {
+        stepSpecificProps = {
+          outputVariable: `cachedData_${typeCount}`,
+          declarationKind: "const",
+          inputBindings: [],
+        };
+      } else if (type === "storage_operation") {
+        stepSpecificProps = {
+          outputVariable: `storageResult_${typeCount}`,
+          declarationKind: "const",
+          inputBindings: [],
+        };
+      } else if (type === "kafka_publish") {
+        stepSpecificProps = {
+          outputVariable: `publishResult_${typeCount}`,
+          declarationKind: "const",
+          inputBindings: [],
+        };
+      } else if (type === "external_call") {
+        stepSpecificProps = {
+          outputVariable: `apiResponse_${typeCount}`,
+          declarationKind: "const",
+          inputBindings: [],
+        };
+      } else if (type === "service_call") {
+        stepSpecificProps = {
+          outputVariable: `serviceResponse_${typeCount}`,
+          declarationKind: "const",
+          inputBindings: [],
+        };
+      } else if (type === "variable") {
+        stepSpecificProps = {
+          outputVariable: `myVar_${typeCount}`,
+          variableOperation: "declare",
+          declarationKind: "const",
+          variableDataType: "string",
+        };
+      } else if (type === "condition") {
+        stepSpecificProps = {
+          thenSteps: [],
+          elseSteps: [],
+        };
+      } else if (type === "try_catch") {
+        stepSpecificProps = {
+          trySteps: [],
+          catchSteps: [],
+        };
+      } else if (type === "push_to_client") {
+        stepSpecificProps = {
+          pushProtocol: "sse",
+          inputBindings: [],
+        };
       }
 
       const newStep: LangGraphNodePipelineStep = {
         id: newStepId,
         type,
         label: defaultLabel,
-        ...(type === "transformer" || type === "transform"
-          ? {
-              outputVariable: `transformedData_${activePipelineSteps.length + 1}`,
-              outputSchema: [{ name: "result", type: "string", required: true }],
-              inputBindings: [],
-            }
-          : type === "custom_code"
-            ? {
-                customCode: {
-                  body: "// TypeScript logic: (state, clone) => Partial<State>\nreturn {\n  // mutate channels\n};\n",
-                },
-              }
-            : {
-                llmConfig: { enabled: true },
-              }),
+        name: defaultLabel,
+        enabled: true,
+        ...stepSpecificProps,
       };
 
       const nextSteps = [...activePipelineSteps, newStep];
@@ -179,7 +268,7 @@ export function useAgentPipelineSteps({
       };
 
       if (type === "custom_code" && !selectedAgentData.customCode?.body) {
-        updates.customCode = newStep.customCode;
+        updates.customCode = { body: newStep.customCode || "" };
       } else if (type === "llm_call") {
         updates.llmConfig = {
           ...(selectedAgentData.llmConfig || {}),
@@ -206,7 +295,7 @@ export function useAgentPipelineSteps({
       if (remainingCodeSteps.length === 0) {
         updates.customCode = { body: "" };
       } else if (remainingCodeSteps[0]?.customCode) {
-        updates.customCode = remainingCodeSteps[0].customCode;
+        updates.customCode = { body: remainingCodeSteps[0].customCode };
       }
 
       const remainingLlmSteps = nextSteps.filter((s) => s.type === "llm_call");
@@ -235,14 +324,14 @@ export function useAgentPipelineSteps({
   const handleUpdateStepCode = useCallback(
     (stepId: string, body: string) => {
       const next = activePipelineSteps.map((s) =>
-        s.id === stepId ? { ...s, customCode: { body } } : s,
+        s.id === stepId ? { ...s, customCode: body } : s,
       );
       setActivePipelineSteps(next);
       const firstCode = next.find((s) => s.type === "custom_code");
       onUpdateAgent({
         pipelineSteps: next,
         nodeSteps: next.map((s) => s.type),
-        ...(firstCode?.customCode ? { customCode: firstCode.customCode } : {}),
+        ...(firstCode?.customCode ? { customCode: { body: firstCode.customCode } } : {}),
       });
     },
     [activePipelineSteps, onUpdateAgent],
@@ -256,6 +345,20 @@ export function useAgentPipelineSteps({
       setActivePipelineSteps(next);
       onUpdateAgent({
         pipelineSteps: next,
+      });
+    },
+    [activePipelineSteps, onUpdateAgent],
+  );
+
+  const handleUpdateStep = useCallback(
+    (updatedStep: LangGraphNodePipelineStep) => {
+      const next = activePipelineSteps.map((s) =>
+        s.id === updatedStep.id ? updatedStep : s,
+      );
+      setActivePipelineSteps(next);
+      onUpdateAgent({
+        pipelineSteps: next,
+        nodeSteps: next.map((st) => st.type),
       });
     },
     [activePipelineSteps, onUpdateAgent],
@@ -280,5 +383,6 @@ export function useAgentPipelineSteps({
     handleDragEnd,
     handleUpdateStepCode,
     handleUpdateStepLabel,
+    handleUpdateStep,
   };
 }

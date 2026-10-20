@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { useParams } from "next/navigation";
 import {
   Network,
   Radio,
@@ -11,13 +12,24 @@ import {
   Plus,
   Bot,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   Flame,
   ArrowRight,
   Database,
   Key,
+  ExternalLink,
 } from "lucide-react";
-import { BackendNode, KafkaTopic, RedisStream, Endpoint, Parameter } from "@workspace/canvas/types";
+import {
+  BackendNode,
+  BackendEdge,
+  KafkaTopic,
+  RedisStream,
+  Endpoint,
+  Parameter,
+  LangGraphInputChannel,
+} from "@workspace/canvas/types";
+import { checkCheckpointerTablesStatus } from "../../backend-nodes/graph-nodes/langgraph/langgraph-canvas/utils/checkpointerTables";
 import { Button } from "@workspace/ui/components/button";
 import { BufferedInput, LocalInput } from "./BufferedInput";
 import { Label } from "@workspace/ui/components/label";
@@ -136,6 +148,7 @@ function accessorToStepSource(
 export interface LangGraphInvokeStepSectionProps {
   step: PipelineStepDraft;
   allNodes: BackendNode[];
+  allEdges?: BackendEdge[];
   availableSources?: AvailableSource[];
   serviceNodeId?: string;
   onChange: (updated: PipelineStepDraft) => void;
@@ -149,6 +162,7 @@ export const LangGraphInvokeStepSection: React.FC<
 > = ({
   step,
   allNodes,
+  allEdges = [],
   availableSources = [],
   serviceNodeId,
   onChange,
@@ -156,6 +170,15 @@ export const LangGraphInvokeStepSection: React.FC<
   onEndpointChange,
   children,
 }) => {
+  const params = useParams();
+  const rawProjectId = params?.projectId;
+  const projectId =
+    typeof rawProjectId === "string"
+      ? rawProjectId
+      : Array.isArray(rawProjectId)
+        ? rawProjectId[0]
+        : "";
+
   const [newKey, setNewKey] = useState("");
   const [newCustomBinding, setNewCustomBinding] = useState<StepBinding>({
     argName: "",
@@ -238,6 +261,15 @@ export const LangGraphInvokeStepSection: React.FC<
     }
   }, [selectedAgentNode, step.langGraphTargetNodeId, step, onChange]);
 
+  // Input channels defined on selected agent node (the explicit public API contract)
+  const inputChannels: LangGraphInputChannel[] = useMemo(() => {
+    if (!selectedAgentNode?.data?.inputChannels) return [];
+    if (Array.isArray(selectedAgentNode.data.inputChannels)) {
+      return selectedAgentNode.data.inputChannels;
+    }
+    return [];
+  }, [selectedAgentNode]);
+
   // State channels defined on selected agent node
   const stateChannels: Array<{ key: string; type: string }> = useMemo(() => {
     if (!selectedAgentNode?.data) return [{ key: "messages", type: "BaseMessage[]" }];
@@ -248,6 +280,63 @@ export const LangGraphInvokeStepSection: React.FC<
     return [{ key: "messages", type: "BaseMessage[]" }];
   }, [selectedAgentNode]);
 
+  // Combined declared channels for mapping: prioritizing inputChannels, plus unmapped state channels
+  const declaredChannels = useMemo<
+    Array<{
+      key: string;
+      type: string;
+      isInputChannel: boolean;
+      required?: boolean;
+      description?: string;
+      stateChannelKey?: string;
+    }>
+  >(() => {
+    const list: Array<{
+      key: string;
+      type: string;
+      isInputChannel: boolean;
+      required?: boolean;
+      description?: string;
+      stateChannelKey?: string;
+    }> = [];
+    const seen = new Set<string>();
+
+    for (const inCh of inputChannels) {
+      if (inCh.key) {
+        list.push({
+          key: inCh.key,
+          type: inCh.type || "string",
+          isInputChannel: true,
+          required: inCh.required,
+          description: inCh.description,
+          stateChannelKey: inCh.stateChannelKey,
+        });
+        seen.add(inCh.key);
+      }
+    }
+
+    for (const stCh of stateChannels) {
+      if (stCh.key && !seen.has(stCh.key)) {
+        list.push({
+          key: stCh.key,
+          type: stCh.type || "unknown",
+          isInputChannel: false,
+        });
+        seen.add(stCh.key);
+      }
+    }
+
+    if (list.length === 0) {
+      list.push({
+        key: "messages",
+        type: "BaseMessage[]",
+        isInputChannel: false,
+      });
+    }
+
+    return list;
+  }, [inputChannels, stateChannels]);
+
   const rawMemoryConfig = selectedAgentNode?.data?.memoryConfig;
   const memoryConfig = rawMemoryConfig ?? {
     checkpointer: "memory",
@@ -257,6 +346,37 @@ export const LangGraphInvokeStepSection: React.FC<
     if (rawMemoryConfig && rawMemoryConfig.enabled === false) return false;
     return Boolean(memoryConfig.checkpointer);
   }, [rawMemoryConfig, memoryConfig]);
+
+  const checkpointerTablesStatus = useMemo(() => {
+    if (!selectedAgentNode || !hasMemory) return null;
+    const mem = selectedAgentNode.data?.memoryConfig;
+    const checkpointerType = mem?.checkpointer || "memory";
+    if (checkpointerType === "memory") return null;
+    return checkCheckpointerTablesStatus(
+      allNodes,
+      allEdges,
+      mem?.enabled !== false,
+      checkpointerType,
+      mem?.checkpointerNodeId,
+    );
+  }, [selectedAgentNode, hasMemory, allNodes, allEdges]);
+
+  const checkpointerWarning = useMemo(() => {
+    if (!checkpointerTablesStatus) return null;
+    if (checkpointerTablesStatus.isMissingStorage) {
+      const type =
+        selectedAgentNode?.data?.memoryConfig?.checkpointer === "postgres"
+          ? "PostgreSQL database"
+          : "Redis instance";
+      return `No connected ${type} found in SchemaView. Please create a database/Redis node in SchemaView to store conversation checkpoints.`;
+    }
+    if (!checkpointerTablesStatus.areTablesCreated) {
+      return `${checkpointerTablesStatus.missingCount} checkpointer ${
+        checkpointerTablesStatus.missingCount === 1 ? "table is" : "tables are"
+      } missing in SchemaView. Configure them in LangGraph Studio to enable persistence.`;
+    }
+    return null;
+  }, [checkpointerTablesStatus, selectedAgentNode]);
 
   // Check if the endpoint request contract already declares a thread_id field
   const endpointHasThreadId = useMemo(() => {
@@ -362,19 +482,19 @@ export const LangGraphInvokeStepSection: React.FC<
   };
 
   const mappedDeclaredChannels = useMemo(() => {
-    return stateChannels.filter((ch) => isChannelMapped(ch.key));
-  }, [stateChannels, mapping, step.inputBindings]);
+    return declaredChannels.filter((ch) => isChannelMapped(ch.key));
+  }, [declaredChannels, mapping, step.inputBindings]);
 
   const customKeys = useMemo(() => {
     const keysFromMapping = Object.keys(mapping).filter((k) => Boolean(mapping[k]));
     const keysFromBindings = (step.inputBindings || []).map((b) => b.argName).filter(Boolean);
     const allKeys = Array.from(new Set([...keysFromMapping, ...keysFromBindings]));
-    return allKeys.filter((k) => !stateChannels.some((ch) => ch.key === k));
-  }, [mapping, step.inputBindings, stateChannels]);
+    return allKeys.filter((k) => !declaredChannels.some((ch) => ch.key === k));
+  }, [mapping, step.inputBindings, declaredChannels]);
 
   const unmappedDeclaredChannels = useMemo(() => {
-    return stateChannels.filter((ch) => !isChannelMapped(ch.key));
-  }, [stateChannels, mapping, step.inputBindings]);
+    return declaredChannels.filter((ch) => !isChannelMapped(ch.key));
+  }, [declaredChannels, mapping, step.inputBindings]);
 
   const isStreaming = step.langGraphStreamingEnabled ?? false;
   const streamingProtocol = step.langGraphStreamingProtocol || "sse";
@@ -603,7 +723,7 @@ export const LangGraphInvokeStepSection: React.FC<
     const newMapping: Record<string, string> = { ...mapping };
     const newBindings: StepBinding[] = [...(step.inputBindings || [])];
 
-    stateChannels.forEach((ch) => {
+    declaredChannels.forEach((ch) => {
       let matchedSource: StepSource | null = null;
       const keyLower = ch.key.toLowerCase();
 
@@ -613,7 +733,16 @@ export const LangGraphInvokeStepSection: React.FC<
         const foundPath = src.paths.find((p) => {
           const pLower = p.path.toLowerCase();
           if (pLower === keyLower) return true;
-          if (keyLower === "messages" && (pLower === "messages" || pLower === "message" || pLower === "prompt" || pLower === "query")) {
+          if (
+            keyLower === "messages" &&
+            (pLower === "messages" || pLower === "message" || pLower === "prompt" || pLower === "query")
+          ) {
+            return true;
+          }
+          if (
+            (keyLower === "message" || keyLower === "query" || keyLower === "prompt") &&
+            (pLower === "message" || pLower === "prompt" || pLower === "query" || pLower === "messages")
+          ) {
             return true;
           }
           return false;
@@ -802,9 +931,26 @@ export const LangGraphInvokeStepSection: React.FC<
             <Bot className="w-3.5 h-3.5 text-primary" />
             Target LangGraph Agent
           </Label>
-          <span className="text-[10px] text-muted-foreground font-mono">
-            {availableAgents.length} available
-          </span>
+          <div className="flex items-center gap-2">
+            {projectId && selectedAgentNode && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  window.open(`/project/${projectId}/langgraph/${selectedAgentNode.id}`, "_blank");
+                }}
+                className="h-6 text-[10px] font-semibold text-primary hover:text-primary hover:bg-primary/10 gap-1 px-2"
+                title="Open this agent in LangGraph Studio (new tab)"
+              >
+                <ExternalLink className="w-3 h-3" />
+                <span>Open in Studio</span>
+              </Button>
+            )}
+            <span className="text-[10px] text-muted-foreground font-mono">
+              {availableAgents.length} available
+            </span>
+          </div>
         </div>
         <Select
           value={selectedAgentNode?.id || ""}
@@ -837,6 +983,14 @@ export const LangGraphInvokeStepSection: React.FC<
             <span className="font-medium text-foreground">
               {selectedAgentNode.data?.label || "Agent"}
             </span>
+            {inputChannels.length > 0 && (
+              <>
+                <span className="text-[10px]">•</span>
+                <span className="text-primary font-mono text-[10px]">
+                  {inputChannels.length} input {inputChannels.length === 1 ? "channel" : "channels"}
+                </span>
+              </>
+            )}
             <span className="text-[10px]">•</span>
             <span>{stateChannels.length} state channels</span>
             {selectedAgentNode.data?.memoryConfig?.checkpointer && (
@@ -880,6 +1034,34 @@ export const LangGraphInvokeStepSection: React.FC<
           <p className="text-[10px] text-muted-foreground leading-relaxed">
             LangGraph automatically queries the checkpointer database to retrieve the full chat history for this <code className="font-mono text-emerald-400">thread_id</code>. It is an execution config parameter (<code className="font-mono text-primary">configurable.thread_id</code>), not a state variable. Only the new user message needs to be mapped into state channels.
           </p>
+
+          {/* Checkpointer storage health warning */}
+          {checkpointerWarning && (
+            <div className="flex flex-col gap-1.5 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/25 text-rose-300">
+              <div className="flex items-center justify-between text-[11px] font-semibold">
+                <div className="flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-400" />
+                  <span>Checkpointer Storage Not Ready</span>
+                </div>
+                {projectId && selectedAgentNode && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-5 text-[9px] px-1.5 border-rose-500/40 text-rose-200 bg-rose-500/10 hover:bg-rose-500/20"
+                    onClick={() => {
+                      window.open(`/project/${projectId}/langgraph/${selectedAgentNode.id}`, "_blank");
+                    }}
+                  >
+                    Open Studio to Fix
+                  </Button>
+                )}
+              </div>
+              <p className="text-[10px] text-rose-200/80 leading-relaxed">
+                {checkpointerWarning}
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-[140px_auto_1fr_auto] gap-2 items-center text-xs bg-background/60 p-2 rounded-lg border border-emerald-500/20">
             <div className="flex items-center gap-1.5 min-w-0">
@@ -972,7 +1154,7 @@ export const LangGraphInvokeStepSection: React.FC<
         <div className="flex flex-col gap-2 mt-1">
           {(mappedDeclaredChannels.length > 0 || customKeys.length > 0) && (
             <div className="grid grid-cols-[140px_auto_1fr_auto] gap-2 text-[9px] font-bold text-muted-foreground uppercase tracking-wider px-1">
-              <span>State Channel</span>
+              <span>State / Input Channel</span>
               <span></span>
               <span>Source & Field</span>
               <span className="w-6 text-right"></span>
@@ -989,13 +1171,30 @@ export const LangGraphInvokeStepSection: React.FC<
               >
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="font-mono font-bold text-purple-300 text-[11px] truncate bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                    <span
+                      className={`font-mono font-bold text-[11px] truncate px-1.5 py-0.5 rounded border ${
+                        ch.isInputChannel
+                          ? "text-blue-300 bg-blue-500/10 border-blue-500/20"
+                          : "text-purple-300 bg-purple-500/10 border-purple-500/20"
+                      }`}
+                      title={ch.description || ch.key}
+                    >
                       {ch.key}
                     </span>
+                    {ch.required && (
+                      <span className="text-red-400 font-bold text-xs" title="Required input channel">
+                        *
+                      </span>
+                    )}
                     <span className="text-[9px] text-muted-foreground font-mono truncate">
                       {ch.type}
                     </span>
                   </div>
+                  {ch.stateChannelKey && (
+                    <span className="text-[8.5px] text-muted-foreground font-mono mt-0.5 leading-tight truncate">
+                      → state.{ch.stateChannelKey}
+                    </span>
+                  )}
                   {ch.key === "messages" && hasMemory && (
                     <span className="text-[8.5px] text-emerald-400/90 font-sans mt-0.5 leading-tight truncate">
                       new input only (history from DB)
@@ -1075,7 +1274,7 @@ export const LangGraphInvokeStepSection: React.FC<
                 className="text-[10px] text-primary/70 mt-1 cursor-pointer hover:underline"
                 onClick={handleAutoMap}
               >
-                Click here to auto-map all available state channels.
+                Click here to auto-map all available input and state channels.
               </p>
             </div>
           )}
@@ -1091,11 +1290,16 @@ export const LangGraphInvokeStepSection: React.FC<
                   key={ch.key}
                   type="button"
                   onClick={() => handleAddChannel(ch.key)}
-                  className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/25 text-purple-300 hover:bg-purple-500/20 hover:border-purple-500/40 transition-colors"
+                  className={`flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full border transition-colors ${
+                    ch.isInputChannel
+                      ? "bg-blue-500/10 border-blue-500/25 text-blue-300 hover:bg-blue-500/20 hover:border-blue-500/40"
+                      : "bg-purple-500/10 border-purple-500/25 text-purple-300 hover:bg-purple-500/20 hover:border-purple-500/40"
+                  }`}
                   title={`Map channel: ${ch.key} (${ch.type})`}
                 >
-                  <Plus className="w-3 h-3 text-purple-400" />
+                  <Plus className="w-3 h-3 text-primary" />
                   <span>{ch.key}</span>
+                  {ch.required && <span className="text-red-400 font-bold">*</span>}
                   <span className="text-[9px] text-muted-foreground font-sans">
                     ({ch.type})
                   </span>

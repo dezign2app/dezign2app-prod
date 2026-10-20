@@ -41,7 +41,7 @@ export function AgentAddStepToolbar({
             >
               <Plus className="w-2.5 h-2.5 text-muted-foreground/80 shrink-0" />
               <Icon className={`w-3 h-3 ${meta.color} shrink-0`} />
-              <span>+ Add {meta.label}</span>
+              <span>{meta.label}</span>
               {count > 0 && (
                 <span className="text-[9px] px-1 py-0 rounded bg-secondary/80 font-mono text-muted-foreground">
                   {count}

@@ -59,7 +59,18 @@ export interface StepSchemaField {
   description?: string;
 }
 
-export type PipelineStepDraft = PipelineStep;
+export type PipelineStepDraft = PipelineStep & {
+  label?: string;
+  pushProtocol?: "sse" | "websocket";
+  transformerRef?: string;
+  systemPrompt?: string;
+  llmConfig?: {
+    enabled?: boolean;
+    provider?: string;
+    model?: string;
+    temperature?: number;
+  };
+};
 
 
 // ─── Introspection & Autocomplete Sources ─────────────────────────────────────
@@ -73,7 +84,7 @@ export interface AvailablePath {
 export interface AvailableSource {
   id: string;
   label: string;
-  kind: "req_body" | "req_params" | "req_query" | "req_headers" | "env" | "step_output" | "inline";
+  kind: "req_body" | "req_params" | "req_query" | "req_headers" | "env" | "step_output" | "inline" | "state";
   stepId?: string;
   variableName?: string;
   rootVariableName?: string;

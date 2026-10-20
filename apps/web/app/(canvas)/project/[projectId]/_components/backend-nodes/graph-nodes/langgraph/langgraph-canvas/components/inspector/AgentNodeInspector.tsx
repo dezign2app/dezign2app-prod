@@ -215,7 +215,7 @@ export function AgentNodeInspector({
             No execution steps configured for this node yet
           </p>
           <p className="text-[11px] text-muted-foreground/60 max-w-[280px]">
-            Add custom code (pre/post-processing) or an LLM agent from the toolbar below.
+            Add execution steps (DB query, API call, LLM agent, Kafka, custom logic) from the toolbar below.
           </p>
         </div>
       ) : (

@@ -573,6 +573,39 @@ function isLangGraphStepUnconfigured(
     (n) => n.id === step.langGraphTargetNodeId,
   );
   if (!targetNode) return true;
+
+  const inputBindings = step.inputBindings || [];
+  const stateMapping = step.langGraphStateMapping || {};
+
+  // If any input bindings are present, ensure they are properly configured
+  if (inputBindings.some((b) => !isBindingSourceConfigured(b))) {
+    return true;
+  }
+
+  const isChannelMapped = (key: string) => {
+    const hasInMapping =
+      key in stateMapping &&
+      stateMapping[key] !== undefined &&
+      stateMapping[key] !== "";
+    const hasInBindings = inputBindings.some(
+      (b) => b.argName === key && isBindingSourceConfigured(b),
+    );
+    return hasInMapping || hasInBindings;
+  };
+
+  // Check required input channels declared by the target agent
+  const inputChannels = targetNode.data?.inputChannels;
+  if (Array.isArray(inputChannels) && inputChannels.length > 0) {
+    const requiredChannels = inputChannels.filter(
+      (c: { required?: boolean; key?: string }) => c.required && c.key,
+    );
+    for (const req of requiredChannels) {
+      if (!isChannelMapped(req.key)) {
+        return true;
+      }
+    }
+  }
+
   return false;
 }
 
