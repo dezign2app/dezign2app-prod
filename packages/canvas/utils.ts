@@ -615,7 +615,7 @@ export function computeCompiledPageRoute({
 }: {
   label?: string;
   pathParams?: Array<{ name?: string; key?: string }>;
-  queryParams?: Array<{ name?: string; key?: string; defaultValue?: any }>;
+  queryParams?: Array<{ name?: string; key?: string; defaultValue?: string | number | boolean | null }>;
   isLayout?: boolean;
 }): string {
   if (isLayout) {
@@ -807,12 +807,548 @@ export function formatEndpointRoute(route: string): string {
 }
 
 /**
+ * Deduplicates dynamic path parameter placeholders (e.g. ":id", "{id}", "[id]") within a route URL path.
+ * If a parameter placeholder name appears multiple times (e.g. "/users/:id/posts/:id" or "send-message/:id/:id"),
+ * subsequent duplicate placeholders are omitted to maintain valid routing syntax.
+ * If a query string is attached, query parameters that duplicate path parameters or appear multiple times are also cleaned.
+ */
+export function deduplicateEndpointRoutePathParams(route: string): string {
+  if (!route) return "";
+
+  const qIdx = route.indexOf("?");
+  const pathPart = qIdx >= 0 ? route.slice(0, qIdx) : route;
+  const queryPart = qIdx >= 0 ? route.slice(qIdx + 1) : "";
+
+  const hasLeadingSlash = pathPart.startsWith("/");
+  const hasTrailingSlash = pathPart.length > 1 && pathPart.endsWith("/");
+
+  const rawSegments = pathPart.split("/").filter((s, idx) => {
+    if (idx === 0 && s === "") return true;
+    return s !== "";
+  });
+
+  const seenPathParams = new Set<string>();
+  const cleanedSegments: string[] = [];
+
+  for (const seg of rawSegments) {
+    if (seg === "" && cleanedSegments.length === 0 && hasLeadingSlash) {
+      cleanedSegments.push("");
+      continue;
+    }
+
+    const colonMatch = /^:([a-zA-Z_][a-zA-Z0-9_]*)$/.exec(seg);
+    const braceMatch = /^\{([a-zA-Z_][a-zA-Z0-9_]*)\}$/.exec(seg);
+    const bracketMatch = /^\[\[?\.\.\.?([a-zA-Z_][a-zA-Z0-9_]*)\]?\]$|^\[([a-zA-Z_][a-zA-Z0-9_]*)\]$/.exec(seg);
+
+    const paramName = colonMatch?.[1] || braceMatch?.[1] || bracketMatch?.[1] || bracketMatch?.[2];
+
+    if (paramName) {
+      const lower = paramName.toLowerCase();
+      if (seenPathParams.has(lower)) {
+        continue;
+      }
+      seenPathParams.add(lower);
+      cleanedSegments.push(seg);
+    } else {
+      cleanedSegments.push(seg);
+    }
+  }
+
+  let resultPath = cleanedSegments.join("/");
+  if (hasLeadingSlash && !resultPath.startsWith("/")) {
+    resultPath = `/${resultPath}`;
+  }
+  if (hasTrailingSlash && !resultPath.endsWith("/") && resultPath !== "/") {
+    resultPath = `${resultPath}/`;
+  }
+  if (!resultPath && hasLeadingSlash) {
+    resultPath = "/";
+  }
+
+  if (qIdx >= 0) {
+    const cleanedQuery = formatEndpointQueryString(extractEndpointQueryParams(queryPart), {
+      excludeNames: Array.from(seenPathParams),
+    });
+    return cleanedQuery ? `${resultPath}${cleanedQuery}` : resultPath;
+  }
+
+  return resultPath;
+}
+
+/**
  * Sanitizes an endpoint route for persistence (e.g. on blur/save),
- * trimming whitespace and replacing internal spaces with hyphens.
+ * trimming whitespace, replacing internal spaces with hyphens, and deduplicating dynamic path parameters.
  */
 export function sanitizeEndpointRoute(route: string): string {
   if (!route) return "";
-  return route.trim().replace(/\s+/g, "-");
+  const formatted = route.trim().replace(/\s+/g, "-");
+  return deduplicateEndpointRoutePathParams(formatted);
+}
+
+/**
+ * Extracts path parameter placeholder names from an endpoint route string.
+ * Supports Express style (:id), OpenAPI style ({id}), and bracket style ([id]).
+ * Automatically ignores port numbers (e.g. :8080 or :3000) by requiring names
+ * to start with a letter or underscore.
+ *
+ * Examples:
+ * - "send-message/:hello" -> ["hello"]
+ * - "/api/orgs/:orgId/users/:userId" -> ["orgId", "userId"]
+ * - "/items/{itemId}" -> ["itemId"]
+ */
+export function extractEndpointPathParams(route: string): string[] {
+  if (!route) return [];
+  const matches = new Set<string>();
+
+  const qIdx = route.indexOf("?");
+  let pathname = qIdx >= 0 ? route.slice(0, qIdx) : route;
+
+  try {
+    if (pathname.includes("://")) {
+      const parsed = new URL(pathname);
+      pathname = parsed.pathname;
+    }
+  } catch {
+    pathname = pathname.replace(/^[a-zA-Z]+:\/\/[^/]+/, "");
+  }
+
+  // 1. Colon params: :paramName (must start with letter or underscore)
+  const colonRegex = /:([a-zA-Z_][a-zA-Z0-9_]*)/g;
+  let m: RegExpExecArray | null;
+  while ((m = colonRegex.exec(pathname)) !== null) {
+    if (m[1]) matches.add(m[1]);
+  }
+
+  // 2. Brace params: {paramName}
+  const braceRegex = /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g;
+  while ((m = braceRegex.exec(pathname)) !== null) {
+    if (m[1]) matches.add(m[1]);
+  }
+
+  // 3. Bracket params: [paramName] or [...paramName]
+  const bracketRegex = /\[\[?\.\.\.?([a-zA-Z_][a-zA-Z0-9_]*)\]?\]|\[([a-zA-Z_][a-zA-Z0-9_]*)\]/g;
+  while ((m = bracketRegex.exec(pathname)) !== null) {
+    const name = m[1] || m[2];
+    if (name) matches.add(name);
+  }
+
+  return Array.from(matches);
+}
+
+/**
+ * Extracts query parameters from a query string (or endpoint route with '?').
+ */
+export function extractEndpointQueryParams(queryOrRoute: string): Parameter[] {
+  if (!queryOrRoute) return [];
+  const qIdx = queryOrRoute.indexOf("?");
+  let queryPart = "";
+  if (qIdx >= 0) {
+    queryPart = queryOrRoute.slice(qIdx + 1).trim();
+  } else if (!queryOrRoute.includes("/") && queryOrRoute.includes("=")) {
+    queryPart = queryOrRoute.trim();
+  } else {
+    return [];
+  }
+  if (!queryPart) return [];
+
+  const searchParams = new URLSearchParams(queryPart);
+  const extractedQueryParams: Parameter[] = [];
+  const seenQueryParams = new Set<string>();
+
+  searchParams.forEach((val, key) => {
+    const cleanKey = key.trim();
+    if (cleanKey && !seenQueryParams.has(cleanKey.toLowerCase())) {
+      seenQueryParams.add(cleanKey.toLowerCase());
+      let paramType = "string";
+      if (!isNaN(Number(val)) && val.trim() !== "") {
+        paramType = "number";
+      } else if (val === "true" || val === "false") {
+        paramType = "boolean";
+      }
+
+      extractedQueryParams.push({
+        id: `query-${cleanKey}`,
+        name: cleanKey,
+        type: paramType,
+        defaultValue: val,
+        required: false,
+      });
+    }
+  });
+
+  return extractedQueryParams;
+}
+
+/**
+ * Parses an endpoint route string which may include dynamic path params (e.g. :hello or {hello})
+ * and/or query parameters (e.g. ?limit=10&sort=asc).
+ * Returns the sanitized route pathname (without query string) and the extracted path and query parameters.
+ */
+export function parseEndpointRouteWithParams(raw: string): {
+  route: string;
+  extractedPathParams: Parameter[];
+  extractedQueryParams: Parameter[];
+} {
+  if (!raw) {
+    return { route: "", extractedPathParams: [], extractedQueryParams: [] };
+  }
+  const trimmed = raw.trim();
+  const qIndex = trimmed.indexOf("?");
+  const pathPart = qIndex >= 0 ? trimmed.slice(0, qIndex).trim() : trimmed;
+  const queryPart = qIndex >= 0 ? trimmed.slice(qIndex + 1).trim() : "";
+
+  const route = sanitizeEndpointRoute(pathPart);
+  const pathParamNames = extractEndpointPathParams(route);
+  const pathNameSet = new Set(pathParamNames.map((n) => n.toLowerCase()));
+  const extractedPathParams: Parameter[] = pathParamNames.map((name) => ({
+    id: `param-${name}`,
+    name,
+    type: "string",
+    required: true,
+  }));
+
+  const extractedQueryParams = extractEndpointQueryParams(queryPart).filter(
+    (q) => !pathNameSet.has((q.name || "").trim().toLowerCase()),
+  );
+
+  return {
+    route,
+    extractedPathParams,
+    extractedQueryParams,
+  };
+}
+
+/**
+ * Synchronizes an endpoint route URL with an updated list of path parameters.
+ * When a user adds, renames, or deletes a path param in the Path Params editor,
+ * this function updates the `:paramName` segments in the route string.
+ *
+ * Examples:
+ * - "send-message" with param "hello" added -> "send-message/:hello"
+ * - "/send-message" with param "hello" added -> "/send-message/:hello"
+ * - "/api/users/:id" with "id" renamed to "userId" -> "/api/users/:userId"
+ * - "/api/users/:id" with "id" removed -> "/api/users"
+ * - "" with param "id" added -> "/:id"
+ */
+export function syncEndpointRouteWithPathParams({
+  currentRoute,
+  oldPathParams = [],
+  newPathParams = [],
+}: {
+  currentRoute: string;
+  oldPathParams?: Array<{ id?: string; name?: string; key?: string }>;
+  newPathParams?: Array<{ id?: string; name?: string; key?: string }>;
+}): string {
+  let route = (currentRoute || "").trim();
+
+  // Separate query string if present
+  const qIndex = route.indexOf("?");
+  const pathPart = qIndex >= 0 ? route.slice(0, qIndex).trim() : route;
+  const queryPart = qIndex >= 0 ? route.slice(qIndex).trim() : "";
+
+  let updatedPath = pathPart;
+
+  // 1. Handle renamed parameters (matched by parameter id)
+  newPathParams.forEach((newP) => {
+    const oldP = oldPathParams.find((op) => op.id && newP.id && op.id === newP.id);
+    const newName = (newP.name || newP.key || "").trim();
+    if (oldP) {
+      const oldName = (oldP.name || oldP.key || "").trim();
+      if (oldName && newName && oldName !== newName) {
+        const escapedOld = escapeRegexForRoute(oldName);
+        updatedPath = updatedPath.replace(new RegExp(`:${escapedOld}\\b`, "g"), `:${newName}`);
+        updatedPath = updatedPath.replace(new RegExp(`\\{${escapedOld}\\}`, "g"), `:${newName}`);
+        updatedPath = updatedPath.replace(new RegExp(`\\[${escapedOld}\\]`, "g"), `:${newName}`);
+      }
+    }
+  });
+
+  // 2. Handle removed parameters (existed in oldPathParams, removed in newPathParams)
+  oldPathParams.forEach((oldP) => {
+    const stillExists = newPathParams.some((np) => {
+      const sameId = Boolean(oldP.id && np.id && oldP.id === np.id);
+      const sameName = Boolean(
+        (oldP.name || oldP.key)?.trim() &&
+        (np.name || np.key)?.trim() &&
+        (oldP.name || oldP.key)!.trim().toLowerCase() === (np.name || np.key)!.trim().toLowerCase()
+      );
+      return sameId || sameName;
+    });
+
+    if (!stillExists) {
+      const oldName = (oldP.name || oldP.key || "").trim();
+      if (oldName) {
+        const escapedOld = escapeRegexForRoute(oldName);
+        updatedPath = updatedPath.replace(new RegExp(`/+:${escapedOld}\\b`, "g"), "");
+        updatedPath = updatedPath.replace(new RegExp(`:${escapedOld}\\b`, "g"), "");
+        updatedPath = updatedPath.replace(new RegExp(`/+\\{${escapedOld}\\}`, "g"), "");
+        updatedPath = updatedPath.replace(new RegExp(`\\{${escapedOld}\\}`, "g"), "");
+        updatedPath = updatedPath.replace(new RegExp(`/+\\[${escapedOld}\\]`, "g"), "");
+        updatedPath = updatedPath.replace(new RegExp(`\\[${escapedOld}\\]`, "g"), "");
+      }
+    }
+  });
+
+  // 3. Ensure all non-empty parameters in newPathParams are present in the route (deduplicated)
+  const seenParamNames = new Set<string>();
+  extractEndpointPathParams(updatedPath).forEach((n) => seenParamNames.add(n.toLowerCase()));
+
+  newPathParams.forEach((newP) => {
+    const newName = (newP.name || newP.key || "").trim();
+    if (newName) {
+      const lower = newName.toLowerCase();
+      if (seenParamNames.has(lower)) {
+        return;
+      }
+      seenParamNames.add(lower);
+
+      const escapedNew = escapeRegexForRoute(newName);
+      const hasParam =
+        new RegExp(`:${escapedNew}\\b`).test(updatedPath) ||
+        new RegExp(`\\{${escapedNew}\\}`).test(updatedPath) ||
+        new RegExp(`\\[${escapedNew}\\]`).test(updatedPath);
+
+      if (!hasParam) {
+        if (!updatedPath || updatedPath === "") {
+          updatedPath = `/:${newName}`;
+        } else if (updatedPath === "/") {
+          updatedPath = `/:${newName}`;
+        } else if (updatedPath.endsWith("/")) {
+          updatedPath = `${updatedPath}:${newName}`;
+        } else {
+          updatedPath = `${updatedPath}/:${newName}`;
+        }
+      }
+    }
+  });
+
+  // Clean up any double slashes and deduplicate dynamic segments
+  updatedPath = deduplicateEndpointRoutePathParams(updatedPath.replace(/\/+/g, "/"));
+
+  // Clean up trailing slash if not root "/"
+  if (updatedPath.length > 1 && updatedPath.endsWith("/")) {
+    updatedPath = updatedPath.slice(0, -1);
+  }
+
+  return updatedPath + queryPart;
+}
+
+/**
+ * Reconciles the pathParams array when an endpoint route string is edited.
+ * - Extracts parameter names from newRoute (e.g. ":id", "{orgId}").
+ * - Preserves existing Parameter configurations (id, type, defaultValue, required, description).
+ * - If an old parameter was removed from the route string (present in oldRoute but not newRoute), removes it.
+ * - Renames a parameter if a single param was renamed in place.
+ * - Adds new Parameter objects for newly added placeholders.
+ * - Deduplicates parameter names so duplicate path parameters are prevented.
+ */
+export function reconcileEndpointPathParams({
+  currentPathParams = [],
+  newRoute,
+  oldRoute,
+  idGenerator,
+}: {
+  currentPathParams?: Parameter[];
+  newRoute: string;
+  oldRoute?: string;
+  idGenerator?: () => string;
+}): Parameter[] {
+  const newNames = extractEndpointPathParams(newRoute);
+  const oldNames = oldRoute ? extractEndpointPathParams(oldRoute) : [];
+
+  let result = [...currentPathParams];
+
+  // If a single old param was replaced by a single new param (e.g. :id -> :userId), rename it
+  let renamedOldName: string | null = null;
+  const firstOld = oldNames[0];
+  const firstNew = newNames[0];
+  if (oldNames.length === 1 && newNames.length === 1 && firstOld && firstNew && firstOld !== firstNew) {
+    const oldName = firstOld.toLowerCase();
+    const newName = firstNew;
+    renamedOldName = oldName;
+    result = result.map((p) => {
+      if (p.name && p.name.trim().toLowerCase() === oldName) {
+        return { ...p, name: newName };
+      }
+      return p;
+    });
+  }
+
+  const removedNames = new Set(
+    oldNames
+      .filter(
+        (name) =>
+          name.toLowerCase() !== renamedOldName &&
+          !newNames.some((n) => n.toLowerCase() === name.toLowerCase()),
+      )
+      .map((n) => n.toLowerCase()),
+  );
+
+  result = result.filter(
+    (p) => !p.name || !removedNames.has(p.name.trim().toLowerCase()),
+  );
+
+  // Ensure all newNames exist in result
+  const makeId = idGenerator || (() => `param-${Math.random().toString(36).substring(2, 9)}`);
+  newNames.forEach((name) => {
+    const exists = result.some((p) => p.name && p.name.trim().toLowerCase() === name.toLowerCase());
+    if (!exists) {
+      result.push({
+        id: makeId(),
+        name,
+        type: "string",
+        required: true,
+      });
+    }
+  });
+
+  // Deduplicate result to ensure no duplicate names exist in pathParams
+  const seenNames = new Set<string>();
+  result = result.filter((p) => {
+    const name = (p.name || "").trim().toLowerCase();
+    if (!name) return true;
+    if (seenNames.has(name)) return false;
+    seenNames.add(name);
+    return true;
+  });
+
+  return result;
+}
+
+/**
+ * Formats endpoint query parameters into a standard query string pattern
+ * with keys and their default values (e.g. "?key=defaultvalue&key2=&key3=value").
+ * Deduplicates repeated query parameter keys and filters out any keys present in options.excludeNames (e.g. path params).
+ */
+export function formatEndpointQueryString(
+  queryParams?: Parameter[] | Array<{ name?: string; defaultValue?: string }>,
+  options?: {
+    excludeNames?: string[];
+  },
+): string {
+  const disallowed = new Set(
+    (options?.excludeNames || [])
+      .map((n) => n.trim().toLowerCase())
+      .filter((n) => n.length > 0),
+  );
+
+  const seenKeys = new Set<string>();
+  const validQueryParams = (queryParams || []).filter((p) => {
+    if (!p || typeof p.name !== "string") return false;
+    const trimmed = p.name.trim();
+    if (!trimmed) return false;
+    const lower = trimmed.toLowerCase();
+    if (seenKeys.has(lower)) return false;
+    if (disallowed.has(lower)) return false;
+    seenKeys.add(lower);
+    return true;
+  });
+
+  if (validQueryParams.length === 0) {
+    return "";
+  }
+
+  const queryParts = validQueryParams.map((p) => {
+    const k = p.name!.trim();
+    const v =
+      p.defaultValue !== undefined && p.defaultValue !== null
+        ? String(p.defaultValue).trim()
+        : "";
+    return `${k}=${v}`;
+  });
+
+  return `?${queryParts.join("&")}`;
+}
+
+/**
+ * Computes a preview URL pattern for the endpoint including query string if queryParams are defined
+ * (e.g. "/send-message/:hello?sort=asc&limit=10&page=").
+ * Deduplicates path parameters and excludes any query parameters that share the same key as a path parameter.
+ */
+export function computeCompiledEndpointRoute({
+  route,
+  queryParams = [],
+  pathParams = [],
+}: {
+  route: string;
+  queryParams?: Parameter[] | Array<{ name?: string; defaultValue?: string }>;
+  pathParams?: Parameter[] | Array<{ name?: string; key?: string }>;
+}): string {
+  const cleanRoute = deduplicateEndpointRoutePathParams((route || "").trim());
+  const extractedPathNames = extractEndpointPathParams(cleanRoute);
+  const explicitPathNames = (pathParams || [])
+    .map((p) => (p.name || ("key" in p ? p.key : "") || "").trim())
+    .filter((n): n is string => n.length > 0);
+  const allPathNames = Array.from(new Set([...extractedPathNames, ...explicitPathNames]));
+
+  const qs = formatEndpointQueryString(queryParams, {
+    excludeNames: allPathNames,
+  });
+  return qs ? `${cleanRoute}${qs}` : cleanRoute;
+}
+
+export interface EndpointParamValidationResult {
+  isValid: boolean;
+  duplicatePathParams: string[];
+  duplicateQueryParams: string[];
+  conflictingParams: string[];
+  errors: string[];
+}
+
+/**
+ * Validates endpoint path parameters and query parameters to ensure:
+ * 1. No duplicate parameter names within pathParams.
+ * 2. No duplicate parameter names within queryParams.
+ * 3. No parameter names shared between pathParams and queryParams.
+ */
+export function validateEndpointParamKeys({
+  pathParams = [],
+  queryParams = [],
+}: {
+  pathParams?: Array<{ name?: string }>;
+  queryParams?: Array<{ name?: string }>;
+}): EndpointParamValidationResult {
+  const duplicatePathParams: string[] = [];
+  const duplicateQueryParams: string[] = [];
+  const conflictingParams: string[] = [];
+  const errors: string[] = [];
+
+  const seenPath = new Set<string>();
+  pathParams.forEach((p) => {
+    const name = (p.name || "").trim().toLowerCase();
+    if (!name) return;
+    if (seenPath.has(name) && !duplicatePathParams.includes(name)) {
+      duplicatePathParams.push(name);
+      errors.push(`Duplicate path parameter: "${name}"`);
+    }
+    seenPath.add(name);
+  });
+
+  const seenQuery = new Set<string>();
+  queryParams.forEach((q) => {
+    const name = (q.name || "").trim().toLowerCase();
+    if (!name) return;
+    if (seenQuery.has(name) && !duplicateQueryParams.includes(name)) {
+      duplicateQueryParams.push(name);
+      errors.push(`Duplicate query parameter: "${name}"`);
+    }
+    seenQuery.add(name);
+
+    if (seenPath.has(name) && !conflictingParams.includes(name)) {
+      conflictingParams.push(name);
+      errors.push(
+        `Parameter "${name}" cannot be used as both a path parameter and a query parameter.`,
+      );
+    }
+  });
+
+  return {
+    isValid: errors.length === 0,
+    duplicatePathParams,
+    duplicateQueryParams,
+    conflictingParams,
+    errors,
+  };
 }
 
 /**

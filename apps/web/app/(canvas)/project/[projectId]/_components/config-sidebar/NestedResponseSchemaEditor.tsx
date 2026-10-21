@@ -281,11 +281,30 @@ export const NestedResponseSchemaEditor: React.FC<
     toast.info(`Copied "${path}" to clipboard`);
   };
 
+  // Compute duplicate field name counts
+  const duplicateFieldCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    rawFields.forEach((f) => {
+      const name = (f.name || "").trim().toLowerCase();
+      if (name) {
+        counts.set(name, (counts.get(name) || 0) + 1);
+      }
+    });
+    return counts;
+  }, [rawFields]);
+
   // Field builder actions
   const addField = () => {
+    const existingNames = new Set(
+      rawFields.map((f) => (f.name || "").trim().toLowerCase()).filter(Boolean),
+    );
+    let idx = rawFields.length + 1;
+    while (existingNames.has(`field_${idx}`.toLowerCase())) {
+      idx++;
+    }
     const newFields = [
       ...rawFields,
-      { id: generateId(), name: "", type: "string", required: true },
+      { id: generateId(), name: `field_${idx}`, type: "string", required: true },
     ];
     onSchemaChange({
       ...safeSchema,
@@ -456,18 +475,32 @@ export const NestedResponseSchemaEditor: React.FC<
             </p>
           )}
 
-          {rawFields.map((f, idx) => (
-            <div
-              key={f.id || `field_${idx}_${f.name}`}
-              className="flex flex-col gap-2 rounded-lg border bg-background/60 p-2 group/f transition-all hover:border-primary/40"
-            >
-              <div className="flex items-center gap-2">
-                <LocalInput
-                  className="h-7 text-xs flex-1 nodrag bg-background font-mono border-none shadow-none focus-visible:ring-1"
-                  placeholder="fieldName (e.g. data.id or token)"
-                  value={f.name || ""}
-                  onBlur={(e) => updateField(f.id, { name: e.target.value })}
-                />
+          {rawFields.map((f, idx) => {
+            const cleanName = (f.name || "").trim().toLowerCase();
+            const isDuplicateName = cleanName.length > 0 && (duplicateFieldCounts.get(cleanName) || 0) > 1;
+
+            return (
+              <div
+                key={f.id || `field_${idx}_${f.name}`}
+                className={cn(
+                  "flex flex-col gap-2 rounded-lg border bg-background/60 p-2 group/f transition-all hover:shadow-sm",
+                  isDuplicateName
+                    ? "border-destructive/60 bg-destructive/[0.03]"
+                    : "hover:border-primary/40",
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <LocalInput
+                    className={cn(
+                      "h-7 text-xs flex-1 nodrag bg-background font-mono shadow-none focus-visible:ring-1",
+                      isDuplicateName
+                        ? "border border-destructive text-destructive focus-visible:ring-destructive"
+                        : "border-none",
+                    )}
+                    placeholder="fieldName (e.g. data.id or token)"
+                    value={f.name || ""}
+                    onBlur={(e) => updateField(f.id, { name: e.target.value })}
+                  />
 
                 <TypeCombobox
                   value={f.type || "string"}
@@ -567,8 +600,16 @@ export const NestedResponseSchemaEditor: React.FC<
                   />
                 </div>
               )}
+
+              {isDuplicateName && (
+                <div className="flex items-center gap-1 text-[10px] text-destructive font-medium px-1">
+                  <AlertTriangle size={10} className="shrink-0" />
+                  <span>Duplicate field name &quot;{f.name?.trim()}&quot;: schema field names must be unique.</span>
+                </div>
+              )}
             </div>
-          ))}
+          );
+        })}
 
           <Button
             type="button"

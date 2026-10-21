@@ -279,10 +279,18 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
 
   const handleMapAllSchemaFields = () => {
     if (incomingSchemaFields.length === 0) return;
-    const bindings: StepBinding[] = incomingSchemaFields.map((f) => ({
-      argName: f.name,
-      source: { kind: "req_body", field: f.name },
-    }));
+    const seen = new Set<string>();
+    const bindings: StepBinding[] = incomingSchemaFields
+      .filter((f) => {
+        const lower = f.name.toLowerCase();
+        if (seen.has(lower)) return false;
+        seen.add(lower);
+        return true;
+      })
+      .map((f) => ({
+        argName: f.name,
+        source: { kind: "req_body", field: f.name },
+      }));
     update({ inputBindings: bindings });
   };
 

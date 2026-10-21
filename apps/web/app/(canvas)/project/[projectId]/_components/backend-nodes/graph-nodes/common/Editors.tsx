@@ -1,5 +1,5 @@
 import React from "react";
-import { Plus, Trash, Text, Braces, ListPlus, Lock } from "lucide-react";
+import { Plus, Trash, Text, Braces, ListPlus, Lock, AlertCircle } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -158,12 +158,16 @@ export const ParameterEditor = ({
   onChange,
   fieldOptions,
   isExternal = false,
+  disallowedNames = [],
+  disallowedReason = "another parameter section",
 }: {
   title: string;
   parameters: Parameter[];
   onChange: (params: Parameter[]) => void;
   fieldOptions?: string[];
   isExternal?: boolean;
+  disallowedNames?: string[];
+  disallowedReason?: string;
 }) => {
   const addParam = () => {
     const isQueryParam = title?.toLowerCase().includes("query");
@@ -180,6 +184,14 @@ export const ParameterEditor = ({
   const removeParam = (id: string) => {
     onChange(parameters.filter((p) => p.id !== id));
   };
+
+  const normalizedDisallowed = React.useMemo(() => {
+    return new Set(
+      disallowedNames
+        .map((n) => n.trim().toLowerCase())
+        .filter((n) => n.length > 0),
+    );
+  }, [disallowedNames]);
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
@@ -206,12 +218,28 @@ export const ParameterEditor = ({
                 p.id === "auth-bearer-header"
             );
 
+          const cleanName = (p.name || "").trim().toLowerCase();
+          const isDuplicateWithin =
+            cleanName.length > 0 &&
+            parameters.filter(
+              (other) => (other.name || "").trim().toLowerCase() === cleanName,
+            ).length > 1;
+          const isConflictingWithDisallowed =
+            cleanName.length > 0 && normalizedDisallowed.has(cleanName);
+
+          const errorText = isDuplicateWithin
+            ? `Duplicate key "${p.name?.trim()}": keys in ${title} must be unique.`
+            : isConflictingWithDisallowed
+              ? `Key "${p.name?.trim()}" is already used in ${disallowedReason}. Parameter keys cannot be shared between path and query parameters.`
+              : null;
+
           return (
           <div
             key={p.id}
             className={cn(
               "flex flex-col gap-2 rounded-lg border bg-background/50 p-2.5 relative group/param transition-all hover:border-primary/30 hover:shadow-sm",
-              isAuthManaged && "border-emerald-500/30 bg-emerald-500/[0.02]"
+              isAuthManaged && "border-emerald-500/30 bg-emerald-500/[0.02]",
+              errorText && "border-destructive/60 bg-destructive/[0.03]",
             )}
           >
             {isAuthManaged && (
@@ -257,7 +285,8 @@ export const ParameterEditor = ({
                   disabled={isAuthManaged}
                   className={cn(
                     "h-7 text-xs flex-1 nodrag bg-background font-mono border-none shadow-none focus-visible:ring-1 placeholder:font-sans",
-                    isAuthManaged && "opacity-80 cursor-not-allowed bg-muted/30"
+                    isAuthManaged && "opacity-80 cursor-not-allowed bg-muted/30",
+                    errorText && "ring-1 ring-destructive/80 text-destructive",
                   )}
                   placeholder="Field name"
                   value={p.name || ""}
@@ -308,6 +337,12 @@ export const ParameterEditor = ({
                 </Button>
               )}
             </div>
+            {errorText && (
+              <div className="flex items-center gap-1.5 text-[10px] text-destructive font-medium bg-destructive/10 px-2 py-1 rounded border border-destructive/20 animate-in fade-in slide-in-from-top-1 duration-150">
+                <AlertCircle size={12} className="shrink-0" />
+                <span>{errorText}</span>
+              </div>
+            )}
             {p.description !== undefined && (
               <div className="relative w-full">
                 <LocalInput

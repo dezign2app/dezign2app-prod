@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { ChevronDown, ChevronRight, Plus, Trash, Send, Pencil, Check, X, Braces, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Trash, Send, Pencil, Check, X, Braces, Sparkles, AlertTriangle } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import { toast } from "sonner";
 import { NestedResponseSchemaEditor } from "../NestedResponseSchemaEditor";
@@ -62,11 +62,31 @@ export const ReturnResponseStepRow = ({
 
   const statusCode = step.statusCode || (endpoint?.type === "POST" ? 201 : 200);
 
+  // Compute duplicate argument keys in response bindings
+  const duplicateArgCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    (step.inputBindings || []).forEach((b) => {
+      const key = (b.argName || "").trim().toLowerCase();
+      if (key) {
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+    });
+    return counts;
+  }, [step.inputBindings]);
+
   // Auto-sync payload bindings into endpoint.responseBody so user never has to configure fields twice
   const syncResponseBody = (bindings: StepBinding[]) => {
     if (onEndpointChange) {
+      const seen = new Set<string>();
       const fields = bindings
-        .filter((b) => Boolean(b.argName?.trim()))
+        .filter((b) => {
+          const trimmed = (b.argName || "").trim();
+          if (!trimmed) return false;
+          const lower = trimmed.toLowerCase();
+          if (seen.has(lower)) return false;
+          seen.add(lower);
+          return true;
+        })
         .map((b, idx) => ({
           id: `res_f_${idx}`,
           name: b.argName.trim(),
@@ -93,8 +113,17 @@ export const ReturnResponseStepRow = ({
   };
 
   const addBinding = () => {
+    const existing = new Set(
+      (step.inputBindings || [])
+        .map((b) => (b.argName || "").trim().toLowerCase())
+        .filter(Boolean),
+    );
+    let idx = (step.inputBindings || []).length + 1;
+    while (existing.has(`field_${idx}`.toLowerCase())) {
+      idx++;
+    }
     const newBinding: StepBinding = {
-      argName: `field_${(step.inputBindings || []).length + 1}`,
+      argName: `field_${idx}`,
       source: { kind: "req_body", field: "" },
     };
     const next = [...(step.inputBindings || []), newBinding];
@@ -416,40 +445,63 @@ export const ReturnResponseStepRow = ({
                     })()}
                   </div>
                 ) : (
-                  (step.inputBindings || []).map((binding, bi) => (
-                    <div
-                      key={bi}
-                      className="grid grid-cols-[1fr_auto_2.2fr_auto] gap-1.5 items-center bg-muted/15 p-1.5 rounded border border-border/40"
-                    >
-                      {/* Key name */}
-                      <BufferedInput
-                        className="h-7 text-xs font-mono bg-background/70 border-border/60"
-                        value={binding.argName}
-                        onCommit={(val) =>
-                          updateBinding(bi, { ...binding, argName: val })
-                        }
-                        placeholder="data / fieldName"
-                      />
-                      {/* Arrow */}
-                      <span className="text-[10px] text-muted-foreground/50 px-0.5">←</span>
-                      {/* Source & Smart Path */}
-                      <BindingSourceEditor
-                        binding={binding}
-                        availableSources={availableSources}
-                        serviceNodeId={serviceNodeId}
-                        onChange={(updated) => updateBinding(bi, updated)}
-                      />
-                      {/* Delete button */}
-                      <button
-                        type="button"
-                        className="text-muted-foreground/40 hover:text-destructive transition-colors p-1 rounded hover:bg-destructive/10 cursor-pointer"
-                        onClick={() => removeBinding(bi)}
-                        title="Remove field"
+                  (step.inputBindings || []).map((binding, bi) => {
+                    const cleanArg = (binding.argName || "").trim().toLowerCase();
+                    const isDuplicate = cleanArg.length > 0 && (duplicateArgCounts.get(cleanArg) || 0) > 1;
+
+                    return (
+                      <div
+                        key={bi}
+                        className={cn(
+                          "flex flex-col gap-1 p-1.5 rounded border transition-colors",
+                          isDuplicate
+                            ? "border-destructive/60 bg-destructive/[0.04]"
+                            : "bg-muted/15 border-border/40",
+                        )}
                       >
-                        <Trash size={11} />
-                      </button>
-                    </div>
-                  ))
+                        <div className="grid grid-cols-[1fr_auto_2.2fr_auto] gap-1.5 items-center">
+                          {/* Key name */}
+                          <div className="min-w-0">
+                            <BufferedInput
+                              className={cn(
+                                "h-7 text-xs font-mono bg-background/70 border-border/60 w-full",
+                                isDuplicate && "border-destructive text-destructive ring-1 ring-destructive/40",
+                              )}
+                              value={binding.argName}
+                              onCommit={(val) =>
+                                updateBinding(bi, { ...binding, argName: val })
+                              }
+                              placeholder="data / fieldName"
+                            />
+                          </div>
+                          {/* Arrow */}
+                          <span className="text-[10px] text-muted-foreground/50 px-0.5 select-none">←</span>
+                          {/* Source & Smart Path */}
+                          <BindingSourceEditor
+                            binding={binding}
+                            availableSources={availableSources}
+                            serviceNodeId={serviceNodeId}
+                            onChange={(updated) => updateBinding(bi, updated)}
+                          />
+                          {/* Delete button */}
+                          <button
+                            type="button"
+                            className="text-muted-foreground/40 hover:text-destructive transition-colors p-1 rounded hover:bg-destructive/10 cursor-pointer"
+                            onClick={() => removeBinding(bi)}
+                            title="Remove field"
+                          >
+                            <Trash size={11} />
+                          </button>
+                        </div>
+                        {isDuplicate && (
+                          <div className="flex items-center gap-1 text-[9px] text-destructive font-medium px-1">
+                            <AlertTriangle size={9} className="shrink-0" />
+                            <span>Duplicate response field &quot;{binding.argName?.trim()}&quot;: payload field keys must be unique.</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>

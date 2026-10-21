@@ -8,26 +8,58 @@ import { StepBinding, ExpectedArg, AvailableSource, PipelineStepDraft } from "..
 import { Endpoint, BackendNode } from "@workspace/canvas/types";
 
 vi.mock("@workspace/ui/components/select", () => ({
-  Select: ({ children, value }: any) => (
+  Select: ({ children, value }: { children?: React.ReactNode; value?: string }) => (
     <div data-testid="mock-select" data-value={value}>
       {children}
     </div>
   ),
-  SelectTrigger: ({ children, className }: any) => (
+  SelectTrigger: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
     <button role="combobox" className={className}>
       {children}
     </button>
   ),
-  SelectValue: ({ placeholder, children }: any) => (
+  SelectValue: ({ placeholder, children }: { placeholder?: string; children?: React.ReactNode }) => (
     <span>{children || placeholder}</span>
   ),
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => (
+  SelectContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  SelectItem: ({ children, value }: { children?: React.ReactNode; value?: string }) => (
     <div data-testid="mock-select-item" data-value={value}>
       {children}
     </div>
   ),
   SelectSeparator: () => <hr />,
+}));
+
+vi.mock("../StepCombobox", () => ({
+  StepCombobox: ({
+    value,
+    options = [],
+    className,
+    placeholder,
+    footerAction,
+  }: {
+    value: string;
+    options?: { value: string; label: string }[];
+    className?: string;
+    placeholder?: string;
+    footerAction?: { label: string; onSelect: () => void };
+  }) => (
+    <div data-testid="mock-combobox">
+      <button role="combobox" className={className}>
+        {value || placeholder}
+      </button>
+      {options.map((opt) => (
+        <div key={opt.value} data-testid="mock-select-item" data-value={opt.value}>
+          {opt.label}
+        </div>
+      ))}
+      {footerAction && (
+        <div data-testid="mock-select-item" data-value="__custom__">
+          {footerAction.label}
+        </div>
+      )}
+    </div>
+  ),
 }));
 
 vi.mock("../BindingSourceEditor", () => ({
@@ -208,12 +240,12 @@ describe("useStepRowState: addBinding with expectedArgs", () => {
   });
 
   it("filters out empty, null, or undefined expectedArg names without rendering invalid select items", () => {
-    const mixedExpectedArgs: ExpectedArg[] = [
+    const mixedExpectedArgs: Array<{ name?: string | null; type?: string; required?: boolean }> = [
       { name: "validArg", type: "string", required: true },
       { name: "", type: "string", required: false },
       { name: "   ", type: "string", required: false },
-      { name: undefined as any, type: "string", required: false },
-      { name: null as any, type: "string", required: false },
+      { name: undefined, type: "string", required: false },
+      { name: null, type: "string", required: false },
     ];
 
     const bindings: StepBinding[] = [
@@ -243,5 +275,71 @@ describe("useStepRowState: addBinding with expectedArgs", () => {
     expect(values).not.toContain("   ");
     expect(values).not.toContain("undefined");
     expect(values).not.toContain("null");
+  });
+
+  it("renders a duplicate argument warning when duplicate argument names exist in bindings", () => {
+    const duplicateBindings: StepBinding[] = [
+      {
+        argName: "data",
+        source: { kind: "req_body", field: "data" },
+      },
+      {
+        argName: "data",
+        source: { kind: "step_output", stepId: "step_1", field: "" },
+      },
+    ];
+
+    render(
+      <ArgumentBindingsSection
+        bindings={duplicateBindings}
+        expectedArgs={[]}
+        availableSources={mockAvailableSources}
+        onAddBinding={vi.fn()}
+        onUpdateBinding={vi.fn()}
+        onRemoveBinding={vi.fn()}
+        onAutoMapArguments={vi.fn()}
+      />,
+    );
+
+    const warnings = screen.getAllByText(/Duplicate argument/i);
+    expect(warnings.length).toBe(2);
+  });
+
+  it("generates a unique arg_N name in useStepRowState when all expectedArgs are already bound", () => {
+    let updatedStep: PipelineStepDraft = {
+      id: "step_test",
+      name: "Test Step",
+      type: "transform",
+      enabled: true,
+      inputBindings: [
+        { argName: "conversationId", source: { kind: "req_body", field: "conversationId" } },
+        { argName: "text", source: { kind: "req_body", field: "text" } },
+      ],
+    };
+
+    const onChange = vi.fn((step: PipelineStepDraft) => {
+      updatedStep = step;
+    });
+
+    const { result } = renderHook(() =>
+      useStepRowState({
+        step: updatedStep,
+        index: 0,
+        priorSteps: [],
+        allNodes: [],
+        allEdges: [],
+        extraSources: [],
+        onChange,
+      }),
+    );
+
+    act(() => {
+      result.current.addBinding();
+    });
+
+    expect(onChange).toHaveBeenCalled();
+    expect(updatedStep.inputBindings).toHaveLength(3);
+    const thirdBinding = updatedStep.inputBindings?.[2];
+    expect(thirdBinding?.argName).toBe("arg_3");
   });
 });

@@ -28,7 +28,15 @@ import { ChevronDown, ChevronRight, Globe, AlertCircle } from "lucide-react";
 import { isEndpointPipelineUnconfigured } from "@/lib/utils/pipelineValidation";
 import { useBufferedInput } from "@/lib/hooks/useBufferedInput";
 import { cn } from "@workspace/ui/lib/utils";
-import { formatEndpointRoute, sanitizeEndpointRoute } from "@workspace/canvas";
+import {
+  formatEndpointRoute,
+  sanitizeEndpointRoute,
+  syncEndpointRouteWithPathParams,
+  reconcileEndpointPathParams,
+  parseEndpointRouteWithParams,
+  computeCompiledEndpointRoute,
+  Endpoint,
+} from "@workspace/canvas";
 import {
   isHealthEndpoint,
   getHealthCheckPipelineSteps,
@@ -282,15 +290,75 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
     }
   }, [item?.id, item?.name, item?.summary, item?.businessLogic, item?.pipelineSteps, item?.responseBody, isExternal, node?.data?.label, node?.data?.port, updateEndpoint]);
 
+  const handleRouteChange = React.useCallback(
+    (rawInput: string) => {
+      const parsed = parseEndpointRouteWithParams(rawInput);
+      const cleanNewRoute = parsed.route;
+      const oldRoute = item?.name || "";
+
+      // Reconcile path params
+      const reconciledPathParams = reconcileEndpointPathParams({
+        currentPathParams: item?.pathParams || [],
+        newRoute: cleanNewRoute,
+        oldRoute,
+      });
+
+      // Merge any query params that were typed in the route (e.g. ?limit=10)
+      const existingQueryParams = item?.queryParams || [];
+      const mergedQueryParams = [...existingQueryParams];
+      let queryParamsChanged = false;
+      const pathParamNames = new Set(
+        reconciledPathParams
+          .map((p) => (p.name || "").trim().toLowerCase())
+          .filter((n) => n.length > 0),
+      );
+      parsed.extractedQueryParams.forEach((eq) => {
+        const lower = eq.name.toLowerCase();
+        if (pathParamNames.has(lower)) {
+          return;
+        }
+        if (!mergedQueryParams.some((q) => q.name.toLowerCase() === lower)) {
+          mergedQueryParams.push(eq);
+          queryParamsChanged = true;
+        }
+      });
+
+      const updates: Partial<Endpoint> = { name: cleanNewRoute };
+      const pathParamsChanged =
+        reconciledPathParams.length !== (item?.pathParams || []).length ||
+        JSON.stringify(reconciledPathParams) !== JSON.stringify(item?.pathParams || []);
+
+      if (pathParamsChanged) {
+        updates.pathParams = reconciledPathParams;
+      }
+      if (queryParamsChanged) {
+        updates.queryParams = mergedQueryParams;
+      }
+
+      updateEndpoint(id, updates);
+    },
+    [id, item?.name, item?.pathParams, item?.queryParams, updateEndpoint],
+  );
+
   const nameBuffer = useBufferedInput(
     formatEndpointRoute(item?.name || ""),
-    React.useCallback(
-      (name: string) =>
-        updateEndpoint(id, { name: sanitizeEndpointRoute(name) }),
-      [id, updateEndpoint],
-    ),
+    handleRouteChange,
     200,
   );
+
+  // Auto-synchronize endpoint route with pathParams if any are missing or out of sync
+  React.useEffect(() => {
+    if (!item) return;
+    const currentRoute = item.name || "";
+    const syncedRoute = syncEndpointRouteWithPathParams({
+      currentRoute,
+      oldPathParams: [],
+      newPathParams: item.pathParams || [],
+    });
+    if (syncedRoute && syncedRoute !== currentRoute) {
+      updateEndpoint(item.id, { name: syncedRoute });
+    }
+  }, [item?.id, item?.name, item?.pathParams, updateEndpoint]);
 
   const summaryBuffer = useBufferedInput(
     item?.summary || "",
@@ -403,11 +471,31 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
           />
         </div>
 
-        <span className="text-xs text-muted-foreground">
-          {isExternal
-            ? "Configure request parameters and declare the output structure callers bind to."
-            : "Configure endpoint details and behavior."}
-        </span>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-xs text-muted-foreground">
+            {isExternal
+              ? "Configure request parameters and declare the output structure callers bind to."
+              : "Configure endpoint details and behavior."}
+          </span>
+          {Boolean(
+            (item.queryParams && item.queryParams.length > 0) ||
+            (item.pathParams && item.pathParams.length > 0)
+          ) && (
+            <span
+              className="text-[11px] font-mono text-muted-foreground/80 truncate max-w-[280px]"
+              title={`Full Pattern: ${computeCompiledEndpointRoute({ route: nameBuffer.value || "/", queryParams: item.queryParams, pathParams: item.pathParams })}`}
+            >
+              Pattern:{" "}
+              <span className="text-foreground font-semibold">
+                {computeCompiledEndpointRoute({
+                  route: nameBuffer.value || "/",
+                  queryParams: item.queryParams,
+                  pathParams: item.pathParams,
+                })}
+              </span>
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Authentication */}
@@ -613,7 +701,23 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         title="Path Params"
         isExternal={isExternal}
         parameters={item.pathParams || []}
-        onChange={(pathParams) => updateEndpoint(item.id, { pathParams })}
+        disallowedNames={(item.queryParams || [])
+          .map((q) => (q.name || "").trim().toLowerCase())
+          .filter((n) => n.length > 0)}
+        disallowedReason="Query Params"
+        onChange={(newPathParams) => {
+          const currentRoute = item.name || "";
+          const nextRoute = syncEndpointRouteWithPathParams({
+            currentRoute,
+            oldPathParams: item.pathParams || [],
+            newPathParams,
+          });
+          const updates: Partial<Endpoint> = { pathParams: newPathParams };
+          if (nextRoute !== currentRoute) {
+            updates.name = nextRoute;
+          }
+          updateEndpoint(item.id, updates);
+        }}
       />
       <ParameterEditor
         title="Query Params"
@@ -625,6 +729,10 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
           }
           return q;
         })()}
+        disallowedNames={(item.pathParams || [])
+          .map((p) => (p.name || "").trim().toLowerCase())
+          .filter((n) => n.length > 0)}
+        disallowedReason="Path Params"
         onChange={(queryParams) => updateEndpoint(item.id, { queryParams })}
       />
       <RequestBodyEditor

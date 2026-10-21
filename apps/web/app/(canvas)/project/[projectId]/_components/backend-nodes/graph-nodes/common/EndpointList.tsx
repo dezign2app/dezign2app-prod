@@ -23,7 +23,15 @@ import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { Endpoint } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { isEndpointPipelineUnconfigured } from "@/lib/utils/pipelineValidation";
-import { formatEndpointRoute, sanitizeEndpointRoute } from "@workspace/canvas";
+import {
+  formatEndpointRoute,
+  sanitizeEndpointRoute,
+  syncEndpointRouteWithPathParams,
+  reconcileEndpointPathParams,
+  parseEndpointRouteWithParams,
+  formatEndpointQueryString,
+  extractEndpointPathParams,
+} from "@workspace/canvas";
 import { generateId } from "./utils";
 import { LocalInput } from "./LocalInput";
 
@@ -94,7 +102,8 @@ export const EndpointRow = ({
     <div
       className="flex flex-col border-b last:border-b-0 text-xs relative group/row hover:bg-secondary/20 nodrag"
       onBlur={(e) => {
-        const related = e.relatedTarget as HTMLElement | null;
+        const related =
+          e.relatedTarget instanceof HTMLElement ? e.relatedTarget : null;
         if (related?.closest('[role="combobox"]')) return;
         if (related?.closest('[role="listbox"]')) return;
         if (related?.closest("[data-radix-popper-content-wrapper]")) return;
@@ -224,7 +233,12 @@ export const EndpointRow = ({
               className="flex items-center justify-between w-full cursor-pointer"
               onClick={() => {
                 setEditingId(item.id);
-                setEditingName(formatEndpointRoute(item.name || ""));
+                const effectiveName = syncEndpointRouteWithPathParams({
+                  currentRoute: item.name || "",
+                  oldPathParams: [],
+                  newPathParams: item.pathParams || [],
+                });
+                setEditingName(formatEndpointRoute(effectiveName));
                 setEditingType(item.type || "GET");
               }}
             >
@@ -245,8 +259,33 @@ export const EndpointRow = ({
                     isUnconfigured && "text-destructive font-semibold",
                   )}
                 >
-                  {formatEndpointRoute(item.name || "")}
+                  {formatEndpointRoute(
+                    syncEndpointRouteWithPathParams({
+                      currentRoute: item.name || "",
+                      oldPathParams: [],
+                      newPathParams: item.pathParams || [],
+                    }),
+                  )}
                 </span>
+                {(() => {
+                  const syncedRoute = syncEndpointRouteWithPathParams({
+                    currentRoute: item.name || "",
+                    oldPathParams: [],
+                    newPathParams: item.pathParams || [],
+                  });
+                  const pathParamNames = extractEndpointPathParams(syncedRoute);
+                  const qs = formatEndpointQueryString(item.queryParams, {
+                    excludeNames: pathParamNames,
+                  });
+                  return qs ? (
+                    <span
+                      className="text-[10px] font-mono text-muted-foreground/70 shrink-0"
+                      title={`Query parameters: ${qs}`}
+                    >
+                      {qs}
+                    </span>
+                  ) : null;
+                })()}
                 {isUnconfigured && (
                   <span
                     className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse shrink-0"
@@ -406,8 +445,54 @@ export const EndpointList = ({
     setEditingType("GET");
   };
 
-  const handleUpdate = (id: string, name: string, type: string) => {
-    updateEndpoint(id, { name: sanitizeEndpointRoute(name), type });
+  const handleUpdate = (id: string, rawName: string, type: string) => {
+    const ep = items.find((e) => e.id === id);
+    const parsed = parseEndpointRouteWithParams(rawName);
+    const sanitizedName = parsed.route;
+    const oldRoute = ep?.name || "";
+
+    const reconciledPathParams = reconcileEndpointPathParams({
+      currentPathParams: ep?.pathParams || [],
+      newRoute: sanitizedName,
+      oldRoute,
+    });
+
+    const existingQueryParams = ep?.queryParams || [];
+    const mergedQueryParams = [...existingQueryParams];
+    let queryParamsChanged = false;
+
+    const pathParamNames = new Set(
+      reconciledPathParams
+        .map((p) => (p.name || "").trim().toLowerCase())
+        .filter((n) => n.length > 0),
+    );
+    parsed.extractedQueryParams.forEach((eq) => {
+      const lower = eq.name.toLowerCase();
+      if (pathParamNames.has(lower)) {
+        return;
+      }
+      if (!mergedQueryParams.some((q) => q.name.toLowerCase() === lower)) {
+        mergedQueryParams.push(eq);
+        queryParamsChanged = true;
+      }
+    });
+
+    const updates: Partial<Endpoint> = {
+      name: sanitizedName,
+      type,
+    };
+
+    if (
+      reconciledPathParams.length !== (ep?.pathParams || []).length ||
+      JSON.stringify(reconciledPathParams) !== JSON.stringify(ep?.pathParams || [])
+    ) {
+      updates.pathParams = reconciledPathParams;
+    }
+    if (queryParamsChanged) {
+      updates.queryParams = mergedQueryParams;
+    }
+
+    updateEndpoint(id, updates);
   };
 
   const handleDelete = (id: string) => {

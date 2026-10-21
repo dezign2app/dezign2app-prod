@@ -911,7 +911,13 @@ export function useStepRowState({
     );
     const argName = nextUnbound
       ? nextUnbound.name.trim()
-      : (validArgs[0]?.name?.trim() ?? `arg_${(step.inputBindings || []).length + 1}`);
+      : (() => {
+          let idx = (step.inputBindings || []).length + 1;
+          while (existingNames.has(`arg_${idx}`.toLowerCase())) {
+            idx++;
+          }
+          return `arg_${idx}`;
+        })();
 
     let defaultSource: StepBinding["source"] = { kind: "req_body", field: "" };
     if (argName) {

@@ -1,5 +1,5 @@
 import React from "react";
-import { Plus, Trash, Braces, ListPlus, Text, X, Sparkles } from "lucide-react";
+import { Plus, Trash, Braces, ListPlus, Text, X, Sparkles, AlertTriangle } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
 import { Schema, Parameter, BackendNode } from "@/types/canvas";
@@ -55,13 +55,32 @@ export const RequestBodyEditor: React.FC<RequestBodyEditorProps> = ({
   // Local draft state for adding enum values per field
   const [enumInputs, setEnumInputs] = React.useState<Record<string, string>>({});
 
+  // Compute duplicate field name counts
+  const duplicateFieldCounts = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    fields.forEach((f) => {
+      const name = (f.name || "").trim().toLowerCase();
+      if (name) {
+        counts.set(name, (counts.get(name) || 0) + 1);
+      }
+    });
+    return counts;
+  }, [fields]);
+
   // ---- field-builder helpers -------------------------------------------------
   const addField = () => {
+    const existingNames = new Set(
+      fields.map((f) => (f.name || "").trim().toLowerCase()).filter(Boolean),
+    );
+    let idx = fields.length + 1;
+    while (existingNames.has(`field_${idx}`.toLowerCase())) {
+      idx++;
+    }
     onSchemaChange({
       ...safeSchema,
       fields: [
         ...fields,
-        { id: generateId(), name: "", type: "string", required: true },
+        { id: generateId(), name: `field_${idx}`, type: "string", required: true },
       ],
     });
   };
@@ -214,14 +233,27 @@ export const RequestBodyEditor: React.FC<RequestBodyEditorProps> = ({
             const isFieldArray = Boolean(f.isArray || f.type?.endsWith("[]"));
             const baseType = (f.type || "string").replace(/\[\]$/, "");
 
+            const cleanName = (f.name || "").trim().toLowerCase();
+            const isDuplicateName = cleanName.length > 0 && (duplicateFieldCounts.get(cleanName) || 0) > 1;
+
             return (
               <div
                 key={f.id || `field_${idx}_${f.name}`}
-                className="flex flex-col gap-2 rounded-lg border bg-background/50 p-2.5 group/f transition-all hover:border-primary/30 hover:shadow-sm"
+                className={cn(
+                  "flex flex-col gap-2 rounded-lg border bg-background/50 p-2.5 group/f transition-all hover:shadow-sm",
+                  isDuplicateName
+                    ? "border-destructive/60 bg-destructive/[0.03]"
+                    : "hover:border-primary/30",
+                )}
               >
                 <div className="flex items-center gap-2">
                   <LocalInput
-                    className="h-7 text-xs flex-1 nodrag bg-background font-mono border-none shadow-none focus-visible:ring-1 placeholder:font-sans"
+                    className={cn(
+                      "h-7 text-xs flex-1 nodrag bg-background font-mono shadow-none focus-visible:ring-1 placeholder:font-sans",
+                      isDuplicateName
+                        ? "border border-destructive text-destructive focus-visible:ring-destructive"
+                        : "border-none",
+                    )}
                     placeholder="fieldName"
                     value={f.name || ""}
                     onChange={(e) => updateField(f.id, { name: e.target.value })}
@@ -415,6 +447,13 @@ export const RequestBodyEditor: React.FC<RequestBodyEditorProps> = ({
                     >
                       <Trash size={10} />
                     </Button>
+                  </div>
+                )}
+
+                {isDuplicateName && (
+                  <div className="flex items-center gap-1 text-[10px] text-destructive font-medium px-1">
+                    <AlertTriangle size={10} className="shrink-0" />
+                    <span>Duplicate field name &quot;{f.name?.trim()}&quot;: schema field names must be unique.</span>
                   </div>
                 )}
               </div>
