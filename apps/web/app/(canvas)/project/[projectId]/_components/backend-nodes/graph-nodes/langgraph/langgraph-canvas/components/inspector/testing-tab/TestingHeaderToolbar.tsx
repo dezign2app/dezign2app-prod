@@ -17,6 +17,7 @@ import {
 import { Badge } from "@workspace/ui/components/badge";
 import { toast } from "sonner";
 import type { LangGraphMemoryConfig } from "@workspace/canvas";
+import { LocalInput } from "../../../../../common";
 import {
   ExecutionMode,
   LLMProvider,
@@ -220,27 +221,46 @@ export function TestingHeaderToolbar({
       {/* ── Thread & Memory Config ── */}
       <div className="flex flex-col gap-1 pt-1">
         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-          <span className="font-mono uppercase font-semibold">Thread ID (Memory)</span>
+          <span className="font-mono uppercase font-semibold">Thread ID (thread_id)</span>
           <button
             type="button"
             onClick={handleNewThread}
             className="text-primary hover:underline flex items-center gap-0.5 text-[9px] cursor-pointer"
+            title="Start new thread session"
           >
             <Plus className="w-2.5 h-2.5" /> New
           </button>
         </div>
-        <Select value={threadId} onValueChange={setThreadId}>
-          <SelectTrigger className="h-7 text-xs bg-background/80 font-mono">
-            <SelectValue placeholder="Thread ID" />
-          </SelectTrigger>
-          <SelectContent>
-            {knownThreads.map((t) => (
-              <SelectItem key={t} value={t} className="font-mono text-xs">
-                {t}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-1.5">
+          <LocalInput
+            value={threadId}
+            onChange={(e) => setThreadId(e.target.value)}
+            placeholder="thread_id (e.g. session-1)"
+            className="h-7 text-xs bg-background/80 font-mono flex-1"
+          />
+          {knownThreads.length > 0 && (
+            <Select
+              value={knownThreads.includes(threadId) ? threadId : ""}
+              onValueChange={(val) => {
+                if (val) setThreadId(val);
+              }}
+            >
+              <SelectTrigger
+                className="h-7 w-28 text-[11px] bg-background/80 font-mono px-2 shrink-0"
+                title="Select known thread"
+              >
+                <SelectValue placeholder="Known" />
+              </SelectTrigger>
+              <SelectContent>
+                {knownThreads.map((t) => (
+                  <SelectItem key={t} value={t} className="font-mono text-xs">
+                    {t}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
       </div>
     </div>
   );
