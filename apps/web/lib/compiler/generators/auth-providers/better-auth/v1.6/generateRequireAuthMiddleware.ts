@@ -58,8 +58,13 @@ interface AuthOptions {
  * On success, attaches \`req.user = { id, role }\` and calls next().
  * On failure, responds immediately with 401 (unauthenticated) or 403 (unauthorized).
  */
-export function requireAuth(options: AuthOptions = {}): RequestHandler {
-  return async (req: Request, res: Response, next: NextFunction) => {
+export function requireAuth<
+  P = any,
+  ResBody = any,
+  ReqBody = any,
+  ReqQuery = any
+>(options: AuthOptions = {}): RequestHandler<P, ResBody, ReqBody, ReqQuery> {
+  return async (req: Request<any, any, any, any>, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
       logger.warn("Auth failed: missing or malformed Authorization header", {
