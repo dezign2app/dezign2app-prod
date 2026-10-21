@@ -4,31 +4,42 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { LangGraphCanvasStartNode } from "../LangGraphCanvasStartNode";
 import { StartNode, LangGraphInputChannel, LangGraphStateChannel } from "@workspace/canvas";
 
+type StartNodeProps = React.ComponentProps<typeof LangGraphCanvasStartNode>;
+
+function createMockStartNode(data: StartNode["data"]): StartNodeProps {
+  return {
+    id: "start",
+    data,
+    selected: false,
+  };
+}
+
 vi.mock("@xyflow/react", () => ({
-  Handle: ({ id, className }: any) => <div data-testid={`handle-${id}`} className={className} />,
+  Handle: ({ id, className }: { id?: string; className?: string }) => (
+    <div data-testid={`handle-${id}`} className={className} />
+  ),
   Position: { Right: "right" },
 }));
 
-vi.mock("@workspace/ui/components/select", () => ({
-  Select: ({ children, value, onValueChange }: any) => (
-    <div data-testid="mock-select" data-value={value}>
+vi.mock("@workspace/ui/components/combobox", () => ({
+  Combobox: ({ children, value }: { children?: React.ReactNode; value?: string }) => (
+    <div data-testid="mock-combobox" data-value={value}>
       {children}
     </div>
   ),
-  SelectTrigger: ({ children, className }: any) => (
-    <button role="combobox" className={className}>
-      {children}
-    </button>
+  ComboboxInput: ({ placeholder, className }: { placeholder?: string; className?: string }) => (
+    <input placeholder={placeholder} className={className} />
   ),
-  SelectValue: ({ placeholder, children }: any) => (
-    <span>{children || placeholder}</span>
+  ComboboxContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  ComboboxList: ({ children }: { children?: React.ReactNode | ((item: string) => React.ReactNode) }) => (
+    <div>{typeof children === "function" ? null : children}</div>
   ),
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => (
-    <div data-testid="mock-select-item" data-value={value}>
+  ComboboxItem: ({ children, value }: { children?: React.ReactNode; value?: string }) => (
+    <div data-testid="mock-combobox-item" data-value={value}>
       {children}
     </div>
   ),
+  ComboboxEmpty: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 
 describe("LangGraphCanvasStartNode", () => {
@@ -54,15 +65,11 @@ describe("LangGraphCanvasStartNode", () => {
       },
     ];
 
-    const mockNode: any = {
-      id: "start",
-      type: "start",
-      data: {
-        label: "START",
-        inputChannels,
-        stateChannels,
-      },
-    };
+    const mockNode = createMockStartNode({
+      label: "START",
+      inputChannels,
+      stateChannels,
+    });
 
     render(<LangGraphCanvasStartNode {...mockNode} />);
 
@@ -93,15 +100,11 @@ describe("LangGraphCanvasStartNode", () => {
       },
     ];
 
-    const mockNode: any = {
-      id: "start",
-      type: "start",
-      data: {
-        label: "START",
-        inputChannels,
-        stateChannels,
-      },
-    };
+    const mockNode = createMockStartNode({
+      label: "START",
+      inputChannels,
+      stateChannels,
+    });
 
     render(<LangGraphCanvasStartNode {...mockNode} />);
 
@@ -116,24 +119,20 @@ describe("LangGraphCanvasStartNode", () => {
 
   it("imports suggested params and preserves targetStateChannel mapping", () => {
     const handleAddSuggested = vi.fn();
-    const mockNode: any = {
-      id: "start",
-      type: "start",
-      data: {
-        label: "START",
-        inputChannels: [],
-        stateChannels,
-        suggestedParams: [
-          {
-            key: "message",
-            type: "string",
-            targetStateChannel: "messages",
-            required: true,
-          },
-        ],
-        onAddSuggestedChannel: handleAddSuggested,
-      },
-    };
+    const mockNode = createMockStartNode({
+      label: "START",
+      inputChannels: [],
+      stateChannels,
+      suggestedParams: [
+        {
+          key: "message",
+          type: "string",
+          targetStateChannel: "messages",
+          required: true,
+        },
+      ],
+      onAddSuggestedChannel: handleAddSuggested,
+    });
 
     render(<LangGraphCanvasStartNode {...mockNode} />);
 
@@ -153,23 +152,19 @@ describe("LangGraphCanvasStartNode", () => {
 
   it("renders refresh/sync button and calls onRefreshInputs when clicked", () => {
     const onRefreshInputs = vi.fn();
-    const mockNode: any = {
-      id: "start",
-      type: "start",
-      data: {
-        label: "START",
-        inputChannels: [
-          {
-            id: "inp-1",
-            key: "message",
-            type: "string",
-            source: "request",
-          },
-        ],
-        stateChannels,
-        onRefreshInputs,
-      },
-    };
+    const mockNode = createMockStartNode({
+      label: "START",
+      inputChannels: [
+        {
+          id: "inp-1",
+          key: "message",
+          type: "string",
+          source: "request",
+        },
+      ],
+      stateChannels,
+      onRefreshInputs,
+    });
 
     render(<LangGraphCanvasStartNode {...mockNode} />);
 
@@ -182,16 +177,12 @@ describe("LangGraphCanvasStartNode", () => {
 
   it("renders Check / Sync Inputs button when no inputs connected and calls onRefreshInputs", () => {
     const onRefreshInputs = vi.fn();
-    const mockNode: any = {
-      id: "start",
-      type: "start",
-      data: {
-        label: "START",
-        inputChannels: [],
-        stateChannels,
-        onRefreshInputs,
-      },
-    };
+    const mockNode = createMockStartNode({
+      label: "START",
+      inputChannels: [],
+      stateChannels,
+      onRefreshInputs,
+    });
 
     render(<LangGraphCanvasStartNode {...mockNode} />);
 
@@ -212,18 +203,14 @@ describe("LangGraphCanvasStartNode", () => {
       { id: "inp-5", key: "Authorization", type: "string", source: "request" },
     ];
 
-    const mockNode: any = {
-      id: "start",
-      type: "start",
-      data: {
-        label: "START",
-        inputChannels,
-        stateChannels,
-        suggestedParams: [
-          { key: "message", type: "string", targetStateChannel: "messages" },
-        ],
-      },
-    };
+    const mockNode = createMockStartNode({
+      label: "START",
+      inputChannels,
+      stateChannels,
+      suggestedParams: [
+        { key: "message", type: "string", targetStateChannel: "messages" },
+      ],
+    });
 
     render(<LangGraphCanvasStartNode {...mockNode} />);
 
@@ -239,4 +226,3 @@ describe("LangGraphCanvasStartNode", () => {
     expect(screen.queryByText("id")).not.toBeInTheDocument();
   });
 });
-

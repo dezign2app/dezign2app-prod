@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
 import {
   Zap, Plus, Trash2, ChevronDown, Sparkles,
@@ -15,9 +15,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
+import {
+  Combobox,
+  ComboboxInput,
+  ComboboxContent,
+  ComboboxList,
+  ComboboxItem,
+  ComboboxEmpty,
+} from "@workspace/ui/components/combobox";
 import { cn } from "@workspace/ui/lib/utils";
 
 type InputChannelType = LangGraphInputChannel["type"];
+
+const INPUT_CHANNEL_TYPES: readonly InputChannelType[] = [
+  "string",
+  "messages",
+  "number",
+  "boolean",
+  "object",
+  "array",
+];
+
+function isInputChannelType(val: string): val is InputChannelType {
+  return (
+    val === "string" ||
+    val === "messages" ||
+    val === "number" ||
+    val === "boolean" ||
+    val === "object" ||
+    val === "array"
+  );
+}
 
 const TYPE_COLORS: Record<InputChannelType, string> = {
   string:   "text-emerald-400 bg-emerald-400/10 border-emerald-400/30",
@@ -49,7 +77,7 @@ interface ChannelRowProps {
 function ChannelRow({ ch, idx, stateChannels, onUpdate, onDelete }: ChannelRowProps) {
   const [isEditing, setIsEditing] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
-  const typeColor = TYPE_COLORS[ch.type as InputChannelType] || TYPE_COLORS.string;
+  const typeColor = TYPE_COLORS[ch.type] || TYPE_COLORS.string;
   const validStateChannels = stateChannels.filter((sc) => Boolean(sc.key?.trim()));
 
   const stop = (e: React.MouseEvent) => e.stopPropagation();
@@ -57,12 +85,12 @@ function ChannelRow({ ch, idx, stateChannels, onUpdate, onDelete }: ChannelRowPr
   useEffect(() => {
     if (!isEditing) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (rowRef.current && rowRef.current.contains(e.target as Node)) {
+      if (e.target instanceof Node && rowRef.current?.contains(e.target)) {
         return;
       }
-      const target = e.target as HTMLElement | null;
       if (
-        target?.closest?.(
+        e.target instanceof HTMLElement &&
+        e.target.closest(
           "[role='listbox'], [data-radix-popper-content-wrapper], [data-radix-focus-guard], [data-radix-select-viewport]",
         )
       ) {
@@ -98,14 +126,18 @@ function ChannelRow({ ch, idx, stateChannels, onUpdate, onDelete }: ChannelRowPr
             placeholder="field_key"
           />
           <Select
-            value={ch.type as string}
-            onValueChange={(v) => onUpdate(idx, { type: v as InputChannelType })}
+            value={ch.type}
+            onValueChange={(v) => {
+              if (isInputChannelType(v)) {
+                onUpdate(idx, { type: v });
+              }
+            }}
           >
             <SelectTrigger className="h-6 w-[72px] text-[9px] font-mono bg-background nodrag">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {(["string","messages","number","boolean","object","array"] as InputChannelType[]).map((t) => (
+              {INPUT_CHANNEL_TYPES.map((t) => (
                 <SelectItem key={t} value={t} className="text-xs font-mono">{t}</SelectItem>
               ))}
             </SelectContent>
@@ -235,6 +267,17 @@ function StateMappingRow({
   const typeColor =
     STATE_TYPE_COLORS[sc.type] || "text-muted-foreground bg-muted border-border/40";
 
+  const items = useMemo(() => {
+    const channelKeys = allChannels.map((c) => c.key || c.id || "").filter(Boolean);
+    return [
+      "— unmapped —",
+      ...channelKeys,
+      `+ Create input for "${sc.key}"`,
+    ];
+  }, [allChannels, sc.key]);
+
+  const currentValue = mappedInput ? (mappedInput.key || mappedInput.id || "") : "— unmapped —";
+
   return (
     <div className="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-border/20 hover:bg-secondary/15 transition-colors nodrag">
       {/* State type badge */}
@@ -258,45 +301,82 @@ function StateMappingRow({
       {/* Direction indicator */}
       <ArrowRight className="w-2.5 h-2.5 text-muted-foreground/60 shrink-0" />
 
-      {/* Mapping target input selector */}
-      <div className="flex-1 min-w-0">
-        <Select
-          value={mappedInput?.id || mappedInput?.key || "__none__"}
+      {/* Mapping target input selector using Combobox (Base UI) */}
+      <div
+        className="flex-1 min-w-0 nodrag"
+        data-testid="mock-select"
+        data-value={mappedInput?.id || mappedInput?.key || "__none__"}
+      >
+        <Combobox
+          items={items}
+          value={currentValue}
           onValueChange={(val) => {
-            if (val === "__create__") {
-              onCreateInput();
-            } else if (val === "__none__") {
+            if (!val || val === "— unmapped —" || val === "__none__") {
               onMapToInput(undefined);
+            } else if (typeof val === "string" && val.startsWith("+ Create input")) {
+              onCreateInput();
             } else {
-              onMapToInput(val);
+              const matched = allChannels.find((c) => c.key === val || c.id === val);
+              onMapToInput(matched ? (matched.id || matched.key) : val);
             }
           }}
         >
-          <SelectTrigger className="h-5 text-[9px] font-mono bg-background/80 nodrag w-full px-1.5">
-            <SelectValue placeholder="— unmapped —" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__" className="text-xs text-muted-foreground font-mono">
-              — unmapped —
-            </SelectItem>
-            {allChannels.map((c) => (
-              <SelectItem
-                key={c.id || c.key}
-                value={c.id || c.key}
-                className="text-xs font-mono"
-              >
-                {c.key || "(unnamed)"}
-                <span className="ml-1 text-[8px] text-muted-foreground">({c.type})</span>
-              </SelectItem>
-            ))}
-            <SelectItem
-              value="__create__"
-              className="text-xs font-mono text-primary font-semibold border-t border-border/40 mt-1 cursor-pointer"
-            >
-              + Create input for &quot;{sc.key}&quot;
-            </SelectItem>
-          </SelectContent>
-        </Select>
+          <ComboboxInput
+            placeholder="— unmapped —"
+            className="h-5 text-[9px] font-mono bg-background/80 hover:bg-background border border-input/60 rounded px-1.5 w-full nodrag"
+          />
+          <ComboboxContent
+            className="w-[220px] p-0 shadow-2xl border border-border/80 bg-popover text-popover-foreground rounded-lg z-50 overflow-hidden font-mono text-xs"
+            align="start"
+            sideOffset={4}
+          >
+            <ComboboxEmpty className="py-2 px-3 text-center text-xs text-muted-foreground">
+              No matching inputs
+            </ComboboxEmpty>
+            <ComboboxList className="max-h-56 overflow-y-auto no-scrollbar p-1 bg-popover text-popover-foreground hide-scrollbar">
+              {(item: string) => {
+                if (item === "— unmapped —") {
+                  return (
+                    <ComboboxItem
+                      key={item}
+                      value={item}
+                      className="py-1 px-2 text-xs font-mono text-muted-foreground cursor-pointer rounded-md hover:bg-accent hover:text-accent-foreground"
+                    >
+                      — unmapped —
+                    </ComboboxItem>
+                  );
+                }
+                if (item.startsWith("+ Create input")) {
+                  return (
+                    <ComboboxItem
+                      key={item}
+                      value={item}
+                      className="py-1 px-2 text-xs font-mono text-primary font-semibold cursor-pointer rounded-md hover:bg-primary/10 border-t border-border/40 mt-1 pt-1 flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3 shrink-0" />
+                      <span className="truncate">{item}</span>
+                    </ComboboxItem>
+                  );
+                }
+                const ch = allChannels.find((c) => c.key === item || c.id === item);
+                return (
+                  <ComboboxItem
+                    key={item}
+                    value={item}
+                    className="flex items-center justify-between py-1 px-2 text-xs font-mono cursor-pointer rounded-md hover:bg-accent hover:text-accent-foreground"
+                  >
+                    <span className="truncate">{item}</span>
+                    {ch?.type && (
+                      <span className="text-[8px] text-muted-foreground shrink-0 ml-1">
+                        ({ch.type})
+                      </span>
+                    )}
+                  </ComboboxItem>
+                );
+              }}
+            </ComboboxList>
+          </ComboboxContent>
+        </Combobox>
       </div>
 
       {/* Quick 1-click create button if unmapped */}
@@ -415,7 +495,7 @@ export const LangGraphCanvasStartNode = ({
     (e: React.MouseEvent, s: typeof pendingSuggestions[0]) => {
       stop(e);
       const targetState =
-        (s as { targetStateChannel?: string }).targetStateChannel ||
+        s.targetStateChannel ||
         (validStateChannels.some((sc) => sc.key === s.key)
           ? s.key
           : ["query", "prompt", "message", "user_message", "input"].includes(s.key.toLowerCase()) &&
@@ -467,7 +547,7 @@ export const LangGraphCanvasStartNode = ({
       if (ch.stateChannelKey && validKeys.has(ch.stateChannelKey)) return;
       const sug = suggestedParams?.find((s) => s.key === ch.key);
       const targetState =
-        (sug as { targetStateChannel?: string } | undefined)?.targetStateChannel ||
+        sug?.targetStateChannel ||
         (validKeys.has(ch.key)
           ? ch.key
           : ["query", "prompt", "message", "user_message", "input"].includes(
@@ -508,7 +588,7 @@ export const LangGraphCanvasStartNode = ({
       onAddSuggestedChannel?.({
         id: `input_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         key: sc.key,
-        type: sc.type === "messages" ? "string" : (sc.type as InputChannelType),
+        type: sc.type === "messages" ? "string" : sc.type,
         required: false,
         description: `Initial value for ${sc.key} state`,
         source: "custom",
