@@ -6,6 +6,10 @@ import { BackendNode, Endpoint } from "@/types/canvas";
 import { generateId } from "./utils";
 import { LocalInput } from "./LocalInput";
 import { EndpointRow, EndpointList } from "./EndpointList";
+import {
+  parseEndpointRouteWithParams,
+  reconcileEndpointPathParams,
+} from "@workspace/canvas";
 
 export interface RouteGroupEditorProps {
   group: NonNullable<BackendNode["data"]["routeGroups"]>[0];
@@ -97,9 +101,48 @@ export const RouteGroupEditor = ({
     setEditingEndpointType("GET");
   };
 
-  const handleUpdateEndpoint = (id: string, name: string, type: string) => {
+  const handleUpdateEndpoint = (id: string, rawName: string, type: string) => {
+    const target = endpoints.find((ep) => ep.id === id);
+    const parsed = parseEndpointRouteWithParams(rawName);
+    const sanitizedName = parsed.route;
+    const oldRoute = target?.name || "";
+
+    const reconciledPathParams = reconcileEndpointPathParams({
+      currentPathParams: target?.pathParams || [],
+      newRoute: sanitizedName,
+      oldRoute,
+    });
+
+    const existingQueryParams = target?.queryParams || [];
+    const mergedQueryParams = [...existingQueryParams];
+    let queryParamsChanged = false;
+    const pathParamNames = new Set(
+      reconciledPathParams
+        .map((p) => (p.name || "").trim().toLowerCase())
+        .filter((n) => n.length > 0),
+    );
+    parsed.extractedQueryParams.forEach((eq) => {
+      const lower = eq.name.toLowerCase();
+      if (pathParamNames.has(lower)) return;
+      if (!mergedQueryParams.some((q) => q.name.toLowerCase() === lower)) {
+        mergedQueryParams.push(eq);
+        queryParamsChanged = true;
+      }
+    });
+
     const newEndpoints = endpoints.map((ep) =>
-      ep.id === id ? { ...ep, name, type } : ep,
+      ep.id === id
+        ? {
+            ...ep,
+            name: sanitizedName,
+            type,
+            ...(reconciledPathParams.length !== (ep.pathParams || []).length ||
+            JSON.stringify(reconciledPathParams) !== JSON.stringify(ep.pathParams || [])
+              ? { pathParams: reconciledPathParams }
+              : {}),
+            ...(queryParamsChanged ? { queryParams: mergedQueryParams } : {}),
+          }
+        : ep,
     );
     updateGroup({ endpoints: newEndpoints });
   };
