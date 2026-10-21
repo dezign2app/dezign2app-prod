@@ -44,6 +44,7 @@ import {
 } from "@workspace/ui/components/select";
 import { BindingSourceEditor } from "./BindingSourceEditor";
 import { PipelineStepDraft, StepBinding, StepSource, AvailableSource } from "./types";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 
 function stepSourceToAccessor(
   source: StepSource,
@@ -535,6 +536,93 @@ export const LangGraphInvokeStepSection: React.FC<
     };
   };
 
+  const syncAgentInputChannels = React.useCallback(
+    (
+      bindings: StepBinding[],
+      mappingRecord: Record<string, string>,
+      threadIdSource?: string,
+    ) => {
+      if (!selectedAgentNode) return;
+      const store = useBackendCanvasStore.getState();
+      const currentChannels: LangGraphInputChannel[] =
+        selectedAgentNode.data?.inputChannels &&
+        Array.isArray(selectedAgentNode.data.inputChannels)
+          ? [...selectedAgentNode.data.inputChannels]
+          : [];
+
+      const customChannels = currentChannels.filter((c) => c.source === "custom");
+      const newRequestChannels: LangGraphInputChannel[] = [];
+      const seen = new Set<string>();
+
+      const resolveFieldType = (fieldName: string): LangGraphInputChannel["type"] => {
+        const epField = endpoint?.requestBody?.fields?.find((f) => f.name === fieldName);
+        if (epField?.type === "number") return "number";
+        if (epField?.type === "boolean") return "boolean";
+        if (epField?.type === "object") return "object";
+        if (epField?.type === "array") return "array";
+        return "string";
+      };
+
+      for (const b of bindings) {
+        if (!b.argName) continue;
+        let fieldKey = "";
+        if ("field" in b.source && b.source.field) {
+          fieldKey = b.source.field;
+        } else {
+          fieldKey = b.argName;
+        }
+
+        if (!fieldKey) continue;
+
+        const existing = newRequestChannels.find((c) => c.key === fieldKey);
+        if (existing) {
+          if (b.argName && b.argName !== "thread_id") {
+            const currentMapped = existing.stateChannelKey
+              ? existing.stateChannelKey.split(",").map((s) => s.trim())
+              : [];
+            if (!currentMapped.includes(b.argName)) {
+              currentMapped.push(b.argName);
+              existing.stateChannelKey = currentMapped.join(",");
+            }
+          }
+        } else {
+          newRequestChannels.push({
+            id: `input_${fieldKey}_${Date.now()}`,
+            key: fieldKey,
+            type: resolveFieldType(fieldKey),
+            source: "request",
+            required: true,
+            stateChannelKey: b.argName !== "thread_id" ? b.argName : undefined,
+          });
+          seen.add(fieldKey);
+        }
+      }
+
+
+
+      const updatedChannels = [...newRequestChannels, ...customChannels];
+
+      store.updateNode(selectedAgentNode.id, {
+        data: {
+          ...selectedAgentNode.data,
+          inputChannels: updatedChannels,
+        },
+      });
+    },
+    [selectedAgentNode, endpoint, step.langGraphThreadIdSource],
+  );
+
+  React.useEffect(() => {
+    if (
+      selectedAgentNode &&
+      (!selectedAgentNode.data?.inputChannels || selectedAgentNode.data.inputChannels.length === 0) &&
+      ((step.inputBindings && step.inputBindings.length > 0) ||
+        (step.langGraphStateMapping && Object.keys(step.langGraphStateMapping).length > 0))
+    ) {
+      syncAgentInputChannels(step.inputBindings || [], mapping, step.langGraphThreadIdSource);
+    }
+  }, [selectedAgentNode?.id]);
+
   const handleBindingChange = (channelKey: string, updatedBinding: StepBinding) => {
     const currentBindings = step.inputBindings || [];
     const existingKeys = new Set(currentBindings.map((b) => b.argName));
@@ -565,6 +653,7 @@ export const LangGraphInvokeStepSection: React.FC<
       inputBindings: nextBindings,
       langGraphStateMapping: nextMapping,
     });
+    syncAgentInputChannels(nextBindings, nextMapping);
   };
 
   const getArgBinding = (
@@ -607,6 +696,11 @@ export const LangGraphInvokeStepSection: React.FC<
       inputBindings: nextBindings,
       [fieldKey]: accessor,
     });
+    syncAgentInputChannels(
+      nextBindings,
+      mapping,
+      fieldKey === "langGraphThreadIdSource" ? accessor : undefined,
+    );
   };
 
   const handleResetArgBinding = (
@@ -622,6 +716,11 @@ export const LangGraphInvokeStepSection: React.FC<
     const nextStep = { ...step, inputBindings: nextBindings };
     delete nextStep[fieldKey];
     onChange(nextStep);
+    syncAgentInputChannels(
+      nextBindings,
+      mapping,
+      fieldKey === "langGraphThreadIdSource" ? undefined : step.langGraphThreadIdSource,
+    );
   };
 
   const handleRemoveMapping = (stateKey: string) => {
@@ -648,6 +747,7 @@ export const LangGraphInvokeStepSection: React.FC<
       inputBindings: nextBindings,
       langGraphStateMapping: nextMapping,
     });
+    syncAgentInputChannels(nextBindings, nextMapping);
   };
 
   const handleAddChannel = (channelKey: string) => {
@@ -724,6 +824,7 @@ export const LangGraphInvokeStepSection: React.FC<
       inputBindings: nextBindings,
       langGraphStateMapping: nextMapping,
     });
+    syncAgentInputChannels(nextBindings, nextMapping);
   };
 
   const handleAutoMap = () => {
@@ -843,6 +944,7 @@ export const LangGraphInvokeStepSection: React.FC<
         ? { langGraphThreadIdSource: nextThreadIdSource }
         : {}),
     });
+    syncAgentInputChannels(newBindings, newMapping, nextThreadIdSource);
   };
 
   const handleAddCustomField = () => {
@@ -880,6 +982,7 @@ export const LangGraphInvokeStepSection: React.FC<
       inputBindings: nextBindings,
       langGraphStateMapping: nextMapping,
     });
+    syncAgentInputChannels(nextBindings, nextMapping);
     setNewKey("");
     setNewCustomBinding({
       argName: "",
@@ -947,6 +1050,11 @@ export const LangGraphInvokeStepSection: React.FC<
                 variant="ghost"
                 size="sm"
                 onClick={() => {
+                  syncAgentInputChannels(
+                    step.inputBindings || [],
+                    mapping,
+                    step.langGraphThreadIdSource,
+                  );
                   window.open(`/project/${projectId}/langgraph/${selectedAgentNode.id}`, "_blank");
                 }}
                 className="h-6 text-[10px] font-semibold text-primary hover:text-primary hover:bg-primary/10 gap-1 px-2"

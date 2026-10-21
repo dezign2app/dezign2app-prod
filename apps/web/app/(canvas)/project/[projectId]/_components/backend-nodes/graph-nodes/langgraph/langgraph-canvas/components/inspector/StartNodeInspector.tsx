@@ -52,6 +52,7 @@ export interface StartNodeInspectorProps {
   ) => Promise<SimulationTestCaseResult | void> | SimulationTestCaseResult | void;
   defaultTab?: "inputs" | "testing" | "test-cases";
   onClose?: () => void;
+  onRefreshInputs?: () => void;
 }
 
 export function StartNodeInspector({
@@ -71,6 +72,7 @@ export function StartNodeInspector({
   onRunTestCase,
   defaultTab = "inputs",
   onClose,
+  onRefreshInputs,
 }: StartNodeInspectorProps) {
   const [activeTab, setActiveTab] = useState<string>(defaultTab);
 
@@ -128,6 +130,7 @@ export function StartNodeInspector({
             setInputChannels={setInputChannels}
             suggestedParams={suggestedParams}
             stateChannels={stateChannels}
+            onRefreshInputs={onRefreshInputs}
           />
         </TabsContent>
 

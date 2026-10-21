@@ -3,7 +3,7 @@ import { NodeProps, Handle, Position } from "@xyflow/react";
 import {
   Zap, Plus, Trash2, ChevronDown, Sparkles,
   ArrowRight, Globe, Sliders, ChevronsRight, Play, Check,
-  Database,
+  Database, RefreshCw,
 } from "lucide-react";
 import type { StartNode, LangGraphInputChannel, LangGraphStateChannel } from "@workspace/canvas";
 import { Button } from "@workspace/ui/components/button";
@@ -214,9 +214,23 @@ function StateMappingRow({
   onCreateInput,
 }: StateMappingRowProps) {
   // Find which input channel maps to this state variable
-  const mappedInput = allChannels.find(
-    (c) => c.stateChannelKey === sc.key || (!c.stateChannelKey && c.key === sc.key),
-  );
+  const mappedInput =
+    allChannels.find(
+      (c) =>
+        c.stateChannelKey === sc.key ||
+        (!c.stateChannelKey && c.key === sc.key) ||
+        (c.stateChannelKey &&
+          c.stateChannelKey.split(",").map((s) => s.trim()).includes(sc.key)),
+    ) ||
+    (sc.key === "messages"
+      ? allChannels.find(
+          (c) =>
+            !c.stateChannelKey &&
+            ["query", "prompt", "message", "user_message", "input"].includes(
+              c.key.toLowerCase(),
+            ),
+        )
+      : undefined);
 
   const typeColor =
     STATE_TYPE_COLORS[sc.type] || "text-muted-foreground bg-muted border-border/40";
@@ -355,16 +369,35 @@ export const LangGraphCanvasStartNode = ({
   const onAutoMapStateChannels = data.onAutoMapStateChannels;
   const onMapStateToInput      = data.onMapStateToInput;
   const onOpenStateTab         = data.onOpenStateTab;
+  const onRefreshInputs        = data.onRefreshInputs;
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onRefreshInputs) return;
+    setIsRefreshing(true);
+    try {
+      await onRefreshInputs();
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  }, [onRefreshInputs]);
 
   const validStateChannels = stateChannels.filter((sc) => Boolean(sc.key?.trim()));
 
-  // Split inputs by source
-  const requestVars = allChannels.filter(
-    (c) => c.source === "request" || (!c.source && suggestedParams?.some((s) => s.key === c.key)),
-  );
-  const customVars = allChannels.filter(
-    (c) => c.source === "custom" || (!c.source && !suggestedParams?.some((s) => s.key === c.key)),
-  );
+  // Split inputs by source: show ONLY fields mapped to the LangGraph step
+  const hasSuggestedParams = Array.isArray(suggestedParams);
+  const mappedKeySet = hasSuggestedParams
+    ? new Set(suggestedParams.map((s) => s.key))
+    : null;
+
+  const requestVars = allChannels.filter((c) => {
+    if (c.source === "custom") return false;
+    if (mappedKeySet) return mappedKeySet.has(c.key);
+    return c.source === "request";
+  });
+  const customVars = allChannels.filter((c) => c.source === "custom");
+  const visibleChannels = [...requestVars, ...customVars];
 
   // Suggested not yet added
   const pendingSuggestions = (suggestedParams || []).filter(
@@ -378,17 +411,30 @@ export const LangGraphCanvasStartNode = ({
     onAddInputChannel?.();
   }, [onAddInputChannel]);
 
-  const handleAddSuggested = useCallback((e: React.MouseEvent, s: typeof pendingSuggestions[0]) => {
-    stop(e);
-    onAddSuggestedChannel?.({
-      id: `input_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      key: s.key,
-      type: s.type,
-      required: s.required ?? true,
-      description: s.description || "",
-      source: "request",
-    });
-  }, [onAddSuggestedChannel]);
+  const handleAddSuggested = useCallback(
+    (e: React.MouseEvent, s: typeof pendingSuggestions[0]) => {
+      stop(e);
+      const targetState =
+        (s as { targetStateChannel?: string }).targetStateChannel ||
+        (validStateChannels.some((sc) => sc.key === s.key)
+          ? s.key
+          : ["query", "prompt", "message", "user_message", "input"].includes(s.key.toLowerCase()) &&
+            validStateChannels.some((sc) => sc.key === "messages")
+          ? "messages"
+          : undefined);
+
+      onAddSuggestedChannel?.({
+        id: `input_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        key: s.key,
+        type: s.type,
+        required: s.required ?? true,
+        description: s.description || "",
+        source: "request",
+        ...(targetState ? { stateChannelKey: targetState } : {}),
+      });
+    },
+    [onAddSuggestedChannel, validStateChannels],
+  );
 
   // Find global index for an input channel
   const globalIdx = (ch: LangGraphInputChannel) =>
@@ -396,8 +442,17 @@ export const LangGraphCanvasStartNode = ({
 
   // Count mapped state variables
   const mappedStateCount = validStateChannels.filter((sc) =>
-    allChannels.some(
-      (c) => c.stateChannelKey === sc.key || (!c.stateChannelKey && c.key === sc.key),
+    visibleChannels.some(
+      (c) =>
+        c.stateChannelKey === sc.key ||
+        (!c.stateChannelKey && c.key === sc.key) ||
+        (c.stateChannelKey &&
+          c.stateChannelKey.split(",").map((s) => s.trim()).includes(sc.key)) ||
+        (sc.key === "messages" &&
+          !c.stateChannelKey &&
+          ["query", "prompt", "message", "user_message", "input"].includes(
+            c.key.toLowerCase(),
+          )),
     ),
   ).length;
 
@@ -410,18 +465,22 @@ export const LangGraphCanvasStartNode = ({
     const validKeys = new Set(validStateChannels.map((s) => s.key));
     allChannels.forEach((ch, idx) => {
       if (ch.stateChannelKey && validKeys.has(ch.stateChannelKey)) return;
-      if (validKeys.has(ch.key)) {
-        onUpdateInputChannel?.(idx, { stateChannelKey: ch.key });
-      } else if (
-        ["query", "prompt", "message", "user_message", "input"].includes(
-          ch.key.toLowerCase(),
-        ) &&
-        validKeys.has("messages")
-      ) {
-        onUpdateInputChannel?.(idx, { stateChannelKey: "messages" });
+      const sug = suggestedParams?.find((s) => s.key === ch.key);
+      const targetState =
+        (sug as { targetStateChannel?: string } | undefined)?.targetStateChannel ||
+        (validKeys.has(ch.key)
+          ? ch.key
+          : ["query", "prompt", "message", "user_message", "input"].includes(
+              ch.key.toLowerCase(),
+            ) && validKeys.has("messages")
+          ? "messages"
+          : undefined);
+
+      if (targetState) {
+        onUpdateInputChannel?.(idx, { stateChannelKey: targetState });
       }
     });
-  }, [allChannels, onAutoMapStateChannels, onUpdateInputChannel, validStateChannels]);
+  }, [allChannels, onAutoMapStateChannels, onUpdateInputChannel, validStateChannels, suggestedParams]);
 
   // Map state to input handler
   const handleMapState = useCallback(
@@ -521,11 +580,37 @@ export const LangGraphCanvasStartNode = ({
               label="Incoming Request"
               count={requestVars.length}
               color="bg-sky-500/5 text-sky-400"
+              extraAction={
+                onRefreshInputs && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-4 px-1.5 text-[8px] font-semibold text-sky-400 hover:text-sky-300 hover:bg-sky-500/15 gap-1 nodrag"
+                    onClick={handleRefresh}
+                    title="Check & sync configured input fields from connected endpoint"
+                  >
+                    <RefreshCw className={cn("w-2.5 h-2.5", isRefreshing && "animate-spin")} />
+                    <span>Sync</span>
+                  </Button>
+                )
+              }
             />
 
             {requestVars.length === 0 && pendingSuggestions.length === 0 && (
-              <div className="px-3 py-1.5 text-[9px] text-muted-foreground italic text-center">
-                No endpoint connected
+              <div className="px-3 py-2 text-[9px] text-muted-foreground flex flex-col items-center gap-1.5 text-center">
+                <span>No endpoint connected</span>
+                {onRefreshInputs && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-5 text-[9px] px-2 py-0 font-medium gap-1 text-sky-400 border-sky-500/30 hover:bg-sky-500/10 hover:text-sky-300 nodrag"
+                    onClick={handleRefresh}
+                    title="Check & sync configured input fields from endpoint"
+                  >
+                    <RefreshCw className={cn("w-2.5 h-2.5", isRefreshing && "animate-spin")} />
+                    <span>Check / Sync Inputs</span>
+                  </Button>
+                )}
               </div>
             )}
 
@@ -647,7 +732,7 @@ export const LangGraphCanvasStartNode = ({
                   <StateMappingRow
                     key={sc.key}
                     sc={sc}
-                    allChannels={allChannels}
+                    allChannels={visibleChannels}
                     onMapToInput={(inputKeyOrId) => handleMapState(sc.key, inputKeyOrId)}
                     onCreateInput={() => handleAddInputForState(sc)}
                   />
@@ -657,7 +742,7 @@ export const LangGraphCanvasStartNode = ({
           </div>
 
           {/* ── State mapping legend ── */}
-          {validStateChannels.length > 0 && allChannels.some((c) => c.stateChannelKey) && (
+          {validStateChannels.length > 0 && visibleChannels.some((c) => c.stateChannelKey) && (
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 border-t border-border/30 bg-primary/3">
               <ArrowRight className="w-2.5 h-2.5 text-primary/40 shrink-0" />
               <span className="text-[8px] text-muted-foreground/60">

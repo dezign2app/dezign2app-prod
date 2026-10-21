@@ -327,6 +327,8 @@ export interface StepNodeData extends Record<string, unknown> {
 export interface StartNodeData extends Record<string, unknown> {
   label: string;
   inputChannels?: LangGraphInputChannel[];
+  /** Re-scans and synchronizes configured input fields from connected endpoint pipeline steps */
+  onRefreshInputs?: () => void;
   /** Called when user clicks the + button to add a new input field */
   onAddInputChannel?: () => void;
   /** Called to add a pre-filled channel directly (e.g. from suggestions) */

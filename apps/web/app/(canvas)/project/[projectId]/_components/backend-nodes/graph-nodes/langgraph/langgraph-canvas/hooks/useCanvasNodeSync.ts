@@ -55,6 +55,7 @@ interface UseCanvasNodeSyncProps {
   ) => void;
   handleDeleteCustomReducer?: (idOrName: string) => void;
   // Input channel callbacks (for StartNode inline editing)
+  handleRefreshInputs?: () => void;
   handleAddInputChannel?: () => void;
   handleAddSuggestedChannel?: (channel: LangGraphInputChannel) => void;
   handleUpdateInputChannel?: (index: number, changes: Partial<LangGraphInputChannel>) => void;
@@ -81,6 +82,7 @@ export function useCanvasNodeSync({
   handleAddCustomReducer,
   handleUpdateCustomReducer,
   handleDeleteCustomReducer,
+  handleRefreshInputs,
   handleAddInputChannel,
   handleAddSuggestedChannel,
   handleUpdateInputChannel,
@@ -102,6 +104,7 @@ export function useCanvasNodeSync({
               inputChannels,
               stateChannels,
               suggestedParams,
+              onRefreshInputs: handleRefreshInputs,
               onAddInputChannel: handleAddInputChannel,
               onAddSuggestedChannel: handleAddSuggestedChannel,
               onUpdateInputChannel: handleUpdateInputChannel,
