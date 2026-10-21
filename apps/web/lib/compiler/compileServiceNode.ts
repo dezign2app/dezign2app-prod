@@ -4,6 +4,8 @@ import {
   INTER_SERVICE_PROTOCOL_GRPC,
   INTER_SERVICE_PROTOCOL_HTTP,
   InterServiceProtocol,
+  syncEndpointRouteWithPathParams,
+  parseEndpointRouteWithParams,
 } from "@workspace/canvas";
 import { compileExpressV4Service } from "./services/express/v4";
 import { compileFastAPIService } from "./services/fastapi/v0";
@@ -265,6 +267,31 @@ export function compileServiceNode(
 
   // Normalize endpoint requestBody schemas to align with parameters referenced in pipeline steps
   nodeEndpoints = nodeEndpoints.map(normalizeEndpointRequestBody);
+
+  // Normalize endpoint path parameters and ensure route name is in sync with pathParams
+  nodeEndpoints = nodeEndpoints.map((ep) => {
+    let name = ep.name || "/";
+    let pathParams = ep.pathParams || [];
+
+    if (pathParams.length > 0) {
+      name = syncEndpointRouteWithPathParams({
+        currentRoute: name,
+        oldPathParams: [],
+        newPathParams: pathParams,
+      });
+    } else if (name.includes("/:")) {
+      const parsed = parseEndpointRouteWithParams(name);
+      if (parsed.extractedPathParams.length > 0) {
+        pathParams = parsed.extractedPathParams;
+      }
+    }
+
+    return {
+      ...ep,
+      name,
+      pathParams,
+    };
+  });
 
   // Filter events for this specific node
   let nodeEvents = events.filter(

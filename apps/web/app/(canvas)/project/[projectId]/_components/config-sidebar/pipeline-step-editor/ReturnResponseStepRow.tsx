@@ -74,6 +74,143 @@ export const ReturnResponseStepRow = ({
     return counts;
   }, [step.inputBindings]);
 
+  function inferFieldTypeFromBinding(
+    b: StepBinding,
+    sources: AvailableSource[],
+    ep?: Endpoint,
+  ): string {
+    const src = b.source;
+    if (!src) return "string";
+    const srcField = "field" in src && typeof src.field === "string" ? src.field.trim() : "";
+
+    // 1. Look in availableSources for matching source and path
+    let targetSource: AvailableSource | undefined;
+    if (src.kind === "step_output") {
+      targetSource = sources.find(
+        (s) => s.id === `step:${src.stepId}` || s.stepId === src.stepId,
+      );
+    } else {
+      targetSource = sources.find(
+        (s) => s.id === src.kind || s.kind === src.kind,
+      );
+    }
+
+    if (targetSource && srcField) {
+      const cleanField = srcField.toLowerCase();
+      const matchedPath = targetSource.paths.find(
+        (p) => p.path.toLowerCase() === cleanField,
+      );
+      if (matchedPath?.type) {
+        return matchedPath.type;
+      }
+    }
+
+    // 2. Endpoint path parameters
+    if (src.kind === "req_params") {
+      if (srcField) {
+        const param = ep?.pathParams?.find(
+          (p) => p.name?.toLowerCase() === srcField.toLowerCase(),
+        );
+        if (param?.type) {
+          return param.type;
+        }
+      }
+    }
+
+    // 3. Endpoint query parameters
+    if (src.kind === "req_query") {
+      if (srcField) {
+        const param = ep?.queryParams?.find(
+          (p) => p.name?.toLowerCase() === srcField.toLowerCase(),
+        );
+        if (param?.type) {
+          return param.type;
+        }
+      }
+    }
+
+    // 4. Endpoint headers
+    if (src.kind === "req_headers") {
+      if (srcField) {
+        const header = ep?.headers?.find(
+          (h) => h.name?.toLowerCase() === srcField.toLowerCase(),
+        );
+        if (header?.type) {
+          return header.type;
+        }
+      }
+    }
+
+    // 5. Endpoint request body
+    if (src.kind === "req_body") {
+      if (srcField) {
+        const field = ep?.requestBody?.fields?.find(
+          (f) => (f.name || f.key)?.toLowerCase() === srcField.toLowerCase(),
+        );
+        if (field?.type) {
+          return field.type;
+        }
+      }
+    }
+
+    // 6. Inline literal values
+    if (src.kind === "inline") {
+      if (typeof src.value === "number") return "number";
+      if (typeof src.value === "boolean") return "boolean";
+      return "string";
+    }
+
+    // 7. Preserve existing field type if already configured on endpoint responseBody
+    const existingField = ep?.responseBody?.fields?.find(
+      (f) => (f.name || f.key)?.toLowerCase() === b.argName?.trim().toLowerCase(),
+    );
+    if (existingField?.type) {
+      return existingField.type;
+    }
+
+    return "string";
+  }
+
+  function inferFieldRequiredFromBinding(
+    b: StepBinding,
+    ep?: Endpoint,
+  ): boolean {
+    const src = b.source;
+    if (!src) return true;
+    const srcField = "field" in src && typeof src.field === "string" ? src.field.trim() : "";
+
+    if (src.kind === "req_query") {
+      if (srcField) {
+        const param = ep?.queryParams?.find(
+          (p) => p.name?.toLowerCase() === srcField.toLowerCase(),
+        );
+        return param?.required === true;
+      }
+      return false;
+    }
+
+    if (src.kind === "req_headers") {
+      if (srcField) {
+        const header = ep?.headers?.find(
+          (h) => h.name?.toLowerCase() === srcField.toLowerCase(),
+        );
+        return header?.required === true;
+      }
+      return false;
+    }
+
+    if (src.kind === "req_body") {
+      if (srcField) {
+        const field = ep?.requestBody?.fields?.find(
+          (f) => (f.name || f.key)?.toLowerCase() === srcField.toLowerCase(),
+        );
+        return field?.required !== false;
+      }
+    }
+
+    return true;
+  }
+
   // Auto-sync payload bindings into endpoint.responseBody so user never has to configure fields twice
   const syncResponseBody = (bindings: StepBinding[]) => {
     if (onEndpointChange) {
@@ -90,8 +227,8 @@ export const ReturnResponseStepRow = ({
         .map((b, idx) => ({
           id: `res_f_${idx}`,
           name: b.argName.trim(),
-          type: "string",
-          required: true,
+          type: inferFieldTypeFromBinding(b, availableSources, endpoint),
+          required: inferFieldRequiredFromBinding(b, endpoint),
           key: b.argName.trim(),
           value: "",
         }));

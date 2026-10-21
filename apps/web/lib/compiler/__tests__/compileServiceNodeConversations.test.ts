@@ -654,5 +654,250 @@ app.use(express.json());
     expect(typeCode).not.toContain(": unknown");
     expect(typeCode).not.toMatch(/\bas\s+[A-Za-z0-9_]+/);
   });
+
+  it("compiles endpoint with path params and requireAuth without TypeScript overload mismatch", () => {
+    const serviceNode: BackendNode = {
+      id: "srv-conversations",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "conversations",
+        techStack: "express",
+        port: "8080",
+      },
+    };
+
+    const endpoint: Endpoint & { nodeId: string } = {
+      id: "ep-send-message-by-id",
+      nodeId: "srv-conversations",
+      name: "/send-message/:id",
+      type: "POST",
+      summary: "Send message by ID",
+      requireAuth: true,
+      pathParams: [
+        { id: "param-id", name: "id", type: "string", required: true },
+      ],
+      queryParams: [
+        { id: "param-q", name: "filter", type: "string", required: false },
+      ],
+      pipelineSteps: [
+        {
+          id: "step-ret",
+          name: "Return Response",
+          type: "return_response",
+          statusCode: 201,
+          inputBindings: [
+            {
+              argName: "field_1",
+              source: { kind: "req_params", field: "id" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const compiledService = compileServiceNode(
+      serviceNode,
+      [endpoint],
+      [],
+      [serviceNode],
+      [],
+      [],
+      [],
+      [],
+      "conversations",
+    );
+
+    // 1. Verify route handler file is generated
+    const routeFile = compiledService.files.find((f) =>
+      f.filename.includes("postSendMessageById.ts"),
+    );
+    expect(routeFile).toBeDefined();
+    expect(routeFile!.content).toContain("export async function postSendMessageByIdHandler");
+    expect(routeFile!.content).toContain("ConversationsPostSendMessageByIdParams");
+    expect(routeFile!.content).toContain("export type AuthUser = {");
+    expect(routeFile!.content).toContain("user?: AuthUser;");
+    expect(routeFile!.content).not.toContain('Express.Request["user"]');
+
+    // 2. Verify router registration mounts requireAuth()
+    const routesIndex = compiledService.files.find((f) => f.filename === "src/routes/index.ts");
+    expect(routesIndex).toBeDefined();
+    expect(routesIndex!.content).toContain('router.post("/send-message/:id", requireAuth(), postSendMessageByIdHandler);');
+
+    // 3. Verify requireAuth middleware has generic signature preventing ParamsDictionary lock
+    const requireAuthFile = compiledService.files.find((f) => f.filename === "src/middleware/requireAuth.ts");
+    expect(requireAuthFile).toBeDefined();
+    expect(requireAuthFile!.content).toContain("export function requireAuth<");
+    expect(requireAuthFile!.content).toContain("P = any");
+    expect(requireAuthFile!.content).toContain("RequestHandler<P, ResBody, ReqBody, ReqQuery>");
+
+    // 4. Verify src/types.d.ts is generated with Express namespace augmentation
+    const typesDtsFile = compiledService.files.find((f) => f.filename === "src/types.d.ts");
+    expect(typesDtsFile).toBeDefined();
+    expect(typesDtsFile!.content).toContain("interface Request {");
+    expect(typesDtsFile!.content).toContain("user?: AuthUser;");
+
+    // 5. Verify types package generates proper Params and Response interface inferred from pathParams config
+    const typesFiles = generateTypesPackage(
+      [serviceNode],
+      [endpoint],
+      [],
+      [{ id: serviceNode.id, name: "conversations", folderName: "conversations" }],
+      [],
+    );
+    const typesFile = typesFiles.find((f) => f.filename.includes("postSendMessageById.ts"));
+    expect(typesFile).toBeDefined();
+    expect(typesFile!.content).toContain("export interface ConversationsPostSendMessageByIdParams {");
+    expect(typesFile!.content).toContain("id: string;");
+    expect(typesFile!.content).toContain("export interface ConversationsPostSendMessageByIdResponse {");
+    expect(typesFile!.content).toContain("field_1: string;");
+    expect(typesFile!.content).not.toContain("field_1: Record<string, string | number | boolean | null>;");
+  });
+
+  it("infers response types dynamically from parameter and body configurations rather than hardcoding", () => {
+    const serviceNode: BackendNode = {
+      id: "srv-conversation",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "conversations",
+        techStack: "express",
+        port: "8080",
+      },
+    };
+
+    const endpoint: Endpoint & { nodeId: string } = {
+      id: "ep-mixed-types",
+      nodeId: "srv-conversation",
+      name: "/items/:itemId",
+      type: "POST",
+      summary: "Mixed types inference",
+      pathParams: [{id:"123456789", name: "itemId", type: "number", required: true }],
+      queryParams: [{id:"12345678", name: "active", type: "boolean", required: false }],
+      requestBody: {
+        id: "rb-1",
+        fields: [
+          { id: "f1", name: "count", type: "number", required: true, key: "count", value: "" },
+          { id: "f2", name: "label", type: "string", required: true, key: "label", value: "" },
+        ],
+      },
+      pipelineSteps: [
+        {
+          id: "step-ret",
+          name: "Return Response",
+          type: "return_response",
+          statusCode: 200,
+          inputBindings: [
+            {
+              argName: "itemId",
+              source: { kind: "req_params", field: "itemId" },
+            },
+            {
+              argName: "isActive",
+              source: { kind: "req_query", field: "active" },
+            },
+            {
+              argName: "totalCount",
+              source: { kind: "req_body", field: "count" },
+            },
+            {
+              argName: "itemLabel",
+              source: { kind: "req_body", field: "label" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const typesFiles = generateTypesPackage(
+      [serviceNode],
+      [endpoint],
+      [],
+      [{ id: serviceNode.id, name: "conversations", folderName: "conversations" }],
+      [],
+    );
+    const typesFile = typesFiles.find((f) => f.filename.includes("postItemsByItemId.ts"));
+    expect(typesFile).toBeDefined();
+    expect(typesFile!.content).toContain("export interface ConversationsPostItemsByItemIdResponse {");
+    expect(typesFile!.content).toContain("itemId: number;");
+    expect(typesFile!.content).toContain("isActive?: boolean | undefined;");
+    expect(typesFile!.content).toContain("totalCount: number;");
+    expect(typesFile!.content).toContain("itemLabel: string;");
+    expect(typesFile!.content).not.toContain("itemId: Record<string, string | number | boolean | null>;");
+  });
+
+  it("compiles endpoint with optional query param mapped to response step without TS2322 undefined mismatch", () => {
+    const serviceNode: BackendNode = {
+      id: "srv-conversation",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "conversations",
+        techStack: "express",
+        port: "8080",
+      },
+    };
+
+    const endpoint: Endpoint & { nodeId: string } = {
+      id: "ep-send-msg",
+      nodeId: "srv-conversation",
+      name: "/send-message/:id",
+      type: "POST",
+      summary: "Send message by ID with query demo",
+      pathParams: [{ id: "p1", name: "id", type: "string", required: true }],
+      queryParams: [{ id: "q1", name: "demo", type: "string", required: false }],
+      pipelineSteps: [
+        {
+          id: "step-ret",
+          name: "Return Response",
+          type: "return_response",
+          statusCode: 201,
+          inputBindings: [
+            {
+              argName: "field_1",
+              source: { kind: "req_params", field: "id" },
+            },
+            {
+              argName: "field_2",
+              source: { kind: "req_query", field: "demo" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const compiledService = compileServiceNode(
+      serviceNode,
+      [endpoint],
+      [],
+      [serviceNode],
+      [],
+      [],
+      [],
+      [],
+      "conversations",
+    );
+
+    const routeFile = compiledService.files.find((f) =>
+      f.filename.includes("postSendMessageById.ts"),
+    );
+    expect(routeFile).toBeDefined();
+    expect(routeFile!.content).toContain("field_2: req.query.demo");
+
+    const typesFiles = generateTypesPackage(
+      [serviceNode],
+      [endpoint],
+      [],
+      [{ id: serviceNode.id, name: "conversations", folderName: "conversations" }],
+      [],
+    );
+    const typesFile = typesFiles.find((f) => f.filename.includes("postSendMessageById.ts"));
+    expect(typesFile).toBeDefined();
+    expect(typesFile!.content).toContain("field_1: string;");
+    expect(typesFile!.content).toContain("field_2?: string | undefined;");
+  });
 });
 

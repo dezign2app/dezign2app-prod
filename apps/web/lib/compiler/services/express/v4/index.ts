@@ -169,6 +169,33 @@ export function compileExpressV4Service(
       allEdges,
     ),
     ...generateServiceUnitTests(serviceName, nodeEndpoints, testCases),
+    {
+      filename: "src/types.d.ts",
+      language: "typescript",
+      content: `import "express";
+
+export interface AuthUser {
+  id: string;
+  userId: string;
+  username: string;
+  role: string;
+  email?: string;
+  name?: string;
+  sessionToken?: string;
+  expiresAt?: number;
+  [key: string]: string | number | boolean | null | undefined;
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: AuthUser;
+    }
+  }
+}
+export {};
+`,
+    },
   ];
 
   // Guarantee that src/index.ts always includes the default express import

@@ -1,5 +1,6 @@
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { Endpoint, CompiledFile, ServiceInfo } from "@workspace/canvas/types";
+import { syncEndpointRouteWithPathParams, parseEndpointRouteWithParams } from "@workspace/canvas";
 import {
   toVarName,
   toPascalCase,
@@ -72,7 +73,22 @@ export function generateServiceRouteTypes(
 
     if (nodeEndpoints.length > 0) {
       nodeEndpoints.forEach((rawEp, index) => {
-        const ep = normalizeEndpointRequestBody(rawEp);
+        let ep = normalizeEndpointRequestBody(rawEp);
+        let epName = ep.name || "/";
+        let epPathParams = ep.pathParams || [];
+        if (epPathParams.length > 0) {
+          epName = syncEndpointRouteWithPathParams({
+            currentRoute: epName,
+            oldPathParams: [],
+            newPathParams: epPathParams,
+          });
+        } else if (epName.includes("/:")) {
+          const parsed = parseEndpointRouteWithParams(epName);
+          if (parsed.extractedPathParams.length > 0) {
+            epPathParams = parsed.extractedPathParams;
+          }
+        }
+        ep = { ...ep, name: epName, pathParams: epPathParams };
         let routeFileName = deriveRouteFileName(ep, index, rawServiceName);
 
         if (usedFileNames.has(routeFileName)) {

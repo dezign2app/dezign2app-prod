@@ -210,49 +210,141 @@ export function inferBindingType(
         }
         return "string";
       }
+      if (step.type === "variable") {
+        const varType = (step.variableDataType || "").toLowerCase();
+        if (["number", "integer", "int", "float", "double"].includes(varType)) return "number";
+        if (["boolean", "bool"].includes(varType)) return "boolean";
+        if (["array"].includes(varType) || varType.endsWith("[]")) return "string[]";
+        if (["object", "record"].includes(varType)) return "Record<string, string | number | boolean | null>";
+        if (varType && varType !== "string") return varType;
+        if (step.variableSource?.kind === "inline") {
+          const val = step.variableSource.value;
+          if (typeof val === "number") return "number";
+          if (typeof val === "boolean") return "boolean";
+        }
+        return "string";
+      }
+      if (step.type === "kafka_publish") {
+        if (source.field === "success") return "boolean";
+        if (source.field === "messageId" || source.field === "topic") return "string";
+        return "{ success: boolean }";
+      }
+      if (step.type === "service_call") {
+        if (source.field) return "string | number | boolean | null";
+        return "Record<string, string | number | boolean | null>";
+      }
+      if (step.type === "langgraph_invoke") {
+        if (source.field === "response" || source.field === "threadId") return "string";
+        return "{ response: string; threadId?: string; state?: Record<string, string | number | boolean | null> }";
+      }
     }
   }
 
   if (source.kind === "req_body") {
-    if (source.field && ep?.requestBody?.fields) {
-      const f = ep.requestBody.fields.find(
-        (field) => field.name === source.field || field.key === source.field,
-      );
-      if (f?.type) {
-        switch (f.type) {
-          case "number": return "number";
-          case "boolean": return "boolean";
-          case "array": return "string[]";
-          case "object": return "Record<string, string | number | boolean | null>";
-          default: return "string";
+    if (source.field) {
+      if (ep?.requestBody?.fields && ep.requestBody.fields.length > 0) {
+        const f = ep.requestBody.fields.find(
+          (field) => (field.name || field.key)?.toLowerCase() === source.field?.toLowerCase(),
+        );
+        if (f?.type) {
+          const t = f.type.toLowerCase();
+          if (["number", "integer", "int", "float", "double"].includes(t)) return "number";
+          if (["boolean", "bool"].includes(t)) return "boolean";
+          if (["array"].includes(t)) return "string[]";
+          if (["object", "record"].includes(t)) return "Record<string, unknown>";
+          return "string";
         }
       }
+      if (ep?.requestBody?.rawJson) {
+        try {
+          const parsed = JSON.parse(ep.requestBody.rawJson);
+          if (parsed && typeof parsed === "object" && source.field in parsed) {
+            const val = parsed[source.field];
+            if (typeof val === "number") return "number";
+            if (typeof val === "boolean") return "boolean";
+            if (Array.isArray(val)) return "string[]";
+            if (val && typeof val === "object") return "Record<string, string | number | boolean | null>";
+            return "string";
+          }
+        } catch {
+          // ignore invalid json in rawJson
+        }
+      }
+      return "string";
     }
     return "Record<string, string | number | boolean | null>";
   }
 
   if (source.kind === "auth") {
     if (source.field) {
-      if (source.field === "expiresAt") return "number";
+      const fieldLower = source.field.toLowerCase();
+      if (fieldLower === "expiresat") return "number";
+      const userNode = nodes.find(
+        (n) => n.type === "entity" && (n.data?.label?.toLowerCase() === "user" || n.data?.label?.toLowerCase() === "users")
+      );
+      const col = userNode?.data?.columns?.find(
+        (c: { name?: string }) => c.name?.toLowerCase() === fieldLower
+      );
+      if (col?.type) {
+        const colType = col.type.toLowerCase();
+        if (["integer", "int", "number", "float", "double"].includes(colType)) return "number";
+        if (["boolean", "bool"].includes(colType)) return "boolean";
+      }
       return "string";
     }
     return "{ id: string; userId: string; username: string; email?: string; role?: string; name?: string; sessionToken?: string; expiresAt?: number }";
   }
 
-  if (source.kind === "req_param") {
+  if (source.kind === "req_params" || source.kind === "req_param") {
     if (source.field) {
       const p = [...(ep?.pathParams || []), ...(ep?.queryParams || [])].find(
-        (param) => param.name === source.field,
+        (param) => param.name?.toLowerCase() === source.field?.toLowerCase(),
       );
       if (p?.type) {
-        switch (p.type) {
-          case "number": return "number";
-          case "boolean": return "boolean";
-          default: return "string";
-        }
+        const t = p.type.toLowerCase();
+        if (["number", "integer", "int", "float", "double"].includes(t)) return "number";
+        if (["boolean", "bool"].includes(t)) return "boolean";
+        if (["array"].includes(t)) return "string[]";
+        return "string";
       }
+      return "string";
     }
-    return "string";
+    return "Record<string, string>";
+  }
+
+  if (source.kind === "req_query") {
+    if (source.field) {
+      const q = ep?.queryParams?.find(
+        (param) => param.name?.toLowerCase() === source.field?.toLowerCase(),
+      );
+      let baseType = "string";
+      if (q?.type) {
+        const t = q.type.toLowerCase();
+        if (["number", "integer", "int", "float", "double"].includes(t)) baseType = "number";
+        else if (["boolean", "bool"].includes(t)) baseType = "boolean";
+        else if (["array"].includes(t)) baseType = "string[]";
+      }
+      const isRequired = q?.required === true;
+      return isRequired ? baseType : `${baseType} | undefined`;
+    }
+    return "Record<string, string | string[] | undefined>";
+  }
+
+  if (source.kind === "req_headers" || source.kind === "req_header") {
+    if (source.field) {
+      const h = ep?.headers?.find(
+        (header) => header.name?.toLowerCase() === source.field?.toLowerCase(),
+      );
+      let baseType = "string";
+      if (h?.type) {
+        const t = h.type.toLowerCase();
+        if (["number", "integer", "int", "float", "double"].includes(t)) baseType = "number";
+        else if (["boolean", "bool"].includes(t)) baseType = "boolean";
+      }
+      const isRequired = h?.required === true;
+      return isRequired ? baseType : `${baseType} | undefined`;
+    }
+    return "Record<string, string | string[] | undefined>";
   }
 
   if (source.kind === "literal" || source.kind === "inline") {
@@ -269,6 +361,42 @@ export function inferBindingType(
   if (source.kind === "context") {
     if (source.field === "timestamp") return "string";
     if (source.field === "user") return "Record<string, string | number | boolean | null>";
+    return "string";
+  }
+
+  // Fallback 1: Check if the endpoint's configured responseBody has a field with this argName
+  if (binding.argName) {
+    const cleanArg = binding.argName.trim().toLowerCase();
+    if (ep?.responseBody?.fields) {
+      const rf = ep.responseBody.fields.find(
+        (f) => (f.name || f.key)?.toLowerCase() === cleanArg
+      );
+      if (rf?.type) {
+        const t = rf.type.toLowerCase();
+        if (["number", "integer", "int", "float", "double"].includes(t)) return "number";
+        if (["boolean", "bool"].includes(t)) return "boolean";
+        if (["array"].includes(t)) return "string[]";
+        if (["object", "record"].includes(t)) return "Record<string, string | number | boolean | null>";
+        if (t !== "string") return rf.type;
+      }
+    }
+    if (ep?.responseFields) {
+      const rf = ep.responseFields.find(
+        (f) => f.name?.toLowerCase() === cleanArg
+      );
+      if (rf?.type) {
+        const t = rf.type.toLowerCase();
+        if (["number", "integer", "int", "float", "double"].includes(t)) return "number";
+        if (["boolean", "bool"].includes(t)) return "boolean";
+        if (["array"].includes(t)) return "string[]";
+        if (["object", "record"].includes(t)) return "Record<string, string | number | boolean | null>";
+        if (t !== "string") return rf.type;
+      }
+    }
+  }
+
+  // If a field was specified on the source, it is a single property (not a Record dictionary)
+  if (source.field) {
     return "string";
   }
 
@@ -322,7 +450,8 @@ export function generateResponseInterface(
         for (const b of bindings) {
           const propName = b.argName?.trim() || "data";
           const tsType = inferBindingType(b, ep, nodes, entityImports);
-          props.push(`  ${propName}: ${tsType};`);
+          const isOptional = tsType.includes("undefined");
+          props.push(`  ${propName}${isOptional ? "?" : ""}: ${tsType};`);
         }
         return {
           code: `export interface ${interfaceName} {\n${props.join("\n")}\n}\n`,
