@@ -31,10 +31,10 @@ describe("AgentAddStepToolbar", () => {
     expect(screen.queryByText("Custom Code")).toBeNull();
     expect(screen.getByText("If / Else")).toBeDefined();
     expect(screen.getByText("Try / Catch")).toBeDefined();
-    expect(screen.getByText("Push to Client")).toBeDefined();
+    expect(screen.queryByText("Push to Client")).toBeNull();
 
     // Verify total count matches ADDABLE_LANGGRAPH_STEP_TYPES
-    expect(ADDABLE_LANGGRAPH_STEP_TYPES.length).toBeGreaterThanOrEqual(12);
+    expect(ADDABLE_LANGGRAPH_STEP_TYPES.length).toBe(11);
   });
 
   it("calls onAddStep with the correct type when clicked", () => {

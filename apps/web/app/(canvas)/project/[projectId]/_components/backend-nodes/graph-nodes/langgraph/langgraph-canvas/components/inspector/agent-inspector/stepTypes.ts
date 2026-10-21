@@ -288,7 +288,6 @@ export const ADDABLE_LANGGRAPH_STEP_TYPES: readonly LangGraphNodeStepType[] = [
   "variable",
   "condition",
   "try_catch",
-  "push_to_client",
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
