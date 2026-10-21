@@ -342,8 +342,8 @@ export async function executeBrowserLangGraph(
       // ─── A. AGENT / COMPONENT NODE ──────────────────────────────────
       if (isAgent) {
         const agentData = node.data as AgentNodeData;
-        const systemPrompt =
-          agentData.systemPrompt || "You are a helpful assistant.";
+        const pipelineSteps = agentData.pipelineSteps;
+        const hasPipelineSteps = Array.isArray(pipelineSteps) && pipelineSteps.length > 0;
 
         // Detect LLM node connected to this agent on the canvas
         const llmEdge = edges.find(
@@ -355,11 +355,13 @@ export async function executeBrowserLangGraph(
         // Is LLM actually enabled/configured for this node?
         const isExplicitlyDisabled = agentData.llmConfig?.enabled === false;
         const hasConnectedLlm = Boolean(llmNode && llmData?.enabled !== false);
-        const isLlmActive =
-          !isExplicitlyDisabled &&
-          (hasConnectedLlm ||
-            agentData.llmConfig?.enabled === true ||
-            node.type === "langgraph_agent");
+        const isLlmActive = hasPipelineSteps
+          ? pipelineSteps.some((s) => s.type === "llm_call" && s.enabled !== false)
+          : !isExplicitlyDisabled &&
+            (hasConnectedLlm || agentData.llmConfig?.enabled === true);
+
+        const rawSystemPrompt = agentData.systemPrompt?.trim() || "";
+        const systemPrompt = rawSystemPrompt || (isLlmActive ? "You are a helpful assistant." : "");
 
         // Gather real conversation messages with strict typing (no any)
         let messages: GraphChatMessage[] = extractMessages(state.messages);
@@ -505,101 +507,97 @@ export async function executeBrowserLangGraph(
           outputDelta.middleware = connectedMiddleware;
         }
 
-        // ── CONFIG 1/5: IDENTITY & PROMPT ──
+        // ── STEP-BASED EXECUTION LOGGING ──
+        // Only show the configuration for steps that are actually present/configured
         const agentName = agentData.name || agentData.label || nodeName;
-        addLog(
-          "config",
-          `[Config 1/5 - Identity & Prompt] Node: "${agentName}" | Mode: ${isLlmActive ? "LLM Agent" : "State Mutator / Component Orchestrator"} | System Prompt: "${systemPrompt.length > 90 ? systemPrompt.slice(0, 90) + "..." : systemPrompt}" (${systemPrompt.length} chars)`,
-          {
-            agentName,
-            systemPrompt,
-            agentId: agentData.agentId || node.id,
-            isLlmActive,
-          }
-        );
-
-        // ── CONFIG 2/5: MODEL & TOOLS ──
-        if (isLlmActive) {
-          addLog(
-            "config",
-            `[Config 2/5 - Model & Tools] Model: ${effectiveProvider.toUpperCase()} / ${effectiveModel} | Tools: ${connectedTools.length > 0 ? connectedTools.map((t) => t.name).join(", ") : "None attached"} (${connectedTools.length}) | Middleware: ${connectedMiddleware.length > 0 ? connectedMiddleware.map((m) => m.name).join(", ") : "0 active"}`,
-            {
-              provider: effectiveProvider,
-              model: effectiveModel,
-              tools: connectedTools,
-              middleware: connectedMiddleware,
-            }
-          );
-        } else {
-          addLog(
-            "config",
-            `[Config 2/5 - Model & Tools] LLM is disabled for node "${agentName}". Executing state channel mutations and connected components. | Tools: ${connectedTools.length} | Middleware: ${connectedMiddleware.length}`,
-            {
-              isLlmActive: false,
-              tools: connectedTools,
-              middleware: connectedMiddleware,
-            }
-          );
-        }
-
-        // ── CONFIG 3/5: STRUCTURED OUTPUT ──
-        const responseFormat = agentData.responseFormat;
-        const isStructured = Boolean(responseFormat?.enabled);
-        const schemaJsonStr = responseFormat?.schemaJson?.trim() || "";
-        let parsedSchemaFields: Array<{ name: string; type?: string; required?: boolean }> = [];
-        if (isStructured && schemaJsonStr) {
-          try {
-            const rawSchema = JSON.parse(schemaJsonStr);
-            if (rawSchema?.properties && typeof rawSchema.properties === "object") {
-              const reqs = Array.isArray(rawSchema.required) ? rawSchema.required : [];
-              parsedSchemaFields = Object.entries(rawSchema.properties).map(([k, def]: [string, any]) => ({
-                name: k,
-                type: def?.type || "string",
-                required: reqs.includes(k),
-              }));
-            }
-          } catch {}
-        }
-        addLog(
-          "config",
-          `[Config 3/5 - Structured Output] ${isStructured ? `Active (Strategy: ${responseFormat?.strategy || "auto"}, Schema: { ${parsedSchemaFields.map((f) => `${f.name}:${f.type}${f.required ? " [REQ]" : ""}`).join(", ") || "custom"} })` : "Disabled (Plain Text Output)"}`,
-          {
-            enabled: isStructured,
-            strategy: responseFormat?.strategy || "auto",
-            schemaFields: parsedSchemaFields,
-            schemaJson: responseFormat?.schemaJson,
-            toolMessageContent: responseFormat?.toolMessageContent,
-            handleErrorMode: responseFormat?.handleErrorMode,
-          }
-        );
-
-        // ── CONFIG 4/5: STATE UPDATES ──
         const configuredUpdates = agentData.stateUpdates || [];
-        addLog(
-          "config",
-          `[Config 4/5 - State Updates] ${configuredUpdates.length} channel update(s) configured: ${configuredUpdates.map((u) => `${u.channelKey} <- ${u.source === "structured_field" ? `structuredResponse.${u.schemaField || u.value}` : u.source || "value"} [mode: ${u.mode || "replace"}]`).join(", ") || "None"}`,
-          {
-            stateUpdates: configuredUpdates,
-          }
-        );
 
-        // ── CONFIG 5/5: EVENT STREAMING ──
-        const streamConfig = agentData.streamConfig;
-        const isStreamActive = streamConfig?.enabled !== false;
-        const streamPreset =
-          ((streamConfig as Record<string, unknown> | undefined)?.preset as string) ||
-          "Standard SSE";
-        addLog(
-          "config",
-          `[Config 5/5 - Event Streaming] ${isStreamActive ? `Active (${streamConfig?.version || "v3"} - Preset: ${streamPreset})` : "Disabled"}`,
-          {
-            streamConfig,
+        if (hasPipelineSteps) {
+          addLog(
+            "config",
+            `[Pipeline Steps] ${pipelineSteps.length} step(s) configured: ${pipelineSteps.map((s, i) => `${i + 1}. ${s.label || s.name || s.type}`).join(" → ")}`,
+            { pipelineSteps },
+          );
+
+          const hasLlmInSteps = pipelineSteps.some((s) => s.type === "llm_call" && s.enabled !== false);
+          if (hasLlmInSteps) {
+            addLog(
+              "config",
+              `[Step: LLM Agent] Model: ${effectiveProvider.toUpperCase()} / ${effectiveModel}${systemPrompt ? ` | System Prompt: "${systemPrompt.length > 90 ? systemPrompt.slice(0, 90) + "..." : systemPrompt}"` : ""} | Tools: ${connectedTools.length} | Middleware: ${connectedMiddleware.length}`,
+              {
+                provider: effectiveProvider,
+                model: effectiveModel,
+                systemPrompt,
+                tools: connectedTools,
+                middleware: connectedMiddleware,
+              },
+            );
           }
-        );
+
+          if (configuredUpdates.length > 0) {
+            addLog(
+              "config",
+              `[State Updates] ${configuredUpdates.length} channel update(s) configured: ${configuredUpdates.map((u) => `${u.channelKey} <- ${u.source === "structured_field" ? `structuredResponse.${u.schemaField || u.value}` : u.source || "value"} [mode: ${u.mode || "replace"}]`).join(", ")}`,
+              { stateUpdates: configuredUpdates },
+            );
+          }
+        } else {
+          // Legacy fallback: only log active components
+          if (isLlmActive) {
+            addLog(
+              "config",
+              `[Config - LLM Agent] Node: "${agentName}" | Model: ${effectiveProvider.toUpperCase()} / ${effectiveModel}${systemPrompt ? ` | System Prompt: "${systemPrompt.length > 90 ? systemPrompt.slice(0, 90) + "..." : systemPrompt}"` : ""} | Tools: ${connectedTools.length} | Middleware: ${connectedMiddleware.length}`,
+              {
+                provider: effectiveProvider,
+                model: effectiveModel,
+                systemPrompt,
+                tools: connectedTools,
+                middleware: connectedMiddleware,
+              },
+            );
+          }
+
+          if (configuredUpdates.length > 0) {
+            addLog(
+              "config",
+              `[State Updates] ${configuredUpdates.length} channel update(s) configured: ${configuredUpdates.map((u) => `${u.channelKey} <- ${u.source === "structured_field" ? `structuredResponse.${u.schemaField || u.value}` : u.source || "value"} [mode: ${u.mode || "replace"}]`).join(", ")}`,
+              { stateUpdates: configuredUpdates },
+            );
+          }
+        }
 
         if (isLlmActive) {
           // Call the real LLM endpoint directly in the browser
+          const streamConfig = agentData.streamConfig;
+          const isStreamActive = streamConfig?.enabled !== false;
           const streamEnabled = isStreamActive;
+          const responseFormat = agentData.responseFormat;
+          const isStructured = Boolean(responseFormat?.enabled);
+          const schemaJsonStr = responseFormat?.schemaJson?.trim() || "";
+          const parsedSchemaFields: Array<{ name: string; type?: string; required?: boolean }> = [];
+          if (isStructured && schemaJsonStr) {
+            try {
+              const parsedJson = JSON.parse(schemaJsonStr);
+              if (parsedJson && typeof parsedJson === "object" && "properties" in parsedJson) {
+                const properties = parsedJson.properties;
+                if (properties && typeof properties === "object") {
+                  const reqs: string[] =
+                    "required" in parsedJson && Array.isArray(parsedJson.required) ? parsedJson.required : [];
+                  for (const [k, def] of Object.entries(properties)) {
+                    const propType =
+                      def && typeof def === "object" && "type" in def && typeof def.type === "string"
+                        ? def.type
+                        : "string";
+                    parsedSchemaFields.push({
+                      name: k,
+                      type: propType,
+                      required: reqs.includes(k),
+                    });
+                  }
+                }
+              }
+            } catch {}
+          }
           addLog("llm", `Calling LLM: ${effectiveProvider.toUpperCase()} / ${effectiveModel} (${messages.length} message(s))`);
           const { text: responseText, streamBatches } = await callBrowserLLM({
             provider: effectiveProvider,

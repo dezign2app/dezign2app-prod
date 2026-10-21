@@ -589,8 +589,6 @@ export function StartNodeTestingTab({
             <TabsContent value="trace" className="flex flex-col gap-2 pt-2 m-0">
               <TestingTraceTab
                 executionResult={executionResult}
-                isTraceExpanded={isTraceExpanded}
-                setIsTraceExpanded={setIsTraceExpanded}
                 nodes={nodes}
                 edges={edges}
                 expandedTraceNodes={expandedTraceNodes}
