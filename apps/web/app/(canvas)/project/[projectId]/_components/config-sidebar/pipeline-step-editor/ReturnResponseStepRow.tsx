@@ -171,6 +171,46 @@ export const ReturnResponseStepRow = ({
     return "string";
   }
 
+  function inferFieldRequiredFromBinding(
+    b: StepBinding,
+    ep?: Endpoint,
+  ): boolean {
+    const src = b.source;
+    if (!src) return true;
+    const srcField = "field" in src && typeof src.field === "string" ? src.field.trim() : "";
+
+    if (src.kind === "req_query") {
+      if (srcField) {
+        const param = ep?.queryParams?.find(
+          (p) => p.name?.toLowerCase() === srcField.toLowerCase(),
+        );
+        return param?.required === true;
+      }
+      return false;
+    }
+
+    if (src.kind === "req_headers") {
+      if (srcField) {
+        const header = ep?.headers?.find(
+          (h) => h.name?.toLowerCase() === srcField.toLowerCase(),
+        );
+        return header?.required === true;
+      }
+      return false;
+    }
+
+    if (src.kind === "req_body") {
+      if (srcField) {
+        const field = ep?.requestBody?.fields?.find(
+          (f) => (f.name || f.key)?.toLowerCase() === srcField.toLowerCase(),
+        );
+        return field?.required !== false;
+      }
+    }
+
+    return true;
+  }
+
   // Auto-sync payload bindings into endpoint.responseBody so user never has to configure fields twice
   const syncResponseBody = (bindings: StepBinding[]) => {
     if (onEndpointChange) {
@@ -188,7 +228,7 @@ export const ReturnResponseStepRow = ({
           id: `res_f_${idx}`,
           name: b.argName.trim(),
           type: inferFieldTypeFromBinding(b, availableSources, endpoint),
-          required: true,
+          required: inferFieldRequiredFromBinding(b, endpoint),
           key: b.argName.trim(),
           value: "",
         }));

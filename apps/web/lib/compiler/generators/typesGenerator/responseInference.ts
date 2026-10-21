@@ -317,14 +317,15 @@ export function inferBindingType(
       const q = ep?.queryParams?.find(
         (param) => param.name?.toLowerCase() === source.field?.toLowerCase(),
       );
+      let baseType = "string";
       if (q?.type) {
         const t = q.type.toLowerCase();
-        if (["number", "integer", "int", "float", "double"].includes(t)) return "number";
-        if (["boolean", "bool"].includes(t)) return "boolean";
-        if (["array"].includes(t)) return "string[]";
-        return "string";
+        if (["number", "integer", "int", "float", "double"].includes(t)) baseType = "number";
+        else if (["boolean", "bool"].includes(t)) baseType = "boolean";
+        else if (["array"].includes(t)) baseType = "string[]";
       }
-      return "string";
+      const isRequired = q?.required === true;
+      return isRequired ? baseType : `${baseType} | undefined`;
     }
     return "Record<string, string | string[] | undefined>";
   }
@@ -334,13 +335,14 @@ export function inferBindingType(
       const h = ep?.headers?.find(
         (header) => header.name?.toLowerCase() === source.field?.toLowerCase(),
       );
+      let baseType = "string";
       if (h?.type) {
         const t = h.type.toLowerCase();
-        if (["number", "integer", "int", "float", "double"].includes(t)) return "number";
-        if (["boolean", "bool"].includes(t)) return "boolean";
-        return "string";
+        if (["number", "integer", "int", "float", "double"].includes(t)) baseType = "number";
+        else if (["boolean", "bool"].includes(t)) baseType = "boolean";
       }
-      return "string";
+      const isRequired = h?.required === true;
+      return isRequired ? baseType : `${baseType} | undefined`;
     }
     return "Record<string, string | string[] | undefined>";
   }
@@ -448,7 +450,8 @@ export function generateResponseInterface(
         for (const b of bindings) {
           const propName = b.argName?.trim() || "data";
           const tsType = inferBindingType(b, ep, nodes, entityImports);
-          props.push(`  ${propName}: ${tsType};`);
+          const isOptional = tsType.includes("undefined");
+          props.push(`  ${propName}${isOptional ? "?" : ""}: ${tsType};`);
         }
         return {
           code: `export interface ${interfaceName} {\n${props.join("\n")}\n}\n`,

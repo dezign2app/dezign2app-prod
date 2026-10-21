@@ -146,19 +146,41 @@ import {
 } from "@workspace/types";
 ${allExtraImportLines ? `${allExtraImportLines}\n` : ""}\nconst logger = createLogger("${serviceName}:${routeFileName}");
 
+export type AuthUser = {
+  id: string;
+  userId: string;
+  username: string;
+  role: string;
+  email?: string;
+  name?: string;
+  sessionToken?: string;
+  expiresAt?: number;
+  [key: string]: string | number | boolean | null | undefined;
+};
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: AuthUser;
+    }
+  }
+}
+
 type ${pascalName}ErrorResponse = {
   error: string;
   details?: string | { formErrors: string[]; fieldErrors: Record<string, string[] | undefined> } | Record<string, string | number | boolean | null>;
 };
 
 export type ${pascalName}Request =
-  | Request<${pascalName}Params, ${pascalName}Response | ${pascalName}ErrorResponse, ${pascalName}Body, ${pascalName}Query>
+  | (Request<${pascalName}Params, ${pascalName}Response | ${pascalName}ErrorResponse, ${pascalName}Body, ${pascalName}Query> & {
+      user?: AuthUser;
+    })
   | {
       headers?: Record<string, string | string[] | undefined>;
       params: ${pascalName}Params;
       query: ${pascalName}Query;
       body?: ${pascalName}Body;
-      user?: Express.Request["user"];
+      user?: AuthUser;
     };
 
 ${hasStreamingStep ? `export type ${pascalName}ResponseContext = Response;\n` : `export type ${pascalName}ResponseContext =
