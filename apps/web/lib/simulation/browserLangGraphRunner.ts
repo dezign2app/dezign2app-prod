@@ -177,7 +177,9 @@ export async function executeBrowserLangGraph(
     // Initialize default channel values
     for (const channel of stateChannels) {
       if (channel.key === "messages") {
-        state[channel.key] = [];
+        state.messages = extractMessages(channel.defaultValue);
+      } else if (channel.defaultValue !== undefined && channel.defaultValue !== null) {
+        state[channel.key] = clone(channel.defaultValue);
       } else if (channel.type === "number") {
         state[channel.key] = 0;
       } else if (channel.type === "boolean") {
