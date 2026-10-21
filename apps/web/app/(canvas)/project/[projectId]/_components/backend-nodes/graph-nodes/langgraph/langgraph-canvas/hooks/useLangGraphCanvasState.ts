@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useReactFlow } from "@xyflow/react";
 import {
   type BackendNode,
@@ -8,6 +8,7 @@ import {
   type LangGraphCustomReducer,
   type LangGraphCanvasNode,
   type LangGraphCanvasEdge,
+  type Endpoint,
 } from "@workspace/canvas";
 import { isReservedNodeId, NODE_ID_STATE_GLOBAL } from "../constants";
 import { getSuggestedReducerCodeForChannelType } from "../components/inspector/state-inspector/constants";
@@ -21,11 +22,175 @@ import { useCanvasConnections } from "./useCanvasConnections";
 import { useCanvasPersistence } from "./useCanvasPersistence";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { getLangGraphFlowNodes } from "../../../../../hooks/auto-layout/langGraphLayout";
+import { toast } from "sonner";
 
 export interface UseLangGraphCanvasStateProps {
   node: BackendNode;
   updateNode: (id: string, changes: Partial<BackendNode>) => void;
   onClose: () => void;
+}
+
+export function extractConfiguredEndpointInputs(
+  nodeId: string,
+  nodeLabel: string | undefined,
+  allEdges: Array<{
+    source: string;
+    target: string;
+    sourceHandle?: string | null;
+    targetHandle?: string | null;
+  }>,
+  allEndpoints: Endpoint[],
+): Array<{
+  key: string;
+  type: LangGraphInputChannel["type"];
+  description?: string;
+  required?: boolean;
+  targetStateChannel?: string;
+}> {
+  const suggested: Array<{
+    key: string;
+    type: LangGraphInputChannel["type"];
+    description?: string;
+    required?: boolean;
+    targetStateChannel?: string;
+  }> = [];
+  const seen = new Set<string>();
+
+  const connectedEpIds = new Set<string>();
+  const connectedEndpoints: Endpoint[] = [];
+
+  // 1. Find connected endpoints via canvas edges (in either direction)
+  for (const edge of allEdges) {
+    if (edge.source !== nodeId && edge.target !== nodeId) continue;
+    const handles = [edge.sourceHandle, edge.targetHandle].filter(Boolean) as string[];
+    for (const h of handles) {
+      const match = h.match(/^endpoint-(?:out|in)-(.+)$/);
+      const epId = match ? match[1] : allEndpoints.find((e) => h.includes(e.id))?.id;
+      if (epId && !connectedEpIds.has(epId)) {
+        connectedEpIds.add(epId);
+        const ep = allEndpoints.find((e) => e.id === epId);
+        if (ep) connectedEndpoints.push(ep);
+      }
+    }
+  }
+
+  // 2. Find connected endpoints via pipeline steps invoking this LangGraph agent
+  for (const ep of allEndpoints) {
+    if (connectedEpIds.has(ep.id)) continue;
+    const steps = ep.pipelineSteps || [];
+    const hasLgStep = steps.some((s) => {
+      const isLg =
+        (s.type as string) === "langgraph_invoke" ||
+        (s.type as string) === "langgraph_agent" ||
+        (s.type as string) === "langgraph";
+      if (!isLg) return false;
+      return (
+        s.langGraphTargetNodeId === nodeId ||
+        (!s.langGraphTargetNodeId &&
+          Boolean(nodeLabel) &&
+          s.name?.trim().toLowerCase() === nodeLabel?.trim().toLowerCase())
+      );
+    });
+    if (hasLgStep) {
+      connectedEpIds.add(ep.id);
+      connectedEndpoints.push(ep);
+    }
+  }
+
+  for (const ep of connectedEndpoints) {
+    // Extract mapped fields from pipeline steps calling this agent
+    const lgSteps = (ep.pipelineSteps || []).filter((s) => {
+      const isLg =
+        (s.type as string) === "langgraph_invoke" ||
+        (s.type as string) === "langgraph_agent" ||
+        (s.type as string) === "langgraph";
+      if (!isLg) return false;
+      return (
+        s.langGraphTargetNodeId === nodeId ||
+        (!s.langGraphTargetNodeId &&
+          Boolean(nodeLabel) &&
+          s.name?.trim().toLowerCase() === nodeLabel?.trim().toLowerCase())
+      );
+    });
+
+    const resolveType = (name: string): LangGraphInputChannel["type"] => {
+      const bf = ep.requestBody?.fields?.find((f) => f.name === name);
+      if (bf?.type === "number") return "number";
+      if (bf?.type === "boolean") return "boolean";
+      if (bf?.type === "object") return "object";
+      if (bf?.type === "array") return "array";
+      const pf = [
+        ...(ep.params || []),
+        ...(ep.queryParams || []),
+        ...(ep.pathParams || []),
+        ...(ep.headers || []),
+      ].find((p) => p.name === name);
+      if (pf?.type === "number") return "number";
+      if (pf?.type === "boolean") return "boolean";
+      return "string";
+    };
+
+    for (const step of lgSteps) {
+      // 1. Collect ONLY mapped fields from step.inputBindings
+      for (const b of step.inputBindings || []) {
+        if (!b.argName) continue;
+        let fieldKey = "";
+        if ("field" in b.source && b.source.field) {
+          fieldKey = b.source.field;
+        } else {
+          fieldKey = b.argName;
+        }
+
+        if (fieldKey && !seen.has(fieldKey)) {
+          seen.add(fieldKey);
+          suggested.push({
+            key: fieldKey,
+            type: resolveType(fieldKey),
+            targetStateChannel: b.argName !== "thread_id" ? b.argName : undefined,
+            description:
+              b.argName === "thread_id" ? "Session thread ID" : `Mapped to ${b.argName}`,
+            required: true,
+          });
+        } else if (fieldKey && seen.has(fieldKey)) {
+          const found = suggested.find((s) => s.key === fieldKey);
+          if (found && !found.targetStateChannel && b.argName !== "thread_id") {
+            found.targetStateChannel = b.argName;
+          }
+        }
+      }
+
+      // 2. Collect ONLY mapped fields from step.langGraphStateMapping
+      if (step.langGraphStateMapping) {
+        for (const [stKey, accessor] of Object.entries(step.langGraphStateMapping)) {
+          if (!accessor) continue;
+          let fieldKey = "";
+          if (accessor.startsWith("body.")) fieldKey = accessor.slice(5);
+          else if (accessor.startsWith("params.")) fieldKey = accessor.slice(7);
+          else if (accessor.startsWith("query.")) fieldKey = accessor.slice(6);
+          else if (accessor.startsWith("headers.")) fieldKey = accessor.slice(8);
+          else fieldKey = accessor;
+
+          if (fieldKey && !seen.has(fieldKey)) {
+            seen.add(fieldKey);
+            suggested.push({
+              key: fieldKey,
+              type: resolveType(fieldKey),
+              targetStateChannel: stKey !== "thread_id" ? stKey : undefined,
+              description: `Mapped to ${stKey}`,
+              required: true,
+            });
+          } else if (fieldKey && seen.has(fieldKey)) {
+            const found = suggested.find((s) => s.key === fieldKey);
+            if (found && !found.targetStateChannel && stKey !== "thread_id") {
+              found.targetStateChannel = stKey;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return suggested;
 }
 
 export function useLangGraphCanvasState({
@@ -303,79 +468,156 @@ export function useLangGraphCanvasState({
   const allEdges = useBackendCanvasStore((s) => s.edges);
   const allEndpoints = useBackendCanvasStore((s) => s.endpoints);
 
-  const suggestedParams = useMemo(() => {
-    // Find edges pointing at this LangGraph node
-    const incomingEdges = allEdges.filter((e) => e.target === node.id);
-    const suggested: Array<{
-      key: string;
-      type: LangGraphInputChannel["type"];
-      description?: string;
-      required?: boolean;
-    }> = [];
-    const seen = new Set<string>();
+  const suggestedParams = useMemo(
+    () =>
+      extractConfiguredEndpointInputs(
+        node.id,
+        node.data?.label,
+        allEdges,
+        allEndpoints,
+      ),
+    [allEdges, allEndpoints, node.id, node.data?.label],
+  );
 
-    for (const edge of incomingEdges) {
-      if (!edge.sourceHandle?.startsWith("endpoint-out-")) continue;
-      const endpointId = edge.sourceHandle.replace("endpoint-out-", "");
-      const ep = allEndpoints.find((e) => e.id === endpointId);
-      if (!ep) continue;
+  // ── Explicit refresh/check button handler ──
+  const handleRefreshInputs = useCallback(() => {
+    const liveEndpoints = useBackendCanvasStore.getState().endpoints || [];
+    const liveEdges = useBackendCanvasStore.getState().edges || [];
+    const foundParams = extractConfiguredEndpointInputs(
+      node.id,
+      node.data?.label,
+      liveEdges,
+      liveEndpoints,
+    );
 
-      // Collect from params (legacy), queryParams, pathParams
-      const paramSources = [
-        ...(ep.params || []),
-        ...(ep.queryParams || []),
-        ...(ep.pathParams || []),
-      ];
-      for (const p of paramSources) {
-        if (!p.name || seen.has(p.name)) continue;
-        seen.add(p.name);
-        suggested.push({
-          key: p.name,
-          type: (p.type === "number" ? "number" : p.type === "boolean" ? "boolean" : "string") as LangGraphInputChannel["type"],
-          description: p.description,
-          required: p.required,
-        });
-      }
-
-      // Collect from requestBody fields
-      const bodyFields = ep.requestBody?.fields || [];
-      for (const f of bodyFields) {
-        const fieldName = f.name;
-        if (!fieldName || seen.has(fieldName)) continue;
-        seen.add(fieldName);
-        const resolvedType: LangGraphInputChannel["type"] =
-          f.type === "number" ? "number"
-          : f.type === "boolean" ? "boolean"
-          : f.type === "object" ? "object"
-          : f.type === "array" ? "array"
-          : "string";
-        suggested.push({
-          key: fieldName,
-          type: resolvedType,
-          description: f.description,
-          required: f.required,
-        });
-      }
+    if (foundParams.length === 0) {
+      toast.info(
+        "No incoming endpoint inputs found. Connect an endpoint or configure pipeline step mappings.",
+      );
+      return;
     }
-    return suggested;
-  }, [allEdges, allEndpoints, node.id]);
 
-  // Auto-seed inputChannels from suggestedParams when they are empty and suggestions exist
+    setInputChannels((prevChannels) => {
+      const customChannels = prevChannels.filter((c) => c.source === "custom");
+      const validStateKeys = new Set(
+        stateChannels.map((sc) => sc.key?.trim()).filter(Boolean),
+      );
+
+      const nextRequestChannels: LangGraphInputChannel[] = foundParams.map((p) => {
+        let targetState = p.targetStateChannel;
+        if (!targetState) {
+          if (validStateKeys.has(p.key)) {
+            targetState = p.key;
+          } else if (
+            ["query", "prompt", "message", "user_message", "input"].includes(
+              p.key.toLowerCase(),
+            ) &&
+            validStateKeys.has("messages")
+          ) {
+            targetState = "messages";
+          }
+        }
+
+        const existing = prevChannels.find((c) => c.key === p.key && c.source === "request");
+        return {
+          id: existing?.id || `input_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          key: p.key,
+          type: p.type || existing?.type || "string",
+          required: p.required ?? true,
+          description: p.description || existing?.description || "",
+          source: "request",
+          ...(targetState || existing?.stateChannelKey
+            ? { stateChannelKey: targetState || existing?.stateChannelKey }
+            : {}),
+        };
+      });
+
+      const updated = [...nextRequestChannels, ...customChannels];
+      return updated;
+    });
+
+    toast.success(
+      `Synced ${foundParams.length} configured input field${foundParams.length === 1 ? "" : "s"} from endpoint.`,
+    );
+  }, [node.id, node.data?.label, stateChannels]);
+
+  // Synchronize inputChannels from suggestedParams (pruning unmapped fields from connected step)
   useEffect(() => {
-    if (inputChannels.length === 0 && suggestedParams.length > 0) {
-      setInputChannels(
-        suggestedParams.map((p) => ({
+    if (suggestedParams.length === 0) return;
+    const mappedKeySet = new Set(suggestedParams.map((s) => s.key));
+
+    setInputChannels((prev) => {
+      const customChannels = prev.filter((c) => c.source === "custom");
+      const existingRequestChannels = prev.filter((c) => c.source === "request");
+
+      // Check if there are stale request channels that are not in suggestedParams
+      const hasStale = existingRequestChannels.some((c) => !mappedKeySet.has(c.key));
+      const hasMissing = suggestedParams.some(
+        (p) => !existingRequestChannels.some((c) => c.key === p.key),
+      );
+
+      const validStateKeys = new Set(
+        stateChannels.map((sc) => sc.key?.trim()).filter(Boolean),
+      );
+
+      let mappingChanged = false;
+      const nextRequestChannels: LangGraphInputChannel[] = suggestedParams.map((p) => {
+        let targetState = p.targetStateChannel;
+        if (!targetState) {
+          if (validStateKeys.has(p.key)) {
+            targetState = p.key;
+          } else if (
+            ["query", "prompt", "message", "user_message", "input"].includes(
+              p.key.toLowerCase(),
+            ) &&
+            validStateKeys.has("messages")
+          ) {
+            targetState = "messages";
+          }
+        }
+
+        const existing = existingRequestChannels.find((c) => c.key === p.key);
+        if (existing) {
+          if (targetState && existing.stateChannelKey !== targetState) {
+            mappingChanged = true;
+          }
+          return {
+            ...existing,
+            key: existing.key,
+            type: p.type || existing.type,
+            required: p.required ?? existing.required,
+            description: existing.description || p.description || "",
+            source: "request",
+            ...(targetState || existing.stateChannelKey
+              ? { stateChannelKey: targetState || existing.stateChannelKey }
+              : {}),
+          };
+        }
+
+        return {
+          id: `input_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
           key: p.key,
           type: p.type,
           required: p.required ?? true,
           description: p.description || "",
-          source: "request" as const,
-        })),
-      );
-    }
-  // Only run once on mount
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+          source: "request",
+          ...(targetState ? { stateChannelKey: targetState } : {}),
+        };
+      });
+
+      if (
+        !hasStale &&
+        !hasMissing &&
+        !mappingChanged &&
+        prev.length === nextRequestChannels.length + customChannels.length
+      ) {
+        return prev;
+      }
+
+      const updated = [...nextRequestChannels, ...customChannels];
+      return updated;
+    });
+  }, [suggestedParams, stateChannels]);
 
   // ── Sync node callbacks and internal attributes ──
   useCanvasNodeSync({
@@ -396,6 +638,7 @@ export function useLangGraphCanvasState({
     handleAddCustomReducer,
     handleUpdateCustomReducer,
     handleDeleteCustomReducer,
+    handleRefreshInputs,
     handleAddInputChannel,
     handleAddSuggestedChannel,
     handleUpdateInputChannel,
@@ -639,5 +882,6 @@ export function useLangGraphCanvasState({
     showCompileModal,
     setShowCompileModal,
     suggestedParams,
+    handleRefreshInputs,
   };
 }

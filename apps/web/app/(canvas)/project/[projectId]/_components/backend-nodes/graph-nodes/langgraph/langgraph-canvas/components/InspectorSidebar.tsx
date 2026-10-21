@@ -118,11 +118,13 @@ export interface InspectorSidebarProps {
   onDeleteCustomReducer?: (idOrName: string) => void;
   memoryConfig?: LangGraphMemoryConfig;
   setMemoryConfig?: React.Dispatch<React.SetStateAction<LangGraphMemoryConfig>>;
+  onRefreshInputs?: () => void;
 }
 
 export function InspectorSidebar({
   selectedNodeId,
   onClose,
+  onRefreshInputs,
   activeSideTab,
   setActiveSideTab,
   selectedStepData,
@@ -369,6 +371,7 @@ export function InspectorSidebar({
             onRunTestCase={onRunTestCase}
             defaultTab={isTestingSelected ? "testing" : "inputs"}
             onClose={onClose}
+            onRefreshInputs={onRefreshInputs}
           />
         </div>
       ) : isMemorySelected && setMemoryConfig && memoryConfig ? (

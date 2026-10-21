@@ -4,6 +4,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { LangGraphInvokeStepSection } from "../LangGraphInvokeStepSection";
 import { PipelineStepDraft, AvailableSource } from "../types";
 import { BackendNode, PipelineStep } from "@workspace/canvas/types";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 
 vi.mock("@workspace/ui/components/select", () => ({
   Select: ({ children, value, onValueChange }: any) => (
@@ -341,6 +342,46 @@ describe("LangGraphInvokeStepSection Payload Mapping", () => {
       expect.objectContaining({
         langGraphThreadIdSource: "body.thread_id",
       })
+    );
+  });
+
+  it("syncs inputChannels to the target LangGraph agent node when payload mapping exists", () => {
+    const store = useBackendCanvasStore.getState();
+    store.addNode(mockAgentNode);
+
+    const step: PipelineStepDraft = {
+      id: "step-agent-sync-1",
+      name: "demo",
+      type: "langgraph_invoke",
+      langGraphTargetNodeId: "agent-1",
+      langGraphStateMapping: {
+        messages: "body.message",
+      },
+      inputBindings: [
+        { argName: "messages", source: { kind: "req_body", field: "message" } },
+      ],
+    };
+
+    const handleChange = vi.fn();
+
+    render(
+      <LangGraphInvokeStepSection
+        step={step}
+        allNodes={[mockAgentNode]}
+        availableSources={mockAvailableSources}
+        onChange={handleChange}
+      />
+    );
+
+    const agentInStore = useBackendCanvasStore.getState().nodes.find((n) => n.id === "agent-1");
+    expect(agentInStore?.data.inputChannels).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "message",
+          source: "request",
+          stateChannelKey: "messages",
+        }),
+      ])
     );
   });
 });

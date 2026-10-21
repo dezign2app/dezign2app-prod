@@ -1,5 +1,5 @@
 import React from "react";
-import { Plus, Trash, Sparkles, Globe, Sliders, ArrowRight } from "lucide-react";
+import { Plus, Trash, Sparkles, Globe, Sliders, ArrowRight, RefreshCw } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { LocalInput } from "../../../../common";
 import { Label } from "@workspace/ui/components/label";
@@ -26,6 +26,7 @@ interface InputsTabContentProps {
   setInputChannels: React.Dispatch<React.SetStateAction<LangGraphInputChannel[]>>;
   suggestedParams?: SuggestedParam[];
   stateChannels?: LangGraphStateChannel[];
+  onRefreshInputs?: () => void;
 }
 
 const TYPE_COLORS: Record<LangGraphInputChannel["type"], string> = {
@@ -136,18 +137,24 @@ export function InputsTabContent({
   setInputChannels,
   suggestedParams = [],
   stateChannels = [],
+  onRefreshInputs,
 }: InputsTabContentProps) {
   const pendingSuggestions = suggestedParams.filter(
     (s) => !inputChannels.some((c) => c.key === s.key),
   );
 
-  // Split by source
-  const requestVars = inputChannels.filter(
-    (c) => c.source === "request" || (!c.source && suggestedParams.some((s) => s.key === c.key)),
-  );
-  const customVars = inputChannels.filter(
-    (c) => c.source === "custom" || (!c.source && !suggestedParams.some((s) => s.key === c.key)),
-  );
+  // Split by source: show ONLY fields mapped to the LangGraph step
+  const hasSuggestedParams = Array.isArray(suggestedParams);
+  const mappedKeySet = hasSuggestedParams
+    ? new Set(suggestedParams.map((s) => s.key))
+    : null;
+
+  const requestVars = inputChannels.filter((c) => {
+    if (c.source === "custom") return false;
+    if (mappedKeySet) return mappedKeySet.has(c.key);
+    return c.source === "request";
+  });
+  const customVars = inputChannels.filter((c) => c.source === "custom");
 
   const globalIdx = (ch: LangGraphInputChannel) =>
     inputChannels.findIndex((c) => (c.id && ch.id ? c.id === ch.id : c === ch));
@@ -213,6 +220,18 @@ export function InputsTabContent({
             </span>
             <span className="text-[9px] text-muted-foreground font-mono">({requestVars.length})</span>
           </div>
+          {onRefreshInputs && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-[10px] border-sky-500/30 text-sky-400 hover:bg-sky-500/10 px-2 gap-1"
+              onClick={onRefreshInputs}
+              title="Check and sync configured input fields from connected endpoint"
+            >
+              <RefreshCw className="w-2.5 h-2.5" />
+              <span>Sync</span>
+            </Button>
+          )}
         </div>
 
         {/* Suggested from endpoint */}
@@ -266,9 +285,22 @@ export function InputsTabContent({
         ))}
 
         {requestVars.length === 0 && pendingSuggestions.length === 0 && (
-          <p className="text-xs text-muted-foreground italic text-center py-2">
-            Connect a ServiceNode endpoint to import request params.
-          </p>
+          <div className="flex flex-col items-center gap-2 py-3 px-2 border border-dashed border-sky-500/20 rounded-xl text-center">
+            <p className="text-xs text-muted-foreground">
+              Connect a ServiceNode endpoint to import request params.
+            </p>
+            {onRefreshInputs && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 text-[10px] border-sky-500/30 text-sky-400 hover:bg-sky-500/10 px-2.5 gap-1.5"
+                onClick={onRefreshInputs}
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Check Configured Fields</span>
+              </Button>
+            )}
+          </div>
         )}
       </div>
 

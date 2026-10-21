@@ -165,6 +165,7 @@ export function LangGraphStudioView({
     showCompileModal,
     setShowCompileModal,
     suggestedParams,
+    handleRefreshInputs,
   } = useLangGraphCanvasState({ node, updateNode, onClose });
 
   const [outputMode, setOutputMode] = useState<"app" | "package">("app");
@@ -970,6 +971,7 @@ export function LangGraphStudioView({
           memoryConfig={memoryConfig}
           setMemoryConfig={setMemoryConfig}
           suggestedParams={suggestedParams}
+          onRefreshInputs={handleRefreshInputs}
           nodes={nodes}
           edges={edges}
           graphLabel={node.data.label}
