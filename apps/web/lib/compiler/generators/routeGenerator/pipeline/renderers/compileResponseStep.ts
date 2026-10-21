@@ -30,10 +30,22 @@ export function renderResponseStep(
   }
 
   if (inputBindings.length > 0) {
-    const fields = inputBindings
-      .map((b) => `  ${b.argName}: ${resolveBinding(b, ctx)}`)
-      .join(",\n");
-    return [`return res.status(${statusCode}).json({\n${fields}\n});`];
+    const seen = new Set<string>();
+    const uniqueBindings = inputBindings.filter((b) => {
+      const key = (b.argName || "").trim();
+      if (!key) return false;
+      const lower = key.toLowerCase();
+      if (seen.has(lower)) return false;
+      seen.add(lower);
+      return true;
+    });
+
+    if (uniqueBindings.length > 0) {
+      const fields = uniqueBindings
+        .map((b) => `  ${b.argName}: ${resolveBinding(b, ctx)}`)
+        .join(",\n");
+      return [`return res.status(${statusCode}).json({\n${fields}\n});`];
+    }
   }
 
   const defaultMsg = step.type === "early_return" ? "Early return" : "Success";

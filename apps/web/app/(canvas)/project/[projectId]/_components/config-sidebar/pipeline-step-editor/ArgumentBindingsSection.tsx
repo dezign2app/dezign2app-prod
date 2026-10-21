@@ -11,9 +11,16 @@ import { StepBinding, ExpectedArg, AvailableSource } from "./types";
 import { isPathMatch } from "./utils";
 import { isBindingSourceConfigured } from "@/lib/utils/pipelineValidation";
 
+export type ExpectedArgInput = {
+  name?: string | null;
+  type?: string | null;
+  required?: boolean | null;
+  description?: string | null;
+};
+
 export interface ArgumentBindingsSectionProps {
   bindings: StepBinding[];
-  expectedArgs?: ExpectedArg[];
+  expectedArgs?: Array<ExpectedArgInput | null | undefined>;
   availableSources: AvailableSource[];
   serviceNodeId?: string;
   onAddBinding: () => void;
@@ -88,6 +95,42 @@ export const ArgumentBindingsSection = ({
     onUpdateBinding(bi, updated);
   };
 
+  const duplicateArgCounts = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    bindings.forEach((b) => {
+      const key = (b.argName || "").trim().toLowerCase();
+      if (key) {
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+    });
+    return counts;
+  }, [bindings]);
+
+  const validExpectedArgs: ExpectedArg[] = React.useMemo(() => {
+    const seen = new Set<string>();
+    const result: ExpectedArg[] = [];
+    for (const a of expectedArgs || []) {
+      if (
+        typeof a === "object" &&
+        a !== null &&
+        typeof a.name === "string" &&
+        a.name.trim().length > 0
+      ) {
+        const norm = a.name.trim().toLowerCase();
+        if (!seen.has(norm)) {
+          seen.add(norm);
+          result.push({
+            name: a.name.trim(),
+            type: typeof a.type === "string" && a.type ? a.type : "TEXT",
+            required: Boolean(a.required),
+            description: a.description || undefined,
+          });
+        }
+      }
+    }
+    return result;
+  }, [expectedArgs]);
+
   return (
     <div className="flex flex-col gap-2 pt-2 border-t border-border/30">
       <div className="flex items-center justify-between">
@@ -145,14 +188,6 @@ export const ArgumentBindingsSection = ({
       )}
 
       {bindings.map((binding, bi) => {
-        const seenArgNames = new Set<string>();
-        const validExpectedArgs = expectedArgs.filter((a) => {
-          if (!a || !a.name || !a.name.trim()) return false;
-          const norm = a.name.trim().toLowerCase();
-          if (seenArgNames.has(norm)) return false;
-          seenArgNames.add(norm);
-          return true;
-        });
         const hasExpectedArgs = validExpectedArgs.length > 0;
         const isCustomMode = Boolean(customModeRows[bi]);
         const matchingExpectedArg = validExpectedArgs.find(
@@ -164,6 +199,9 @@ export const ArgumentBindingsSection = ({
         const isCustomValue = Boolean(binding.argName?.trim()) && !matchingExpectedArg;
 
         const isInlineSource = binding.source.kind === "inline";
+
+        const cleanArgName = (binding.argName || "").trim().toLowerCase();
+        const isDuplicateArg = cleanArgName.length > 0 && (duplicateArgCounts.get(cleanArgName) || 0) > 1;
 
         // Highlight row red when it maps a required arg that has no configured source
         const isRequiredAndUnmapped =
@@ -198,9 +236,11 @@ export const ArgumentBindingsSection = ({
           <div
             key={bi}
             className={cn(
-              "grid grid-cols-[1fr_auto_2.4fr_auto] gap-1.5 bg-background/60 p-1.5 rounded border",
+              "grid grid-cols-[1fr_auto_2.4fr_auto] gap-1.5 bg-background/60 p-1.5 rounded border transition-colors",
               isInlineSource ? "items-start pt-2" : "items-center",
-              isCredentialLeak
+              isDuplicateArg
+                ? "border-destructive/60 bg-destructive/5"
+                : isCredentialLeak
                 ? "border-amber-500/60 bg-amber-500/5"
                 : isRequiredAndUnmapped
                 ? "border-destructive/50 bg-destructive/5"
@@ -254,42 +294,64 @@ export const ArgumentBindingsSection = ({
                   }
 
                   return (
-                    <StepCombobox
-                      value={matchingExpectedArg ? matchingExpectedArg.name : (binding.argName?.trim() || "")}
-                      onValueChange={(val) => handleArgSelect(bi, binding, val)}
-                      options={argOptions}
-                      placeholder="Select arg..."
-                      className="h-7 text-xs font-mono bg-background/70 border-border/60 w-full min-w-0"
-                      footerAction={{
-                        label: "Custom variable name...",
-                        icon: <Edit2 size={10} />,
-                        onSelect: () => handleArgSelect(bi, binding, "__custom__"),
-                      }}
-                    />
+                    <div className="flex flex-col">
+                      <StepCombobox
+                        value={matchingExpectedArg ? matchingExpectedArg.name : (binding.argName?.trim() || "")}
+                        onValueChange={(val) => handleArgSelect(bi, binding, val)}
+                        options={argOptions}
+                        placeholder="Select arg..."
+                        className={cn(
+                          "h-7 text-xs font-mono bg-background/70 border-border/60 w-full min-w-0",
+                          isDuplicateArg && "border-destructive text-destructive ring-1 ring-destructive/40",
+                        )}
+                        footerAction={{
+                          label: "Custom variable name...",
+                          icon: <Edit2 size={10} />,
+                          onSelect: () => handleArgSelect(bi, binding, "__custom__"),
+                        }}
+                      />
+                      {isDuplicateArg && (
+                        <span className="flex items-center gap-0.5 mt-0.5 text-[9px] text-destructive font-medium">
+                          <AlertTriangle size={9} />
+                          Duplicate argument
+                        </span>
+                      )}
+                    </div>
                   );
                 })()
               ) : (
-                <div className="flex items-center gap-1 min-w-0">
-                  <BufferedInput
-                    className="h-7 text-xs font-mono bg-background/70 border-border/60 flex-1 min-w-0"
-                    value={binding.argName}
-                    onCommit={(val) =>
-                      onUpdateBinding(bi, { ...binding, argName: val })
-                    }
-                    placeholder="argName"
-                    autoFocus={isCustomMode}
-                  />
-                  {hasExpectedArgs && (
-                    <button
-                      type="button"
-                      className="h-7 w-7 p-0 flex items-center justify-center rounded border border-border/50 bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0 cursor-pointer"
-                      onClick={() =>
-                        setCustomModeRows((prev) => ({ ...prev, [bi]: false }))
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1 min-w-0">
+                    <BufferedInput
+                      className={cn(
+                        "h-7 text-xs font-mono bg-background/70 border-border/60 flex-1 min-w-0",
+                        isDuplicateArg && "border-destructive text-destructive ring-1 ring-destructive/40",
+                      )}
+                      value={binding.argName}
+                      onCommit={(val) =>
+                        onUpdateBinding(bi, { ...binding, argName: val })
                       }
-                      title="Switch to function variables dropdown"
-                    >
-                      <List size={12} />
-                    </button>
+                      placeholder="argName"
+                      autoFocus={isCustomMode}
+                    />
+                    {hasExpectedArgs && (
+                      <button
+                        type="button"
+                        className="h-7 w-7 p-0 flex items-center justify-center rounded border border-border/50 bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0 cursor-pointer"
+                        onClick={() =>
+                          setCustomModeRows((prev) => ({ ...prev, [bi]: false }))
+                        }
+                        title="Switch to function variables dropdown"
+                      >
+                        <List size={12} />
+                      </button>
+                    )}
+                  </div>
+                  {isDuplicateArg && (
+                    <span className="flex items-center gap-0.5 mt-0.5 text-[9px] text-destructive font-medium">
+                      <AlertTriangle size={9} />
+                      Duplicate argument
+                    </span>
                   )}
                 </div>
               )}
