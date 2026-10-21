@@ -342,7 +342,13 @@ export interface StartNodeData extends Record<string, unknown> {
   /** Opens the Testing tab in the inspector sidebar */
   onOpenTestingTab?: () => void;
   /** Derived from connected endpoint – shown as "suggested" fields */
-  suggestedParams?: Array<{ key: string; type: LangGraphInputChannel["type"]; description?: string; required?: boolean }>;
+  suggestedParams?: Array<{
+    key: string;
+    type: LangGraphInputChannel["type"];
+    description?: string;
+    required?: boolean;
+    targetStateChannel?: string;
+  }>;
   /** Available state channels for mapping dropdowns */
   stateChannels?: LangGraphStateChannel[];
   /** Auto-maps inputs to state channels by matching names or common aliases */
