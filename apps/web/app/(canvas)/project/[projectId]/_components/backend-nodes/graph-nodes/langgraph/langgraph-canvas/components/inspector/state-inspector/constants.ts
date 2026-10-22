@@ -75,25 +75,20 @@ export const DEFAULT_REDUCER_CODE = `(prev, next) => {
 
 export const REDUCER_CODE_PRESETS = {
   chat: `(prev, next) => {
-  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
+  const action = next?.action;
   const prevArr = Array.isArray(prev) ? prev : [];
 
   // 1. Default update: when action is undefined, "", or "default" (appends incoming messages)
   // e.g. dispatch { messages: [newMsg] } or { messages: newMsg }
   if (!action || action === "" || action === "default") {
-    const incoming = typeof next === "object" && next !== null && "action" in next
-      ? (next.value !== undefined ? next.value : [])
-      : (typeof next === "object" && next !== null && "value" in next && next.value !== undefined ? next.value : next);
-    const nextArr = Array.isArray(incoming) ? incoming : (incoming != null ? [incoming] : []);
-    return [...prevArr, ...nextArr];
+    const incoming = next?.value !== undefined ? next.value : next;
+    return [...prevArr, ...(Array.isArray(incoming) ? incoming : (incoming != null ? [incoming] : []))];
   }
 
   // 2. Action: replace - overwrites entire message history
   // e.g. dispatch { messages: { action: "replace", value: [systemMsg, userMsg] } }
   if (action === "replace") {
-    const incoming = typeof next === "object" && next !== null && "action" in next
-      ? (next.value !== undefined ? next.value : [])
-      : (typeof next === "object" && next !== null && "value" in next && next.value !== undefined ? next.value : next);
+    const incoming = next?.value !== undefined ? next.value : next;
     return Array.isArray(incoming) ? incoming : (incoming != null ? [incoming] : []);
   }
 
