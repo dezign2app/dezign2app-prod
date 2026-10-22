@@ -212,7 +212,14 @@ export function generateEndpointRouteHandler(
     (s) => s.type === "langgraph_invoke" && s.langGraphStreamingEnabled && (!s.langGraphStreamingProtocol || s.langGraphStreamingProtocol === "sse") && s.enabled !== false,
   );
 
-  // 1. Preamble (imports, request/response context types, function header)
+  // 1. Auth Resolution
+  const { requiresAuth: baseRequiresAuth, authOptions } = resolveEndpointAuth(ep, trace);
+  const requiresAuth = baseRequiresAuth || isConnectedToAuthPage;
+  if (isHealth && requiresAuth && !parsedResSchema && (!ep.responseBody?.fields || ep.responseBody.fields.length === 0)) {
+    responseData = `{\n      message: "Successfully executed ${ep.type || "GET"} ${path}",\n      status: "ok",\n      service: "${serviceName}",\n      timestamp: new Date().toISOString(),\n      user: req.user\n    }`;
+  }
+
+  // 2. Preamble (imports, request/response context types, function header)
   const { preambleCode } = emitHandlerPreamble({
     serviceName,
     routeFileName,
@@ -233,16 +240,10 @@ export function generateEndpointRouteHandler(
     isBodyMethod,
     bodyTypeResHasContent: bodyTypeRes.hasContent,
     pipelineSteps: pipelineStepsEarly,
+    requiresAuth,
   });
 
   let routeHandlerCode = preambleCode;
-
-  // 2. Auth Resolution
-  const { requiresAuth: baseRequiresAuth, authOptions } = resolveEndpointAuth(ep, trace);
-  const requiresAuth = baseRequiresAuth || isConnectedToAuthPage;
-  if (isHealth && requiresAuth && !parsedResSchema && (!ep.responseBody?.fields || ep.responseBody.fields.length === 0)) {
-    responseData = `{\n      message: "Successfully executed ${ep.type || "GET"} ${path}",\n      status: "ok",\n      service: "${serviceName}",\n      timestamp: new Date().toISOString(),\n      user: req.user\n    }`;
-  }
 
   // 3. Validation Checks
   const hasValidatedBody = bodyTypeRes.hasContent;

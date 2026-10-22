@@ -7,23 +7,16 @@ export function generateDefaultRoute(
 ): { files: CompiledFile[]; routeImports: string[]; routeRegistrations: string[] } {
   const healthRouteCode = `import { Request, Response } from "express";
 import { createLogger } from "@workspace/logger";
-
+${requiresAuth ? 'import type { AuthUser } from "@workspace/types";\n' : ""}
 const logger = createLogger("${serviceName}:HealthRoute");
 
-export type HealthUser = {
-  id: string;
-  userId?: string;
-  username?: string;
-  role: string;
-  email?: string;
-  name?: string;
-  sessionToken?: string;
-  [key: string]: string | number | boolean | null | undefined;
-};
-
-export type HealthRequest = Request & {
-  user?: HealthUser;
-};
+${
+  requiresAuth
+    ? `export type HealthRequest = Request & {
+  user?: AuthUser;
+};`
+    : `export type HealthRequest = Request;`
+}
 
 export type HealthResponseContext =
   | Response
@@ -32,15 +25,13 @@ export type HealthResponseContext =
         json: (data: {
           status: string;
           service: string;
-          timestamp: string;
-          user?: HealthUser | null;
+          timestamp: string;${requiresAuth ? "\n          user?: AuthUser | null;" : ""}
         }) => void;
       };
       json: (data: {
         status: string;
         service: string;
-        timestamp: string;
-        user?: HealthUser | null;
+        timestamp: string;${requiresAuth ? "\n        user?: AuthUser | null;" : ""}
       }) => void;
       setHeader?: (name: string, value: string | number | readonly string[]) => void | Response;
       header?: (name: string, value?: string | number | readonly string[]) => void | Response;

@@ -716,7 +716,8 @@ app.use(express.json());
     expect(routeFile).toBeDefined();
     expect(routeFile!.content).toContain("export async function postSendMessageByIdHandler");
     expect(routeFile!.content).toContain("ConversationsPostSendMessageByIdParams");
-    expect(routeFile!.content).toContain("export type AuthUser = {");
+    expect(routeFile!.content).toContain("AuthUser");
+    expect(routeFile!.content).not.toContain("export type AuthUser = {");
     expect(routeFile!.content).toContain("user?: AuthUser;");
     expect(routeFile!.content).not.toContain('Express.Request["user"]');
 
@@ -732,9 +733,11 @@ app.use(express.json());
     expect(requireAuthFile!.content).toContain("P = any");
     expect(requireAuthFile!.content).toContain("RequestHandler<P, ResBody, ReqBody, ReqQuery>");
 
-    // 4. Verify src/types.d.ts is generated with Express namespace augmentation
+    // 4. Verify src/types.d.ts is generated with Express namespace augmentation importing AuthUser from @workspace/types
     const typesDtsFile = compiledService.files.find((f) => f.filename === "src/types.d.ts");
     expect(typesDtsFile).toBeDefined();
+    expect(typesDtsFile!.content).toContain('import type { AuthUser } from "@workspace/types";');
+    expect(typesDtsFile!.content).not.toContain("export interface AuthUser {");
     expect(typesDtsFile!.content).toContain("interface Request {");
     expect(typesDtsFile!.content).toContain("user?: AuthUser;");
 
@@ -746,6 +749,14 @@ app.use(express.json());
       [{ id: serviceNode.id, name: "conversations", folderName: "conversations" }],
       [],
     );
+    const authTypeFile = typesFiles.find((f) => f.filename === "src/auth.ts");
+    expect(authTypeFile).toBeDefined();
+    expect(authTypeFile!.content).toContain("export interface AuthUser {");
+
+    const typesIndexFile = typesFiles.find((f) => f.filename === "src/index.ts");
+    expect(typesIndexFile).toBeDefined();
+    expect(typesIndexFile!.content).toContain('export * from "./auth";');
+
     const typesFile = typesFiles.find((f) => f.filename.includes("postSendMessageById.ts"));
     expect(typesFile).toBeDefined();
     expect(typesFile!.content).toContain("export interface ConversationsPostSendMessageByIdParams {");
@@ -753,6 +764,58 @@ app.use(express.json());
     expect(typesFile!.content).toContain("export interface ConversationsPostSendMessageByIdResponse {");
     expect(typesFile!.content).toContain("field_1: string;");
     expect(typesFile!.content).not.toContain("field_1: Record<string, string | number | boolean | null>;");
+  });
+
+  it("does NOT generate Auth types for non-authenticated endpoints or public services", () => {
+    const serviceNode: BackendNode = {
+      id: "srv-public",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "public_service",
+        techStack: "express",
+        port: "8080",
+      },
+    };
+
+    const publicEndpoint: Endpoint & { nodeId: string } = {
+      id: "ep-public-info",
+      nodeId: "srv-public",
+      name: "/info",
+      type: "GET",
+      summary: "Public information",
+      requireAuth: false,
+    };
+
+    const compiledService = compileServiceNode(
+      serviceNode,
+      [publicEndpoint],
+      [],
+      [serviceNode],
+      [],
+      [],
+      [],
+      [],
+      "public_service",
+    );
+
+    const routeFile = compiledService.files.find((f) => f.filename.includes("getInfo.ts"));
+    expect(routeFile).toBeDefined();
+    expect(routeFile!.content).not.toContain("AuthUser");
+    expect(routeFile!.content).not.toContain("user?:");
+    expect(routeFile!.content).not.toContain("declare global");
+
+    const routesIndex = compiledService.files.find((f) => f.filename === "src/routes/index.ts");
+    expect(routesIndex).toBeDefined();
+    expect(routesIndex!.content).toContain('router.get("/info", getInfoHandler);');
+    expect(routesIndex!.content).not.toContain("requireAuth");
+
+    const requireAuthFile = compiledService.files.find((f) => f.filename === "src/middleware/requireAuth.ts");
+    expect(requireAuthFile).toBeUndefined();
+
+    const typesDtsFile = compiledService.files.find((f) => f.filename === "src/types.d.ts");
+    expect(typesDtsFile).toBeUndefined();
   });
 
   it("infers response types dynamically from parameter and body configurations rather than hardcoding", () => {

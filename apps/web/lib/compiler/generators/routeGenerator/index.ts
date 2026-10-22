@@ -107,15 +107,28 @@ ${routeRegistrations.join("\n")}
     content: routesIndexCode,
   });
 
-  // Emit the requireAuth middleware file once per service, only when needed.
-  // Strategy defaults to "db" (shared SQLite via @workspace/db) — correct for
-  // this monorepo. No authStrategy field exists on canvas nodes yet; add one
-  // to BackendNodeData when per-project overrides are needed.
+  // Emit the requireAuth middleware and Express types augmentation once per service, only when needed.
   if (hasAuthEndpoints) {
     files.push({
       filename: "src/middleware/requireAuth.ts",
       language: "typescript",
       content: generateRequireAuthMiddleware("db"),
+    });
+    files.push({
+      filename: "src/types.d.ts",
+      language: "typescript",
+      content: `import "express";
+import type { AuthUser } from "@workspace/types";
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: AuthUser;
+    }
+  }
+}
+export {};
+`,
     });
   }
 
