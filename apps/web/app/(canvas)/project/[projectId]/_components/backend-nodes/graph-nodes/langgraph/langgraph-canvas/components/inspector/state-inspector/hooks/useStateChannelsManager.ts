@@ -30,7 +30,6 @@ export function useStateChannelsManager({
       type: "messages",
       reducer: "add_messages",
       defaultValue: [],
-      customReducerCode: getSuggestedReducerCodeForChannelType("messages"),
     };
     setStateChannels([defaultMessagesChannel, ...stateChannels]);
   }, [stateChannels, setStateChannels]);
