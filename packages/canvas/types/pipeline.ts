@@ -9,6 +9,7 @@ import type {
   ConditionExpr,
   SwitchCase,
   ParallelBranch,
+  LangGraphMessagesConfig,
 } from "../schemas/shared";
 import type { BackendNode } from "./nodes";
 import type { PublishedEventItem } from "./services";
@@ -36,6 +37,7 @@ export type {
   SwitchCase,
   ParallelBranch,
   PipelineStepCacheMiss,
+  LangGraphMessagesConfig,
 };
 
 

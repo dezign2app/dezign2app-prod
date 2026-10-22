@@ -986,6 +986,7 @@ app.use(express.json());
 
     // Route handler should construct demoResult with response, threadId, and state
     expect(routeCode).toContain("const demoResultRaw = await demoGraph.invoke(agentState, { configurable: { thread_id: req.params.id } });");
+    expect(routeCode).toContain('"message": body.message');
     expect(routeCode).toContain("const demoResult = {");
     expect(routeCode).toContain("response: demoResultResponse,");
     expect(routeCode).toContain("threadId: req.params.id,");

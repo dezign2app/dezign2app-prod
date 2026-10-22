@@ -21,6 +21,7 @@ export function buildLibIndexFile(ctx: CompileContext): string {
  */
 export { ${graphVarName} } from "./graph";
 export type { ${schemaName}Type, ${schemaName}UpdateType } from "./state";
+export { HumanMessage, AIMessage, SystemMessage, BaseMessage } from "@langchain/core/messages";
 `;
 }
 
