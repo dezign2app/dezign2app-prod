@@ -32,7 +32,6 @@ import { LangGraphCanvasHeader } from "./langgraph-canvas/components/LangGraphCa
 import { ToolsSidebar } from "./langgraph-canvas/components/ToolsSidebar";
 import { InspectorSidebar } from "./langgraph-canvas/components/InspectorSidebar";
 import { LangGraphReferenceEdge } from "./langgraph-canvas/components/LangGraphReferenceEdge";
-import { Terminal } from "../../../terminal/Terminal";
 import { CompilerDialog } from "../../../compiler";
 import { compileLangGraph } from "@/lib/compiler";
 import { simulateLangGraphTestCase } from "@/lib/simulation/runtime";
@@ -86,9 +85,7 @@ export function LangGraphStudioView({
 
   const terminalOpen = useSidebarStore((s) => s.terminalOpen);
   const toggleTerminal = useSidebarStore((s) => s.toggleTerminal);
-  const setProjectFolderModalOpen = useSidebarStore(
-    (s) => s.setProjectFolderModalOpen,
-  );
+  const terminalHeight = useSidebarStore((s) => s.terminalHeight);
 
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const connectedRoutes = useConnectedRoutes(node.id);
@@ -857,10 +854,20 @@ export function LangGraphStudioView({
               color="#3f3f46"
               size={1.5}
             />
-            <Controls className="!bg-background !border-border !text-foreground" />
+            <Controls
+              className="!bg-background !border-border !text-foreground"
+              style={{
+                bottom: terminalOpen ? `${terminalHeight + 14}px` : "16px",
+                transition: "bottom 0.2s cubic-bezier(0.16,1,0.3,1)",
+              }}
+            />
             <MiniMap
               className="!bg-background/90 !border-border"
               nodeColor="#71717a"
+              style={{
+                bottom: terminalOpen ? `${terminalHeight + 14}px` : "16px",
+                transition: "bottom 0.2s cubic-bezier(0.16,1,0.3,1)",
+              }}
             />
             <Panel
               position="top-left"
@@ -977,15 +984,6 @@ export function LangGraphStudioView({
           graphLabel={node.data.label}
         />
       </div>
-
-      {/* Terminal Drawer and Dock Button */}
-      {projectId && (
-        <Terminal
-          projectId={projectId}
-          projectName={node.data.label || "LangGraph Agent"}
-          onPickDirectory={() => setProjectFolderModalOpen(true)}
-        />
-      )}
 
       {/* Compiled Code Dialog */}
       <CompilerDialog

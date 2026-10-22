@@ -17,6 +17,14 @@ const activeListeners = new Map<
   { dataCleanup: () => void; exitCleanup: () => void }
 >();
 
+// Active terminal instance registry: sessionId -> getter for XTermTerminalHandle
+// Ensures long-lived Electron IPC subscriptions always resolve to the currently-mounted XTerm instance
+const activeTerminalHandleGetters = new Map<
+  string,
+  () => XTermTerminalHandle | null | undefined
+>();
+
+
 export function getShellPrompt(
   shell: string | undefined,
   dir: string = "",
@@ -208,6 +216,20 @@ export function useDynamicTerminalSessions({
   >(new Map());
   const writtenLogCountRef = useRef<Map<string, number>>(new Map());
 
+  // Keep the module-level active terminal handle getter updated with the latest terminalRefs
+  useEffect(() => {
+    sessions.forEach((s) => {
+      activeTerminalHandleGetters.set(s.id, () => terminalRefs?.current?.get(s.id));
+    });
+    return () => {
+      sessions.forEach((s) => {
+        if (activeTerminalHandleGetters.get(s.id)?.() === terminalRefs?.current?.get(s.id)) {
+          activeTerminalHandleGetters.delete(s.id);
+        }
+      });
+    };
+  }, [sessions, terminalRefs]);
+
   // Attach Electron IPC listeners for a given terminal session
   const attachPtyListeners = useCallback(
     (sessionId: string) => {
@@ -215,12 +237,18 @@ export function useDynamicTerminalSessions({
       const api = getElectronAPI();
       if (!api?.terminal?.onData) return;
 
+      // Ensure the handle getter is mapped immediately with current terminalRefs
+      if (terminalRefs) {
+        activeTerminalHandleGetters.set(sessionId, () => terminalRefs?.current?.get(sessionId));
+      }
+
       // If already actively listening, NEVER register duplicate listener!
       if (activeListeners.has(sessionId)) return;
 
       const dataCleanup = api.terminal.onData(sessionId, (data: string) => {
-        // 1. Write directly to the xterm instance — zero React re-renders
-        terminalRefs?.current?.get(sessionId)?.write(data);
+        // 1. Write directly to the active xterm instance — zero React re-renders
+        const handle = activeTerminalHandleGetters.get(sessionId)?.() ?? terminalRefs?.current?.get(sessionId);
+        handle?.write(data);
         // 2. Buffer for replay (non-reactive, no Zustand)
         appendToLogBuffer(sessionId, data);
         const currentCount = writtenLogCountRef.current.get(sessionId) || 0;
@@ -231,7 +259,8 @@ export function useDynamicTerminalSessions({
 
       const exitCleanup = api.terminal.onExit(sessionId, (exitCode: number) => {
         store.updateSession(projectId, sessionId, { status: "stopped" });
-        terminalRefs?.current?.get(sessionId)?.write(
+        const handle = activeTerminalHandleGetters.get(sessionId)?.() ?? terminalRefs?.current?.get(sessionId);
+        handle?.write(
           `\r\n\x1b[33m[Process exited with code ${exitCode}]\x1b[0m\r\n`,
         );
       });
@@ -244,7 +273,7 @@ export function useDynamicTerminalSessions({
   // Safely replays any output that was emitted before the terminal DOM component mounted
   const replayMissedLogs = useCallback(
     (sessionId: string, fullReset: boolean = false) => {
-      const term = terminalRefs?.current?.get(sessionId);
+      const term = activeTerminalHandleGetters.get(sessionId)?.() ?? terminalRefs?.current?.get(sessionId);
       if (!term) return;
 
       // Read from the non-reactive module-level log buffer
@@ -463,7 +492,8 @@ export function useDynamicTerminalSessions({
       writtenLogCountRef.current.delete(sessionId);
       clearLogBuffer(sessionId);
 
-      // 1. Clean up IPC listeners
+      // 1. Clean up IPC listeners and active handle getter
+      activeTerminalHandleGetters.delete(sessionId);
       if (activeListeners.has(sessionId)) {
         const listeners = activeListeners.get(sessionId);
         listeners?.dataCleanup();
@@ -502,7 +532,7 @@ export function useDynamicTerminalSessions({
       }
 
       // Web Mode: Fully Interactive Simulated CLI Engine
-      const termHandle = terminalRefs?.current?.get(sessionId);
+      const termHandle = activeTerminalHandleGetters.get(sessionId)?.() ?? terminalRefs?.current?.get(sessionId);
       const currentSessions = store.getSessions(projectId);
       const session = currentSessions.find((s) => s.id === sessionId);
       const targetDir = outputDir || `/workspace/${projectId}`;
@@ -626,7 +656,7 @@ export function useDynamicTerminalSessions({
       inputBuffersRef.current.set(sessionId, "");
       writtenLogCountRef.current.set(sessionId, 0);
       clearLogBuffer(sessionId);
-      const termHandle = terminalRefs?.current?.get(sessionId);
+      const termHandle = activeTerminalHandleGetters.get(sessionId)?.() ?? terminalRefs?.current?.get(sessionId);
       if (inElectron) {
         const api = getElectronAPI();
         api?.terminal?.write?.(sessionId, "\x0c");
@@ -686,7 +716,8 @@ export function killAllTerminalJobs(projectId: string, outputDir?: string) {
   const sessions = store.getSessions(projectId);
 
   sessions.forEach((session) => {
-    // 1. Clean up IPC listeners
+    // 1. Clean up IPC listeners and active handle getter
+    activeTerminalHandleGetters.delete(session.id);
     if (activeListeners.has(session.id)) {
       const listeners = activeListeners.get(session.id);
       try {

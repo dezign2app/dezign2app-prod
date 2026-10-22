@@ -100,40 +100,42 @@ export function ProjectCanvasLayout({
 
         {/* ======================================================================== */}
         {/* SHARED UI OVERLAY - Sidebars + Terminal (persists across all tab routes)  */}
-        {/* Hidden in LangGraph Studio: no pallet sidebar, toggle button, or terminal */}
+        {/* NodePalette & AI Panel are hidden in LangGraph Studio; Terminal persists  */}
         {/* ======================================================================== */}
-        {!isLangGraph && (
-          <div className="absolute inset-0 w-full h-full z-20 pointer-events-none flex flex-col overflow-hidden">
-            {/* Top spacer: matches toolbar height so sidebars start below the toolbar */}
-            <div className="shrink-0 h-14" />
-            <div className="flex-1 min-h-0 w-full flex overflow-hidden relative pointer-events-none">
-              {/* Left: Node Palette Sidebar */}
+        <div className="absolute inset-0 w-full h-full z-20 pointer-events-none flex flex-col overflow-hidden">
+          {/* Top spacer: matches toolbar height so sidebars start below the toolbar */}
+          <div className="shrink-0 h-14" />
+          <div className="flex-1 min-h-0 w-full flex overflow-hidden relative pointer-events-none">
+            {/* Left: Node Palette Sidebar */}
+            {!isLangGraph && (
               <NodePaletteSidebar
                 view={canvasView ?? "graph"}
                 isOpen={paletteOpen}
                 onToggle={() => setPaletteOpen(!paletteOpen)}
               />
+            )}
 
-              {/* Center Column: Transparent canvas area + Terminal docked at bottom */}
-              <div className="flex-1 min-w-0 h-full pointer-events-none overflow-hidden relative flex flex-col">
-                <div className="flex-1 min-h-0" />
-                <Terminal
-                  projectId={projectId}
-                  projectName={project?.name || "Dezign2App"}
-                  outputDir={outputDir}
-                  onPickDirectory={() => setProjectFolderModalOpen(true)}
-                />
-              </div>
+            {/* Center Column: Transparent canvas area + Terminal docked at bottom */}
+            <div className="flex-1 min-w-0 h-full pointer-events-none overflow-hidden relative flex flex-col">
+              <div className="flex-1 min-h-0" />
+              <Terminal
+                projectId={projectId}
+                projectName={project?.name || "Dezign2App"}
+                outputDir={outputDir}
+                onPickDirectory={() => setProjectFolderModalOpen(true)}
+              />
+            </div>
 
-              {/* Right: AI Assistant Sidebar */}
+            {/* Right: AI Assistant Sidebar */}
+            {!isLangGraph && (
               <AiPanel
                 projectId={projectId}
                 isOpen={aiPanelOpen}
                 onClose={() => setAiPanelOpen(false)}
               />
-            </div>
+            )}
           </div>
-        )}
+        </div>
 
         {/* Unique Project Folder Selection Modal */}
         <ProjectFolderModal
