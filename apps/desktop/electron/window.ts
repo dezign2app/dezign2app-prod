@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, shell } from "electron";
+import { BrowserWindow, dialog, screen, shell } from "electron";
 import path from "path";
 import {
   APP_NAME,
@@ -61,12 +61,15 @@ export async function detectDevServerUrl(
 export async function createMainWindow(): Promise<BrowserWindow> {
   const iconPath = getAppIcon();
 
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+
   mainWindow = new BrowserWindow({
     title: APP_NAME,
-    width: 1440,
-    height: 900,
-    minWidth: 1024,
-    minHeight: 640,
+    width: Math.round(screenWidth * 0.5),
+    height: screenHeight,
+    minWidth: 480,
+    minHeight: 400,
     autoHideMenuBar: true,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     backgroundColor: "#0d1117",
