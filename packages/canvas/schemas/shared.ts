@@ -471,6 +471,7 @@ export interface LangGraphMessagesConfig {
   systemMessageSource?: string;
   aiMessageSource?: string;
   bulkMessagesSource?: string;
+  operation?: "append" | "overwrite";
 }
 
 export const langGraphMessagesConfigSchema = z.object({
@@ -479,6 +480,7 @@ export const langGraphMessagesConfigSchema = z.object({
   systemMessageSource: z.string().optional(),
   aiMessageSource: z.string().optional(),
   bulkMessagesSource: z.string().optional(),
+  operation: z.enum(["append", "overwrite"]).optional(),
 });
 
 

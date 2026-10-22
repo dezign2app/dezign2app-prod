@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { Endpoint } from "@workspace/canvas/types";
+import { Endpoint, EndpointWithNode } from "@workspace/canvas/types";
 import { compileServiceNode } from "../compileServiceNode";
 import { generateTypesPackage } from "../generators/typesGenerator";
 import { cleanUnusedImports } from "../utils";
@@ -1179,6 +1179,69 @@ app.use(express.json());
     expect(typeCode).toContain("field_1: string;");
     expect(typeCode).toContain("field_2: Record<string, unknown>;");
     expect(typeCode).toContain("field_3: string;");
+  });
+
+  it("compiles langgraph invoke step with overwrite operation using native __overwrite__ envelope", () => {
+    const langGraphNode: BackendNode = {
+      id: "node-lg-1",
+      type: "langgraph",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "supportAgent",
+        stateChannels: [
+          { key: "messages", type: "messages", reducer: "add_messages" },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "service-1",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: { label: "conversations" },
+    };
+
+    const endpoint: EndpointWithNode = {
+      id: "ep-reset",
+      nodeId: serviceNode.id,
+      name: "/resetConversation",
+      type: "POST",
+      pipelineSteps: [
+        {
+          id: "step-reset",
+          name: "supportAgent",
+          type: "langgraph_invoke",
+          langGraphTargetNodeId: langGraphNode.id,
+          langGraphMessagesConfig: {
+            mode: "single",
+            userMessageSource: "body.message",
+            operation: "overwrite",
+          },
+        },
+      ],
+    };
+
+    const compiledService = compileServiceNode(
+      serviceNode,
+      [endpoint],
+      [],
+      [serviceNode, langGraphNode],
+      [],
+      [],
+      [],
+      [],
+      "conversations",
+    );
+
+    const routeFile = compiledService.files.find((f) =>
+      f.filename.includes("postResetConversation.ts"),
+    );
+    expect(routeFile).toBeDefined();
+    const routeCode = routeFile!.content;
+
+    expect(routeCode).toContain('"messages": { __overwrite__: supportAgentMessages }');
   });
 });
 

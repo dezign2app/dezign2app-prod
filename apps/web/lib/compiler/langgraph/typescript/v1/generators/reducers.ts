@@ -123,31 +123,32 @@ export function buildReducerFiles(ctx: CompileContext): CompiledFile[] {
     // 1. Messages channel
     if (ch.key === "messages" || ch.type === "messages" || ch.reducer === "add_messages") {
       if (ch.customReducerCode) {
+        const updateType = codeUsesActionUpdates(ch.customReducerCode)
+          ? "MessagesChannelUpdate"
+          : "BaseMessage[] | BaseMessage";
         const customFn = normalizeReducerCode(
           ch.customReducerCode,
           "BaseMessage[]",
-          "BaseMessage[] | BaseMessage",
+          updateType,
         );
+        const stateImport =
+          updateType === "MessagesChannelUpdate"
+            ? `import type { MessagesChannelUpdate } from "../state";\n`
+            : "";
         content = `import type { BaseMessage } from "@langchain/core/messages";
-
+${stateImport}
 /**
  * Reducer for "${ch.key}" messages channel
  */
 export const ${reducerName} = ${customFn};
 `;
       } else {
-        content = `import type { BaseMessage } from "@langchain/core/messages";
+        content = `import { addMessages } from "@langchain/langgraph";
 
 /**
- * Reducer for "${ch.key}" messages channel: appends incoming messages to conversation history
+ * Reducer for "${ch.key}" messages channel: LangGraph native append, ID deduplication & Overwrite support
  */
-export function ${reducerName}(
-  prev: BaseMessage[] = [],
-  next: BaseMessage[] | BaseMessage,
-): BaseMessage[] {
-  const current = Array.isArray(prev) ? prev : [];
-  return current.concat(Array.isArray(next) ? next : (next != null ? [next] : []));
-}
+export const ${reducerName} = addMessages;
 `;
       }
     } else if (ch.reducer === "custom" || ch.customReducerCode) {

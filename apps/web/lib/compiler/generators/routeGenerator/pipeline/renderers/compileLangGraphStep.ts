@@ -194,7 +194,11 @@ export function renderLangGraphInvokeStep(
 
   if (messagesVarName) {
     mappedFieldKeys.add("messages");
-    stateFields.push(`  "messages": ${messagesVarName},`);
+    if (langGraphMessagesConfig?.operation === "overwrite") {
+      stateFields.push(`  "messages": { __overwrite__: ${messagesVarName} },`);
+    } else {
+      stateFields.push(`  "messages": ${messagesVarName},`);
+    }
   }
 
   if (inputBindings.length > 0) {

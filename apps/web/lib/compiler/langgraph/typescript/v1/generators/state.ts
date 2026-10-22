@@ -187,6 +187,12 @@ export function buildStateFile(ctx: CompileContext): string {
     (c) => c.type === "boolean" && codeUsesActionUpdates(c.customReducerCode),
   );
 
+  const needsMessagesUpdate = ctx.input.stateChannels.some(
+    (c) =>
+      (c.key === "messages" || c.type === "messages" || c.reducer === "add_messages") &&
+      codeUsesActionUpdates(c.customReducerCode),
+  );
+
   const primitiveUpdateDefs: string[] = [
     `export type StringChannelUpdate = string | {
   action?: string;
@@ -203,6 +209,16 @@ export function buildStateFile(ctx: CompileContext): string {
   value?: boolean;
 };`,
   ];
+
+  if (needsMessagesUpdate) {
+    primitiveUpdateDefs.push(`export type MessagesChannelUpdate =
+  | BaseMessage[]
+  | BaseMessage
+  | {
+      action?: string;
+      value?: BaseMessage[] | BaseMessage;
+    };`);
+  }
 
   const channelLines: string[] = [];
   const importedReducers: string[] = [];
@@ -239,8 +255,11 @@ export function buildStateFile(ctx: CompileContext): string {
     const tsType = customTypeMatch || typeMap[ch.type] || "string";
 
     if (ch.key === "messages" || ch.type === "messages" || ch.reducer === "add_messages") {
+      const updateType = codeUsesActionUpdates(ch.customReducerCode)
+        ? "MessagesChannelUpdate"
+        : "BaseMessage[] | BaseMessage";
       channelLines.push(
-        `  ${field}: Annotation<BaseMessage[], BaseMessage[] | BaseMessage>({
+        `  ${field}: Annotation<BaseMessage[], ${updateType}>({
     reducer: ${reducerName},
     default: () => [],
   }),`,
@@ -340,7 +359,11 @@ export function buildStateFile(ctx: CompileContext): string {
   }
 
   const extraImports: string[] = [];
-  if (hasCustomMessages || channelLines.some((line) => line.includes("BaseMessage"))) {
+  if (
+    hasCustomMessages ||
+    channelLines.some((line) => line.includes("BaseMessage")) ||
+    needsMessagesUpdate
+  ) {
     extraImports.push(`import type { BaseMessage } from "@langchain/core/messages";`);
   }
 
