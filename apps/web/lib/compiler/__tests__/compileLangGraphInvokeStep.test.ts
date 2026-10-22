@@ -186,7 +186,9 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       const code = lines.join("\n");
 
       expect(code).toContain("const syncResultRaw = await agentSyncGraph.invoke(agentState);");
-      expect(code).toContain("const syncResult = syncResultRaw;");
+      expect(code).toContain("const syncResult = {");
+      expect(code).toContain("response: syncResultResponse");
+      expect(code).toContain("state: syncResultRaw");
     });
 
     it("extracts last message content when langGraphOutputMode is last_message", () => {

@@ -154,9 +154,15 @@ export function StartNodeTestingTab({
   };
 
 
+  const handleThreadIdChange = (tid: string) => {
+    setThreadId(tid);
+    setInputValues((prev) => ({ ...prev, thread_id: tid }));
+  };
+
   const handleNewThread = () => {
     const newTid = `session-${Math.floor(Math.random() * 900 + 100)}`;
     setThreadId(newTid);
+    setInputValues((prev) => ({ ...prev, thread_id: newTid }));
     setKnownThreads((prev) => Array.from(new Set([...prev, newTid])));
     setExecutionResult(null);
     toast.success(`Started new memory thread: ${newTid}`);
@@ -231,8 +237,17 @@ export function StartNodeTestingTab({
     const explicitMsg =
       typeof overrideMsg === "string" ? overrideMsg : undefined;
 
-    // Merge chatMessage into inputValues
+    const rawThreadId = inputValues.thread_id;
+    const threadIdFromInputs = typeof rawThreadId === "string" ? rawThreadId : "";
+    const effectiveThreadId = (threadId || threadIdFromInputs || "session-1").trim();
+
+    if (effectiveThreadId && !knownThreads.includes(effectiveThreadId)) {
+      setKnownThreads((prev) => Array.from(new Set([...prev, effectiveThreadId])));
+    }
+
+    // Merge chatMessage and thread_id into inputValues
     const finalInputs = { ...inputValues };
+    finalInputs.thread_id = effectiveThreadId;
     const msgChannel = inputChannels.find(
       (c) => c.key === "message" || c.key === "messages" || c.key === "prompt"
     );
@@ -271,7 +286,7 @@ export function StartNodeTestingTab({
             memoryConfig,
             checkpointerConnection,
             inputValues: finalInputs,
-            threadId,
+            threadId: effectiveThreadId,
             provider,
             apiKey: apiKey.trim() || undefined,
             modelName,
@@ -312,7 +327,7 @@ export function StartNodeTestingTab({
           inputChannels,
           memoryConfig,
           inputValues: finalInputs,
-          threadId,
+          threadId: effectiveThreadId,
           provider,
           apiKey: apiKey.trim() || undefined,
           modelName,
@@ -328,7 +343,7 @@ export function StartNodeTestingTab({
             setCheckpoints((prev) => [...prev, cp]);
           },
         });
-        await loadCheckpoints(threadId);
+        await loadCheckpoints(effectiveThreadId);
       }
 
       setExecutionResult(result);
@@ -470,7 +485,7 @@ export function StartNodeTestingTab({
         handleClearThread={handleClearThread}
         handleExecute={handleExecute}
         threadId={threadId}
-        setThreadId={setThreadId}
+        setThreadId={handleThreadIdChange}
         knownThreads={knownThreads}
         handleNewThread={handleNewThread}
       />
@@ -552,6 +567,10 @@ export function StartNodeTestingTab({
           handleExecute={handleExecute}
           isInputCollapsed={isInputCollapsed}
           setIsInputCollapsed={setIsInputCollapsed}
+          threadId={threadId}
+          setThreadId={handleThreadIdChange}
+          knownThreads={knownThreads}
+          handleNewThread={handleNewThread}
         />
 
         {/* ── Results Tabs ── */}
@@ -589,8 +608,6 @@ export function StartNodeTestingTab({
             <TabsContent value="trace" className="flex flex-col gap-2 pt-2 m-0">
               <TestingTraceTab
                 executionResult={executionResult}
-                isTraceExpanded={isTraceExpanded}
-                setIsTraceExpanded={setIsTraceExpanded}
                 nodes={nodes}
                 edges={edges}
                 expandedTraceNodes={expandedTraceNodes}

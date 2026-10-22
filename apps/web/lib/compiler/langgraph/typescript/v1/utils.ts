@@ -272,6 +272,13 @@ export function toIdentifier(str: string): string {
   return toCamelCase(str);
 }
 
+export function getChannelReducerName(key?: string): string {
+  const clean = (key || "var").replace(/[^a-zA-Z0-9_$]/g, "");
+  if (!clean) return "stateReducer";
+  const camel = toCamelCase(clean);
+  return `${camel}Reducer`;
+}
+
 export function capitalize(str: string): string {
   return toPascalCase(str);
 }

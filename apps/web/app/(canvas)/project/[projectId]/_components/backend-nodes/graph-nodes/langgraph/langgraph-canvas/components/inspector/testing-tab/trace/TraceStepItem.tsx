@@ -35,7 +35,6 @@ export interface TraceStepItemProps {
   idx: number;
   nodes: LangGraphCanvasNode[];
   edges: LangGraphCanvasEdge[];
-  isTraceExpanded: boolean;
   expandedTraceNodes: Record<number, boolean>;
   setExpandedTraceNodes: React.Dispatch<React.SetStateAction<Record<number, boolean>>>;
   traceNodeViews: Record<number, TraceViewMode>;
@@ -55,7 +54,6 @@ export function TraceStepItem({
   idx,
   nodes,
   edges,
-  isTraceExpanded,
   expandedTraceNodes,
   setExpandedTraceNodes,
   traceNodeViews,
@@ -70,7 +68,7 @@ export function TraceStepItem({
   modelName,
 }: TraceStepItemProps) {
   const isFailed = t.status === "failed";
-  const isNodeExpanded = expandedTraceNodes[idx] ?? isTraceExpanded;
+  const isNodeExpanded = expandedTraceNodes[idx];
   const outputObj = (t.output && typeof t.output === "object" ? t.output : null) as Record<string, unknown> | null;
   const streamBatches = (outputObj?.streamBatches || []) as StreamBatchItem[];
   const hasBatches = streamBatches.length > 0;
@@ -209,7 +207,7 @@ export function TraceStepItem({
     const targetNodeLabel =
       targetEdge?.target === "END" || targetEdge?.target?.startsWith("end_")
         ? "END"
-        : (targetNode?.data as { label?: string })?.label || targetEdge?.target || "END";
+        : targetNode?.data?.label || targetEdge?.target || "END";
 
     routerDecision = {
       selectedRoute: matchedBranch?.label || (matchedBranch?.id ? `Route (${matchedBranch.id})` : "Default Route"),
@@ -264,16 +262,102 @@ export function TraceStepItem({
     }
   }
 
+  // START node check
+  const isStartNode =
+    t.nodeId === "START" ||
+    t.label === "START" ||
+    canvasNode?.type === "start";
+
+  // Check connected LLM handles via edges
+  const connectedLlmEdge = edges.find(
+    (e) =>
+      e.target === t.nodeId &&
+      (e.targetHandle === "llm_in" || e.targetHandle === "llm")
+  );
+  const connectedLlmNode = connectedLlmEdge
+    ? nodes.find((n) => n.id === connectedLlmEdge.source)
+    : undefined;
+
+  let connectedModel = "";
+  let connectedProvider = "";
+  let hasConnectedLlm = false;
+
+  if (connectedLlmNode?.type === "langgraph_llm") {
+    hasConnectedLlm = connectedLlmNode.data.enabled !== false;
+    connectedModel = connectedLlmNode.data.model ?? "";
+    connectedProvider = connectedLlmNode.data.provider ?? "";
+  } else if (connectedLlmNode?.type === "langgraph_llm_ref") {
+    hasConnectedLlm = true;
+    const masterId = connectedLlmNode.data.llmRef || connectedLlmNode.data.refId;
+    const masterNode = nodes.find((n) => n.id === masterId);
+    if (masterNode?.type === "langgraph_llm") {
+      connectedModel = masterNode.data.model ?? "";
+      connectedProvider = masterNode.data.provider ?? "";
+    }
+  }
+
+  let nodeLlmEnabled = false;
+  let nodeModel = "";
+  let nodeProvider = "";
+  let isLlmStepType = false;
+
+  if (canvasNode?.type === "langgraph_node" || canvasNode?.type === "langgraph_agent") {
+    nodeLlmEnabled = canvasNode.data.llmConfig?.enabled === true || Boolean(canvasNode.data.modelConfig?.model);
+    nodeModel = canvasNode.data.llmConfig?.model ?? canvasNode.data.modelConfig?.model ?? "";
+    nodeProvider = canvasNode.data.llmConfig?.provider ?? canvasNode.data.modelConfig?.provider ?? "";
+  } else if (canvasNode?.type === "step") {
+    nodeLlmEnabled = canvasNode.data.llmConfig?.enabled === true || Boolean(canvasNode.data.modelConfig?.model);
+    nodeModel = canvasNode.data.llmConfig?.model ?? canvasNode.data.modelConfig?.model ?? "";
+    nodeProvider = canvasNode.data.llmConfig?.provider ?? canvasNode.data.modelConfig?.provider ?? "";
+    isLlmStepType = canvasNode.data.stepType === "llm_call";
+  }
+
+  let hasInvokedLlm = false;
+  let invokedModel = "";
+  let invokedProvider = "";
+  let invokedSystemPrompt = "";
+
+  if (
+    outputObj &&
+    "llmRequest" in outputObj &&
+    outputObj.llmRequest &&
+    typeof outputObj.llmRequest === "object"
+  ) {
+    hasInvokedLlm = true;
+    if ("model" in outputObj.llmRequest && typeof outputObj.llmRequest.model === "string") {
+      invokedModel = outputObj.llmRequest.model;
+    }
+    if ("provider" in outputObj.llmRequest && typeof outputObj.llmRequest.provider === "string") {
+      invokedProvider = outputObj.llmRequest.provider;
+    }
+    if ("systemPrompt" in outputObj.llmRequest && typeof outputObj.llmRequest.systemPrompt === "string") {
+      invokedSystemPrompt = outputObj.llmRequest.systemPrompt;
+    }
+  }
+
+  const isLlmActive =
+    !isStartNode &&
+    (hasInvokedLlm || hasConnectedLlm || nodeLlmEnabled || isLlmStepType);
+
   // 5 Node configuration steps
-  const agentName = (nodeData.name as string) || (nodeData.label as string) || t.label;
+  const agentName =
+    (canvasNode && "name" in canvasNode.data && typeof canvasNode.data.name === "string" && canvasNode.data.name) ||
+    (canvasNode && "label" in canvasNode.data && typeof canvasNode.data.label === "string" && canvasNode.data.label) ||
+    t.label;
   const systemPrompt =
-    (nodeData.systemPrompt as string) ||
-    ((outputObj?.llmRequest as any)?.systemPrompt as string) ||
-    "";
+    (canvasNode && "systemPrompt" in canvasNode.data && typeof canvasNode.data.systemPrompt === "string"
+      ? canvasNode.data.systemPrompt
+      : invokedSystemPrompt);
   const effectiveModel =
-    ((outputObj?.llmRequest as any)?.model as string) || modelName;
+    invokedModel ||
+    connectedModel ||
+    nodeModel ||
+    modelName;
   const effectiveProvider =
-    ((outputObj?.llmRequest as any)?.provider as string) || provider;
+    invokedProvider ||
+    connectedProvider ||
+    nodeProvider ||
+    provider;
   const responseFormat = (nodeData.responseFormat as any) || {};
   const isStructured = Boolean(responseFormat?.enabled);
   let schemaFieldsList: Array<{ name: string; type?: string; required?: boolean }> = [];
@@ -296,12 +380,13 @@ export function TraceStepItem({
   const streamConfig = (nodeData.streamConfig as any) || (outputObj?.streamConfig as any);
   const isStreamActive = streamConfig?.enabled !== false;
   const hasNodeConfig = Boolean(
-    canvasNode ||
-    systemPrompt ||
-    isStructured ||
-    configuredUpdates.length > 0 ||
-    nodeTools.length > 0 ||
-    nodeMiddleware.length > 0
+    !isStartNode &&
+      (isLlmActive ||
+        systemPrompt ||
+        isStructured ||
+        configuredUpdates.length > 0 ||
+        nodeTools.length > 0 ||
+        nodeMiddleware.length > 0)
   );
 
   return (
@@ -487,7 +572,7 @@ export function TraceStepItem({
         const configCells: React.ReactNode[] = [];
 
         // Identity & Prompt — show if we have a name or system prompt
-        if (agentName || systemPrompt) {
+        if (!isStartNode && (agentName || systemPrompt)) {
           configCells.push(
             <div key="identity" className="flex flex-col gap-0.5 p-1.5 rounded bg-background/60 border border-border/40 min-w-0">
               <span className="text-[8px] font-semibold text-muted-foreground uppercase flex items-center gap-1">Identity & Prompt</span>
@@ -501,8 +586,8 @@ export function TraceStepItem({
           );
         }
 
-        // Model — always show if there's a model/provider
-        if (effectiveModel || effectiveProvider) {
+        // Model — only show if LLM is actually active/configured or was invoked
+        if (isLlmActive && (effectiveModel || effectiveProvider)) {
           configCells.push(
             <div key="model" className="flex flex-col gap-0.5 p-1.5 rounded bg-background/60 border border-border/40 min-w-0">
               <span className="text-[8px] font-semibold text-muted-foreground uppercase flex items-center gap-1">Model</span>
@@ -676,7 +761,7 @@ export function TraceStepItem({
             <Terminal className="w-2.5 h-2.5" />
             Logs ({nodeLogs.length})
           </button>
-          {(outputObj?.llmRequest || nodeData.stepType === "llm" || nodeData.stepType === "agent") && (
+          {(hasInvokedLlm || isLlmActive) && (
             <button
               type="button"
               onClick={() =>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { Trash2, Lock, Play, ChevronDown, GitMerge, Code2, Braces } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
@@ -12,7 +12,11 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { LocalInput } from "../../../../../../common";
-import { BUILT_IN_REDUCERS, getSuggestedReducerCodeForChannelType } from "../constants";
+import {
+  BUILT_IN_REDUCERS,
+  getSuggestedReducerCodeForChannelType,
+  getChannelReducerName,
+} from "../constants";
 import {
   isLangGraphChannelType,
   isTypesNode,
@@ -89,6 +93,90 @@ export function StateChannelItem({
     return types;
   }, [allNodes]);
 
+  const initialValueString = useMemo(() => {
+    if (isBuiltin || ch.key === "messages" || ch.type === "messages") {
+      return "[]";
+    }
+    if (ch.defaultValue === undefined || ch.defaultValue === null) {
+      return "";
+    }
+    if (typeof ch.defaultValue === "object") {
+      try {
+        return JSON.stringify(ch.defaultValue);
+      } catch {
+        return String(ch.defaultValue);
+      }
+    }
+    return String(ch.defaultValue);
+  }, [ch.defaultValue, ch.key, ch.type, isBuiltin]);
+
+  const handleInitialValueChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const raw = e.target.value;
+      if (ch.type === "string") {
+        // Plain text - no quotes required. Strip wrapping quotes if user typed them.
+        let parsedStr = raw;
+        if (
+          (raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2) ||
+          (raw.startsWith("'") && raw.endsWith("'") && raw.length >= 2)
+        ) {
+          parsedStr = raw.slice(1, -1);
+        }
+        // If blank or "" or '', keep it empty string ""
+        if (raw.trim() === "" || parsedStr.trim() === "" || parsedStr === '""' || parsedStr === "''") {
+          onUpdateField(idx, { defaultValue: "" });
+          return;
+        }
+        onUpdateField(idx, { defaultValue: parsedStr });
+        return;
+      }
+
+      let parsed: any = raw;
+      if (raw === "") {
+        onUpdateField(idx, { defaultValue: undefined });
+        return;
+      } else if (ch.type === "number") {
+        if (raw.trim() === "-" || raw.trim() === "") {
+          parsed = undefined;
+        } else {
+          const num = Number(raw);
+          parsed = isNaN(num) ? raw : num;
+        }
+      } else if (ch.type === "boolean") {
+        const lower = raw.trim().toLowerCase();
+        if (lower === "true") parsed = true;
+        else if (lower === "false") parsed = false;
+        else parsed = raw;
+      } else if (ch.type === "array" || ch.type === "object" || ch.customTypeId) {
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          parsed = raw;
+        }
+      }
+
+      onUpdateField(idx, { defaultValue: parsed });
+    },
+    [idx, ch.type, ch.customTypeId, onUpdateField],
+  );
+
+  const initialPlaceholder = useMemo(() => {
+    if (isBuiltin || ch.key === "messages" || ch.type === "messages") return "[]";
+    switch (ch.type) {
+      case "number":
+        return "0";
+      case "boolean":
+        return "false";
+      case "array":
+        return "[]";
+      case "object":
+        return ch.customTypeName ? `{/* ${ch.customTypeName} */}` : "{}";
+      case "string":
+      default:
+        return "e.g., <blank>, hello, draft, pending";
+    }
+  }, [ch.key, ch.type, ch.customTypeName, isBuiltin]);
+
   return (
     <div
       className={`flex flex-col gap-3 p-3.5 rounded-xl border border-border/70 bg-card/70 shadow-xs backdrop-blur-sm text-xs transition-all ${
@@ -162,9 +250,9 @@ export function StateChannelItem({
         </div>
       </div>
 
-      {/* ── State Var Type & Summary ── */}
-      <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/40">
-        <div className="flex items-center gap-2 flex-1">
+      {/* ── State Var Type, Initial Value & Summary ── */}
+      <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 pt-2 border-t border-border/40">
+        <div className="flex items-center gap-1.5 flex-1 min-w-[130px]">
           <Label className="text-[10px] text-muted-foreground font-mono shrink-0">
             Type
           </Label>
@@ -258,13 +346,35 @@ export function StateChannelItem({
           )}
         </div>
 
+        {/* Initial Value LocalInput */}
+        <div className="flex items-center gap-1.5 flex-1 min-w-[130px]">
+          <Label className="text-[10px] text-muted-foreground font-mono shrink-0">
+            Initial
+          </Label>
+          <LocalInput
+            className={`h-7 text-xs font-mono bg-background flex-1 ${
+              isBuiltin ? "cursor-not-allowed opacity-75" : ""
+            }`}
+            placeholder={initialPlaceholder}
+            disabled={isBuiltin}
+            value={initialValueString}
+            onChange={handleInitialValueChange}
+            debounceMs={150}
+            title={
+              isBuiltin
+                ? "Built-in chat state defaults to empty messages []"
+                : "Initial default value for this channel"
+            }
+          />
+        </div>
+
         <div className="flex items-center gap-1.5 shrink-0">
           <span className="text-[10px] text-muted-foreground font-mono">Reducer:</span>
           <Badge
             variant="secondary"
             className="text-[9px] h-5 px-1.5 font-mono bg-purple-500/20 text-purple-300 border border-purple-500/30"
           >
-            {ch.reducer || `${ch.key || "state"}_reducer`}
+            {getChannelReducerName(ch.key)}
           </Badge>
         </div>
       </div>

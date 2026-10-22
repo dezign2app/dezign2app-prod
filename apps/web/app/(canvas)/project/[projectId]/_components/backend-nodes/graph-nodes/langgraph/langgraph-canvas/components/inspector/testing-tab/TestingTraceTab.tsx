@@ -1,6 +1,4 @@
 import React from "react";
-import { Maximize2, Minimize2 } from "lucide-react";
-import { Button } from "@workspace/ui/components/button";
 import type { BrowserExecutionResult } from "@/lib/simulation/browserLangGraphRunner";
 import type { LangGraphCanvasNode, LangGraphCanvasEdge } from "@workspace/canvas";
 import type { TraceViewMode, BatchFormatMode } from "./types";
@@ -8,8 +6,6 @@ import { TraceStepItem } from "./trace/TraceStepItem";
 
 export interface TestingTraceTabProps {
   executionResult: BrowserExecutionResult | null;
-  isTraceExpanded: boolean;
-  setIsTraceExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   nodes: LangGraphCanvasNode[];
   edges: LangGraphCanvasEdge[];
   expandedTraceNodes: Record<number, boolean>;
@@ -27,8 +23,6 @@ export interface TestingTraceTabProps {
 
 export function TestingTraceTab({
   executionResult,
-  isTraceExpanded,
-  setIsTraceExpanded,
   nodes,
   edges,
   expandedTraceNodes,
@@ -62,34 +56,11 @@ export function TestingTraceTab({
         </span>
         <div className="flex items-center gap-2 shrink-0">
           <span className="font-mono">{executionResult.totalDurationMs}ms</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-5 text-[10px] px-1.5 gap-1 text-muted-foreground hover:text-foreground"
-            onClick={() => setIsTraceExpanded((v) => !v)}
-            title={isTraceExpanded ? "Collapse trace view" : "Expand trace view"}
-          >
-            {isTraceExpanded ? (
-              <>
-                <Minimize2 className="w-3 h-3" />
-                <span>Collapse</span>
-              </>
-            ) : (
-              <>
-                <Maximize2 className="w-3 h-3" />
-                <span>Expand</span>
-              </>
-            )}
-          </Button>
         </div>
       </div>
 
       <div
-        className={`flex flex-col gap-1.5 overflow-y-auto hide-scrollbar transition-all duration-200 ${
-          isTraceExpanded
-            ? "min-h-[460px] max-h-[750px]"
-            : "min-h-[300px] max-h-[500px]"
-        }`}
+        className={`flex flex-col gap-1.5 overflow-y-auto hide-scrollbar transition-all duration-200 pb-20`}
       >
         {executionResult.trace.map((step, idx) => (
           <TraceStepItem
@@ -98,7 +69,6 @@ export function TestingTraceTab({
             idx={idx}
             nodes={nodes}
             edges={edges}
-            isTraceExpanded={isTraceExpanded}
             expandedTraceNodes={expandedTraceNodes}
             setExpandedTraceNodes={setExpandedTraceNodes}
             traceNodeViews={traceNodeViews}

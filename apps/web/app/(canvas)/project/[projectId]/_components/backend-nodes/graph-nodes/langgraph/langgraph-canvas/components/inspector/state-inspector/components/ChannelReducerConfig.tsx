@@ -20,6 +20,7 @@ import {
   isReducerCodeCompatibleWithType,
   extractActionsFromReducerCode,
   getActionMetadata,
+  getChannelReducerName,
 } from "../constants";
 import type { CustomTypeItem } from "@workspace/canvas";
 import type { LangGraphStateChannel, LangGraphCustomReducer } from "@/types/canvas";
@@ -113,12 +114,7 @@ export function ChannelReducerConfig({
     return getSuggestedReducerCodeForChannelType(ch.type, activeSchema);
   }, [ch.customReducerCode, matchedCustom?.code, ch.type, activeSchema]);
 
-  const [customName, setCustomName] = useState<string>(
-    matchedCustom?.name ||
-      (ch.reducer && !BUILT_IN_REDUCERS.some((r) => r.name === ch.reducer)
-        ? ch.reducer
-        : `${ch.key || ch.customTypeName || "var"}_reducer`),
-  );
+  const reducerName = useMemo(() => getChannelReducerName(ch.key), [ch.key]);
   const [customCode, setCustomCode] = useState<string>(resolveInitialCode());
   const [customDesc, setCustomDesc] = useState<string>(
     matchedCustom?.description || "",
@@ -175,12 +171,7 @@ export function ChannelReducerConfig({
     if (shouldRegenerate) {
       const suggested = getSuggestedReducerCodeForChannelType(ch.type, activeSchema);
       setCustomCode(suggested);
-      const newName =
-        matchedCustom?.name ||
-        (ch.reducer && !BUILT_IN_REDUCERS.some((r) => r.name === ch.reducer)
-          ? ch.reducer
-          : `${ch.key || ch.customTypeName || "var"}_reducer`);
-      setCustomName(newName);
+      const newName = reducerName;
       onUpdateField(idx, {
         reducer: newName,
         customReducerCode: suggested,
@@ -196,9 +187,6 @@ export function ChannelReducerConfig({
       if (raw !== undefined) {
         setCustomCode(raw);
       }
-      if (matchedCustom?.name) {
-        setCustomName(matchedCustom.name);
-      }
       if (matchedCustom?.description) {
         setCustomDesc(matchedCustom.description);
       }
@@ -213,6 +201,7 @@ export function ChannelReducerConfig({
     ch.key,
     ch.customTypeName,
     idx,
+    reducerName,
     onUpdateField,
     onUpdateCustomReducer,
   ]);
@@ -222,7 +211,7 @@ export function ChannelReducerConfig({
     (presetCode: string) => {
       isExplicitPresetOrEditRef.current = true;
       setCustomCode(presetCode);
-      const targetName = customName || `${ch.key || "var"}_reducer`;
+      const targetName = reducerName;
       onUpdateField(idx, {
         reducer: targetName,
         customReducerCode: presetCode,
@@ -249,7 +238,7 @@ export function ChannelReducerConfig({
       return () => clearTimeout(timer);
     },
     [
-      customName,
+      reducerName,
       ch.key,
       idx,
       onUpdateField,
@@ -264,7 +253,7 @@ export function ChannelReducerConfig({
     (newCode: string) => {
       isExplicitPresetOrEditRef.current = true;
       setCustomCode(newCode);
-      const targetName = customName || `${ch.key || "var"}_reducer`;
+      const targetName = reducerName;
       onUpdateField(idx, {
         reducer: targetName,
         customReducerCode: newCode,
@@ -276,7 +265,7 @@ export function ChannelReducerConfig({
         });
       }
     },
-    [customName, ch.key, idx, onUpdateField, matchedCustom, onUpdateCustomReducer],
+    [reducerName, ch.key, idx, onUpdateField, matchedCustom, onUpdateCustomReducer],
   );
 
   return (
@@ -289,27 +278,15 @@ export function ChannelReducerConfig({
         </div>
       )}
 
-      {/* ── Reducer Function Name ── */}
-      <div className="flex flex-col gap-1">
-        <Label className="text-[9px] text-muted-foreground font-mono">
-          Reducer Name
-        </Label>
-        <LocalInput
-          className="h-7 text-xs font-mono font-medium bg-background border-purple-500/30 focus-visible:ring-purple-500/40"
-          placeholder={`${ch.key || "var"}_reducer`}
-          value={customName}
-          onChange={(e) => {
-            const val = e.target.value;
-            setCustomName(val);
-            onUpdateField(idx, { reducer: val });
-            if (matchedCustom && onUpdateCustomReducer) {
-              onUpdateCustomReducer(matchedCustom.id, {
-                name: val,
-                targetField: ch.key,
-              });
-            }
-          }}
-        />
+      {/* ── Reducer Function Name (Derived automatically as <statevar>Reducer) ── */}
+      <div className="flex items-center justify-between py-1 px-2.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-xs">
+        <span className="text-[10px] text-muted-foreground font-mono">Reducer:</span>
+        <Badge
+          variant="secondary"
+          className="text-[10px] h-5 px-2 font-mono font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30"
+        >
+          {reducerName}
+        </Badge>
       </div>
 
       {/* ── Action Presets / Quick Templates ── */}

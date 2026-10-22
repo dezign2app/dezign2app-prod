@@ -600,6 +600,9 @@ function isLangGraphStepUnconfigured(
       (c: { required?: boolean; key?: string }) => c.required && c.key,
     );
     for (const req of requiredChannels) {
+      // thread_id / threadId is configurable.thread_id (checkpointer config), not a state channel —
+      // it is validated separately via langGraphThreadIdSource, so skip it here.
+      if (req.key === "thread_id" || req.key === "threadId") continue;
       if (!isChannelMapped(req.key)) {
         return true;
       }

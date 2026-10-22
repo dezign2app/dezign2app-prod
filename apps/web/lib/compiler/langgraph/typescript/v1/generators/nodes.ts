@@ -52,14 +52,14 @@ export function buildAgentNodeFile(
   let hasLLM = false;
 
   if (hasConfiguredSteps) {
-    if (llmVar && llmMeta) {
-      addImport(`../llm/${llmMeta.fileName}`, [llmVar]);
-    }
-
     const rendered = renderAgentPipelineSteps(pipelineSteps, d, ctx, llmVar);
     bodyLines = rendered.bodyLines;
     responseVar = rendered.llmOutputVar;
     hasLLM = rendered.hasLLMCall;
+
+    if (hasLLM && llmVar && llmMeta) {
+      addImport(`../llm/${llmMeta.fileName}`, [llmVar]);
+    }
 
     for (const imp of rendered.imports) {
       addImport(imp.source, imp.specifiers);

@@ -9,7 +9,26 @@ import { PipelineRenderContext } from "../types";
 import { resolveBinding } from "../sourceResolver";
 import { toVarName } from "../../../../utils";
 
+function isBlankOrQuotes(val: unknown): boolean {
+  if (val === undefined || val === null) return true;
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    return (
+      trimmed === "" ||
+      trimmed === '""' ||
+      trimmed === "''" ||
+      trimmed === "inline:" ||
+      trimmed === 'inline:""' ||
+      trimmed === "inline:''"
+    );
+  }
+  return false;
+}
+
 function resolvePathAccessor(path: string, ctx: PipelineRenderContext): string {
+  if (isBlankOrQuotes(path)) {
+    return '""';
+  }
   if (path.startsWith("headers.")) {
     return `req.headers["${path.slice(8)}"]`;
   }
@@ -38,12 +57,20 @@ function resolvePathAccessor(path: string, ctx: PipelineRenderContext): string {
   }
   if (path.startsWith("inline:")) {
     const val = path.slice(7).trim();
-    if (!val) return '""';
-    if (val.startsWith("`") || val.startsWith('"') || val.startsWith("'")) return val;
+    if (!val || val === '""' || val === "''") return '""';
+    if (val.startsWith("`") || val.startsWith('"') || val.startsWith("'")) {
+      const innerTrimmed = val.slice(1, -1).trim();
+      if (!innerTrimmed && (val.startsWith('"') || val.startsWith("'"))) {
+        return '""';
+      }
+      return val;
+    }
     if (val.includes("${")) return `\`${val}\``;
     return JSON.stringify(val);
   }
   if (path.startsWith("`") || path.startsWith('"') || path.startsWith("'")) {
+    const trimmed = path.trim();
+    if (trimmed === '""' || trimmed === "''") return '""';
     return path;
   }
   if (path.includes("${")) {
@@ -128,11 +155,15 @@ export function renderLangGraphInvokeStep(
     }
   } else if (langGraphStateMapping && Object.keys(langGraphStateMapping).length > 0) {
     for (const [key, path] of Object.entries(langGraphStateMapping)) {
-      if (!path) continue;
+      if (path === undefined || path === null) continue;
       if (key === "thread_id" || key === "threadId") {
-        if (!threadIdExpr) {
+        if (!threadIdExpr && !isBlankOrQuotes(path)) {
           threadIdExpr = resolvePathAccessor(path, ctx);
         }
+        continue;
+      }
+      if (isBlankOrQuotes(path)) {
+        stateFields.push(`  ${JSON.stringify(key)}: "",`);
         continue;
       }
       stateFields.push(`  ${JSON.stringify(key)}: ${resolvePathAccessor(path, ctx)},`);
@@ -356,7 +387,21 @@ export function renderLangGraphInvokeStep(
         .join("\n");
       rawLines.push(`const ${outputVariable} = {\n${fieldPicks}\n};`);
     } else {
-      rawLines.push(`const ${outputVariable} = ${outputVariable}Raw;`);
+      rawLines.push(
+        `const ${outputVariable}Messages = Array.isArray(${outputVariable}Raw?.messages) ? ${outputVariable}Raw.messages : [];`,
+      );
+      rawLines.push(
+        `const ${outputVariable}LastMsg = ${outputVariable}Messages.length > 0 ? ${outputVariable}Messages[${outputVariable}Messages.length - 1] : undefined;`,
+      );
+      rawLines.push(
+        `const ${outputVariable}Response = (typeof ${outputVariable}LastMsg === "object" && ${outputVariable}LastMsg !== null && "content" in ${outputVariable}LastMsg && ${outputVariable}LastMsg.content !== undefined ? (typeof ${outputVariable}LastMsg.content === "string" ? ${outputVariable}LastMsg.content : JSON.stringify(${outputVariable}LastMsg.content)) : undefined) ?? (typeof ${outputVariable}Raw?.message === "string" ? ${outputVariable}Raw.message : (typeof ${outputVariable}Raw === "string" ? ${outputVariable}Raw : ""));`,
+      );
+      rawLines.push(`const ${outputVariable} = {
+  ...${outputVariable}Raw,
+  response: ${outputVariable}Response,
+  threadId: ${threadIdExpr || "undefined"},
+  state: ${outputVariable}Raw,
+};`);
     }
   }
 

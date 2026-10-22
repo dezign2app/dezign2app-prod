@@ -388,6 +388,37 @@ export const LangGraphInvokeStepSection: React.FC<
   // Check if the endpoint request contract already declares a thread_id field
   const endpointHasThreadId = useMemo(() => {
     if (!endpoint) return true;
+
+    // If the user has already explicitly mapped thread_id to any contract field
+    // (regardless of its name, e.g. path param "id"), suppress the warning —
+    // there is nothing actionable to add.
+    if (step.langGraphThreadIdSource) {
+      const src = accessorToStepSource(step.langGraphThreadIdSource, availableSources);
+      if (src.kind === "req_params" && src.field) {
+        const exists = (endpoint.pathParams || []).some((p: Parameter) => p.name === src.field);
+        if (exists) return true;
+      }
+      if (src.kind === "req_body" && src.field) {
+        const exists = (endpoint.requestBody?.fields || []).some(
+          (f: Parameter) => f.name === src.field,
+        );
+        if (exists) return true;
+      }
+      if (src.kind === "req_query" && src.field) {
+        const exists = (endpoint.queryParams || []).some(
+          (q: Parameter) => q.name === src.field,
+        );
+        if (exists) return true;
+      }
+      if (src.kind === "req_headers" && src.field) {
+        const exists = (endpoint.headers || []).some(
+          (h: Parameter) => h.name === src.field,
+        );
+        if (exists) return true;
+      }
+    }
+
+    // Fallback: check for canonical thread_id field names across all contract sections
     const bodyFields = endpoint.requestBody?.fields || [];
     const hasInBody = bodyFields.some(
       (f: Parameter) =>
@@ -418,7 +449,7 @@ export const LangGraphInvokeStepSection: React.FC<
         p.name?.toLowerCase() === "threadid",
     );
     return hasInPath;
-  }, [endpoint]);
+  }, [endpoint, step.langGraphThreadIdSource, availableSources]);
 
   const handleAddThreadIdToRequestBody = () => {
     if (!endpoint || !onEndpointChange) return;
@@ -565,6 +596,9 @@ export const LangGraphInvokeStepSection: React.FC<
 
       for (const b of bindings) {
         if (!b.argName) continue;
+        // thread_id is configurable.thread_id (checkpointer config), NOT a state channel — skip it
+        if (b.argName === "thread_id" || b.argName === "threadId") continue;
+
         let fieldKey = "";
         if ("field" in b.source && b.source.field) {
           fieldKey = b.source.field;
@@ -576,14 +610,12 @@ export const LangGraphInvokeStepSection: React.FC<
 
         const existing = newRequestChannels.find((c) => c.key === fieldKey);
         if (existing) {
-          if (b.argName && b.argName !== "thread_id") {
-            const currentMapped = existing.stateChannelKey
-              ? existing.stateChannelKey.split(",").map((s) => s.trim())
-              : [];
-            if (!currentMapped.includes(b.argName)) {
-              currentMapped.push(b.argName);
-              existing.stateChannelKey = currentMapped.join(",");
-            }
+          const currentMapped = existing.stateChannelKey
+            ? existing.stateChannelKey.split(",").map((s) => s.trim())
+            : [];
+          if (!currentMapped.includes(b.argName)) {
+            currentMapped.push(b.argName);
+            existing.stateChannelKey = currentMapped.join(",");
           }
         } else {
           newRequestChannels.push({
@@ -592,7 +624,7 @@ export const LangGraphInvokeStepSection: React.FC<
             type: resolveFieldType(fieldKey),
             source: "request",
             required: true,
-            stateChannelKey: b.argName !== "thread_id" ? b.argName : undefined,
+            stateChannelKey: b.argName,
           });
           seen.add(fieldKey);
         }
