@@ -134,6 +134,9 @@ export function resolveSource(
       if (typeof v === "number" || typeof v === "boolean") return String(v);
       const str = String(v ?? "");
       const trimmed = str.trim();
+      if (trimmed === "" || trimmed === '""' || trimmed === "''") {
+        return '""';
+      }
       if (
         (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
         (trimmed.startsWith("[") && trimmed.endsWith("]"))

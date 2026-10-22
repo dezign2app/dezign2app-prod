@@ -12,7 +12,11 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { LocalInput } from "../../../../../../common";
-import { BUILT_IN_REDUCERS, getSuggestedReducerCodeForChannelType } from "../constants";
+import {
+  BUILT_IN_REDUCERS,
+  getSuggestedReducerCodeForChannelType,
+  getChannelReducerName,
+} from "../constants";
 import {
   isLangGraphChannelType,
   isTypesNode,
@@ -109,22 +113,28 @@ export function StateChannelItem({
   const handleInitialValueChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const raw = e.target.value;
-      if (raw === "") {
-        onUpdateField(idx, { defaultValue: undefined });
-        return;
-      }
-
-      let parsed: LangGraphStateChannel["defaultValue"] = raw;
       if (ch.type === "string") {
         // Plain text - no quotes required. Strip wrapping quotes if user typed them.
+        let parsedStr = raw;
         if (
           (raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2) ||
           (raw.startsWith("'") && raw.endsWith("'") && raw.length >= 2)
         ) {
-          parsed = raw.slice(1, -1);
-        } else {
-          parsed = raw;
+          parsedStr = raw.slice(1, -1);
         }
+        // If blank or "" or '', keep it empty string ""
+        if (raw.trim() === "" || parsedStr.trim() === "" || parsedStr === '""' || parsedStr === "''") {
+          onUpdateField(idx, { defaultValue: "" });
+          return;
+        }
+        onUpdateField(idx, { defaultValue: parsedStr });
+        return;
+      }
+
+      let parsed: any = raw;
+      if (raw === "") {
+        onUpdateField(idx, { defaultValue: undefined });
+        return;
       } else if (ch.type === "number") {
         if (raw.trim() === "-" || raw.trim() === "") {
           parsed = undefined;
@@ -364,7 +374,7 @@ export function StateChannelItem({
             variant="secondary"
             className="text-[9px] h-5 px-1.5 font-mono bg-purple-500/20 text-purple-300 border border-purple-500/30"
           >
-            {ch.reducer || `${ch.key || "state"}_reducer`}
+            {getChannelReducerName(ch.key)}
           </Badge>
         </div>
       </div>

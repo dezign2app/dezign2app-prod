@@ -27,6 +27,7 @@ import {
   buildReadme,
 } from "./generators/config";
 import { buildStateFile } from "./generators/state";
+import { buildReducerFiles } from "./generators/reducers";
 import { buildToolsFile } from "./generators/tools";
 import { buildIndividualLLMFile, buildLLMIndexFile } from "./generators/llm";
 import {
@@ -105,6 +106,10 @@ export function compileLangGraph(input: CompileLangGraphInput): CompiledFile[] {
       ? buildLibReadme(ctx, pkgId)
       : buildReadme(ctx, pkgId, deps),
   });
+
+  // ── src/reducers/ ───────────────────────────────────────────────────────────
+  const reducerFiles = buildReducerFiles(ctx);
+  files.push(...reducerFiles);
 
   // ── src/state.ts ────────────────────────────────────────────────────────────
   files.push({

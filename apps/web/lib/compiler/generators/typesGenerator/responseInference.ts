@@ -234,7 +234,39 @@ export function inferBindingType(
         return "Record<string, string | number | boolean | null>";
       }
       if (step.type === "langgraph_invoke") {
-        if (source.field === "response" || source.field === "threadId") return "string";
+        if (source.field) {
+          if (
+            source.field === "response" ||
+            source.field === "threadId" ||
+            source.field === "message"
+          ) {
+            return "string";
+          }
+          if (source.field === "count") {
+            return "number";
+          }
+          if (source.field === "messages") {
+            return "unknown[]";
+          }
+          if (source.field === "state") {
+            return "Record<string, string | number | boolean | null>";
+          }
+          const lgNode = nodes.find((n) => n.id === step.langGraphTargetNodeId);
+          const stateChannels =
+            (lgNode?.data?.stateChannels as { key?: string; type?: string }[] | undefined) || [];
+          const ch = stateChannels.find((c) => c.key === source.field);
+          if (ch?.type) {
+            if (ch.type === "number") return "number";
+            if (ch.type === "boolean") return "boolean";
+            if (ch.type === "string") return "string";
+            if (ch.type === "array" || ch.type === "messages") return "unknown[]";
+            if (ch.type === "object" || ch.type === "json") return "Record<string, unknown>";
+          }
+          return "string | number | boolean | null | undefined";
+        }
+        if (step.langGraphOutputMode === "last_message") {
+          return "string";
+        }
         return "{ response: string; threadId?: string; state?: Record<string, string | number | boolean | null> }";
       }
     }

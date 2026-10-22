@@ -42,6 +42,13 @@ export const BUILT_IN_REDUCERS: BuiltInReducer[] = [
   },
 ];
 
+export function getChannelReducerName(key?: string): string {
+  const clean = (key || "var").replace(/[^a-zA-Z0-9_$]/g, "");
+  if (!clean) return "stateReducer";
+  const camel = clean.charAt(0).toLowerCase() + clean.slice(1);
+  return `${camel}Reducer`;
+}
+
 export const DEFAULT_REDUCER_CODE = `(prev, next) => {
   // Check action sent by node (e.g. { action: "replace", value: ... })
   const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;

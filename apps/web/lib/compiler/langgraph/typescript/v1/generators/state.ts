@@ -5,7 +5,7 @@ import type {
 } from "@workspace/canvas";
 import { isTypesNode, isTypesRefNode } from "@workspace/canvas";
 import type { CompileContext } from "../types";
-import { toPascalCase, toCamelCase } from "../utils";
+import { toPascalCase, toCamelCase, getChannelReducerName } from "../utils";
 
 function normalizeReducerCode(code: string, updateType?: string, typeName?: string): string {
   let fn = code.trim();
@@ -187,49 +187,39 @@ export function buildStateFile(ctx: CompileContext): string {
     (c) => c.type === "boolean" && codeUsesActionUpdates(c.customReducerCode),
   );
 
-  const primitiveUpdateDefs: string[] = [];
-  if (needsStringUpdate) {
-    primitiveUpdateDefs.push(`export type StringChannelUpdate = string | {
+  const primitiveUpdateDefs: string[] = [
+    `export type StringChannelUpdate = string | {
   action?: string;
   value?: string;
   separator?: string;
-};`);
-  }
-  if (needsNumberUpdate) {
-    primitiveUpdateDefs.push(`export type NumberChannelUpdate = number | {
+};`,
+    `export type NumberChannelUpdate = number | {
   action?: string;
   value?: number;
   amount?: number;
-};`);
-  }
-  if (needsBooleanUpdate) {
-    primitiveUpdateDefs.push(`export type BooleanChannelUpdate = boolean | {
+};`,
+    `export type BooleanChannelUpdate = boolean | {
   action?: string;
   value?: boolean;
-};`);
-  }
+};`,
+  ];
 
   const channelLines: string[] = [];
+  const importedReducers: string[] = [];
 
   for (const ch of ctx.input.stateChannels) {
     const field = toCamelCase(ch.key);
+    const reducerName = getChannelReducerName(ch.key);
+
     if (
-      ch.key === "messages" ||
-      ch.type === "messages" ||
-      ch.reducer === "add_messages"
+      (ch.key === "messages" && !ch.customReducerCode && ch.reducer !== "custom") ||
+      (ch.type === "messages" && !ch.customReducerCode && ch.key === "messages" && ch.reducer !== "custom")
     ) {
-      if (ch.key === "messages") {
-        channelLines.push(`  ...MessagesAnnotation.spec,`);
-      } else {
-        channelLines.push(
-          `  ${field}: Annotation<BaseMessage[]>({
-    reducer: (x: BaseMessage[], y: BaseMessage[]) => x.concat(y),
-    default: () => [],
-  }),`,
-        );
-      }
+      channelLines.push(`  ...MessagesAnnotation.spec,`);
       continue;
     }
+
+    importedReducers.push(reducerName);
 
     const customTypeMatch =
       ch.customTypeName ||
@@ -248,6 +238,31 @@ export function buildStateFile(ctx: CompileContext): string {
     };
     const tsType = customTypeMatch || typeMap[ch.type] || "string";
 
+    if (ch.key === "messages" || ch.type === "messages" || ch.reducer === "add_messages") {
+      channelLines.push(
+        `  ${field}: Annotation<BaseMessage[], BaseMessage[] | BaseMessage>({
+    reducer: ${reducerName},
+    default: () => [],
+  }),`,
+      );
+      continue;
+    }
+
+    if (isCustomType && customTypeMatch) {
+      const updateType = `${customTypeMatch}Update`;
+      const defaultVal =
+        ch.defaultValue !== undefined && ch.defaultValue !== ""
+          ? JSON.stringify(ch.defaultValue)
+          : undefined;
+
+      channelLines.push(
+        `  ${field}: Annotation<${tsType}, ${updateType}>({
+    reducer: ${reducerName},${defaultVal !== undefined ? `\n    default: () => ${defaultVal},` : ""}
+  }),`,
+      );
+      continue;
+    }
+
     if (ch.reducer === "custom" || ch.customReducerCode) {
       let updateType: string | undefined;
       if (isCustomType && customTypeMatch) {
@@ -260,11 +275,6 @@ export function buildStateFile(ctx: CompileContext): string {
         updateType = "BooleanChannelUpdate";
       }
 
-      const customFn = normalizeReducerCode(
-        ch.customReducerCode || `(prev, next) => next`,
-        updateType,
-        customTypeMatch,
-      );
       const defaultVal =
         ch.defaultValue !== undefined && ch.defaultValue !== ""
           ? JSON.stringify(ch.defaultValue)
@@ -273,125 +283,64 @@ export function buildStateFile(ctx: CompileContext): string {
       const annotationGeneric = updateType ? `${tsType}, ${updateType}` : tsType;
       channelLines.push(
         `  ${field}: Annotation<${annotationGeneric}>({
-    reducer: ${customFn},${defaultVal !== undefined ? `\n    default: () => ${defaultVal},` : ""}
+    reducer: ${reducerName},${defaultVal !== undefined ? `\n    default: () => ${defaultVal},` : ""}
   }),`,
       );
       continue;
     }
 
-    if (isCustomType && customTypeMatch) {
-      const updateType = `${customTypeMatch}Update`;
-      const defaultVal =
-        ch.defaultValue !== undefined && ch.defaultValue !== ""
-          ? JSON.stringify(ch.defaultValue)
-          : undefined;
-      if (ch.reducer === "merge_object") {
-        channelLines.push(
-          `  ${field}: Annotation<${tsType}, ${updateType}>({
-    reducer: (x: ${tsType}, y: ${updateType}) => ({ ...x, ...(typeof y === "object" && y !== null && "value" in y && typeof y.value === "object" ? y.value : y) }),${defaultVal !== undefined ? `\n    default: () => ${defaultVal},` : ""}
-  }),`,
-        );
-      } else {
-        channelLines.push(
-          `  ${field}: Annotation<${tsType}, ${updateType}>({
-    reducer: (x: ${tsType}, y: ${updateType}): ${tsType} => {
-      const initial = { ...x };
-      if (typeof y === "object" && y !== null) {
-        const payload = "value" in y && typeof y.value === "object" && y.value !== null ? y.value : y;
-        return { ...initial, ...payload };
-      }
-      return initial;
-    },${defaultVal !== undefined ? `\n    default: () => ${defaultVal},` : ""}
-  }),`,
-        );
-      }
-      continue;
-    }
-
     if (ch.type === "string") {
-      if (ch.reducer === "append") {
-        channelLines.push(
-          `  ${field}: Annotation<string>({
-    reducer: (x: string, y: string) => x + y,
-    default: () => ${JSON.stringify(ch.defaultValue ?? "")},
+      const isBlank =
+        ch.defaultValue === undefined ||
+        ch.defaultValue === "" ||
+        ch.defaultValue === '""' ||
+        ch.defaultValue === "''" ||
+        String(ch.defaultValue).trim() === "";
+      const defaultVal = isBlank ? '""' : JSON.stringify(ch.defaultValue);
+      channelLines.push(
+        `  ${field}: Annotation<string>({
+    reducer: ${reducerName},
+    default: () => ${defaultVal},
   }),`,
-        );
-      } else if (ch.defaultValue !== undefined && ch.defaultValue !== "") {
-        channelLines.push(
-          `  ${field}: Annotation<string>({
-    reducer: (_, y: string) => y,
-    default: () => ${JSON.stringify(ch.defaultValue)},
-  }),`,
-        );
-      } else {
-        channelLines.push(`  ${field}: Annotation<string>(),`);
-      }
+      );
     } else if (ch.type === "number") {
-      if (ch.reducer === "append") {
-        channelLines.push(
-          `  ${field}: Annotation<number>({
-    reducer: (x: number, y: number) => x + y,
-    default: () => ${Number(ch.defaultValue ?? 0)},
+      const defaultVal = Number(ch.defaultValue ?? 0);
+      channelLines.push(
+        `  ${field}: Annotation<number>({
+    reducer: ${reducerName},
+    default: () => ${defaultVal},
   }),`,
-        );
-      } else if (ch.defaultValue !== undefined && ch.defaultValue !== 0) {
-        channelLines.push(
-          `  ${field}: Annotation<number>({
-    reducer: (_, y: number) => y,
-    default: () => ${Number(ch.defaultValue)},
-  }),`,
-        );
-      } else {
-        channelLines.push(`  ${field}: Annotation<number>(),`);
-      }
+      );
     } else if (ch.type === "boolean") {
-      if (ch.defaultValue !== undefined) {
-        channelLines.push(
-          `  ${field}: Annotation<boolean>({
-    reducer: (_, y: boolean) => y,
-    default: () => ${Boolean(ch.defaultValue)},
+      const defaultVal = Boolean(ch.defaultValue ?? false);
+      channelLines.push(
+        `  ${field}: Annotation<boolean>({
+    reducer: ${reducerName},
+    default: () => ${defaultVal},
   }),`,
-        );
-      } else {
-        channelLines.push(`  ${field}: Annotation<boolean>(),`);
-      }
+      );
     } else if (ch.type === "array") {
       const defArr = Array.isArray(ch.defaultValue) ? ch.defaultValue : [];
-      if (ch.reducer === "concat_array" || ch.reducer === "append") {
-        channelLines.push(
-          `  ${field}: Annotation<string[]>({
-    reducer: (x: string[], y: string[]) => x.concat(y),
+      channelLines.push(
+        `  ${field}: Annotation<string[]>({
+    reducer: ${reducerName},
     default: () => ${JSON.stringify(defArr)},
   }),`,
-        );
-      } else if (defArr.length > 0) {
-        channelLines.push(
-          `  ${field}: Annotation<string[]>({
-    reducer: (_, y: string[]) => y,
-    default: () => ${JSON.stringify(defArr)},
-  }),`,
-        );
-      } else {
-        channelLines.push(`  ${field}: Annotation<string[]>(),`);
-      }
+      );
     } else if (ch.type === "object" || ch.type === "json") {
-      if (ch.reducer === "merge_object") {
-        channelLines.push(
-          `  ${field}: Annotation<Record<string, string>>({
-    reducer: (x: Record<string, string>, y: Record<string, string>) => ({ ...x, ...y }),
+      channelLines.push(
+        `  ${field}: Annotation<Record<string, string>>({
+    reducer: ${reducerName},
     default: () => ({}),
   }),`,
-        );
-      } else {
-        channelLines.push(`  ${field}: Annotation<Record<string, string>>(),`);
-      }
+      );
     } else {
       channelLines.push(`  ${field}: Annotation<string>(),`);
     }
   }
 
   const extraImports: string[] = [];
-  if (hasCustomMessages) {
+  if (hasCustomMessages || channelLines.some((line) => line.includes("BaseMessage"))) {
     extraImports.push(`import type { BaseMessage } from "@langchain/core/messages";`);
   }
 
@@ -399,7 +348,13 @@ export function buildStateFile(ctx: CompileContext): string {
   const customTypesSection =
     allTypeDefs.length > 0 ? `\n\n${allTypeDefs.join("\n\n")}` : "";
 
-  return `import { ${imports.sort().join(", ")} } from "@langchain/langgraph";${extraImports.length > 0 ? "\n" + extraImports.join("\n") : ""}${customTypesSection}
+  const uniqueReducers = Array.from(new Set(importedReducers));
+  const reducersImportSection =
+    uniqueReducers.length > 0
+      ? `\nimport {\n  ${uniqueReducers.join(",\n  ")},\n} from "./reducers";`
+      : "";
+
+  return `import { ${imports.sort().join(", ")} } from "@langchain/langgraph";${reducersImportSection}${extraImports.length > 0 ? "\n" + extraImports.join("\n") : ""}${customTypesSection}
 
 /**
  * Graph State Schema Definition
