@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { DragDropContext, Droppable } from "@hello-pangea/dnd";
 import { Bot } from "lucide-react";
+import { Button } from "@workspace/ui/components/button";
 import type {
   AgentNodeData,
   LangGraphLLMNode,
@@ -218,6 +219,15 @@ export function AgentNodeInspector({
           <p className="text-[11px] text-muted-foreground/60 max-w-[280px]">
             Add execution steps (DB query, API call, LLM agent, Kafka, custom logic) from the toolbar below.
           </p>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => handleAddStep("llm_call")}
+            className="mt-2 text-xs font-semibold gap-1.5 h-7 px-3 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30"
+          >
+            <Bot className="w-3.5 h-3.5" />
+            <span>Add LLM Agent Step</span>
+          </Button>
         </div>
       ) : (
         <DragDropContext onDragEnd={handleDragEnd}>

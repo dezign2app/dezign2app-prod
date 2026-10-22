@@ -359,13 +359,20 @@ function StateMappingRow({
                   );
                 }
                 const ch = allChannels.find((c) => c.key === item || c.id === item);
+                const isMessagesTarget = sc.key === "messages";
+                const roleHint =
+                  isMessagesTarget && ch
+                    ? ch.type === "string"
+                      ? " (wraps as HumanMessage)"
+                      : " (bulk array)"
+                    : "";
                 return (
                   <ComboboxItem
                     key={item}
                     value={item}
                     className="flex items-center justify-between py-1 px-2 text-xs font-mono cursor-pointer rounded-md hover:bg-accent hover:text-accent-foreground"
                   >
-                    <span className="truncate">{item}</span>
+                    <span className="truncate">{item}{roleHint}</span>
                     {ch?.type && (
                       <span className="text-[8px] text-muted-foreground shrink-0 ml-1">
                         ({ch.type})

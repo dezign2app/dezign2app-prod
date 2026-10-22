@@ -72,6 +72,23 @@ export function collectPipelineImports(
         imports.set(importPath, new Set([graphName]));
       }
 
+      if (s.langGraphMessagesConfig) {
+        const set = imports.get(importPath)!;
+        if (s.langGraphMessagesConfig.mode === "bulk") {
+          set.add("HumanMessage");
+          set.add("SystemMessage");
+          set.add("AIMessage");
+        } else {
+          set.add("HumanMessage");
+          if (s.langGraphMessagesConfig.systemMessageSource?.trim()) {
+            set.add("SystemMessage");
+          }
+          if (s.langGraphMessagesConfig.aiMessageSource?.trim()) {
+            set.add("AIMessage");
+          }
+        }
+      }
+
       if (s.langGraphStreamingEnabled) {
         const streamProtocol = s.langGraphStreamingProtocol || "sse";
         if (streamProtocol === "websocket") {

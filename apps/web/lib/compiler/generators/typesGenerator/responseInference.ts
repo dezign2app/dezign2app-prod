@@ -249,9 +249,11 @@ export function inferBindingType(
             return "unknown[]";
           }
           if (source.field === "state") {
-            return "Record<string, string | number | boolean | null>";
+            return "Record<string, unknown>";
           }
-          const lgNode = nodes.find((n) => n.id === step.langGraphTargetNodeId);
+          const lgNode = nodes.find(
+            (n) => n.id === step.langGraphTargetNodeId || (n.data?.label && n.data.label === step.name)
+          );
           const stateChannels =
             (lgNode?.data?.stateChannels as { key?: string; type?: string }[] | undefined) || [];
           const ch = stateChannels.find((c) => c.key === source.field);
@@ -267,7 +269,32 @@ export function inferBindingType(
         if (step.langGraphOutputMode === "last_message") {
           return "string";
         }
-        return "{ response: string; threadId?: string; state?: Record<string, string | number | boolean | null> }";
+        if (
+          step.langGraphOutputMode === "specific_fields" &&
+          step.langGraphOutputFields &&
+          step.langGraphOutputFields.length > 0
+        ) {
+          const lgNode = nodes.find(
+            (n) => n.id === step.langGraphTargetNodeId || (n.data?.label && n.data.label === step.name)
+          );
+          const stateChannels =
+            (lgNode?.data?.stateChannels as { key?: string; type?: string }[] | undefined) || [];
+          const props = step.langGraphOutputFields.map((f) => {
+            if (f === "response" || f === "threadId" || f === "message") return `${f}?: string`;
+            if (f === "count") return `${f}?: number`;
+            if (f === "messages") return `${f}?: unknown[]`;
+            if (f === "state") return `${f}?: Record<string, unknown>`;
+            const ch = stateChannels.find((c) => c.key === f);
+            if (ch?.type === "number") return `${f}?: number`;
+            if (ch?.type === "boolean") return `${f}?: boolean`;
+            if (ch?.type === "string") return `${f}?: string`;
+            if (ch?.type === "array" || ch?.type === "messages") return `${f}?: unknown[]`;
+            if (ch?.type === "object" || ch?.type === "json") return `${f}?: Record<string, unknown>`;
+            return `${f}?: string | number | boolean | null | undefined`;
+          });
+          return `{ ${props.join("; ")} }`;
+        }
+        return "{ response: string; threadId?: string; state?: Record<string, unknown> }";
       }
     }
   }
@@ -655,6 +682,38 @@ export function generateResponseInterface(
           `  ${f.name}${f.required ? "" : "?"}: ${f.type || "string"};`
         );
         lastDataType = `{\n${props.join("\n")}\n}`;
+      }
+    } else if (lastStep?.type === "langgraph_invoke") {
+      if (lastStep.langGraphOutputMode === "last_message") {
+        lastDataType = "string";
+      } else if (
+        lastStep.langGraphOutputMode === "specific_fields" &&
+        lastStep.langGraphOutputFields &&
+        lastStep.langGraphOutputFields.length > 0
+      ) {
+        const lgNode = nodes.find(
+          (n) => n.id === lastStep.langGraphTargetNodeId || (n.data?.label && n.data.label === lastStep.name)
+        );
+        const stateChannels =
+          (lgNode?.data?.stateChannels as { key?: string; type?: string }[] | undefined) || [];
+        const props = lastStep.langGraphOutputFields.map((f) => {
+          if (f === "response" || f === "threadId" || f === "message") return `${f}?: string`;
+          if (f === "count") return `${f}?: number`;
+          if (f === "messages") return `${f}?: unknown[]`;
+          if (f === "state") return `${f}?: Record<string, unknown>`;
+          const ch = stateChannels.find((c) => c.key === f);
+          if (ch?.type) {
+            if (ch.type === "number") return `${f}?: number`;
+            if (ch.type === "boolean") return `${f}?: boolean`;
+            if (ch.type === "string") return `${f}?: string`;
+            if (ch.type === "array" || ch.type === "messages") return `${f}?: unknown[]`;
+            if (ch.type === "object" || ch.type === "json") return `${f}?: Record<string, unknown>`;
+          }
+          return `${f}?: string | number | boolean | null | undefined`;
+        });
+        lastDataType = `{ ${props.join("; ")} }`;
+      } else {
+        lastDataType = "{ response: string; threadId?: string; state?: Record<string, unknown> }";
       }
     }
     return {

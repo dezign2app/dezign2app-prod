@@ -6,6 +6,7 @@ import { generateServiceRouteTypes } from "./serviceRoutesGenerator";
 import { generateEventsModule } from "./eventsGenerator";
 import { generateCustomTypesModule } from "./customTypesGenerator";
 import { generateResponseInterface } from "./responseInference";
+import { generateAuthTypesModule } from "./authTypesGenerator";
 
 export * from "./types";
 export * from "./entitiesGenerator";
@@ -14,6 +15,7 @@ export * from "./serviceRoutesGenerator";
 export * from "./eventsGenerator";
 export * from "./customTypesGenerator";
 export * from "./packageConfigs";
+export * from "./authTypesGenerator";
 
 export function generateTypesPackage(
   nodes: BackendNode[],
@@ -30,6 +32,11 @@ export function generateTypesPackage(
 
   // 1. package.json & tsconfig.json - Zero internal workspace dependencies to prevent cyclic dependencies
   files.push(...generateTypesPackageConfigs());
+
+  // 1.5 Shared Authentication & User Identity Types: src/auth.ts
+  const authModule = generateAuthTypesModule();
+  files.push(authModule.file);
+  barrelExports.push(authModule.exportStatement);
 
   // 2. Custom Reusable Types (defined on canvas via Types nodes)
   const customTypes = generateCustomTypesModule(nodes);

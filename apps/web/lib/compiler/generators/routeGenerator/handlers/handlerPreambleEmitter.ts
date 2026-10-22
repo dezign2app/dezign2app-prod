@@ -28,6 +28,7 @@ export interface HandlerPreambleParams {
   isBodyMethod: boolean;
   bodyTypeResHasContent: boolean;
   pipelineSteps?: Endpoint["pipelineSteps"];
+  requiresAuth?: boolean;
 }
 
 export interface HandlerPreambleResult {
@@ -59,6 +60,7 @@ export function emitHandlerPreamble(params: HandlerPreambleParams): HandlerPream
     isBodyMethod,
     bodyTypeResHasContent,
     pipelineSteps,
+    requiresAuth = false,
   } = params;
 
   // Build the extra import lines (de-duped by importPath)
@@ -138,6 +140,9 @@ export function emitHandlerPreamble(params: HandlerPreambleParams): HandlerPream
   if (bodyTypeResHasContent) {
     typeImportsList.push(`${schemaVarPrefix}BodySchema`);
   }
+  if (requiresAuth) {
+    typeImportsList.push("AuthUser");
+  }
 
   let code = `import { Request, Response } from "express";
 import { createLogger } from "@workspace/logger";
@@ -146,32 +151,14 @@ import {
 } from "@workspace/types";
 ${allExtraImportLines ? `${allExtraImportLines}\n` : ""}\nconst logger = createLogger("${serviceName}:${routeFileName}");
 
-export type AuthUser = {
-  id: string;
-  userId: string;
-  username: string;
-  role: string;
-  email?: string;
-  name?: string;
-  sessionToken?: string;
-  expiresAt?: number;
-  [key: string]: string | number | boolean | null | undefined;
-};
-
-declare global {
-  namespace Express {
-    interface Request {
-      user?: AuthUser;
-    }
-  }
-}
-
 type ${pascalName}ErrorResponse = {
   error: string;
   details?: string | { formErrors: string[]; fieldErrors: Record<string, string[] | undefined> } | Record<string, string | number | boolean | null>;
 };
 
-export type ${pascalName}Request =
+${
+  requiresAuth
+    ? `export type ${pascalName}Request =
   | (Request<${pascalName}Params, ${pascalName}Response | ${pascalName}ErrorResponse, ${pascalName}Body, ${pascalName}Query> & {
       user?: AuthUser;
     })
@@ -181,7 +168,16 @@ export type ${pascalName}Request =
       query: ${pascalName}Query;
       body?: ${pascalName}Body;
       user?: AuthUser;
-    };
+    };`
+    : `export type ${pascalName}Request =
+  | Request<${pascalName}Params, ${pascalName}Response | ${pascalName}ErrorResponse, ${pascalName}Body, ${pascalName}Query>
+  | {
+      headers?: Record<string, string | string[] | undefined>;
+      params: ${pascalName}Params;
+      query: ${pascalName}Query;
+      body?: ${pascalName}Body;
+    };`
+}
 
 ${hasStreamingStep ? `export type ${pascalName}ResponseContext = Response;\n` : `export type ${pascalName}ResponseContext =
   | Response<${pascalName}Response | ${pascalName}ErrorResponse>

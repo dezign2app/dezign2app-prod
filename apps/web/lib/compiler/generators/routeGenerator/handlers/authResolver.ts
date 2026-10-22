@@ -27,22 +27,23 @@ export function resolveEndpointAuth(
 ): AuthResolutionResult {
   const isCallerProtected = trace.incoming.some((inc) => inc.isProtected);
   const requiresAuth =
-    ep.requireAuth !== false &&
-    (isCallerProtected ||
-      Boolean(ep.authRuleId) ||
-      Boolean(ep.requiredRoles && ep.requiredRoles.length > 0) ||
-      Boolean(ep.requiredScopes && ep.requiredScopes.length > 0) ||
-      Boolean(
-        ep.pipelineSteps?.some((s) => {
-          const check = (src?: PipelineStepInputSource): boolean => src?.kind === "auth";
-          return (
-            s.inputBindings?.some((b) => check(b.source)) ||
-            check(s.variableSource) ||
-            check(s.switchSource) ||
-            check(s.loopSource)
-          );
-        }),
-      ));
+    ep.requireAuth === true ||
+    (ep.requireAuth !== false &&
+      (isCallerProtected ||
+        Boolean(ep.authRuleId) ||
+        Boolean(ep.requiredRoles && ep.requiredRoles.length > 0) ||
+        Boolean(ep.requiredScopes && ep.requiredScopes.length > 0) ||
+        Boolean(
+          ep.pipelineSteps?.some((s) => {
+            const check = (src?: PipelineStepInputSource): boolean => src?.kind === "auth";
+            return (
+              s.inputBindings?.some((b) => check(b.source)) ||
+              check(s.variableSource) ||
+              check(s.switchSource) ||
+              check(s.loopSource)
+            );
+          }),
+        )));
 
   // Build the JSON-safe options object for requireAuth().
   // JSON.stringify ensures user-supplied role strings are safely escaped —

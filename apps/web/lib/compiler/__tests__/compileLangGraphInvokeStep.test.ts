@@ -338,5 +338,224 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(content).toContain("res.write(`data: ${JSON.stringify({ error: message })}\\n\\n`);");
     });
   });
+
+  describe("Dedicated Messages Configuration (Single, Dynamic System & Bulk)", () => {
+    it("renders single-turn mode wrapping input in HumanMessage", () => {
+      const step: PipelineStep = {
+        id: "step-agent-single",
+        name: "SupportAgent",
+        type: "langgraph_invoke",
+        langGraphTargetNodeId: "supportAgent",
+        langGraphMessagesConfig: {
+          mode: "single",
+          userMessageSource: "body.prompt",
+        },
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain("const supportAgentMessages = [");
+      expect(code).toContain('new HumanMessage(String(body.prompt || ""))');
+      expect(code).toContain('"messages": supportAgentMessages');
+    });
+
+    it("renders single-turn mode with dynamic SystemMessage", () => {
+      const step: PipelineStep = {
+        id: "step-agent-system",
+        name: "ContextAgent",
+        type: "langgraph_invoke",
+        langGraphTargetNodeId: "contextAgent",
+        langGraphMessagesConfig: {
+          mode: "single",
+          userMessageSource: "body.message",
+          systemMessageSource: "body.systemInstruction",
+        },
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain("const contextAgentMessages = [");
+      expect(code).toContain("(body.systemInstruction ? [new SystemMessage(String(body.systemInstruction))] : [])");
+      expect(code).toContain('new HumanMessage(String(body.message || ""))');
+      expect(code).toContain('"messages": contextAgentMessages');
+    });
+
+    it("renders bulk messages mode mapping array to BaseMessage instances", () => {
+      const step: PipelineStep = {
+        id: "step-agent-bulk",
+        name: "BulkAgent",
+        type: "langgraph_invoke",
+        langGraphTargetNodeId: "bulkAgent",
+        langGraphMessagesConfig: {
+          mode: "bulk",
+          bulkMessagesSource: "body.chatHistory",
+        },
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain("const bulkAgentMessagesRaw = Array.isArray(body.chatHistory) ? body.chatHistory : [];");
+      expect(code).toContain("...bulkAgentMessagesRaw.map((m: any) => {");
+      expect(code).toContain('if (typeof m === "string") return new HumanMessage(m);');
+      expect(code).toContain('if (m?.role === "system") return new SystemMessage(content);');
+      expect(code).toContain('if (m?.role === "assistant" || m?.role === "ai") return new AIMessage(content);');
+      expect(code).toContain("return new HumanMessage(content);");
+      expect(code).toContain('"messages": bulkAgentMessages');
+    });
+
+    it("generates complete route handler importing HumanMessage and SystemMessage from agent package", () => {
+      const ep: Endpoint & { nodeId: string } = {
+        id: "ep-chat-1",
+        nodeId: "service-1",
+        name: "/chat",
+        type: "POST",
+        pipelineSteps: [
+          {
+            id: "step-chat-invoke",
+            name: "ChatBot",
+            type: "langgraph_invoke",
+            langGraphTargetNodeId: "chatBot",
+            langGraphMessagesConfig: {
+              mode: "single",
+              userMessageSource: "body.message",
+              systemMessageSource: "body.systemPrompt",
+            },
+            langGraphThreadIdSource: "body.threadId",
+          },
+        ],
+      };
+
+      const result = generateEndpointRouteHandler({
+        ep,
+        index: 0,
+        serviceName: "ChatService",
+        pascalServiceName: "ChatService",
+        serviceFolderName: "chatservice",
+        allNodes: [],
+        allEdges: [],
+        allEndpoints: [ep],
+        dbFunctions: [],
+        kafkaFunctions: [],
+        redisFunctions: [],
+        nodePublishedEvents: [],
+        usedFileNames: new Set(),
+      });
+
+      const content = result.file.content;
+
+      // Imports should include graph AND message classes
+      expect(content).toContain('import { chatBotGraph, HumanMessage, SystemMessage } from "@workspace/langgraph-chatbot"');
+      // Body should instantiate messages safely
+      expect(content).toContain('new HumanMessage(String(body.message || ""))');
+      expect(content).toContain("new SystemMessage(String(body.systemPrompt))");
+      // Thread ID should be passed in configurable
+      expect(content).toContain("configurable: { thread_id: body.threadId }");
+    });
+
+    it("generates route handler importing ONLY HumanMessage when system prompt is omitted", () => {
+      const ep: Endpoint & { nodeId: string } = {
+        id: "ep-chat-2",
+        nodeId: "service-1",
+        name: "/chat-simple",
+        type: "POST",
+        pipelineSteps: [
+          {
+            id: "step-chat-simple",
+            name: "ChatBot",
+            type: "langgraph_invoke",
+            langGraphTargetNodeId: "chatBot",
+            langGraphMessagesConfig: {
+              mode: "single",
+              userMessageSource: "body.message",
+            },
+          },
+        ],
+      };
+
+      const result = generateEndpointRouteHandler({
+        ep,
+        index: 0,
+        serviceName: "ChatService",
+        pascalServiceName: "ChatService",
+        serviceFolderName: "chatservice",
+        allNodes: [],
+        allEdges: [],
+        allEndpoints: [ep],
+        dbFunctions: [],
+        kafkaFunctions: [],
+        redisFunctions: [],
+        nodePublishedEvents: [],
+        usedFileNames: new Set(),
+      });
+
+      const content = result.file.content;
+
+      // Imports should include graph and HumanMessage only (no SystemMessage)
+      expect(content).toContain('import { chatBotGraph, HumanMessage } from "@workspace/langgraph-chatbot"');
+      expect(content).not.toContain("SystemMessage");
+      expect(content).toContain('new HumanMessage(String(body.message || ""))');
+    });
+
+    it("generates route handler importing AIMessage and SystemMessage when both optional messages are configured", () => {
+      const ep: Endpoint & { nodeId: string } = {
+        id: "ep-chat-3",
+        nodeId: "service-1",
+        name: "/chat-context",
+        type: "POST",
+        pipelineSteps: [
+          {
+            id: "step-chat-context",
+            name: "ChatBot",
+            type: "langgraph_invoke",
+            langGraphTargetNodeId: "chatBot",
+            langGraphMessagesConfig: {
+              mode: "single",
+              userMessageSource: "body.message",
+              systemMessageSource: "body.systemPrompt",
+              aiMessageSource: "body.aiContext",
+            },
+          },
+        ],
+      };
+
+      const result = generateEndpointRouteHandler({
+        ep,
+        index: 0,
+        serviceName: "ChatService",
+        pascalServiceName: "ChatService",
+        serviceFolderName: "chatservice",
+        allNodes: [],
+        allEdges: [],
+        allEndpoints: [ep],
+        dbFunctions: [],
+        kafkaFunctions: [],
+        redisFunctions: [],
+        nodePublishedEvents: [],
+        usedFileNames: new Set(),
+      });
+
+      const content = result.file.content;
+
+      expect(content).toContain("HumanMessage");
+      expect(content).toContain("SystemMessage");
+      expect(content).toContain("AIMessage");
+      expect(content).toContain("new SystemMessage(String(body.systemPrompt))");
+      expect(content).toContain("new AIMessage(String(body.aiContext))");
+      expect(content).toContain('new HumanMessage(String(body.message || ""))');
+    });
+  });
 });
+
   

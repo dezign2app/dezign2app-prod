@@ -458,7 +458,29 @@ export interface PipelineStep {
    * Passed as config.configurable.thread_id to graph.invoke() or graph.stream().
    */
   langGraphThreadIdSource?: string;
+  /**
+   * Dedicated configuration for conversation history and messages input.
+   * Supports single turn (user + dynamic system message) or bulk message array.
+   */
+  langGraphMessagesConfig?: LangGraphMessagesConfig;
 }
+
+export interface LangGraphMessagesConfig {
+  mode?: "single" | "bulk";
+  userMessageSource?: string;
+  systemMessageSource?: string;
+  aiMessageSource?: string;
+  bulkMessagesSource?: string;
+}
+
+export const langGraphMessagesConfigSchema = z.object({
+  mode: z.enum(["single", "bulk"]).optional(),
+  userMessageSource: z.string().optional(),
+  systemMessageSource: z.string().optional(),
+  aiMessageSource: z.string().optional(),
+  bulkMessagesSource: z.string().optional(),
+});
+
 
 export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
   z.object({
@@ -572,6 +594,7 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     langGraphStreamingFields: z.array(z.string()).optional(),
     langGraphOutputMode: z.enum(["full_state", "specific_fields", "last_message"]).optional(),
     langGraphOutputFields: z.array(z.string()).optional(),
+    langGraphMessagesConfig: langGraphMessagesConfigSchema.optional(),
   })
 );
 

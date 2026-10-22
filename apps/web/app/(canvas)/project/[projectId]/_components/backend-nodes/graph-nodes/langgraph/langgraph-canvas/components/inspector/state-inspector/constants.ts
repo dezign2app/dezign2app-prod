@@ -251,24 +251,24 @@ export const REDUCER_CODE_PRESETS = {
     : next;
   const incoming = rawValue !== undefined && rawValue !== null ? String(rawValue) : "";
 
-  // 1. Default update: appends incoming text (supports optional separator)
-  // e.g. dispatch { notes: "world" }
-  if (!action || action === "" || action === "default") {
+  // 1. Default update: replaces current string with incoming value (last-value-wins)
+  // e.g. dispatch { message: "hello" }
+  if (!action || action === "" || action === "default" || action === "replace" || action === "set") {
+    return incoming;
+  }
+
+  // 2. Action: append / concat - appends incoming text (supports optional separator)
+  // e.g. dispatch { notes: { action: "append", value: "world" } }
+  if (action === "append" || action === "concat") {
     const sep = typeof next === "object" && next !== null && "separator" in next && next.separator !== undefined ? String(next.separator) : "";
     return current ? \`\${current}\${sep}\${incoming}\` : incoming;
   }
 
-  // 2. Action: prepend - adds incoming text before the current string
+  // 3. Action: prepend - adds incoming text before the current string
   // e.g. dispatch { notes: { action: "prepend", value: "[INFO] " } }
   if (action === "prepend") {
     const sep = typeof next === "object" && next !== null && "separator" in next && next.separator !== undefined ? String(next.separator) : "";
     return current ? \`\${incoming}\${sep}\${current}\` : incoming;
-  }
-
-  // 3. Action: replace - explicitly replaces the string
-  // e.g. dispatch { notes: { action: "replace", value: "fresh content" } }
-  if (action === "replace") {
-    return incoming;
   }
 
   // 4. Action: reset / clear - clears the string

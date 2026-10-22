@@ -115,6 +115,7 @@ export function renderLangGraphInvokeStep(
     inputBindings = [],
     langGraphStateMapping,
     langGraphThreadIdSource,
+    langGraphMessagesConfig,
     langGraphStreamingEnabled,
     langGraphStreamingFields = [],
     langGraphOutputMode = "full_state",
@@ -138,8 +139,63 @@ export function renderLangGraphInvokeStep(
     ? resolvePathAccessor(langGraphThreadIdSource, ctx)
     : undefined;
 
+  // Build dedicated messages initialization if langGraphMessagesConfig is defined
+  const stepPrefix = toVarName(step.name || step.id || "agent");
+  const messagesInitLines: string[] = [];
+  let messagesVarName: string | undefined;
+
+  if (langGraphMessagesConfig) {
+    messagesVarName = `${stepPrefix}Messages`;
+    const systemSource = langGraphMessagesConfig.systemMessageSource?.trim();
+    const systemAccessor = systemSource ? resolvePathAccessor(systemSource, ctx) : undefined;
+    const aiSource = langGraphMessagesConfig.aiMessageSource?.trim();
+    const aiAccessor = aiSource ? resolvePathAccessor(aiSource, ctx) : undefined;
+
+    if (langGraphMessagesConfig.mode === "bulk") {
+      const bulkSource = langGraphMessagesConfig.bulkMessagesSource || "body.messages";
+      const bulkAccessor = resolvePathAccessor(bulkSource, ctx);
+      messagesInitLines.push(
+        `const ${messagesVarName}Raw = Array.isArray(${bulkAccessor}) ? ${bulkAccessor} : [];`,
+        `const ${messagesVarName} = [`,
+        ...(systemAccessor
+          ? [`  ...(${systemAccessor} ? [new SystemMessage(String(${systemAccessor}))] : []),`]
+          : []),
+        `  ...${messagesVarName}Raw.map((m: any) => {`,
+        `    if (typeof m === "string") return new HumanMessage(m);`,
+        `    const content = m?.content ?? (typeof m === "object" ? JSON.stringify(m) : String(m ?? ""));`,
+        `    if (m?.role === "system") return new SystemMessage(content);`,
+        `    if (m?.role === "assistant" || m?.role === "ai") return new AIMessage(content);`,
+        `    return new HumanMessage(content);`,
+        `  }),`,
+        `];`,
+      );
+    } else {
+      // Single turn mode
+      const userSource = langGraphMessagesConfig.userMessageSource || "body.message";
+      const userAccessor = resolvePathAccessor(userSource, ctx);
+
+      messagesInitLines.push(
+        `const ${messagesVarName} = [`,
+        ...(systemAccessor
+          ? [`  ...(${systemAccessor} ? [new SystemMessage(String(${systemAccessor}))] : []),`]
+          : []),
+        ...(aiAccessor
+          ? [`  ...(${aiAccessor} ? [new AIMessage(String(${aiAccessor}))] : []),`]
+          : []),
+        `  new HumanMessage(String(${userAccessor} || "")),`,
+        `];`,
+      );
+    }
+  }
+
   // Build state input object
   const stateFields: string[] = [];
+  const mappedFieldKeys = new Set<string>();
+
+  if (messagesVarName) {
+    mappedFieldKeys.add("messages");
+    stateFields.push(`  "messages": ${messagesVarName},`);
+  }
 
   if (inputBindings.length > 0) {
     for (const b of inputBindings) {
@@ -150,6 +206,10 @@ export function renderLangGraphInvokeStep(
           }
           continue;
         }
+        if ((b.argName === "messages" || b.argName === "message") && messagesVarName) {
+          continue;
+        }
+        mappedFieldKeys.add(b.argName);
         stateFields.push(`  ${JSON.stringify(b.argName)}: ${resolveBinding(b, ctx)},`);
       }
     }
@@ -162,13 +222,18 @@ export function renderLangGraphInvokeStep(
         }
         continue;
       }
+      if ((key === "messages" || key === "message") && messagesVarName) {
+        continue;
+      }
+      mappedFieldKeys.add(key);
       if (isBlankOrQuotes(path)) {
         stateFields.push(`  ${JSON.stringify(key)}: "",`);
         continue;
       }
       stateFields.push(`  ${JSON.stringify(key)}: ${resolvePathAccessor(path, ctx)},`);
     }
-  } else {
+  } else if (!messagesVarName) {
+    mappedFieldKeys.add("messages");
     stateFields.push(
       `  messages: ${ctx.bodyVar}?.messages ?? [{ role: "user", content: ${ctx.bodyVar}?.message ?? (typeof ${ctx.bodyVar} === "string" ? ${ctx.bodyVar} : JSON.stringify(${ctx.bodyVar})) }],`,
     );
@@ -192,6 +257,9 @@ export function renderLangGraphInvokeStep(
 
     if (streamProtocol === "sse") {
       rawLines.push(`// --- LangGraph Streaming Invocation (${step.name}) via SSE ---`);
+      if (messagesInitLines.length > 0) {
+        rawLines.push(...messagesInitLines);
+      }
       rawLines.push(`const agentState = ${stateInit};`);
       rawLines.push(`res.setHeader("Content-Type", "text/event-stream");`);
       rawLines.push(`res.setHeader("Cache-Control", "no-cache");`);
@@ -239,6 +307,9 @@ export function renderLangGraphInvokeStep(
         : (threadIdExpr || `"default"`);
 
       rawLines.push(`// --- LangGraph Streaming Invocation (${step.name}) via WebSocket ---`);
+      if (messagesInitLines.length > 0) {
+        rawLines.push(...messagesInitLines);
+      }
       rawLines.push(`const agentState = ${stateInit};`);
       rawLines.push(
         `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
@@ -281,6 +352,9 @@ export function renderLangGraphInvokeStep(
         : (threadIdExpr || `"agent"`);
 
       rawLines.push(`// --- LangGraph Streaming Invocation (${step.name}) to Kafka Topic ---`);
+      if (messagesInitLines.length > 0) {
+        rawLines.push(...messagesInitLines);
+      }
       rawLines.push(`const agentState = ${stateInit};`);
       rawLines.push(
         `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
@@ -323,6 +397,9 @@ export function renderLangGraphInvokeStep(
         : (threadIdExpr ? `\`stream:agent:\${${threadIdExpr}}\`` : `"stream:agent:default"`);
 
       rawLines.push(`// --- LangGraph Streaming Invocation (${step.name}) to Redis Stream ---`);
+      if (messagesInitLines.length > 0) {
+        rawLines.push(...messagesInitLines);
+      }
       rawLines.push(`const agentState = ${stateInit};`);
       rawLines.push(`const redisClient = await getRedisClient();`);
       rawLines.push(
@@ -367,6 +444,9 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`  res.setHeader("X-Thread-Id", String(${threadIdExpr}));`);
       rawLines.push(`}`);
     }
+    if (messagesInitLines.length > 0) {
+      rawLines.push(...messagesInitLines);
+    }
     rawLines.push(`const agentState = ${stateInit};`);
     rawLines.push(`const ${outputVariable}Raw = await ${graphVar}.invoke(agentState${invokeConfigOptions});`);
 
@@ -394,7 +474,7 @@ export function renderLangGraphInvokeStep(
         `const ${outputVariable}LastMsg = ${outputVariable}Messages.length > 0 ? ${outputVariable}Messages[${outputVariable}Messages.length - 1] : undefined;`,
       );
       rawLines.push(
-        `const ${outputVariable}Response = (typeof ${outputVariable}LastMsg === "object" && ${outputVariable}LastMsg !== null && "content" in ${outputVariable}LastMsg && ${outputVariable}LastMsg.content !== undefined ? (typeof ${outputVariable}LastMsg.content === "string" ? ${outputVariable}LastMsg.content : JSON.stringify(${outputVariable}LastMsg.content)) : undefined) ?? (typeof ${outputVariable}Raw?.message === "string" ? ${outputVariable}Raw.message : (typeof ${outputVariable}Raw === "string" ? ${outputVariable}Raw : ""));`,
+        `const ${outputVariable}Response = (typeof ${outputVariable}LastMsg === "object" && ${outputVariable}LastMsg !== null && "content" in ${outputVariable}LastMsg && ${outputVariable}LastMsg.content !== undefined ? (typeof ${outputVariable}LastMsg.content === "string" ? ${outputVariable}LastMsg.content : JSON.stringify(${outputVariable}LastMsg.content)) : undefined) ?? (typeof ${outputVariable}Raw === "string" ? ${outputVariable}Raw : "");`,
       );
       rawLines.push(`const ${outputVariable} = {
   ...${outputVariable}Raw,

@@ -19,23 +19,14 @@ export function generateRequireAuthMiddleware(
 
   return `import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { createLogger } from "@workspace/logger";
+import type { AuthUser } from "@workspace/types";
 ${buildImports(strategy)}
 
 // Extend Express Request to carry the resolved user identity
 declare global {
   namespace Express {
     interface Request {
-      user?: {
-        id: string;
-        userId: string;
-        username: string;
-        role: string;
-        email?: string;
-        name?: string;
-        sessionToken?: string;
-        expiresAt?: number;
-        [key: string]: string | number | boolean | null | undefined;
-      };
+      user?: AuthUser;
     }
   }
 }

@@ -389,7 +389,16 @@ export const LangGraphCanvasStateNode = ({
                         variant="outline"
                         className="text-[8px] px-1 py-0 h-3.5 border-blue-500/30 text-blue-400 font-mono font-normal shrink-0"
                       >
-                        built-in
+                        chat history
+                      </Badge>
+                    )}
+                    {ch.key === "message" && (
+                      <Badge
+                        variant="outline"
+                        className="text-[8px] px-1 py-0 h-3.5 border-amber-500/30 text-amber-400 font-mono font-normal shrink-0"
+                        title="Current turn prompt only (replace reducer)"
+                      >
+                        prompt turn
                       </Badge>
                     )}
                   </div>
