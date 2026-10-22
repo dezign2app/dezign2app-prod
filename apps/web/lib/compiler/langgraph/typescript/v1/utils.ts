@@ -152,8 +152,24 @@ export function resolveNodeName(
   ctx: CompileContext,
   nodeMetaMap?: Map<string, NodeMeta>,
 ): string | null {
-  if (nodeId === NODE_ID_START) return "START";
-  if (nodeId === NODE_ID_END || nodeId === "END") return "END";
+  if (
+    nodeId === NODE_ID_START ||
+    nodeId === "START" ||
+    nodeId === "__start__" ||
+    nodeId.toLowerCase() === "start" ||
+    nodeId.startsWith("start_")
+  ) {
+    return "START";
+  }
+  if (
+    nodeId === NODE_ID_END ||
+    nodeId === "END" ||
+    nodeId === "__end__" ||
+    nodeId.toLowerCase() === "end" ||
+    nodeId.startsWith("end_")
+  ) {
+    return "END";
+  }
 
   if (nodeMetaMap) {
     const meta = nodeMetaMap.get(nodeId);
@@ -180,7 +196,12 @@ export function resolveNodeName(
     return toIdentifier(node.data.name || node.data.label || nodeId);
   }
   if (node.type === LANGGRAPH_CANVAS_NODE_STEP) {
-    return toIdentifier(node.data.label || nodeId);
+    const d = node.data;
+    if (d.stepType === "router") {
+      const meta = nodeMetaMap?.get(nodeId);
+      return meta ? meta.exportName : `${toIdentifier(d.label || nodeId)}Router`;
+    }
+    return toIdentifier(d.label || nodeId);
   }
   if (node.type === LANGGRAPH_CANVAS_NODE_END) return "END";
   if (node.type === LANGGRAPH_CANVAS_NODE_START) return "START";
@@ -189,8 +210,11 @@ export function resolveNodeName(
 
 export function getNodeLabel(nodeId: string, ctx: CompileContext): string | null {
   const node = ctx.input.nodes.find((n) => n.id === nodeId);
-  if (!node) return null;
-  return (node.data as { label?: string }).label || null;
+  if (!node || !node.data) return null;
+  if ("label" in node.data && typeof node.data.label === "string" && node.data.label.trim()) {
+    return node.data.label.trim();
+  }
+  return null;
 }
 
 export function buildCondition(
@@ -198,33 +222,40 @@ export function buildCondition(
   operator: string,
   value: string,
 ): string {
+  const isNumericValue = !isNaN(Number(value)) && String(value).trim() !== "";
+  const numVal = isNumericValue ? Number(value) : 0;
   const formattedVal =
     value === "true"
       ? "true"
       : value === "false"
         ? "false"
         : JSON.stringify(value);
+
   switch (operator) {
     case "eq":
     case "==":
     case "equals":
-      return `${field} === ${formattedVal}`;
+      return isNumericValue
+        ? `(${field} === ${numVal} || ${field} === ${formattedVal})`
+        : `${field} === ${formattedVal}`;
     case "neq":
     case "!=":
     case "not_equals":
-      return `${field} !== ${formattedVal}`;
+      return isNumericValue
+        ? `(${field} !== ${numVal} && ${field} !== ${formattedVal})`
+        : `${field} !== ${formattedVal}`;
     case "gt":
     case ">":
-      return `Number(${field}) > ${Number(value) || 0}`;
+      return `Number(${field} ?? 0) > ${numVal}`;
     case "gte":
     case ">=":
-      return `Number(${field}) >= ${Number(value) || 0}`;
+      return `Number(${field} ?? 0) >= ${numVal}`;
     case "lt":
     case "<":
-      return `Number(${field}) < ${Number(value) || 0}`;
+      return `Number(${field} ?? 0) < ${numVal}`;
     case "lte":
     case "<=":
-      return `Number(${field}) <= ${Number(value) || 0}`;
+      return `Number(${field} ?? 0) <= ${numVal}`;
     case "contains":
       return `String(${field} ?? "").includes(${JSON.stringify(value)})`;
     case "starts_with":

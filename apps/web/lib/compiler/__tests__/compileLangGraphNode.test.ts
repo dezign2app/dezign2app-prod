@@ -5,6 +5,9 @@ import {
   LANGGRAPH_CANVAS_NODE_TOOL,
   LANGGRAPH_CANVAS_NODE_LLM,
   LANGGRAPH_CANVAS_NODE_NODE,
+  LANGGRAPH_CANVAS_NODE_START,
+  LANGGRAPH_CANVAS_NODE_STEP,
+  LANGGRAPH_CANVAS_NODE_END,
   HANDLE_LLM_IN,
   HANDLE_TOOL_IN,
   NODE_ID_START,
@@ -531,5 +534,101 @@ describe("compileLangGraph Compiler Fixes", () => {
       "export const messageReducer = (prev: string, next: StringChannelUpdate) =>",
     );
     expect(messageReducer).not.toContain("(prev,");
+  });
+
+  it("compiles conditional router step node with exact node names and END constant instead of raw labels", () => {
+    const input: CompileLangGraphInput = {
+      graphLabel: "Loop Agent",
+      stateChannels: [
+        { key: "messages", type: "messages", reducer: "add_messages", defaultValue: [] },
+        { key: "count", type: "number", reducer: "replace", defaultValue: 0 },
+      ],
+      inputChannels: [],
+      nodes: [
+        {
+          id: NODE_ID_START,
+          type: LANGGRAPH_CANVAS_NODE_START,
+          position: { x: 0, y: 0 },
+          data: { label: "START" },
+        },
+        {
+          id: "agent_node",
+          type: LANGGRAPH_CANVAS_NODE_NODE,
+          position: { x: 200, y: 0 },
+          data: {
+            name: "Agent Node",
+            label: "Agent Node",
+          },
+        },
+        {
+          id: "router_node",
+          type: LANGGRAPH_CANVAS_NODE_STEP,
+          position: { x: 400, y: 0 },
+          data: {
+            stepId: "router_node",
+            label: "Conditional Router",
+            stepType: "router",
+            routerConfig: {
+              branches: [
+                {
+                  id: "b_loop",
+                  label: "agent route",
+                  field: "count",
+                  operator: "lte",
+                  value: "5",
+                },
+                {
+                  id: "b_end",
+                  label: "end",
+                  field: "count",
+                  operator: "gt",
+                  value: "5",
+                },
+              ],
+            },
+          },
+        },
+        {
+          id: "end_abc123",
+          type: LANGGRAPH_CANVAS_NODE_END,
+          position: { x: 600, y: 0 },
+          data: { label: "END State" },
+        },
+      ],
+      edges: [
+        { id: "e1", source: NODE_ID_START, target: "agent_node" },
+        { id: "e2", source: "agent_node", target: "router_node" },
+        { id: "e3", source: "router_node", target: "agent_node", sourceHandle: "b_loop" },
+        { id: "e4", source: "router_node", target: "end_abc123", sourceHandle: "b_end" },
+      ],
+      outputMode: "package",
+    };
+
+    const files = compileLangGraph(input);
+    const fileMap = new Map(files.map((f) => [f.filename, f.content]));
+
+    // 1. Verify router node file was generated with correct destinations
+    const routerFile = fileMap.get("src/nodes/conditionalRouter.ts") || "";
+    expect(routerFile).toBeDefined();
+    expect(routerFile).toContain('import { END } from "@langchain/langgraph";');
+    expect(routerFile).toContain('return "agentNode";');
+    expect(routerFile).toContain("return END;");
+    // Ensure raw human labels or end node IDs are not returned as strings
+    expect(routerFile).not.toContain('"agent route"');
+    expect(routerFile).not.toContain('"end"');
+    expect(routerFile).not.toContain('"end_abc123"');
+    expect(routerFile).not.toContain('"endAbc123"');
+    // Ensure condition uses safe numeric handling
+    expect(routerFile).toContain("Number(state.count ?? 0) <= 5");
+    expect(routerFile).toContain("Number(state.count ?? 0) > 5");
+
+    // 2. Verify graph.ts sets up conditional edge from agentNode to the router
+    const graphFile = fileMap.get("src/graph.ts") || "";
+    expect(graphFile).toBeDefined();
+    expect(graphFile).toContain(".addConditionalEdges(");
+    expect(graphFile).toContain('"agentNode"');
+    expect(graphFile).toContain("conditionalRouter");
+    // Allowed destinations must include the agentNode and END
+    expect(graphFile).toMatch(/addConditionalEdges\("agentNode",\s*conditionalRouter,\s*\[.*"agentNode".*END.*\]\)/s);
   });
 });
