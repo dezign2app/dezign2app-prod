@@ -309,7 +309,7 @@ export const LangGraphInvokeStepSection: React.FC<
     const seen = new Set<string>();
 
     for (const inCh of inputChannels) {
-      if (inCh.key) {
+      if (inCh.key && inCh.key !== "thread_id" && inCh.key !== "threadId") {
         list.push({
           key: inCh.key,
           type: inCh.type || "string",
@@ -323,7 +323,12 @@ export const LangGraphInvokeStepSection: React.FC<
     }
 
     for (const stCh of stateChannels) {
-      if (stCh.key && !seen.has(stCh.key)) {
+      if (
+        stCh.key &&
+        stCh.key !== "thread_id" &&
+        stCh.key !== "threadId" &&
+        !seen.has(stCh.key)
+      ) {
         list.push({
           key: stCh.key,
           type: stCh.type || "unknown",
@@ -527,7 +532,12 @@ export const LangGraphInvokeStepSection: React.FC<
     const keysFromMapping = Object.keys(mapping).filter((k) => Boolean(mapping[k]));
     const keysFromBindings = (step.inputBindings || []).map((b) => b.argName).filter(Boolean);
     const allKeys = Array.from(new Set([...keysFromMapping, ...keysFromBindings]));
-    return allKeys.filter((k) => !declaredChannels.some((ch) => ch.key === k));
+    return allKeys.filter(
+      (k) =>
+        k !== "thread_id" &&
+        k !== "threadId" &&
+        !declaredChannels.some((ch) => ch.key === k),
+    );
   }, [mapping, step.inputBindings, declaredChannels]);
 
   const unmappedDeclaredChannels = useMemo(() => {
@@ -655,6 +665,49 @@ export const LangGraphInvokeStepSection: React.FC<
     }
   }, [selectedAgentNode?.id]);
 
+  // Self-healing sanitizer: thread_id is configurable.thread_id (checkpointer config)
+  // belonging strictly to the dedicated Session Thread ID section (langGraphThreadIdSource).
+  // It must NEVER be treated as a state channel payload or stored in langGraphStateMapping/inputBindings.
+  // If legacy data contains thread_id/threadId in mapping or bindings, sanitize it on mount/load
+  // and migrate the source to langGraphThreadIdSource if not already configured.
+  React.useEffect(() => {
+    const rawMapping = step.langGraphStateMapping;
+    const hasThreadInMapping =
+      rawMapping && (Boolean(rawMapping.thread_id) || Boolean(rawMapping.threadId));
+    const currentBindings = step.inputBindings || [];
+    const threadBinding = currentBindings.find(
+      (b) => b.argName === "thread_id" || b.argName === "threadId",
+    );
+
+    if (hasThreadInMapping || threadBinding) {
+      const nextMapping = rawMapping ? { ...rawMapping } : {};
+      const legacyAccessor = nextMapping.thread_id || nextMapping.threadId;
+      delete nextMapping.thread_id;
+      delete nextMapping.threadId;
+
+      const nextBindings = currentBindings.filter(
+        (b) => b.argName !== "thread_id" && b.argName !== "threadId",
+      );
+
+      let nextThreadIdSource = step.langGraphThreadIdSource;
+      if (!nextThreadIdSource) {
+        if (threadBinding && threadBinding.source) {
+          nextThreadIdSource = stepSourceToAccessor(threadBinding.source, availableSources);
+        } else if (legacyAccessor) {
+          nextThreadIdSource = legacyAccessor;
+        }
+      }
+
+      onChange({
+        ...step,
+        inputBindings: nextBindings,
+        langGraphStateMapping: nextMapping,
+        ...(nextThreadIdSource ? { langGraphThreadIdSource: nextThreadIdSource } : {}),
+      });
+      syncAgentInputChannels(nextBindings, nextMapping, nextThreadIdSource);
+    }
+  }, [step.id, step.langGraphStateMapping, step.inputBindings, step.langGraphThreadIdSource]);
+
   const handleBindingChange = (channelKey: string, updatedBinding: StepBinding) => {
     const currentBindings = step.inputBindings || [];
     const existingKeys = new Set(currentBindings.map((b) => b.argName));
@@ -693,8 +746,10 @@ export const LangGraphInvokeStepSection: React.FC<
     fieldValue: string | undefined,
     fallbackAccessor: string,
   ): StepBinding => {
-    const existing = (step.inputBindings || []).find((b) => b.argName === argName);
-    if (existing) return existing;
+    if (argName !== "thread_id" && argName !== "threadId") {
+      const existing = (step.inputBindings || []).find((b) => b.argName === argName);
+      if (existing) return existing;
+    }
     if (fieldValue !== undefined && fieldValue !== "") {
       return {
         argName,
@@ -718,10 +773,10 @@ export const LangGraphInvokeStepSection: React.FC<
   ) => {
     const currentBindings = step.inputBindings || [];
     const otherBindings = currentBindings.filter((b) => b.argName !== argName);
-    const nextBindings: StepBinding[] = [
-      ...otherBindings,
-      { argName, source: updated.source },
-    ];
+    const nextBindings: StepBinding[] =
+      fieldKey === "langGraphThreadIdSource"
+        ? otherBindings.filter((b) => b.argName !== "thread_id" && b.argName !== "threadId")
+        : [...otherBindings, { argName, source: updated.source }];
     const accessor = stepSourceToAccessor(updated.source, availableSources);
     onChange({
       ...step,
@@ -744,7 +799,12 @@ export const LangGraphInvokeStepSection: React.FC<
       | "langGraphThreadIdSource",
   ) => {
     const currentBindings = step.inputBindings || [];
-    const nextBindings = currentBindings.filter((b) => b.argName !== argName);
+    const nextBindings = currentBindings.filter(
+      (b) =>
+        b.argName !== argName &&
+        (fieldKey !== "langGraphThreadIdSource" ||
+          (b.argName !== "thread_id" && b.argName !== "threadId")),
+    );
     const nextStep = { ...step, inputBindings: nextBindings };
     delete nextStep[fieldKey];
     onChange(nextStep);
@@ -783,6 +843,7 @@ export const LangGraphInvokeStepSection: React.FC<
   };
 
   const handleAddChannel = (channelKey: string) => {
+    if (channelKey === "thread_id" || channelKey === "threadId") return;
     let matchedSource: StepSource | null = null;
     const keyLower = channelKey.toLowerCase();
 
@@ -861,7 +922,11 @@ export const LangGraphInvokeStepSection: React.FC<
 
   const handleAutoMap = () => {
     const newMapping: Record<string, string> = { ...mapping };
-    const newBindings: StepBinding[] = [...(step.inputBindings || [])];
+    delete newMapping.thread_id;
+    delete newMapping.threadId;
+    const newBindings: StepBinding[] = (step.inputBindings || []).filter(
+      (b) => b.argName !== "thread_id" && b.argName !== "threadId",
+    );
 
     declaredChannels.forEach((ch) => {
       let matchedSource: StepSource | null = null;
@@ -982,6 +1047,15 @@ export const LangGraphInvokeStepSection: React.FC<
   const handleAddCustomField = () => {
     if (!newKey.trim()) return;
     const key = newKey.trim();
+    if (key === "thread_id" || key === "threadId") {
+      const accessor = stepSourceToAccessor(newCustomBinding.source, availableSources);
+      onChange({
+        ...step,
+        langGraphThreadIdSource: accessor || "body.thread_id",
+      });
+      setNewKey("");
+      return;
+    }
     const bindingToAdd: StepBinding = {
       argName: key,
       source: newCustomBinding.source,

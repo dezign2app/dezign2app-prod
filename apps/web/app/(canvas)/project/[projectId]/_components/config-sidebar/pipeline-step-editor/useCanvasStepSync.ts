@@ -404,6 +404,7 @@ export function useCanvasStepSync({
           const defaultMapping: Record<string, string> = {};
           if (clg.stateChannels && clg.stateChannels.length > 0) {
             clg.stateChannels.forEach((ch) => {
+              if (ch.key === "thread_id" || ch.key === "threadId") return;
               if (ch.key === "messages") {
                 defaultMapping[ch.key] = isConsumer ? "event.message" : "body.message";
               } else {

@@ -384,4 +384,91 @@ describe("LangGraphInvokeStepSection Payload Mapping", () => {
       ])
     );
   });
+
+  it("self-heals and strips legacy thread_id from langGraphStateMapping and inputBindings on mount", () => {
+    const legacyStep: PipelineStepDraft = {
+      id: "step-legacy-thread-1",
+      name: "Invoke Support Agent",
+      type: "langgraph_invoke",
+      langGraphTargetNodeId: "agent-1",
+      langGraphStateMapping: {
+        messages: "body.message",
+        thread_id: "params.id",
+      },
+      inputBindings: [
+        { argName: "messages", source: { kind: "req_body", field: "message" } },
+        { argName: "thread_id", source: { kind: "req_params", field: "id" } },
+      ],
+    };
+
+    const handleChange = vi.fn();
+
+    render(
+      <LangGraphInvokeStepSection
+        step={legacyStep}
+        allNodes={[mockAgentNode]}
+        availableSources={mockAvailableSources}
+        onChange={handleChange}
+      />
+    );
+
+    // Sanitizer effect should have fired
+    expect(handleChange).toHaveBeenCalled();
+    const updated = handleChange.mock.calls[0]![0]!;
+    expect(updated.langGraphStateMapping.thread_id).toBeUndefined();
+    expect(updated.inputBindings.some((b: any) => b.argName === "thread_id")).toBe(false);
+    expect(updated.langGraphThreadIdSource).toBe("params.id");
+  });
+
+  it("never includes thread_id in State Channel Payload Mapping table or available channels even if agent declares it", () => {
+    const agentWithThreadChannel: BackendNode = {
+      id: "agent-with-thread",
+      type: "langgraph",
+      fractionalIndex: "a3",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Agent With Thread Channel",
+        stateChannels: [
+          { key: "messages", type: "messages", reducer: "add_messages" },
+          { key: "thread_id", type: "string", reducer: "replace" },
+        ],
+      },
+    };
+
+    const cleanStep: PipelineStepDraft = {
+      id: "step-clean-1",
+      name: "Invoke Agent",
+      type: "langgraph_invoke",
+      langGraphTargetNodeId: "agent-with-thread",
+      langGraphThreadIdSource: "params.id",
+      langGraphStateMapping: {
+        messages: "body.message",
+      },
+      inputBindings: [
+        { argName: "messages", source: { kind: "req_body", field: "message" } },
+      ],
+    };
+
+    const handleChange = vi.fn();
+
+    render(
+      <LangGraphInvokeStepSection
+        step={cleanStep}
+        allNodes={[agentWithThreadChannel]}
+        availableSources={mockAvailableSources}
+        onChange={handleChange}
+      />
+    );
+
+    // thread_id should NOT be rendered in State Channel Payload Mapping as an available channel chip
+    expect(screen.queryByTitle(/Map channel: thread_id/i)).toBeNull();
+
+    // Auto-map should NOT add thread_id to state channel mapping
+    const autoMapBtn = screen.getByTitle("Auto-map default payload fields");
+    fireEvent.click(autoMapBtn);
+
+    const updatedStep = handleChange.mock.calls[handleChange.mock.calls.length - 1]![0]!;
+    expect(updatedStep.langGraphStateMapping.thread_id).toBeUndefined();
+    expect(updatedStep.inputBindings.some((b: any) => b.argName === "thread_id")).toBe(false);
+  });
 });

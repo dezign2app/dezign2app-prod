@@ -453,6 +453,7 @@ export function createDefaultStepDraft({
     const defaultStateMapping: Record<string, string> = {};
     if (stateChannels.length > 0) {
       stateChannels.forEach((ch) => {
+        if (ch.key === "thread_id" || ch.key === "threadId") return;
         if (ch.key === "messages") {
           defaultStateMapping[ch.key] = isConsumer ? "event.message" : "body.message";
         } else {

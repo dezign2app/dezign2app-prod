@@ -2,7 +2,10 @@ import type {
   CanvasNodeData,
   StepNodeData,
 } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/langgraph/langgraph-canvas/types";
-import { NODE_ID_END } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/langgraph/langgraph-canvas/constants";
+import {
+  NODE_ID_END,
+  LANGGRAPH_CANVAS_NODE_END,
+} from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/langgraph/langgraph-canvas/constants";
 import type { CompileContext, NodeMeta, LLMMeta, ToolMeta } from "../types";
 import {
   toIdentifier,
@@ -177,46 +180,134 @@ export function buildStepNodeFile(
     const branchLines: string[] = [];
     const possibleTargets = new Set<string>();
 
-    for (const branch of branches) {
-      // Find connected target node if targetId is not explicitly set
-      let targetId = branch.targetId;
-      if (!targetId) {
-        const edge = ctx.input.edges.find(
-          (e) => e.source === stepNode.id && e.sourceHandle === branch.id,
-        );
+    const isEndTarget = (id?: string | null, label?: string | null): boolean => {
+      if (!id && !label) return false;
+      const lowerId = (id || "").toLowerCase();
+      const lowerLabel = (label || "").toLowerCase();
+      if (
+        id === "END" ||
+        id === "__end__" ||
+        id === NODE_ID_END ||
+        lowerId === "end" ||
+        lowerId.startsWith("end_") ||
+        lowerLabel === "end" ||
+        lowerLabel === "__end__"
+      ) {
+        return true;
+      }
+      return ctx.input.nodes.some(
+        (n) => n.id === id && n.type === LANGGRAPH_CANVAS_NODE_END,
+      );
+    };
+
+    const getCanvasNodeNameOrLabel = (n: (typeof ctx.input.nodes)[number]): string => {
+      const d = n.data;
+      if (!d) return n.id;
+      if ("name" in d && typeof d.name === "string" && d.name.trim()) {
+        return d.name.trim();
+      }
+      if ("label" in d && typeof d.label === "string" && d.label.trim()) {
+        return d.label.trim();
+      }
+      return n.id;
+    };
+
+    const resolveTargetExpr = (
+      targetId: string | undefined,
+      branchId: string | undefined,
+      branchLabel: string | undefined,
+      branchIdx: number,
+    ): { expr: string; typeStr: string } => {
+      // 1. Check if explicitly targeting END
+      if (isEndTarget(targetId, branchLabel)) {
+        return { expr: "END", typeStr: "typeof END" };
+      }
+
+      // 2. Resolve targetId if not present by inspecting outgoing edges from this router node
+      let resolvedId = targetId;
+      if (!resolvedId) {
+        const outgoing = ctx.input.edges.filter((e) => e.source === stepNode.id);
+        const edge =
+          (branchId ? outgoing.find((e) => e.sourceHandle === branchId) : undefined) ||
+          outgoing.find(
+            (e) =>
+              e.sourceHandle === `branch_${branchIdx}` ||
+              e.sourceHandle === `b_${branchIdx}`,
+          ) ||
+          outgoing[branchIdx] ||
+          (outgoing.length === 1 ? outgoing[0] : undefined);
         if (edge) {
-          targetId = edge.target;
+          resolvedId = edge.target;
         }
       }
 
-      let targetExpr = "";
-      if (targetId) {
-        const meta = nodeMetaMap.get(targetId);
+      // 3. Check again if resolvedId points to an END node
+      if (isEndTarget(resolvedId, branchLabel)) {
+        return { expr: "END", typeStr: "typeof END" };
+      }
+
+      // 4. Try matching with nodeMetaMap
+      if (resolvedId) {
+        const meta = nodeMetaMap.get(resolvedId);
         if (meta) {
-          targetExpr = `"${meta.exportName}"`;
-          possibleTargets.add(`"${meta.exportName}"`);
-        } else if (
-          targetId === "END" ||
-          targetId === "__end__" ||
-          targetId === NODE_ID_END
-        ) {
-          targetExpr = "END";
-          possibleTargets.add("typeof END");
-        } else {
-          const ident = toIdentifier(targetId);
-          targetExpr = `"${ident}"`;
-          possibleTargets.add(`"${ident}"`);
-        }
-      } else {
-        const label = branch.label || "END";
-        if (label === "END" || label === "__end__") {
-          targetExpr = "END";
-          possibleTargets.add("typeof END");
-        } else {
-          targetExpr = `"${label}"`;
-          possibleTargets.add(`"${label}"`);
+          return { expr: `"${meta.exportName}"`, typeStr: `"${meta.exportName}"` };
         }
       }
+
+      // 5. Try finding canvas node by id
+      if (resolvedId) {
+        const canvasNode = ctx.input.nodes.find((n) => n.id === resolvedId);
+        if (canvasNode) {
+          if (canvasNode.type === LANGGRAPH_CANVAS_NODE_END) {
+            return { expr: "END", typeStr: "typeof END" };
+          }
+          const meta = nodeMetaMap.get(canvasNode.id);
+          if (meta) {
+            return { expr: `"${meta.exportName}"`, typeStr: `"${meta.exportName}"` };
+          }
+          const ident = toIdentifier(getCanvasNodeNameOrLabel(canvasNode));
+          return { expr: `"${ident}"`, typeStr: `"${ident}"` };
+        }
+      }
+
+      // 6. Match by branch label matching an existing node name or label in the graph
+      if (branchLabel) {
+        const lowerLabel = branchLabel.toLowerCase();
+        const matchedNode = ctx.input.nodes.find(
+          (n) => getCanvasNodeNameOrLabel(n).toLowerCase() === lowerLabel,
+        );
+        if (matchedNode) {
+          if (matchedNode.type === LANGGRAPH_CANVAS_NODE_END) {
+            return { expr: "END", typeStr: "typeof END" };
+          }
+          const meta = nodeMetaMap.get(matchedNode.id);
+          if (meta) {
+            return { expr: `"${meta.exportName}"`, typeStr: `"${meta.exportName}"` };
+          }
+          const ident = toIdentifier(getCanvasNodeNameOrLabel(matchedNode));
+          return { expr: `"${ident}"`, typeStr: `"${ident}"` };
+        }
+      }
+
+      // 7. If still unresolved and there's a resolvedId, format it as an identifier
+      if (resolvedId) {
+        const ident = toIdentifier(resolvedId);
+        return { expr: `"${ident}"`, typeStr: `"${ident}"` };
+      }
+
+      // 8. Fallback to END
+      return { expr: "END", typeStr: "typeof END" };
+    };
+
+    for (let idx = 0; idx < branches.length; idx++) {
+      const branch = branches[idx]!;
+      const { expr: targetExpr, typeStr } = resolveTargetExpr(
+        branch.targetId,
+        branch.id,
+        branch.label,
+        idx,
+      );
+      possibleTargets.add(typeStr);
 
       let condExpr = "";
       if (branch.conditions && branch.conditions.length > 0) {
@@ -243,58 +334,41 @@ export function buildStepNodeFile(
       if (condExpr) {
         branchLines.push(`  if (${condExpr}) return ${targetExpr};`);
       } else if (branch.isDefault) {
-        // default branch handled below if no condition match
+        // default branch — handled as the final return below
+      } else if (targetExpr) {
+        // Non-default branch with no condition expression: treat as fallback
+        branchLines.push(`  // Branch "${branch.label || branch.id || `route_${idx + 1}`}" has no condition`);
+        branchLines.push(`  return ${targetExpr};`);
       }
     }
 
     let defaultTargetExpr = "END";
+    possibleTargets.add("typeof END");
+
     const defaultBranch = branches.find((b) => b.isDefault);
     if (defaultBranch) {
-      let defTargetId = defaultBranch.targetId;
-      if (!defTargetId) {
-        const edge = ctx.input.edges.find(
-          (e) =>
-            e.source === stepNode.id && e.sourceHandle === defaultBranch.id,
-        );
-        if (edge) defTargetId = edge.target;
-      }
-      if (defTargetId) {
-        const meta = nodeMetaMap.get(defTargetId);
-        if (meta) {
-          defaultTargetExpr = `"${meta.exportName}"`;
-          possibleTargets.add(`"${meta.exportName}"`);
-        } else if (
-          defTargetId === "END" ||
-          defTargetId === "__end__" ||
-          defTargetId === NODE_ID_END
-        ) {
-          defaultTargetExpr = "END";
-          possibleTargets.add("typeof END");
-        }
-      }
+      const defRes = resolveTargetExpr(
+        defaultBranch.targetId,
+        defaultBranch.id,
+        defaultBranch.label,
+        branches.indexOf(defaultBranch),
+      );
+      defaultTargetExpr = defRes.expr;
+      possibleTargets.add(defRes.typeStr);
     } else if (routerConfig?.defaultBranchId) {
-      const meta = nodeMetaMap.get(routerConfig.defaultBranchId);
-      if (meta) {
-        defaultTargetExpr = `"${meta.exportName}"`;
-        possibleTargets.add(`"${meta.exportName}"`);
-      } else if (
-        routerConfig.defaultBranchId === "END" ||
-        routerConfig.defaultBranchId === "__end__"
-      ) {
-        defaultTargetExpr = "END";
-        possibleTargets.add("typeof END");
-      } else {
-        const ident = toIdentifier(routerConfig.defaultBranchId);
-        defaultTargetExpr = `"${ident}"`;
-        possibleTargets.add(`"${ident}"`);
-      }
-    } else {
-      possibleTargets.add("typeof END");
+      const defRes = resolveTargetExpr(
+        routerConfig.defaultBranchId,
+        undefined,
+        undefined,
+        -1,
+      );
+      defaultTargetExpr = defRes.expr;
+      possibleTargets.add(defRes.typeStr);
     }
 
     const returnTypeStr =
       possibleTargets.size > 0 ? [...possibleTargets].join(" | ") : "string";
-    const hasEnd = possibleTargets.has("typeof END");
+    const hasEnd = possibleTargets.has("typeof END") || defaultTargetExpr === "END";
     const importHeader = hasEnd
       ? `import { END } from "@langchain/langgraph";\nimport { ${schemaName}Type } from "../state";`
       : `import { ${schemaName}Type } from "../state";`;

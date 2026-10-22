@@ -196,13 +196,34 @@ export function buildFlowEdges(
 
       // Collect all downstream targets that the router can route to
       const routerOutEdges = flowEdges.filter((e2) => e2.source === routerId);
-      const uniqueTargets: string[] = [
-        ...new Set(
-          routerOutEdges
-            .map((e2) => resolveNodeName(e2.target, ctx, nodeMetaMap))
-            .filter((x): x is string => Boolean(x)),
-        ),
-      ];
+      const targetList: string[] = routerOutEdges
+        .map((e2) => resolveNodeName(e2.target, ctx, nodeMetaMap))
+        .filter((x): x is string => Boolean(x));
+
+      // Also collect targets configured on the router branches directly
+      const routerStep = ctx.stepNodes.find((s) => s.id === routerId);
+      if (routerStep?.data?.routerConfig?.branches) {
+        for (const branch of routerStep.data.routerConfig.branches) {
+          if (branch.targetId) {
+            const resolved = resolveNodeName(branch.targetId, ctx, nodeMetaMap);
+            if (resolved) targetList.push(resolved);
+          }
+          if (
+            branch.label?.toLowerCase() === "end" ||
+            branch.label === "__end__" ||
+            branch.label === "END"
+          ) {
+            targetList.push("END");
+          }
+        }
+      }
+
+      // Every router function emits a default fallback return to END, so END must always be permitted
+      if (!targetList.includes("END")) {
+        targetList.push("END");
+      }
+
+      const uniqueTargets = [...new Set(targetList)];
 
       const targetsStr = uniqueTargets
         .map((t) => (t === "END" ? "END" : `"${t}"`))
