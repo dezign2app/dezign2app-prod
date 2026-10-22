@@ -5,6 +5,8 @@ import type {
 import {
   NODE_ID_END,
   LANGGRAPH_CANVAS_NODE_END,
+  LANGGRAPH_CANVAS_NODE_AGENT_REF,
+  LANGGRAPH_CANVAS_NODE_NODE_REF,
 } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/langgraph/langgraph-canvas/constants";
 import type { CompileContext, NodeMeta, LLMMeta, ToolMeta } from "../types";
 import {
@@ -14,6 +16,7 @@ import {
   escapeTemplateLiteral,
   buildCondition,
   indent,
+  resolveNodeName,
 } from "../utils";
 
 import { renderAgentPipelineSteps } from "./agentPipelineSteps";
@@ -246,7 +249,47 @@ export function buildStepNodeFile(
         return { expr: "END", typeStr: "typeof END" };
       }
 
-      // 4. Try matching with nodeMetaMap
+      // 4. If resolvedId points to an Agent Ref or Node Ref node, dereference to the referenced master node!
+      if (resolvedId) {
+        const targetNode = ctx.input.nodes.find((n) => n.id === resolvedId);
+        if (
+          targetNode &&
+          (targetNode.type === LANGGRAPH_CANVAS_NODE_AGENT_REF ||
+            targetNode.type === LANGGRAPH_CANVAS_NODE_NODE_REF)
+        ) {
+          const d = targetNode.data;
+          let refMasterId: string | undefined;
+          if (d && "agentRef" in d && typeof d.agentRef === "string" && d.agentRef.trim()) {
+            refMasterId = d.agentRef.trim();
+          } else if (d && "nodeRef" in d && typeof d.nodeRef === "string" && d.nodeRef.trim()) {
+            refMasterId = d.nodeRef.trim();
+          }
+          if (!refMasterId) {
+            const refEdge = ctx.input.edges.find(
+              (e) => e.target === resolvedId && e.type === "langgraph-reference",
+            );
+            if (refEdge && refEdge.source) {
+              refMasterId = refEdge.source;
+            }
+          }
+          if (refMasterId) {
+            resolvedId = refMasterId;
+          }
+        }
+      }
+
+      // 5. Use resolveNodeName to resolve resolvedId to its canonical graph export name
+      if (resolvedId) {
+        const resolvedName = resolveNodeName(resolvedId, ctx, nodeMetaMap);
+        if (resolvedName === "END") {
+          return { expr: "END", typeStr: "typeof END" };
+        }
+        if (resolvedName) {
+          return { expr: `"${resolvedName}"`, typeStr: `"${resolvedName}"` };
+        }
+      }
+
+      // 6. Try matching with nodeMetaMap
       if (resolvedId) {
         const meta = nodeMetaMap.get(resolvedId);
         if (meta) {
@@ -254,7 +297,7 @@ export function buildStepNodeFile(
         }
       }
 
-      // 5. Try finding canvas node by id
+      // 7. Try finding canvas node by id
       if (resolvedId) {
         const canvasNode = ctx.input.nodes.find((n) => n.id === resolvedId);
         if (canvasNode) {
@@ -270,22 +313,20 @@ export function buildStepNodeFile(
         }
       }
 
-      // 6. Match by branch label matching an existing node name or label in the graph
+      // 8. Match by branch label matching an existing node name or label in the graph
       if (branchLabel) {
         const lowerLabel = branchLabel.toLowerCase();
         const matchedNode = ctx.input.nodes.find(
           (n) => getCanvasNodeNameOrLabel(n).toLowerCase() === lowerLabel,
         );
         if (matchedNode) {
-          if (matchedNode.type === LANGGRAPH_CANVAS_NODE_END) {
+          const resolvedFromLabel = resolveNodeName(matchedNode.id, ctx, nodeMetaMap);
+          if (resolvedFromLabel === "END") {
             return { expr: "END", typeStr: "typeof END" };
           }
-          const meta = nodeMetaMap.get(matchedNode.id);
-          if (meta) {
-            return { expr: `"${meta.exportName}"`, typeStr: `"${meta.exportName}"` };
+          if (resolvedFromLabel) {
+            return { expr: `"${resolvedFromLabel}"`, typeStr: `"${resolvedFromLabel}"` };
           }
-          const ident = toIdentifier(getCanvasNodeNameOrLabel(matchedNode));
-          return { expr: `"${ident}"`, typeStr: `"${ident}"` };
         }
       }
 

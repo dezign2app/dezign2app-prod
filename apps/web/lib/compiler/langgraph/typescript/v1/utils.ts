@@ -171,23 +171,39 @@ export function resolveNodeName(
     return "END";
   }
 
+  const node = ctx.input.nodes.find((n) => n.id === nodeId);
+
+  if (
+    node &&
+    (node.type === LANGGRAPH_CANVAS_NODE_AGENT_REF ||
+      node.type === LANGGRAPH_CANVAS_NODE_NODE_REF)
+  ) {
+    const d = node.data;
+    let targetRefId: string | undefined;
+    if (d && "agentRef" in d && typeof d.agentRef === "string" && d.agentRef.trim()) {
+      targetRefId = d.agentRef.trim();
+    } else if (d && "nodeRef" in d && typeof d.nodeRef === "string" && d.nodeRef.trim()) {
+      targetRefId = d.nodeRef.trim();
+    }
+    if (!targetRefId) {
+      const refEdge = ctx.input.edges.find(
+        (e) => e.target === nodeId && e.type === "langgraph-reference",
+      );
+      if (refEdge && refEdge.source) {
+        targetRefId = refEdge.source;
+      }
+    }
+    if (targetRefId && targetRefId !== nodeId) {
+      return resolveNodeName(targetRefId, ctx, nodeMetaMap);
+    }
+  }
+
   if (nodeMetaMap) {
     const meta = nodeMetaMap.get(nodeId);
     if (meta) return meta.exportName;
   }
 
-  const node = ctx.input.nodes.find((n) => n.id === nodeId);
   if (!node) return null;
-
-  if (
-    node.type === LANGGRAPH_CANVAS_NODE_AGENT_REF ||
-    node.type === LANGGRAPH_CANVAS_NODE_NODE_REF
-  ) {
-    const targetRefId = node.data.agentRef || node.data.nodeRef;
-    if (targetRefId && targetRefId !== nodeId) {
-      return resolveNodeName(targetRefId, ctx, nodeMetaMap);
-    }
-  }
 
   if (
     node.type === LANGGRAPH_CANVAS_NODE_NODE ||

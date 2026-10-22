@@ -8,6 +8,7 @@ import {
   LANGGRAPH_CANVAS_NODE_START,
   LANGGRAPH_CANVAS_NODE_STEP,
   LANGGRAPH_CANVAS_NODE_END,
+  LANGGRAPH_CANVAS_NODE_AGENT_REF,
   HANDLE_LLM_IN,
   HANDLE_TOOL_IN,
   NODE_ID_START,
@@ -594,12 +595,23 @@ describe("compileLangGraph Compiler Fixes", () => {
           position: { x: 600, y: 0 },
           data: { label: "END State" },
         },
+        {
+          id: "agent_node_ref",
+          type: LANGGRAPH_CANVAS_NODE_AGENT_REF,
+          position: { x: 600, y: 200 },
+          data: {
+            label: "Agent Node Ref",
+            refId: "agent_node_ref",
+            agentRef: "agent_node",
+          },
+        },
       ],
       edges: [
         { id: "e1", source: NODE_ID_START, target: "agent_node" },
         { id: "e2", source: "agent_node", target: "router_node" },
-        { id: "e3", source: "router_node", target: "agent_node", sourceHandle: "b_loop" },
+        { id: "e3", source: "router_node", target: "agent_node_ref", sourceHandle: "b_loop" },
         { id: "e4", source: "router_node", target: "end_abc123", sourceHandle: "b_end" },
+        { id: "e_ref", source: "agent_node", target: "agent_node_ref", type: "langgraph-reference" },
       ],
       outputMode: "package",
     };
@@ -607,12 +619,16 @@ describe("compileLangGraph Compiler Fixes", () => {
     const files = compileLangGraph(input);
     const fileMap = new Map(files.map((f) => [f.filename, f.content]));
 
-    // 1. Verify router node file was generated with correct destinations
+    // 1. Verify router node file was generated with correct destinations (dereferenced from agent_node_ref)
     const routerFile = fileMap.get("src/nodes/conditionalRouter.ts") || "";
     expect(routerFile).toBeDefined();
     expect(routerFile).toContain('import { END } from "@langchain/langgraph";');
     expect(routerFile).toContain('return "agentNode";');
     expect(routerFile).toContain("return END;");
+    // Ensure agent ref node label/id is never returned instead of the master agent node
+    expect(routerFile).not.toContain('"agentNodeRef"');
+    expect(routerFile).not.toContain('"agent_node_ref"');
+    expect(routerFile).not.toContain('"Agent Node Ref"');
     // Ensure raw human labels or end node IDs are not returned as strings
     expect(routerFile).not.toContain('"agent route"');
     expect(routerFile).not.toContain('"end"');
@@ -622,12 +638,13 @@ describe("compileLangGraph Compiler Fixes", () => {
     expect(routerFile).toContain("Number(state.count ?? 0) <= 5");
     expect(routerFile).toContain("Number(state.count ?? 0) > 5");
 
-    // 2. Verify graph.ts sets up conditional edge from agentNode to the router
+    // 2. Verify graph.ts sets up conditional edge from agentNode to the router targeting agentNode (dereferenced)
     const graphFile = fileMap.get("src/graph.ts") || "";
     expect(graphFile).toBeDefined();
     expect(graphFile).toContain(".addConditionalEdges(");
     expect(graphFile).toContain('"agentNode"');
     expect(graphFile).toContain("conditionalRouter");
+    expect(graphFile).not.toContain("agentNodeRef");
     // Allowed destinations must include the agentNode and END
     expect(graphFile).toMatch(/addConditionalEdges\("agentNode",\s*conditionalRouter,\s*\[.*"agentNode".*END.*\]\)/s);
   });
