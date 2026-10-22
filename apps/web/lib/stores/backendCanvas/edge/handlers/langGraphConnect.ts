@@ -102,6 +102,7 @@ export function handleLangGraphConnect({
       const defaultStateMapping: Record<string, string> = {};
       if (stateChannels.length > 0) {
         stateChannels.forEach((ch: { key: string }) => {
+          if (ch.key === "thread_id" || ch.key === "threadId") return;
           if (ch.key === "messages") {
             defaultStateMapping[ch.key] = "body.message";
           } else {
@@ -223,6 +224,7 @@ export function handleLangGraphConnect({
       const defaultStateMapping: Record<string, string> = {};
       if (stateChannels.length > 0) {
         stateChannels.forEach((ch: { key: string }) => {
+          if (ch.key === "thread_id" || ch.key === "threadId") return;
           if (ch.key === "messages") {
             defaultStateMapping[ch.key] = "event.message";
           } else {

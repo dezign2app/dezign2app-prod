@@ -525,7 +525,7 @@ export function useStepRowState({
 
         if (Array.isArray(inChannels) && inChannels.length > 0) {
           for (const ch of inChannels) {
-            if (ch && ch.key) {
+            if (ch && ch.key && ch.key !== "thread_id" && ch.key !== "threadId") {
               args.push({
                 name: ch.key,
                 type: ch.type || "string",
@@ -536,7 +536,7 @@ export function useStepRowState({
           }
         } else if (Array.isArray(stateChannels) && stateChannels.length > 0) {
           for (const ch of stateChannels) {
-            if (ch && ch.key) {
+            if (ch && ch.key && ch.key !== "thread_id" && ch.key !== "threadId") {
               args.push({
                 name: ch.key,
                 type: ch.type || "string",
@@ -547,15 +547,6 @@ export function useStepRowState({
           }
         } else {
           args.push({ name: "messages", type: "BaseMessage[]", required: true });
-        }
-
-        if (hasMemory && !args.some((a) => a.name === "thread_id" || a.name === "threadId")) {
-          args.push({
-            name: "thread_id",
-            type: "string",
-            required: true,
-            description: "Session thread ID for checkpointer memory",
-          });
         }
 
         return args;
