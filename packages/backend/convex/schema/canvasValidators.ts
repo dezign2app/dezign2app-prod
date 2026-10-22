@@ -233,7 +233,7 @@ export const safePipelineStepSchema = z.object({
   langGraphThreadIdSource: z.string().optional(),
   langGraphStreamingEnabled: z.boolean().optional(),
   langGraphStreamingProtocol: z
-    .enum(["sse", "websocket", "kafka", "redis_stream"])
+    .enum(["sse", "raw", "websocket", "kafka", "redis_stream"])
     .optional(),
   langGraphStreamingKafkaNodeId: z.string().optional(),
   langGraphStreamingKafkaTopic: z.string().optional(),

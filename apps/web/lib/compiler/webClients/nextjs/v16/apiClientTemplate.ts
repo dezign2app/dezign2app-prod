@@ -122,7 +122,55 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
     if (targetUrl && targetUrl !== "#") {
       const res = await fetch(targetUrl, fetchOptions);
       status = res.status;
-      resData = await res.json().catch(() => ({ statusText: res.statusText }));
+      const cType = res.headers.get("content-type") || "";
+      if (cType.includes("text/event-stream")) {
+        const rawText = await res.text();
+        const tokens: string[] = [];
+        for (const line of rawText.split("\\n\")) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("data: ")) {
+            const dataStr = trimmed.slice(6).trim();
+            if (dataStr === "[DONE]") continue;
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (parsed && typeof parsed.token === "string") {
+                tokens.push(parsed.token);
+              } else if (parsed && typeof parsed.content === "string") {
+                tokens.push(parsed.content);
+              } else {
+                tokens.push(typeof parsed === "object" ? JSON.stringify(parsed) : String(parsed));
+              }
+            } catch {
+              tokens.push(dataStr);
+            }
+          }
+        }
+        resData = {
+          content: tokens.join(""),
+          tokens,
+          streamed: true,
+          statusText: res.statusText,
+          raw: rawText,
+        };
+      } else if (cType.includes("text/plain")) {
+        const text = await res.text();
+        resData = {
+          content: text,
+          streamed: true,
+          statusText: res.statusText,
+        };
+      } else {
+        const text = await res.text().catch(() => "");
+        if (!text) {
+          resData = { statusText: res.statusText };
+        } else {
+          try {
+            resData = JSON.parse(text);
+          } catch {
+            resData = { text, statusText: res.statusText };
+          }
+        }
+      }
     } else {
       resData = {
         success: true,

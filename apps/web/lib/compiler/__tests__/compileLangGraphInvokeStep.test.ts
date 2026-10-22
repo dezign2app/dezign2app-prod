@@ -337,6 +337,124 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(content).toContain("if (res.headersSent) {");
       expect(content).toContain("res.write(`data: ${JSON.stringify({ error: message })}\\n\\n`);");
     });
+
+    it("omits pinned return_response step and adds res.writableEnded guard when streaming is enabled", () => {
+      const ep: Endpoint & { nodeId: string } = {
+        id: "ep-agent-stream-with-return",
+        name: "/send-message/:id",
+        type: "POST",
+        nodeId: "service-1",
+        pipelineSteps: [
+          {
+            id: "step-agent",
+            name: "LangGraph Agent",
+            type: "langgraph_invoke",
+            langGraphTargetNodeId: "langGraphAgent",
+            langGraphStreamingEnabled: true,
+            langGraphStreamingProtocol: "sse",
+          },
+          {
+            id: "return-response-step",
+            name: "Return Response",
+            type: "return_response",
+            statusCode: 201,
+            inputBindings: [],
+          },
+        ],
+      };
+
+      const result = generateEndpointRouteHandler({
+        ep,
+        index: 0,
+        serviceName: "Conversations",
+        pascalServiceName: "Conversations",
+        serviceFolderName: "conversations",
+        allNodes: [],
+        allEdges: [],
+        allEndpoints: [ep],
+        dbFunctions: [],
+        kafkaFunctions: [],
+        redisFunctions: [],
+        nodePublishedEvents: [],
+        usedFileNames: new Set(),
+      });
+
+      const content = result.file.content;
+
+      // Must have SSE streaming logic
+      expect(content).toContain('res.setHeader("Content-Type", "text/event-stream")');
+      expect(content).toContain('res.write("data: [DONE]\\n\\n")');
+      expect(content).toContain("res.end()");
+
+      // Must NOT render return_response res.status(201).json
+      expect(content).not.toContain("return res.status(201).json");
+      expect(content).not.toContain("Pipeline Step: Return Response");
+
+      // Must include writableEnded guard in catch block to avoid write after end
+      expect(content).toContain("if (res.writableEnded) {");
+      expect(content).toContain("return;");
+    });
+
+    it("renders streaming raw plaintext route handler when langGraphStreamingProtocol is raw", () => {
+      const ep: Endpoint & { nodeId: string } = {
+        id: "ep-agent-stream-raw",
+        name: "/send-message/:id",
+        type: "POST",
+        nodeId: "service-1",
+        pipelineSteps: [
+          {
+            id: "step-agent",
+            name: "LangGraph Agent",
+            type: "langgraph_invoke",
+            langGraphTargetNodeId: "langGraphAgent",
+            langGraphStreamingEnabled: true,
+            langGraphStreamingProtocol: "raw",
+          },
+          {
+            id: "return-response-step",
+            name: "Return Response",
+            type: "return_response",
+            statusCode: 201,
+            inputBindings: [],
+          },
+        ],
+      };
+
+      const result = generateEndpointRouteHandler({
+        ep,
+        index: 0,
+        serviceName: "Conversations",
+        pascalServiceName: "Conversations",
+        serviceFolderName: "conversations",
+        allNodes: [],
+        allEdges: [],
+        allEndpoints: [ep],
+        dbFunctions: [],
+        kafkaFunctions: [],
+        redisFunctions: [],
+        nodePublishedEvents: [],
+        usedFileNames: new Set(),
+      });
+
+      const content = result.file.content;
+
+      // Must have raw stream headers
+      expect(content).toContain('res.setHeader("Content-Type", "text/plain; charset=utf-8")');
+      expect(content).toContain('res.setHeader("Transfer-Encoding", "chunked")');
+      expect(content).not.toContain('res.setHeader("Content-Type", "text/event-stream")');
+
+      // Must stream raw tokens without SSE data: [DONE] framing
+      expect(content).toContain('res.write(typeof token === "string" ? token : JSON.stringify(token));');
+      expect(content).not.toContain('res.write("data: [DONE]\\n\\n")');
+      expect(content).toContain("res.end()");
+
+      // Must NOT render return_response res.status(201).json
+      expect(content).not.toContain("return res.status(201).json");
+
+      // Must include writableEnded guard in catch block
+      expect(content).toContain("if (res.writableEnded) {");
+      expect(content).toContain("[ERROR:");
+    });
   });
 
   describe("Dedicated Messages Configuration (Single, Dynamic System & Bulk)", () => {

@@ -259,15 +259,24 @@ export function renderLangGraphInvokeStep(
   if (langGraphStreamingEnabled) {
     const streamProtocol = step.langGraphStreamingProtocol || "sse";
 
-    if (streamProtocol === "sse") {
-      rawLines.push(`// --- LangGraph Streaming Invocation (${step.name}) via SSE ---`);
+    if (streamProtocol === "sse" || streamProtocol === "raw") {
+      const isRaw = streamProtocol === "raw";
+      rawLines.push(
+        `// --- LangGraph Streaming Invocation (${step.name}) via ${isRaw ? "Raw Stream" : "SSE"} ---`,
+      );
       if (messagesInitLines.length > 0) {
         rawLines.push(...messagesInitLines);
       }
       rawLines.push(`const agentState = ${stateInit};`);
-      rawLines.push(`res.setHeader("Content-Type", "text/event-stream");`);
-      rawLines.push(`res.setHeader("Cache-Control", "no-cache");`);
-      rawLines.push(`res.setHeader("Connection", "keep-alive");`);
+      if (isRaw) {
+        rawLines.push(`res.setHeader("Content-Type", "text/plain; charset=utf-8");`);
+        rawLines.push(`res.setHeader("Cache-Control", "no-cache");`);
+        rawLines.push(`res.setHeader("Transfer-Encoding", "chunked");`);
+      } else {
+        rawLines.push(`res.setHeader("Content-Type", "text/event-stream");`);
+        rawLines.push(`res.setHeader("Cache-Control", "no-cache");`);
+        rawLines.push(`res.setHeader("Connection", "keep-alive");`);
+      }
       if (threadIdExpr) {
         rawLines.push(`if (${threadIdExpr} && typeof res.setHeader === "function") {`);
         rawLines.push(`  res.setHeader("X-Thread-Id", String(${threadIdExpr}));`);
@@ -277,6 +286,9 @@ export function renderLangGraphInvokeStep(
         `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
       );
       rawLines.push(`for await (const chunk of stream) {`);
+      rawLines.push(`  if (res.writableEnded || res.destroyed) {`);
+      rawLines.push(`    break;`);
+      rawLines.push(`  }`);
       rawLines.push(
         `  const [messageChunk, metadata] = Array.isArray(chunk) ? chunk : [chunk, undefined];`,
       );
@@ -286,25 +298,29 @@ export function renderLangGraphInvokeStep(
       rawLines.push(
         `  const nodeName = typeof metadata === "object" && metadata !== null && "langgraph_node" in metadata ? metadata.langgraph_node : undefined;`,
       );
+      const writeChunk = isRaw
+        ? `res.write(typeof token === "string" ? token : JSON.stringify(token));`
+        : `res.write(\`data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);`;
+
       if (langGraphStreamingFields.length > 0) {
         const allowedFields = JSON.stringify(langGraphStreamingFields);
         rawLines.push(`  if (${allowedFields}.includes(nodeName || "")) {`);
         rawLines.push(`    if (token !== undefined && token !== "") {`);
-        rawLines.push(
-          `      res.write(\`data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);`,
-        );
+        rawLines.push(`      ${writeChunk}`);
         rawLines.push(`    }`);
         rawLines.push(`  }`);
       } else {
         rawLines.push(`  if (token !== undefined && token !== "") {`);
-        rawLines.push(
-          `    res.write(\`data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);`,
-        );
+        rawLines.push(`    ${writeChunk}`);
         rawLines.push(`  }`);
       }
       rawLines.push(`}`);
-      rawLines.push(`res.write("data: [DONE]\\n\\n");`);
-      rawLines.push(`res.end();`);
+      rawLines.push(`if (!res.writableEnded && !res.destroyed) {`);
+      if (!isRaw) {
+        rawLines.push(`  res.write("data: [DONE]\\n\\n");`);
+      }
+      rawLines.push(`  res.end();`);
+      rawLines.push(`}`);
     } else if (streamProtocol === "websocket") {
       const roomExpr = step.langGraphStreamingRoom
         ? resolvePathAccessor(step.langGraphStreamingRoom, ctx)

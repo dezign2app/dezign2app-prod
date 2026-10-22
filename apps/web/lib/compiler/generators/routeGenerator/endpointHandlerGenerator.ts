@@ -209,7 +209,7 @@ export function generateEndpointRouteHandler(
   const codeBlockText = (ep.body || ep.code || "").trim();
   const pipelineStepsEarly = ep.pipelineSteps;
   const hasStreamingStep = Array.isArray(pipelineStepsEarly) && pipelineStepsEarly.some(
-    (s) => s.type === "langgraph_invoke" && s.langGraphStreamingEnabled && (!s.langGraphStreamingProtocol || s.langGraphStreamingProtocol === "sse") && s.enabled !== false,
+    (s) => s.type === "langgraph_invoke" && s.langGraphStreamingEnabled && (!s.langGraphStreamingProtocol || s.langGraphStreamingProtocol === "sse" || s.langGraphStreamingProtocol === "raw") && s.enabled !== false,
   );
 
   // 1. Auth Resolution
@@ -310,7 +310,7 @@ export function generateEndpointRouteHandler(
       (s) => s.type === "return_response" && s.enabled !== false,
     );
     const hasStreaming = pipelineSteps.some(
-      (s) => s.type === "langgraph_invoke" && s.langGraphStreamingEnabled && (!s.langGraphStreamingProtocol || s.langGraphStreamingProtocol === "sse") && s.enabled !== false,
+      (s) => s.type === "langgraph_invoke" && s.langGraphStreamingEnabled && (!s.langGraphStreamingProtocol || s.langGraphStreamingProtocol === "sse" || s.langGraphStreamingProtocol === "raw") && s.enabled !== false,
     );
 
     if (!hasReturnStep && !hasStreaming && !autoEmittedStorage) {
@@ -331,8 +331,18 @@ export function generateEndpointRouteHandler(
     routeHandlerCode += `    const message = err instanceof Error ? err.message : String(err);\n`;
     routeHandlerCode += `    logger.error("Error in ${method.toUpperCase()} ${path}:", message);\n`;
     if (hasStreaming) {
+      const isRawStream = pipelineSteps.some(
+        (s) => s.type === "langgraph_invoke" && s.langGraphStreamingProtocol === "raw",
+      );
+      routeHandlerCode += `    if (res.writableEnded) {\n`;
+      routeHandlerCode += `      return;\n`;
+      routeHandlerCode += `    }\n`;
       routeHandlerCode += `    if (res.headersSent) {\n`;
-      routeHandlerCode += `      res.write(\`data: \${JSON.stringify({ error: message })}\\n\\n\`);\n`;
+      if (isRawStream) {
+        routeHandlerCode += `      res.write(\`\\n[ERROR: \${message}]\\n\`);\n`;
+      } else {
+        routeHandlerCode += `      res.write(\`data: \${JSON.stringify({ error: message })}\\n\\n\`);\n`;
+      }
       routeHandlerCode += `      res.end();\n`;
       routeHandlerCode += `    } else {\n`;
       routeHandlerCode += `      return res.status(500).json({ error: "Internal Server Error", details: message });\n`;

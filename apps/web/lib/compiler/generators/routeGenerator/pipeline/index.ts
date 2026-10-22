@@ -171,8 +171,20 @@ export function renderPipeline(
     allLines.push("");
   }
 
+  const hasStreaming = steps.some(
+    (s) =>
+      s.type === "langgraph_invoke" &&
+      s.langGraphStreamingEnabled &&
+      (!s.langGraphStreamingProtocol || s.langGraphStreamingProtocol === "sse" || s.langGraphStreamingProtocol === "raw") &&
+      s.enabled !== false,
+  );
+
   for (const step of steps) {
     if (step.enabled === false) continue;
+    // When SSE streaming is enabled on the endpoint, the LangGraph step directly streams
+    // and terminates the HTTP response via res.write / res.end. Any trailing return_response
+    // step must be skipped to avoid ERR_HTTP_HEADERS_SENT ("Cannot set headers after they are sent to the client").
+    if (hasStreaming && step.type === "return_response") continue;
 
     allLines.push(`// --- Pipeline Step: ${step.name} ---`);
     const stepLines = renderPipelineStep(step, ctx);
