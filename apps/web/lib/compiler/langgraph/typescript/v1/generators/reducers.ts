@@ -24,7 +24,7 @@ function normalizeReducerCode(
   if (arrowRegex.test(fn)) {
     fn = fn.replace(
       arrowRegex,
-      `($1: ${prevType}, $2: ${updateType}) =>`,
+      `($1: ${prevType}, $2: ${updateType}): ${prevType} =>`,
     );
   } else {
     // Match function declaration/expression: function(prev, next) or function foo(prev, next)
@@ -32,7 +32,7 @@ function normalizeReducerCode(
     if (funcRegex.test(fn)) {
       fn = fn.replace(
         funcRegex,
-        `function ($1: ${prevType}, $2: ${updateType})`,
+        `function ($1: ${prevType}, $2: ${updateType}): ${prevType}`,
       );
     }
   }
@@ -60,6 +60,14 @@ function normalizeReducerCode(
     /next\?\.value\s*!==\s*undefined\s*\?\s*next\.value/g,
     `typeof next === "object" && next !== null && "value" in next && next.value !== undefined ? next.value`,
   );
+
+  if (prevType === "BaseMessage[]") {
+    // Ensure incoming messages extraction from action envelope never falls back to the action container object
+    fn = fn.replace(
+      /const\s+incoming\s*=\s*typeof\s+next\s*===[^;]+;/g,
+      `const incoming = typeof next === "object" && next !== null && "action" in next ? (next.value !== undefined ? next.value : []) : (typeof next === "object" && next !== null && "value" in next && next.value !== undefined ? next.value : next);`,
+    );
+  }
 
   // Destructuring rawPayload replaced with strongly-typed payload
   if (typeName) {
@@ -122,7 +130,7 @@ export function buildReducerFiles(ctx: CompileContext): CompiledFile[] {
 
     // 1. Messages channel
     if (ch.key === "messages" || ch.type === "messages" || ch.reducer === "add_messages") {
-      if (ch.customReducerCode) {
+      if (ch.reducer === "custom" && ch.customReducerCode) {
         const updateType = codeUsesActionUpdates(ch.customReducerCode)
           ? "MessagesChannelUpdate"
           : "BaseMessage[] | BaseMessage";

@@ -190,6 +190,7 @@ export function buildStateFile(ctx: CompileContext): string {
   const needsMessagesUpdate = ctx.input.stateChannels.some(
     (c) =>
       (c.key === "messages" || c.type === "messages" || c.reducer === "add_messages") &&
+      c.reducer === "custom" &&
       codeUsesActionUpdates(c.customReducerCode),
   );
 
@@ -228,8 +229,8 @@ export function buildStateFile(ctx: CompileContext): string {
     const reducerName = getChannelReducerName(ch.key);
 
     if (
-      (ch.key === "messages" && !ch.customReducerCode && ch.reducer !== "custom") ||
-      (ch.type === "messages" && !ch.customReducerCode && ch.key === "messages" && ch.reducer !== "custom")
+      (ch.key === "messages" && ch.reducer !== "custom") ||
+      (ch.type === "messages" && ch.key === "messages" && ch.reducer !== "custom")
     ) {
       channelLines.push(`  ...MessagesAnnotation.spec,`);
       continue;
@@ -255,7 +256,8 @@ export function buildStateFile(ctx: CompileContext): string {
     const tsType = customTypeMatch || typeMap[ch.type] || "string";
 
     if (ch.key === "messages" || ch.type === "messages" || ch.reducer === "add_messages") {
-      const updateType = codeUsesActionUpdates(ch.customReducerCode)
+      const isCustomMessages = ch.reducer === "custom" && Boolean(ch.customReducerCode);
+      const updateType = isCustomMessages && codeUsesActionUpdates(ch.customReducerCode)
         ? "MessagesChannelUpdate"
         : "BaseMessage[] | BaseMessage";
       channelLines.push(

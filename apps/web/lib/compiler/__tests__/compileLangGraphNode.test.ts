@@ -450,7 +450,7 @@ describe("compileLangGraph Compiler Fixes", () => {
 
     const reducerFile = fileMap.get("src/reducers/highScoreReducer.ts");
     expect(reducerFile).toBeDefined();
-    expect(reducerFile).toContain("export const highScoreReducer = (prev: number, next: number) =>");
+    expect(reducerFile).toContain("export const highScoreReducer = (prev: number, next: number): number =>");
     expect(reducerFile).toContain("Math.max(prev ?? 0, next ?? 0)");
   });
 
@@ -517,28 +517,28 @@ describe("compileLangGraph Compiler Fixes", () => {
     expect(stateFile).toContain("export type MessagesChannelUpdate");
     expect(stateFile).toContain("messages: Annotation<BaseMessage[], MessagesChannelUpdate>({");
 
-    // 2. Verify messagesReducer strongly types prev without implicit any
+    // 2. Verify messagesReducer strongly types prev and return type without implicit any
     const messagesReducer = fileMap.get("src/reducers/messagesReducer.ts") || "";
     expect(messagesReducer).toContain('import type { BaseMessage } from "@langchain/core/messages";');
     expect(messagesReducer).toContain('import type { MessagesChannelUpdate } from "../state";');
     expect(messagesReducer).toContain(
-      "export const messagesReducer = (prev: BaseMessage[], next: MessagesChannelUpdate) =>",
+      "export const messagesReducer = (prev: BaseMessage[], next: MessagesChannelUpdate): BaseMessage[] =>",
     );
     expect(messagesReducer).not.toContain("(prev,");
 
-    // 3. Verify countReducer strongly types prev without implicit any
+    // 3. Verify countReducer strongly types prev and return type without implicit any
     const countReducer = fileMap.get("src/reducers/countReducer.ts") || "";
     expect(countReducer).toContain('import type { NumberChannelUpdate } from "../state";');
     expect(countReducer).toContain(
-      "export const countReducer = (prev: number, next: NumberChannelUpdate) =>",
+      "export const countReducer = (prev: number, next: NumberChannelUpdate): number =>",
     );
     expect(countReducer).not.toContain("(prev,");
 
-    // 4. Verify messageReducer strongly types prev without implicit any
+    // 4. Verify messageReducer strongly types prev and return type without implicit any
     const messageReducer = fileMap.get("src/reducers/messageReducer.ts") || "";
     expect(messageReducer).toContain('import type { StringChannelUpdate } from "../state";');
     expect(messageReducer).toContain(
-      "export const messageReducer = (prev: string, next: StringChannelUpdate) =>",
+      "export const messageReducer = (prev: string, next: StringChannelUpdate): string =>",
     );
     expect(messageReducer).not.toContain("(prev,");
   });
@@ -653,5 +653,50 @@ describe("compileLangGraph Compiler Fixes", () => {
     expect(graphFile).not.toContain("agentNodeRef");
     // Allowed destinations must include the agentNode and END
     expect(graphFile).toMatch(/addConditionalEdges\("agentNode",\s*conditionalRouter,\s*\[.*"agentNode".*END.*\]\)/s);
+  });
+
+  it("compiles standard messages channel with add_messages reducer into ...MessagesAnnotation.spec even if customReducerCode is present", () => {
+    const input: CompileLangGraphInput = {
+      graphLabel: "Agent",
+      stateChannels: [
+        {
+          key: "messages",
+          type: "messages",
+          reducer: "add_messages",
+          defaultValue: [],
+          customReducerCode: `(prev, next) => { return prev; }`,
+        },
+      ],
+      inputChannels: [],
+      nodes: [
+        {
+          id: "node_1",
+          type: LANGGRAPH_CANVAS_NODE_NODE,
+          position: { x: 0, y: 0 },
+          data: { name: "agent", label: "agent" },
+        },
+      ],
+      edges: [
+        {
+          id: "e1",
+          source: NODE_ID_START,
+          target: "node_1",
+        },
+      ],
+      outputMode: "package",
+    };
+
+    const files = compileLangGraph(input);
+    const fileMap = new Map(files.map((f) => [f.filename, f.content]));
+
+    const stateFile = fileMap.get("src/state.ts") || "";
+    expect(stateFile).toContain("...MessagesAnnotation.spec,");
+    expect(stateFile).not.toContain("messages: Annotation<");
+    expect(stateFile).not.toContain("messagesReducer");
+    expect(stateFile).not.toContain("MessagesChannelUpdate");
+
+    const reducerFile = fileMap.get("src/reducers/messagesReducer.ts") || "";
+    expect(reducerFile).toContain('import { addMessages } from "@langchain/langgraph";');
+    expect(reducerFile).toContain("export const messagesReducer = addMessages;");
   });
 });
