@@ -41,9 +41,10 @@ const edgeTypes = {
 
 export interface GraphViewProps {
   projectId: string;
+  projectName?: string;
 }
 
-export function GraphView({ projectId }: GraphViewProps) {
+export function GraphView({ projectId, projectName }: GraphViewProps) {
   const { nodes, edges, onEdgesChange, onConnect, addNode, setView } =
     useBackendCanvasStore();
   const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
@@ -508,7 +509,11 @@ export function GraphView({ projectId }: GraphViewProps) {
             transition: "all 0.2s cubic-bezier(0.16,1,0.3,1)",
           }}
         />
-        <TopToolbarPanel onLayout={handleLayout} />
+        <TopToolbarPanel
+          onLayout={handleLayout}
+          projectId={projectId}
+          projectName={projectName}
+        />
       </ReactFlow>
 
       <TestCaseDialogs
