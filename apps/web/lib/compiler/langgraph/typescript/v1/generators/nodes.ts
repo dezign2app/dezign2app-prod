@@ -99,10 +99,12 @@ export function buildAgentNodeFile(
 
   const stateUpdates = d.stateUpdates || [];
   const returnEntries: string[] = [];
-  if (hasLLM) returnEntries.push(`    messages: [${responseVar}],`);
+  const hasExplicitMessagesUpdate = stateUpdates.some((su) => su.channelKey === "messages");
+  if (hasLLM && !hasExplicitMessagesUpdate) {
+    returnEntries.push(`    messages: [${responseVar}],`);
+  }
 
   for (const su of stateUpdates) {
-    if (su.channelKey === "messages") continue;
     const key = toCamelCase(su.channelKey);
     const isValueless =
       su.source === "none" ||
