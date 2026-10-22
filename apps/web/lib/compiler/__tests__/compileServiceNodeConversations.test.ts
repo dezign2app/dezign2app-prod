@@ -899,5 +899,115 @@ app.use(express.json());
     expect(typesFile!.content).toContain("field_1: string;");
     expect(typesFile!.content).toContain("field_2?: string | undefined;");
   });
+
+  it("compiles endpoint mapping whole LangGraph step response to return_response field without TS2322 incompatibility on state", () => {
+    const serviceNode: BackendNode = {
+      id: "srv-conversation",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "conversations",
+        techStack: "express",
+        port: "8080",
+      },
+    };
+
+    const langGraphNode: BackendNode = {
+      id: "lg-demo",
+      type: "langgraph",
+      position: { x: 300, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "demo",
+        stateChannels: [
+          { key: "messages", type: "messages", reducer: "add_messages" },
+          { key: "message", type: "string", reducer: "replace" },
+          { key: "count", type: "number", reducer: "add_number" },
+        ],
+      },
+    };
+
+    const endpoint: Endpoint & { nodeId: string } = {
+      id: "ep-send-msg-lg",
+      nodeId: "srv-conversation",
+      name: "/send-message/:id",
+      type: "POST",
+      summary: "Send message with full LangGraph step mapping",
+      pathParams: [{ id: "p1", name: "id", type: "string", required: true }],
+      pipelineSteps: [
+        {
+          id: "step-demo",
+          name: "demo",
+          type: "langgraph_invoke",
+          langGraphTargetNodeId: "lg-demo",
+          outputVariable: "demoResult",
+          langGraphThreadIdSource: "params.id",
+          langGraphStateMapping: {
+            message: "body.message",
+          },
+        },
+        {
+          id: "step-ret",
+          name: "Return Response",
+          type: "return_response",
+          statusCode: 201,
+          inputBindings: [
+            {
+              argName: "field_1",
+              source: { kind: "req_params", field: "id" },
+            },
+            {
+              argName: "field_2",
+              source: { kind: "step_output", stepId: "step-demo" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const compiledService = compileServiceNode(
+      serviceNode,
+      [endpoint],
+      [],
+      [serviceNode, langGraphNode],
+      [],
+      [],
+      [],
+      [],
+      "conversations",
+    );
+
+    const routeFile = compiledService.files.find((f) =>
+      f.filename.includes("postSendMessageById.ts"),
+    );
+    expect(routeFile).toBeDefined();
+    const routeCode = routeFile!.content;
+
+    // Route handler should construct demoResult with response, threadId, and state
+    expect(routeCode).toContain("const demoResultRaw = await demoGraph.invoke(agentState, { configurable: { thread_id: req.params.id } });");
+    expect(routeCode).toContain("const demoResult = {");
+    expect(routeCode).toContain("response: demoResultResponse,");
+    expect(routeCode).toContain("threadId: req.params.id,");
+    expect(routeCode).toContain("state: demoResultRaw,");
+    expect(routeCode).toContain("field_2: demoResult");
+
+    const typesFiles = generateTypesPackage(
+      [serviceNode, langGraphNode],
+      [endpoint],
+      [],
+      [{ id: serviceNode.id, name: "conversations", folderName: "conversations" }],
+      [],
+    );
+    const typesFile = typesFiles.find((f) => f.filename.includes("postSendMessageById.ts"));
+    expect(typesFile).toBeDefined();
+    const typeCode = typesFile!.content;
+
+    expect(typeCode).toContain("export interface ConversationsPostSendMessageByIdResponse {");
+    expect(typeCode).toContain("field_1: string;");
+    // Crucial: state must be Record<string, unknown> instead of Record<string, string | number | boolean | null>
+    expect(typeCode).toContain("state?: Record<string, unknown>");
+    expect(typeCode).not.toContain("state?: Record<string, string | number | boolean | null>");
+  });
 });
 
