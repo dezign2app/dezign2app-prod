@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Database, Flame, Key, Layers, Radio, Trash2 } from "lucide-react";
+import { Brain, Database, Flame, Key, Layers, Radio, Sparkles, Trash2 } from "lucide-react";
 import { BackendNode } from "@workspace/canvas/types";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
@@ -15,11 +15,16 @@ import {
 } from "@workspace/ui/components/select";
 import { BindingSourceEditor } from "../BindingSourceEditor";
 import { LocalInput } from "../BufferedInput";
-import { AvailableSource, StepBinding } from "../types";
+import { AvailableSource, StepBinding, LangGraphStreamMode } from "../types";
+
+export type { LangGraphStreamMode };
 
 export interface StreamingAndOutputSectionProps {
   isStreaming: boolean;
   streamingProtocol: string;
+  streamModes?: LangGraphStreamMode[];
+  includeReasoning?: boolean;
+  includeSubgraphs?: boolean;
   outputMode: string;
   streamingFields: string[];
   outputFields: string[];
@@ -43,6 +48,9 @@ export interface StreamingAndOutputSectionProps {
   serviceNodeId?: string;
   onToggleStreaming: (enabled: boolean) => void;
   onProtocolChange: (protocol: "raw" | "sse" | "websocket" | "kafka" | "redis_stream") => void;
+  onToggleStreamMode?: (mode: LangGraphStreamMode) => void;
+  onToggleIncludeReasoning?: (enabled: boolean) => void;
+  onToggleIncludeSubgraphs?: (enabled: boolean) => void;
   onKafkaBrokerChange: (brokerNodeId: string, defaultTopic: string) => void;
   onKafkaTopicChange: (topic: string) => void;
   onRedisNodeChange: (redisNodeId: string, defaultStreamKey: string) => void;
@@ -61,6 +69,9 @@ export interface StreamingAndOutputSectionProps {
 export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps> = ({
   isStreaming,
   streamingProtocol,
+  streamModes = ["messages"],
+  includeReasoning = true,
+  includeSubgraphs = false,
   outputMode,
   streamingFields,
   outputFields,
@@ -84,6 +95,9 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
   serviceNodeId,
   onToggleStreaming,
   onProtocolChange,
+  onToggleStreamMode,
+  onToggleIncludeReasoning,
+  onToggleIncludeSubgraphs,
   onKafkaBrokerChange,
   onKafkaTopicChange,
   onRedisNodeChange,
@@ -98,6 +112,8 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
   onRedisKeyBindingChange,
   onResetRedisKeyBinding,
 }) => {
+  const effectiveStreamModes = streamModes && streamModes.length > 0 ? streamModes : ["messages"];
+
   return (
     <div className="flex flex-col gap-3 p-3.5 bg-secondary/15 rounded-xl border border-border/50">
       <div className="flex items-center justify-between">
@@ -174,6 +190,112 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
               >
                 Redis Stream
               </Button>
+            </div>
+          </div>
+
+          {/* LangGraph Streaming Modes Selection (as per official LangChain docs) */}
+          <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-background/50 border border-border/40">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3 text-purple-400" />
+                <span>Stream Modes (streamMode)</span>
+              </Label>
+              <span className="text-[9px] text-muted-foreground font-mono">
+                {effectiveStreamModes.length > 1 ? "Multi-Mode List" : "Single-Mode"}
+              </span>
+            </div>
+
+            <p className="text-[9.5px] text-muted-foreground leading-tight">
+              Select stream modes as per LangGraph doc. Combine multiple modes to stream tokens and node progress simultaneously:
+            </p>
+
+            <div className="grid grid-cols-2 gap-1.5">
+              {[
+                {
+                  id: "messages" as const,
+                  label: "LLM Tokens (messages)",
+                  desc: "Live (token, metadata) tuples from nodes where LLM runs",
+                },
+                {
+                  id: "updates" as const,
+                  label: "Agent Progress (updates)",
+                  desc: "State updates after each node step completes",
+                },
+                {
+                  id: "values" as const,
+                  label: "Full State (values)",
+                  desc: "Complete state channel snapshot after each step",
+                },
+                {
+                  id: "custom" as const,
+                  label: "Custom Data (custom)",
+                  desc: "Arbitrary user events emitted via config.writer",
+                },
+              ].map((m) => {
+                const isSelected = effectiveStreamModes.includes(m.id);
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => onToggleStreamMode?.(m.id)}
+                    className={`flex flex-col text-left p-2 rounded-lg border transition-all ${
+                      isSelected
+                        ? "bg-purple-500/15 border-purple-500/50 text-purple-200"
+                        : "bg-background/60 border-border/40 text-muted-foreground hover:bg-secondary/40"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-[10.5px] font-semibold font-mono">
+                        {m.label}
+                      </span>
+                      <span
+                        className={`text-[8.5px] px-1 py-0.2 rounded font-bold ${
+                          isSelected ? "bg-purple-500/30 text-purple-300" : "text-muted-foreground/60"
+                        }`}
+                      >
+                        {isSelected ? "ACTIVE" : "OFF"}
+                      </span>
+                    </div>
+                    <span className="text-[9px] text-muted-foreground/80 mt-0.5 leading-snug">
+                      {m.desc}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Extended Thinking & Reasoning Tokens Toggle */}
+            <div className="flex items-center justify-between pt-1 border-t border-border/20">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-medium text-foreground flex items-center gap-1">
+                  <Brain className="w-3 h-3 text-pink-400" />
+                  Stream Thinking / Reasoning Tokens
+                </span>
+                <span className="text-[9px] text-muted-foreground">
+                  Surface model internal reasoning/thinking blocks in real time (Claude 3.7+, o1/o3, Gemini Flash)
+                </span>
+              </div>
+              <Switch
+                checked={includeReasoning !== false}
+                onCheckedChange={(val) => onToggleIncludeReasoning?.(val)}
+              />
+            </div>
+
+            {/* Subgraphs Output Toggle */}
+            <div className="flex items-center justify-between pt-1 border-t border-border/20">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-medium text-foreground flex items-center gap-1">
+                  <Layers className="w-3 h-3 text-sky-400" />
+                  Include Subgraph Outputs
+                </span>
+                <span className="text-[9px] text-muted-foreground">
+                  Prefix message chunks and state with subgraph namespace (subgraphs: true)
+                </span>
+              </div>
+              <Switch
+                checked={Boolean(includeSubgraphs)}
+                onCheckedChange={(val) => onToggleIncludeSubgraphs?.(val)}
+              />
             </div>
           </div>
 

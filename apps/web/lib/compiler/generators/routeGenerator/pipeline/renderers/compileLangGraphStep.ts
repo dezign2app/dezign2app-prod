@@ -118,6 +118,9 @@ export function renderLangGraphInvokeStep(
     langGraphMessagesConfig,
     langGraphStreamingEnabled,
     langGraphStreamingFields = [],
+    langGraphStreamModes,
+    langGraphStreamIncludeReasoning = true,
+    langGraphStreamSubgraphs,
     langGraphOutputMode = "full_state",
     langGraphOutputFields = [],
     langGraphTargetNodeId,
@@ -248,9 +251,22 @@ export function renderLangGraphInvokeStep(
       ? `{\n${stateFields.join("\n")}\n}`
       : `{ messages: [{ role: "user", content: "hello" }] }`;
 
-  const streamConfigOptions = threadIdExpr
-    ? `{ streamMode: "messages", configurable: { thread_id: ${threadIdExpr} } }`
-    : `{ streamMode: "messages" }`;
+  const activeStreamModes = (langGraphStreamModes && langGraphStreamModes.length > 0)
+    ? langGraphStreamModes
+    : ["messages"];
+
+  const streamModeExpr = activeStreamModes.length === 1
+    ? JSON.stringify(activeStreamModes[0])
+    : JSON.stringify(activeStreamModes);
+
+  const streamConfigProps: string[] = [`streamMode: ${streamModeExpr}`];
+  if (threadIdExpr) {
+    streamConfigProps.push(`configurable: { thread_id: ${threadIdExpr} }`);
+  }
+  if (langGraphStreamSubgraphs) {
+    streamConfigProps.push(`subgraphs: true`);
+  }
+  const streamConfigOptions = `{ ${streamConfigProps.join(", ")} }`;
 
   const invokeConfigOptions = threadIdExpr
     ? `, { configurable: { thread_id: ${threadIdExpr} } }`
@@ -289,31 +305,129 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`  if (res.writableEnded || res.destroyed) {`);
       rawLines.push(`    break;`);
       rawLines.push(`  }`);
+      rawLines.push(`  let mode: string = "messages";`);
+      rawLines.push(`  let payload: any = chunk;`);
+      rawLines.push(`  if (Array.isArray(chunk) && chunk.length === 2 && typeof chunk[0] === "string" && ["messages", "updates", "custom", "values", "debug"].includes(chunk[0])) {`);
+      rawLines.push(`    mode = chunk[0];`);
+      rawLines.push(`    payload = chunk[1];`);
+      rawLines.push(`  } else if (!Array.isArray(chunk) && typeof chunk === "object" && chunk !== null && !("content" in chunk) && !("text" in chunk)) {`);
+      rawLines.push(`    mode = "updates";`);
+      rawLines.push(`  }`);
+      rawLines.push(`  if (mode === "messages") {`);
       rawLines.push(
-        `  const [messageChunk, metadata] = Array.isArray(chunk) ? chunk : [chunk, undefined];`,
+        `    const [messageChunk, metadata] = Array.isArray(payload) ? payload : [payload, undefined];`,
       );
       rawLines.push(
-        `  const token = (typeof messageChunk === "object" && messageChunk !== null && "content" in messageChunk && messageChunk.content !== undefined ? messageChunk.content : undefined) ?? (typeof chunk === "string" ? chunk : (typeof chunk === "object" && chunk !== null && "content" in chunk && chunk.content !== undefined ? chunk.content : chunk));`,
+        `    const nodeName = typeof metadata === "object" && metadata !== null && "langgraph_node" in metadata ? metadata.langgraph_node : undefined;`,
+      );
+      rawLines.push(`    let reasoningToken: string | undefined = undefined;`);
+      rawLines.push(`    let textToken: string | undefined = undefined;`);
+      rawLines.push(`    if (messageChunk && typeof messageChunk === "object") {`);
+      rawLines.push(`      if (Array.isArray(messageChunk.contentBlocks)) {`);
+      rawLines.push(`        for (const block of messageChunk.contentBlocks) {`);
+      rawLines.push(`          if (block?.type === "reasoning" && (block.reasoning || block.text)) {`);
+      rawLines.push(`            reasoningToken = (reasoningToken || "") + (block.reasoning || block.text || "");`);
+      rawLines.push(`          } else if (block?.type === "text" && block.text) {`);
+      rawLines.push(`            textToken = (textToken || "") + block.text;`);
+      rawLines.push(`          }`);
+      rawLines.push(`        }`);
+      rawLines.push(`      }`);
+      rawLines.push(`      if (!reasoningToken && messageChunk.additional_kwargs) {`);
+      rawLines.push(`        const kw = messageChunk.additional_kwargs as Record<string, any>;`);
+      rawLines.push(`        if (typeof kw.reasoning_content === "string") reasoningToken = kw.reasoning_content;`);
+      rawLines.push(`        else if (typeof kw.thinking === "string") reasoningToken = kw.thinking;`);
+      rawLines.push(`      }`);
+      rawLines.push(`      if (!textToken) {`);
+      rawLines.push(`        if (typeof messageChunk.content === "string") {`);
+      rawLines.push(`          textToken = messageChunk.content;`);
+      rawLines.push(`        } else if (typeof messageChunk.text === "string") {`);
+      rawLines.push(`          textToken = messageChunk.text;`);
+      rawLines.push(`        } else if (Array.isArray(messageChunk.content)) {`);
+      rawLines.push(`          for (const item of messageChunk.content) {`);
+      rawLines.push(`            if (typeof item === "string") textToken = (textToken || "") + item;`);
+      rawLines.push(`            else if (item && typeof item === "object") {`);
+      rawLines.push(`              if (item.type === "reasoning") reasoningToken = (reasoningToken || "") + (item.reasoning || item.text || "");`);
+      rawLines.push(`              else if (item.type === "text" && item.text) textToken = (textToken || "") + item.text;`);
+      rawLines.push(`            }`);
+      rawLines.push(`          }`);
+      rawLines.push(`        }`);
+      rawLines.push(`      }`);
+      rawLines.push(`    } else if (typeof messageChunk === "string") {`);
+      rawLines.push(`      textToken = messageChunk;`);
+      rawLines.push(`    }`);
+      rawLines.push(
+        `    const token = textToken ?? (typeof payload === "string" ? payload : (typeof payload === "object" && payload !== null && "content" in payload ? payload.content : undefined));`,
       );
       rawLines.push(
-        `  const nodeName = typeof metadata === "object" && metadata !== null && "langgraph_node" in metadata ? metadata.langgraph_node : undefined;`,
+        `    const writeChunk = isRaw`,
       );
-      const writeChunk = isRaw
-        ? `res.write(typeof token === "string" ? token : JSON.stringify(token));`
-        : `res.write(\`data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);`;
-
+      rawLines.push(
+        `      ? \`res.write(typeof token === "string" ? token : JSON.stringify(token));\``,
+      );
+      rawLines.push(
+        `      : \`res.write(\\\`data: \\\${JSON.stringify({ token, node: nodeName })}\\\\n\\\\n\\\`);\`;`,
+      );
       if (langGraphStreamingFields.length > 0) {
         const allowedFields = JSON.stringify(langGraphStreamingFields);
-        rawLines.push(`  if (${allowedFields}.includes(nodeName || "")) {`);
-        rawLines.push(`    if (token !== undefined && token !== "") {`);
-        rawLines.push(`      ${writeChunk}`);
+        rawLines.push(`    if (${allowedFields}.includes(nodeName || "")) {`);
+        if (langGraphStreamIncludeReasoning !== false) {
+          rawLines.push(`      if (reasoningToken) {`);
+          if (isRaw) {
+            rawLines.push(`        res.write(reasoningToken);`);
+          } else {
+            rawLines.push(`        res.write(\`data: \${JSON.stringify({ type: "reasoning", reasoning: reasoningToken, node: nodeName })}\\n\\n\`);`);
+          }
+          rawLines.push(`      }`);
+        }
+        rawLines.push(`      if (token !== undefined && token !== "") {`);
+        rawLines.push(`        ${isRaw ? 'res.write(typeof token === "string" ? token : JSON.stringify(token));' : 'res.write(`data: ${JSON.stringify({ token, node: nodeName })}\\n\\n`);'}`);
+        rawLines.push(`      }`);
         rawLines.push(`    }`);
-        rawLines.push(`  }`);
       } else {
-        rawLines.push(`  if (token !== undefined && token !== "") {`);
-        rawLines.push(`    ${writeChunk}`);
-        rawLines.push(`  }`);
+        if (langGraphStreamIncludeReasoning !== false) {
+          rawLines.push(`    if (reasoningToken) {`);
+          if (isRaw) {
+            rawLines.push(`      res.write(reasoningToken);`);
+          } else {
+            rawLines.push(`      res.write(\`data: \${JSON.stringify({ type: "reasoning", reasoning: reasoningToken, node: nodeName })}\\n\\n\`);`);
+          }
+          rawLines.push(`    }`);
+        }
+        rawLines.push(`    if (token !== undefined && token !== "") {`);
+        rawLines.push(`      ${isRaw ? 'res.write(typeof token === "string" ? token : JSON.stringify(token));' : 'res.write(`data: ${JSON.stringify({ token, node: nodeName })}\\n\\n`);'}`);
+        rawLines.push(`    }`);
       }
+      rawLines.push(`  } else if (mode === "updates") {`);
+      rawLines.push(`    const nodeName = typeof payload === "object" && payload !== null ? Object.keys(payload)[0] : undefined;`);
+      if (langGraphStreamingFields.length > 0) {
+        const allowedFields = JSON.stringify(langGraphStreamingFields);
+        rawLines.push(`    if (${allowedFields}.includes(nodeName || "")) {`);
+        if (isRaw) {
+          rawLines.push(`      res.write(JSON.stringify(payload));`);
+        } else {
+          rawLines.push(`      res.write(\`data: \${JSON.stringify({ type: "update", mode: "updates", node: nodeName, data: payload })}\\n\\n\`);`);
+        }
+        rawLines.push(`    }`);
+      } else {
+        if (isRaw) {
+          rawLines.push(`    res.write(JSON.stringify(payload));`);
+        } else {
+          rawLines.push(`    res.write(\`data: \${JSON.stringify({ type: "update", mode: "updates", node: nodeName, data: payload })}\\n\\n\`);`);
+        }
+      }
+      rawLines.push(`  } else if (mode === "custom") {`);
+      if (isRaw) {
+        rawLines.push(`    res.write(typeof payload === "string" ? payload : JSON.stringify(payload));`);
+      } else {
+        rawLines.push(`    res.write(\`data: \${JSON.stringify({ type: "custom", mode: "custom", data: payload })}\\n\\n\`);`);
+      }
+      rawLines.push(`  } else if (mode === "values") {`);
+      if (isRaw) {
+        rawLines.push(`    res.write(JSON.stringify(payload));`);
+      } else {
+        rawLines.push(`    res.write(\`data: \${JSON.stringify({ type: "values", mode: "values", data: payload })}\\n\\n\`);`);
+      }
+      rawLines.push(`  }`);
       rawLines.push(`}`);
       rawLines.push(`if (!res.writableEnded && !res.destroyed) {`);
       if (!isRaw) {
@@ -335,31 +449,46 @@ export function renderLangGraphInvokeStep(
         `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
       );
       rawLines.push(`for await (const chunk of stream) {`);
+      rawLines.push(`  let mode: string = "messages";`);
+      rawLines.push(`  let payload: any = chunk;`);
+      rawLines.push(`  if (Array.isArray(chunk) && chunk.length === 2 && typeof chunk[0] === "string" && ["messages", "updates", "custom", "values", "debug"].includes(chunk[0])) {`);
+      rawLines.push(`    mode = chunk[0];`);
+      rawLines.push(`    payload = chunk[1];`);
+      rawLines.push(`  } else if (!Array.isArray(chunk) && typeof chunk === "object" && chunk !== null && !("content" in chunk) && !("text" in chunk)) {`);
+      rawLines.push(`    mode = "updates";`);
+      rawLines.push(`  }`);
+      rawLines.push(`  if (mode === "messages") {`);
       rawLines.push(
-        `  const [messageChunk, metadata] = Array.isArray(chunk) ? chunk : [chunk, undefined];`,
+        `    const [messageChunk, metadata] = Array.isArray(payload) ? payload : [payload, undefined];`,
       );
       rawLines.push(
-        `  const token = (typeof messageChunk === "object" && messageChunk !== null && "content" in messageChunk && messageChunk.content !== undefined ? messageChunk.content : undefined) ?? (typeof chunk === "string" ? chunk : (typeof chunk === "object" && chunk !== null && "content" in chunk && chunk.content !== undefined ? chunk.content : chunk));`,
+        `    const token = (typeof messageChunk === "object" && messageChunk !== null && "content" in messageChunk && messageChunk.content !== undefined ? messageChunk.content : undefined) ?? (typeof chunk === "string" ? chunk : (typeof chunk === "object" && chunk !== null && "content" in chunk && chunk.content !== undefined ? chunk.content : chunk));`,
       );
       rawLines.push(
-        `  const nodeName = typeof metadata === "object" && metadata !== null && "langgraph_node" in metadata ? metadata.langgraph_node : undefined;`,
+        `    const nodeName = typeof metadata === "object" && metadata !== null && "langgraph_node" in metadata ? metadata.langgraph_node : undefined;`,
       );
       if (langGraphStreamingFields.length > 0) {
         const allowedFields = JSON.stringify(langGraphStreamingFields);
-        rawLines.push(`  if (${allowedFields}.includes(nodeName || "")) {`);
+        rawLines.push(`    if (${allowedFields}.includes(nodeName || "")) {`);
+        rawLines.push(`      if (token !== undefined && token !== "") {`);
+        rawLines.push(
+          `        wsBroadcast("agent_stream", { token, node: nodeName, done: false }, ${roomExpr});`,
+        );
+        rawLines.push(`      }`);
+        rawLines.push(`    }`);
+      } else {
         rawLines.push(`    if (token !== undefined && token !== "") {`);
         rawLines.push(
           `      wsBroadcast("agent_stream", { token, node: nodeName, done: false }, ${roomExpr});`,
         );
         rawLines.push(`    }`);
-        rawLines.push(`  }`);
-      } else {
-        rawLines.push(`  if (token !== undefined && token !== "") {`);
-        rawLines.push(
-          `    wsBroadcast("agent_stream", { token, node: nodeName, done: false }, ${roomExpr});`,
-        );
-        rawLines.push(`  }`);
       }
+      rawLines.push(`  } else if (mode === "updates") {`);
+      rawLines.push(`    const nodeName = typeof payload === "object" && payload !== null ? Object.keys(payload)[0] : undefined;`);
+      rawLines.push(`    wsBroadcast("agent_stream", { type: "update", mode: "updates", node: nodeName, data: payload, done: false }, ${roomExpr});`);
+      rawLines.push(`  } else if (mode === "custom" || mode === "values") {`);
+      rawLines.push(`    wsBroadcast("agent_stream", { type: mode, mode, data: payload, done: false }, ${roomExpr});`);
+      rawLines.push(`  }`);
       rawLines.push(`}`);
       rawLines.push(`wsBroadcast("agent_stream", { done: true }, ${roomExpr});`);
       if (outputVariable) {
@@ -380,14 +509,23 @@ export function renderLangGraphInvokeStep(
         `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
       );
       rawLines.push(`for await (const chunk of stream) {`);
+      rawLines.push(`  let mode: string = "messages";`);
+      rawLines.push(`  let payload: any = chunk;`);
+      rawLines.push(`  if (Array.isArray(chunk) && chunk.length === 2 && typeof chunk[0] === "string" && ["messages", "updates", "custom", "values", "debug"].includes(chunk[0])) {`);
+      rawLines.push(`    mode = chunk[0];`);
+      rawLines.push(`    payload = chunk[1];`);
+      rawLines.push(`  } else if (!Array.isArray(chunk) && typeof chunk === "object" && chunk !== null && !("content" in chunk) && !("text" in chunk)) {`);
+      rawLines.push(`    mode = "updates";`);
+      rawLines.push(`  }`);
+      rawLines.push(`  if (mode === "messages") {`);
       rawLines.push(
-        `  const [messageChunk, metadata] = Array.isArray(chunk) ? chunk : [chunk, undefined];`,
+        `    const [messageChunk, metadata] = Array.isArray(payload) ? payload : [payload, undefined];`,
       );
       rawLines.push(
-        `  const token = (typeof messageChunk === "object" && messageChunk !== null && "content" in messageChunk && messageChunk.content !== undefined ? messageChunk.content : undefined) ?? (typeof chunk === "string" ? chunk : (typeof chunk === "object" && chunk !== null && "content" in chunk && chunk.content !== undefined ? chunk.content : chunk));`,
+        `    const token = (typeof messageChunk === "object" && messageChunk !== null && "content" in messageChunk && messageChunk.content !== undefined ? messageChunk.content : undefined) ?? (typeof chunk === "string" ? chunk : (typeof chunk === "object" && chunk !== null && "content" in chunk && chunk.content !== undefined ? chunk.content : chunk));`,
       );
       rawLines.push(
-        `  const nodeName = typeof metadata === "object" && metadata !== null && "langgraph_node" in metadata ? metadata.langgraph_node : undefined;`,
+        `    const nodeName = typeof metadata === "object" && metadata !== null && "langgraph_node" in metadata ? metadata.langgraph_node : undefined;`,
       );
       if (langGraphStreamingFields.length > 0) {
         const allowedFields = JSON.stringify(langGraphStreamingFields);
@@ -405,6 +543,12 @@ export function renderLangGraphInvokeStep(
         );
         rawLines.push(`  }`);
       }
+      rawLines.push(`  } else if (mode === "updates") {`);
+      rawLines.push(`    const nodeName = typeof payload === "object" && payload !== null ? Object.keys(payload)[0] : undefined;`);
+      rawLines.push(`    await publishKafkaEvent(${topicExpr}, { type: "update", mode: "updates", node: nodeName, data: payload, done: false }, ${keyExpr});`);
+      rawLines.push(`  } else if (mode === "custom" || mode === "values") {`);
+      rawLines.push(`    await publishKafkaEvent(${topicExpr}, { type: mode, mode, data: payload, done: false }, ${keyExpr});`);
+      rawLines.push(`  }`);
       rawLines.push(`}`);
       rawLines.push(`await publishKafkaEvent(${topicExpr}, { done: true }, ${keyExpr});`);
       if (outputVariable) {
@@ -426,31 +570,46 @@ export function renderLangGraphInvokeStep(
         `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
       );
       rawLines.push(`for await (const chunk of stream) {`);
+      rawLines.push(`  let mode: string = "messages";`);
+      rawLines.push(`  let payload: any = chunk;`);
+      rawLines.push(`  if (Array.isArray(chunk) && chunk.length === 2 && typeof chunk[0] === "string" && ["messages", "updates", "custom", "values", "debug"].includes(chunk[0])) {`);
+      rawLines.push(`    mode = chunk[0];`);
+      rawLines.push(`    payload = chunk[1];`);
+      rawLines.push(`  } else if (!Array.isArray(chunk) && typeof chunk === "object" && chunk !== null && !("content" in chunk) && !("text" in chunk)) {`);
+      rawLines.push(`    mode = "updates";`);
+      rawLines.push(`  }`);
+      rawLines.push(`  if (mode === "messages") {`);
       rawLines.push(
-        `  const [messageChunk, metadata] = Array.isArray(chunk) ? chunk : [chunk, undefined];`,
+        `    const [messageChunk, metadata] = Array.isArray(payload) ? payload : [payload, undefined];`,
       );
       rawLines.push(
-        `  const token = (typeof messageChunk === "object" && messageChunk !== null && "content" in messageChunk && messageChunk.content !== undefined ? messageChunk.content : undefined) ?? (typeof chunk === "string" ? chunk : (typeof chunk === "object" && chunk !== null && "content" in chunk && chunk.content !== undefined ? chunk.content : chunk));`,
+        `    const token = (typeof messageChunk === "object" && messageChunk !== null && "content" in messageChunk && messageChunk.content !== undefined ? messageChunk.content : undefined) ?? (typeof chunk === "string" ? chunk : (typeof chunk === "object" && chunk !== null && "content" in chunk && chunk.content !== undefined ? chunk.content : chunk));`,
       );
       rawLines.push(
-        `  const nodeName = typeof metadata === "object" && metadata !== null && "langgraph_node" in metadata ? metadata.langgraph_node : undefined;`,
+        `    const nodeName = typeof metadata === "object" && metadata !== null && "langgraph_node" in metadata ? metadata.langgraph_node : undefined;`,
       );
       if (langGraphStreamingFields.length > 0) {
         const allowedFields = JSON.stringify(langGraphStreamingFields);
-        rawLines.push(`  if (${allowedFields}.includes(nodeName || "")) {`);
+        rawLines.push(`    if (${allowedFields}.includes(nodeName || "")) {`);
+        rawLines.push(`      if (token !== undefined && token !== "") {`);
+        rawLines.push(
+          `        await redisClient.xadd(${streamKeyExpr}, "*", "token", String(token), "node", String(nodeName || ""), "done", "false");`,
+        );
+        rawLines.push(`      }`);
+        rawLines.push(`    }`);
+      } else {
         rawLines.push(`    if (token !== undefined && token !== "") {`);
         rawLines.push(
           `      await redisClient.xadd(${streamKeyExpr}, "*", "token", String(token), "node", String(nodeName || ""), "done", "false");`,
         );
         rawLines.push(`    }`);
-        rawLines.push(`  }`);
-      } else {
-        rawLines.push(`  if (token !== undefined && token !== "") {`);
-        rawLines.push(
-          `    await redisClient.xadd(${streamKeyExpr}, "*", "token", String(token), "node", String(nodeName || ""), "done", "false");`,
-        );
-        rawLines.push(`  }`);
       }
+      rawLines.push(`  } else if (mode === "updates") {`);
+      rawLines.push(`    const nodeName = typeof payload === "object" && payload !== null ? Object.keys(payload)[0] : undefined;`);
+      rawLines.push(`    await redisClient.xadd(${streamKeyExpr}, "*", "type", "update", "mode", "updates", "node", String(nodeName || ""), "data", JSON.stringify(payload), "done", "false");`);
+      rawLines.push(`  } else if (mode === "custom" || mode === "values") {`);
+      rawLines.push(`    await redisClient.xadd(${streamKeyExpr}, "*", "type", mode, "mode", mode, "data", JSON.stringify(payload), "done", "false");`);
+      rawLines.push(`  }`);
       rawLines.push(`}`);
       rawLines.push(`await redisClient.xadd(${streamKeyExpr}, "*", "token", "", "done", "true");`);
       if (outputVariable) {

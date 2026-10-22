@@ -242,6 +242,11 @@ export const safePipelineStepSchema = z.object({
   langGraphStreamingRedisKey: z.string().optional(),
   langGraphStreamingRoom: z.string().optional(),
   langGraphStreamingFields: z.array(z.string()).optional(),
+  langGraphStreamModes: z
+    .array(z.enum(["messages", "updates", "values", "custom"]))
+    .optional(),
+  langGraphStreamIncludeReasoning: z.boolean().optional(),
+  langGraphStreamSubgraphs: z.boolean().optional(),
   langGraphOutputMode: z
     .enum(["full_state", "specific_fields", "last_message"])
     .optional(),

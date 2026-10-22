@@ -22,6 +22,20 @@ ${hasAuth ? `import { getAuthBearerToken } from "./auth-token";\n` : ""}export i
   requestBody?: TBody;
 }
 
+export interface ApiStreamResult {
+  content: string;
+  tokens: string[];
+  reasoning?: string;
+  reasoningTokens?: string[];
+  updates?: Array<{ node?: string; data: any }>;
+  custom?: any[];
+  values?: any;
+  threadId?: string;
+  streamed: true;
+  statusText?: string;
+  raw?: string;
+}
+
 export interface ApiActionResult<TData = unknown> {
   id: string;
   eventName: string;
@@ -126,28 +140,97 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
       if (cType.includes("text/event-stream")) {
         const rawText = await res.text();
         const tokens: string[] = [];
-        for (const line of rawText.split("\\n\")) {
+        const reasoningTokens: string[] = [];
+        const updates: Array<{ node?: string; data: any }> = [];
+        const custom: any[] = [];
+        let latestValues: any = undefined;
+        let lastSessionId: string | undefined = undefined;
+
+        for (const line of rawText.split("\\n")) {
           const trimmed = line.trim();
           if (trimmed.startsWith("data: ")) {
             const dataStr = trimmed.slice(6).trim();
             if (dataStr === "[DONE]") continue;
             try {
               const parsed = JSON.parse(dataStr);
-              if (parsed && typeof parsed.token === "string") {
+              if (!parsed || typeof parsed !== "object") {
+                tokens.push(String(parsed));
+                continue;
+              }
+              if (parsed.type === "session" && parsed.thread_id) {
+                lastSessionId = parsed.thread_id;
+              }
+              if (parsed.type === "reasoning" || parsed.reasoning !== undefined) {
+                const rText = typeof parsed.reasoning === "string" ? parsed.reasoning : JSON.stringify(parsed.reasoning);
+                if (rText) reasoningTokens.push(rText);
+              }
+              if (parsed.type === "update" || parsed.mode === "updates") {
+                updates.push({ node: parsed.node, data: parsed.data ?? parsed });
+              }
+              if (parsed.type === "custom" || parsed.mode === "custom") {
+                custom.push(parsed.data ?? parsed);
+              }
+              if (parsed.type === "values" || parsed.mode === "values") {
+                latestValues = parsed.data ?? parsed;
+              }
+              if (typeof parsed.token === "string") {
                 tokens.push(parsed.token);
-              } else if (parsed && typeof parsed.content === "string") {
+              } else if (parsed.token && typeof parsed.token === "object" && typeof parsed.token.content === "string") {
+                tokens.push(parsed.token.content);
+              } else if (typeof parsed.content === "string" && parsed.type !== "reasoning") {
                 tokens.push(parsed.content);
-              } else {
-                tokens.push(typeof parsed === "object" ? JSON.stringify(parsed) : String(parsed));
+              } else if (parsed.type === "token" && parsed.token !== undefined) {
+                tokens.push(typeof parsed.token === "object" ? JSON.stringify(parsed.token) : String(parsed.token));
               }
             } catch {
               tokens.push(dataStr);
             }
           }
         }
+
+        let finalContent = tokens.join("");
+        if (!finalContent && updates.length > 0) {
+          for (let i = updates.length - 1; i >= 0; i--) {
+            const u = updates[i]?.data;
+            if (u && typeof u === "object") {
+              const innerValues = Object.values(u);
+              for (const iv of [u, ...innerValues]) {
+                if (iv && typeof iv === "object" && "messages" in (iv as any)) {
+                  const msgs = (iv as any).messages;
+                  if (Array.isArray(msgs) && msgs.length > 0) {
+                    const lastMsg = msgs[msgs.length - 1];
+                    const msgContent = typeof lastMsg === "string" ? lastMsg : (lastMsg?.content ?? "");
+                    if (typeof msgContent === "string" && msgContent) {
+                      finalContent = msgContent;
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+            if (finalContent) break;
+          }
+        }
+        if (!finalContent && latestValues && typeof latestValues === "object" && "messages" in latestValues) {
+          const msgs = (latestValues as any).messages;
+          if (Array.isArray(msgs) && msgs.length > 0) {
+            const lastMsg = msgs[msgs.length - 1];
+            const msgContent = typeof lastMsg === "string" ? lastMsg : (lastMsg?.content ?? "");
+            if (typeof msgContent === "string" && msgContent) {
+              finalContent = msgContent;
+            }
+          }
+        }
+
         resData = {
-          content: tokens.join(""),
+          content: finalContent,
           tokens,
+          reasoning: reasoningTokens.join(""),
+          reasoningTokens,
+          updates,
+          custom,
+          values: latestValues,
+          threadId: lastSessionId,
           streamed: true,
           statusText: res.statusText,
           raw: rawText,
@@ -156,8 +239,10 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
         const text = await res.text();
         resData = {
           content: text,
+          tokens: [text],
           streamed: true,
           statusText: res.statusText,
+          raw: text,
         };
       } else {
         const text = await res.text().catch(() => "");

@@ -280,6 +280,8 @@ export const pipelineStepCacheMissSchema = z.object({
 });
 export type PipelineStepCacheMiss = z.infer<typeof pipelineStepCacheMissSchema>;
 
+export type LangGraphStreamMode = "messages" | "updates" | "values" | "custom";
+
 export interface PipelineStep {
   id: string;
   name: string;
@@ -449,6 +451,23 @@ export interface PipelineStep {
   langGraphStreamingRoom?: string;
   /** Which state channel keys to forward to the client as streaming chunks (empty = all) */
   langGraphStreamingFields?: string[];
+  /**
+   * LangGraph streaming mode(s) as per official LangGraph docs:
+   * - "messages": Stream LLM tokens + metadata tuples
+   * - "updates": Stream agent progress / state updates after each node step
+   * - "values": Stream full state values snapshot after each step
+   * - "custom": Stream custom data from inside graph nodes using writer
+   * Can be configured as single or multiple modes (e.g. ["messages", "updates"]).
+   */
+  langGraphStreamModes?: LangGraphStreamMode[];
+  /**
+   * Whether to stream thinking / reasoning tokens as they are generated (models with extended thinking/reasoning).
+   */
+  langGraphStreamIncludeReasoning?: boolean;
+  /**
+   * Whether to include subgraph namespace in streamed chunks (subgraphs: true).
+   */
+  langGraphStreamSubgraphs?: boolean;
   /** What the step exposes as its output variable */
   langGraphOutputMode?: "full_state" | "specific_fields" | "last_message";
   /** State channel keys to include when outputMode = "specific_fields" */
@@ -594,6 +613,11 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     langGraphStreamingRedisKey: z.string().optional(),
     langGraphStreamingRoom: z.string().optional(),
     langGraphStreamingFields: z.array(z.string()).optional(),
+    langGraphStreamModes: z
+      .array(z.enum(["messages", "updates", "values", "custom"]))
+      .optional(),
+    langGraphStreamIncludeReasoning: z.boolean().optional(),
+    langGraphStreamSubgraphs: z.boolean().optional(),
     langGraphOutputMode: z.enum(["full_state", "specific_fields", "last_message"]).optional(),
     langGraphOutputFields: z.array(z.string()).optional(),
     langGraphMessagesConfig: langGraphMessagesConfigSchema.optional(),

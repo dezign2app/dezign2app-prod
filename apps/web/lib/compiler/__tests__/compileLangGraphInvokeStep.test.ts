@@ -673,7 +673,80 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(content).toContain("new AIMessage(String(body.aiContext))");
       expect(content).toContain('new HumanMessage(String(body.message || ""))');
     });
+
+    it("renders multi-mode streaming options with streamMode array and subgraphs", () => {
+      const step: PipelineStep = {
+        id: "step-multi-stream",
+        name: "AgentMultiStream",
+        type: "langgraph_invoke",
+        langGraphTargetNodeId: "multiAgent",
+        langGraphStreamingEnabled: true,
+        langGraphStreamingProtocol: "sse",
+        langGraphStreamModes: ["messages", "updates"],
+        langGraphStreamSubgraphs: true,
+        langGraphThreadIdSource: "body.threadId",
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain('streamMode: ["messages","updates"]');
+      expect(code).toContain("configurable: { thread_id: body.threadId }");
+      expect(code).toContain("subgraphs: true");
+      expect(code).toContain('mode = chunk[0]');
+      expect(code).toContain('payload = chunk[1]');
+      expect(code).toContain('mode === "messages"');
+      expect(code).toContain('mode === "updates"');
+      expect(code).toContain('type: "reasoning"');
+      expect(code).toContain('type: "update"');
+    });
+
+    it("renders single-mode updates streaming for agent progress", () => {
+      const step: PipelineStep = {
+        id: "step-progress-stream",
+        name: "AgentProgress",
+        type: "langgraph_invoke",
+        langGraphTargetNodeId: "progressAgent",
+        langGraphStreamingEnabled: true,
+        langGraphStreamingProtocol: "sse",
+        langGraphStreamModes: ["updates"],
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain('streamMode: "updates"');
+      expect(code).toContain('type: "update", mode: "updates"');
+    });
+
+    it("renders custom writer stream mode", () => {
+      const step: PipelineStep = {
+        id: "step-custom-stream",
+        name: "CustomAgent",
+        type: "langgraph_invoke",
+        langGraphTargetNodeId: "customAgent",
+        langGraphStreamingEnabled: true,
+        langGraphStreamingProtocol: "raw",
+        langGraphStreamModes: ["custom"],
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain('streamMode: "custom"');
+      expect(code).toContain('mode === "custom"');
+    });
   });
 });
+
 
   

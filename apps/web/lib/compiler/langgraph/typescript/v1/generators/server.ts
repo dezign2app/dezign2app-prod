@@ -127,19 +127,59 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
 
       for await (const chunk of stream) {
         if (isAborted) break;
-        const [messageChunk, metadata] = Array.isArray(chunk) ? chunk : [chunk, undefined];
-        const token = messageChunk && typeof messageChunk === "object" && "content" in messageChunk
-          ? messageChunk.content
-          : typeof chunk === "string"
-            ? chunk
-            : chunk && typeof chunk === "object" && "content" in chunk
-              ? chunk.content
-              : chunk;
-        const nodeName = metadata && typeof metadata === "object" && "langgraph_node" in metadata
-          ? metadata.langgraph_node
-          : undefined;
-        if (token !== undefined && token !== "") {
-          res.write(\`data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);
+        let mode = "messages";
+        let payload: any = chunk;
+        if (Array.isArray(chunk) && chunk.length === 2 && typeof chunk[0] === "string" && ["messages", "updates", "custom", "values", "debug"].includes(chunk[0])) {
+          mode = chunk[0];
+          payload = chunk[1];
+        } else if (!Array.isArray(chunk) && typeof chunk === "object" && chunk !== null && !("content" in chunk) && !("text" in chunk)) {
+          mode = "updates";
+        }
+
+        if (mode === "messages") {
+          const [messageChunk, metadata] = Array.isArray(payload) ? payload : [payload, undefined];
+          const nodeName = metadata && typeof metadata === "object" && "langgraph_node" in metadata
+            ? metadata.langgraph_node
+            : undefined;
+          let reasoningToken: string | undefined = undefined;
+          let textToken: string | undefined = undefined;
+          if (messageChunk && typeof messageChunk === "object") {
+            if (Array.isArray(messageChunk.contentBlocks)) {
+              for (const block of messageChunk.contentBlocks) {
+                if (block?.type === "reasoning" && (block.reasoning || block.text)) {
+                  reasoningToken = (reasoningToken || "") + (block.reasoning || block.text || "");
+                } else if (block?.type === "text" && block.text) {
+                  textToken = (textToken || "") + block.text;
+                }
+              }
+            }
+            if (!reasoningToken && messageChunk.additional_kwargs) {
+              const kw = messageChunk.additional_kwargs as Record<string, any>;
+              if (typeof kw.reasoning_content === "string") reasoningToken = kw.reasoning_content;
+              else if (typeof kw.thinking === "string") reasoningToken = kw.thinking;
+            }
+            if (!textToken) {
+              if (typeof messageChunk.content === "string") {
+                textToken = messageChunk.content;
+              } else if (typeof messageChunk.text === "string") {
+                textToken = messageChunk.text;
+              }
+            }
+          } else if (typeof messageChunk === "string") {
+            textToken = messageChunk;
+          }
+          const token = textToken ?? (typeof payload === "string" ? payload : (typeof payload === "object" && payload !== null && "content" in payload ? payload.content : undefined));
+          if (reasoningToken) {
+            res.write(\`data: \${JSON.stringify({ type: "reasoning", reasoning: reasoningToken, node: nodeName })}\\n\\n\`);
+          }
+          if (token !== undefined && token !== "") {
+            res.write(\`data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);
+          }
+        } else if (mode === "updates") {
+          const nodeName = typeof payload === "object" && payload !== null ? Object.keys(payload)[0] : undefined;
+          res.write(\`data: \${JSON.stringify({ type: "update", mode: "updates", node: nodeName, data: payload })}\\n\\n\`);
+        } else if (mode === "custom" || mode === "values") {
+          res.write(\`data: \${JSON.stringify({ type: mode, mode, data: payload })}\\n\\n\`);
         }
       }
       if (!isAborted) {
