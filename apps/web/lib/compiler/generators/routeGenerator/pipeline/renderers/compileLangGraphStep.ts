@@ -479,6 +479,7 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`const ${outputVariable} = {
   ...${outputVariable}Raw,
   response: ${outputVariable}Response,
+  content: ${outputVariable}Response,
   threadId: ${threadIdExpr || "undefined"},
   state: ${outputVariable}Raw,
 };`);

@@ -122,6 +122,28 @@ export function resolveSource(
         if (meta?.isArray) {
           return `${varName}[0]?.${field}`;
         }
+        // Map LangGraph convenience paths / aliases to actual properties
+        if (field === "messages[last].content" || field === "content") {
+          return `${varName}.response`;
+        }
+        if (field === "messages[last]") {
+          return `${varName}.messages[${varName}.messages.length - 1]`;
+        }
+        if (field === "finalState") {
+          return `${varName}.state`;
+        }
+
+        if (field.includes("[last]")) {
+          const resolvedField = field.replace(
+            /([a-zA-Z0-9_$]+)\[last\]/g,
+            `$1[$1.length - 1]`,
+          );
+          if (resolvedField.startsWith("[")) {
+            return `${varName}${resolvedField}`;
+          }
+          return `${varName}.${resolvedField}`;
+        }
+
         if (field.startsWith("[")) {
           return `${varName}${field}`;
         }

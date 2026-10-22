@@ -237,6 +237,8 @@ export function inferBindingType(
         if (source.field) {
           if (
             source.field === "response" ||
+            source.field === "content" ||
+            source.field === "messages[last].content" ||
             source.field === "threadId" ||
             source.field === "message"
           ) {
@@ -248,7 +250,7 @@ export function inferBindingType(
           if (source.field === "messages") {
             return "unknown[]";
           }
-          if (source.field === "state") {
+          if (source.field === "state" || source.field === "finalState") {
             return "Record<string, unknown>";
           }
           const lgNode = nodes.find(
