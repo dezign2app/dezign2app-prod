@@ -147,6 +147,8 @@ export const StepRowHeader = ({
                     ? "Kafka Stream"
                     : step.langGraphStreamingProtocol === "redis_stream"
                     ? "Redis Stream"
+                    : step.langGraphStreamingProtocol === "raw"
+                    ? "Raw Stream"
                     : "SSE Stream"}
                 </span>
               ) : (

@@ -434,7 +434,7 @@ export interface PipelineStep {
    */
   langGraphStreamingEnabled?: boolean;
   /** Streaming delivery protocol (only relevant when langGraphStreamingEnabled = true) */
-  langGraphStreamingProtocol?: "sse" | "websocket" | "kafka" | "redis_stream";
+  langGraphStreamingProtocol?: "sse" | "raw" | "websocket" | "kafka" | "redis_stream";
   /** Target Kafka broker node on canvas */
   langGraphStreamingKafkaNodeId?: string;
   /** Target Kafka topic for streaming chunks (when langGraphStreamingProtocol = "kafka") */
@@ -586,7 +586,7 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     langGraphStateMapping: z.record(z.string()).optional(),
     langGraphThreadIdSource: z.string().optional(),
     langGraphStreamingEnabled: z.boolean().optional(),
-    langGraphStreamingProtocol: z.enum(["sse", "websocket", "kafka", "redis_stream"]).optional(),
+    langGraphStreamingProtocol: z.enum(["sse", "raw", "websocket", "kafka", "redis_stream"]).optional(),
     langGraphStreamingKafkaNodeId: z.string().optional(),
     langGraphStreamingKafkaTopic: z.string().optional(),
     langGraphStreamingKafkaKey: z.string().optional(),

@@ -67,6 +67,16 @@ export function usePipelineSteps({
     isConsumer,
   });
 
+  const hasStreaming = useMemo(() => {
+    return executableSteps.some(
+      (s) =>
+        s.type === "langgraph_invoke" &&
+        s.langGraphStreamingEnabled &&
+        (!s.langGraphStreamingProtocol || s.langGraphStreamingProtocol === "sse" || s.langGraphStreamingProtocol === "raw") &&
+        s.enabled !== false,
+    );
+  }, [executableSteps]);
+
   const hasUnconfiguredInputs = useMemo(
     () => executableSteps.some((s) => isStepInputUnconfigured(s, allNodes)),
     [executableSteps, allNodes],
@@ -123,7 +133,7 @@ export function usePipelineSteps({
       serviceNodeId,
     });
 
-    if (isConsumer || isNested) {
+    if (isConsumer || isNested || hasStreaming) {
       onChange([...executableSteps, newStep]);
     } else {
       onChange([...executableSteps, newStep, returnStep]);
@@ -159,7 +169,14 @@ export function usePipelineSteps({
 
     const next = [...executableSteps];
     next[index] = finalUpdated;
-    if (isConsumer || isNested) {
+    const nextHasStreaming = next.some(
+      (s) =>
+        s.type === "langgraph_invoke" &&
+        s.langGraphStreamingEnabled &&
+        (!s.langGraphStreamingProtocol || s.langGraphStreamingProtocol === "sse" || s.langGraphStreamingProtocol === "raw") &&
+        s.enabled !== false,
+    );
+    if (isConsumer || isNested || nextHasStreaming) {
       onChange(next);
     } else {
       onChange([...next, returnStep]);
@@ -182,7 +199,14 @@ export function usePipelineSteps({
       isNested,
     });
 
-    if (isConsumer || isNested) {
+    const nextHasStreaming = remainingSteps.some(
+      (s) =>
+        s.type === "langgraph_invoke" &&
+        s.langGraphStreamingEnabled &&
+        (!s.langGraphStreamingProtocol || s.langGraphStreamingProtocol === "sse" || s.langGraphStreamingProtocol === "raw") &&
+        s.enabled !== false,
+    );
+    if (isConsumer || isNested || nextHasStreaming) {
       onChange(remainingSteps);
     } else {
       onChange([...remainingSteps, returnStep]);
@@ -218,7 +242,7 @@ export function usePipelineSteps({
     const [moved] = reordered.splice(fromIndex, 1);
     if (!moved) return;
     reordered.splice(toIndex, 0, moved);
-    if (isConsumer || isNested) {
+    if (isConsumer || isNested || hasStreaming) {
       onChange(reordered);
     } else {
       onChange([...reordered, returnStep]);
@@ -226,7 +250,7 @@ export function usePipelineSteps({
   };
 
   const updateReturnStep = (updated: PipelineStepDraft) => {
-    if (isConsumer || isNested) return;
+    if (isConsumer || isNested || hasStreaming) return;
     onChange([...executableSteps, updated]);
   };
 
@@ -240,6 +264,7 @@ export function usePipelineSteps({
     isConsumer,
     executableSteps,
     returnStep,
+    hasStreaming,
     hasUnconfiguredInputs,
     addStep,
     updateStep,

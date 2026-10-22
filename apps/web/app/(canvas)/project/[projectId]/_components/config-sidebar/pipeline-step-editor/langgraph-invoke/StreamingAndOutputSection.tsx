@@ -42,7 +42,7 @@ export interface StreamingAndOutputSectionProps {
   availableSources: AvailableSource[];
   serviceNodeId?: string;
   onToggleStreaming: (enabled: boolean) => void;
-  onProtocolChange: (protocol: "sse" | "websocket" | "kafka" | "redis_stream") => void;
+  onProtocolChange: (protocol: "raw" | "sse" | "websocket" | "kafka" | "redis_stream") => void;
   onKafkaBrokerChange: (brokerNodeId: string, defaultTopic: string) => void;
   onKafkaTopicChange: (topic: string) => void;
   onRedisNodeChange: (redisNodeId: string, defaultStreamKey: string) => void;
@@ -132,11 +132,20 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
               <Button
                 type="button"
                 size="sm"
+                variant={streamingProtocol === "raw" ? "default" : "outline"}
+                onClick={() => onProtocolChange("raw")}
+                className="h-6 text-[10px] px-2.5"
+              >
+                Raw Stream
+              </Button>
+              <Button
+                type="button"
+                size="sm"
                 variant={streamingProtocol === "sse" ? "default" : "outline"}
                 onClick={() => onProtocolChange("sse")}
                 className="h-6 text-[10px] px-2.5"
               >
-                Direct SSE
+                SSE
               </Button>
               <Button
                 type="button"
@@ -505,6 +514,8 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
             <span>
               {streamingProtocol === "sse" &&
                 "Tokens will stream in real-time to the caller over HTTP SSE (`res.write()`)."}
+              {streamingProtocol === "raw" &&
+                "Tokens will stream in real-time as raw plaintext to the caller over HTTP chunked transfer (`res.write(token)`)."}
               {streamingProtocol === "websocket" &&
                 "Tokens will broadcast in real-time to connected WebSocket clients (`wsBroadcast()`)."}
               {streamingProtocol === "kafka" &&
