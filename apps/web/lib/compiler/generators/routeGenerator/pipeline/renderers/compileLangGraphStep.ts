@@ -358,15 +358,6 @@ export function renderLangGraphInvokeStep(
       rawLines.push(
         `    const token = textToken ?? (typeof payload === "string" ? payload : (typeof payload === "object" && payload !== null && "content" in payload ? payload.content : undefined));`,
       );
-      rawLines.push(
-        `    const writeChunk = isRaw`,
-      );
-      rawLines.push(
-        `      ? \`res.write(typeof token === "string" ? token : JSON.stringify(token));\``,
-      );
-      rawLines.push(
-        `      : \`res.write(\\\`data: \\\${JSON.stringify({ token, node: nodeName })}\\\\n\\\\n\\\`);\`;`,
-      );
       if (langGraphStreamingFields.length > 0) {
         const allowedFields = JSON.stringify(langGraphStreamingFields);
         rawLines.push(`    if (${allowedFields}.includes(nodeName || "")) {`);
