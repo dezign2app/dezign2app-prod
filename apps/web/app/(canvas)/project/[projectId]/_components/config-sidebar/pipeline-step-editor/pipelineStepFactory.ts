@@ -477,6 +477,9 @@ export function createDefaultStepDraft({
       langGraphTargetNodeId: effectiveLgId,
       langGraphStreamingEnabled: false,
       langGraphStreamingProtocol: "sse",
+      langGraphStreamModes: ["messages"],
+      langGraphStreamIncludeReasoning: true,
+      langGraphStreamSubgraphs: false,
       langGraphOutputMode: "full_state",
       langGraphStateMapping: defaultStateMapping,
       ...(hasMemory

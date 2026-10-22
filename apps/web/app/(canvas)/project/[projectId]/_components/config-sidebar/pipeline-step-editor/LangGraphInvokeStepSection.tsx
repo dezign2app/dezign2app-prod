@@ -14,7 +14,7 @@ import {
   LangGraphMessagesConfig,
 } from "@workspace/canvas/types";
 import { checkCheckpointerTablesStatus } from "../../backend-nodes/graph-nodes/langgraph/langgraph-canvas/utils/checkpointerTables";
-import { PipelineStepDraft, StepBinding, StepSource, AvailableSource } from "./types";
+import { PipelineStepDraft, StepBinding, StepSource, AvailableSource, LangGraphStreamMode } from "./types";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
   stepSourceToAccessor,
@@ -1421,11 +1421,48 @@ export const LangGraphInvokeStepSection: React.FC<
         threadIdSource={step.langGraphThreadIdSource}
         availableSources={availableSources}
         serviceNodeId={serviceNodeId}
+        streamModes={
+          step.langGraphStreamModes && step.langGraphStreamModes.length > 0
+            ? step.langGraphStreamModes
+            : ["messages"]
+        }
+        includeReasoning={step.langGraphStreamIncludeReasoning !== false}
+        includeSubgraphs={Boolean(step.langGraphStreamSubgraphs)}
         onToggleStreaming={handleToggleStreaming}
         onProtocolChange={(proto) =>
           onChange({
             ...step,
             langGraphStreamingProtocol: proto,
+          })
+        }
+        onToggleStreamMode={(mode) => {
+          const current: LangGraphStreamMode[] =
+            step.langGraphStreamModes && step.langGraphStreamModes.length > 0
+              ? [...step.langGraphStreamModes]
+              : ["messages"];
+          const exists = current.includes(mode);
+          let next: LangGraphStreamMode[];
+          if (exists) {
+            next = current.filter((m) => m !== mode);
+            if (next.length === 0) next = ["messages"];
+          } else {
+            next = [...current, mode];
+          }
+          onChange({
+            ...step,
+            langGraphStreamModes: next,
+          });
+        }}
+        onToggleIncludeReasoning={(enabled) =>
+          onChange({
+            ...step,
+            langGraphStreamIncludeReasoning: enabled,
+          })
+        }
+        onToggleIncludeSubgraphs={(enabled) =>
+          onChange({
+            ...step,
+            langGraphStreamSubgraphs: enabled,
           })
         }
         onKafkaBrokerChange={(brokerId, firstTopic) => {

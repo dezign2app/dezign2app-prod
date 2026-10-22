@@ -17,4 +17,5 @@ export type {
   SwitchCase,
   ParallelBranch,
   PipelineStepCacheMiss,
+  LangGraphStreamMode,
 } from "@workspace/canvas/types";
