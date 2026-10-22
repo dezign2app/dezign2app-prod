@@ -354,6 +354,23 @@ export const ReturnResponseStepRow = ({
             }
           }
 
+          if (field === "messages[last].content" || field === "content") {
+            return `${base}.response`;
+          }
+          if (field === "messages[last]") {
+            return `${base}.messages[${base}.messages.length - 1]`;
+          }
+          if (field === "finalState") {
+            return `${base}.state`;
+          }
+          if (field.includes("[last]")) {
+            const resolvedField = field.replace(
+              /([a-zA-Z0-9_$]+)\[last\]/g,
+              `$1[$1.length - 1]`,
+            );
+            return `${base}.${resolvedField}`;
+          }
+
           if (field.startsWith("[")) return `${base}${field}`;
           return `${base}.${field}`;
         }

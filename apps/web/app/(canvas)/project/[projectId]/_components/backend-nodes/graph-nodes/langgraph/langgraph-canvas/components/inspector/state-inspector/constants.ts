@@ -18,8 +18,8 @@ export const BUILT_IN_REDUCERS: BuiltInReducer[] = [
   DEFAULT_BUILT_IN_REDUCER,
   {
     name: "add_messages",
-    label: "add_messages (chat history dedup/append)",
-    desc: "LangGraph ID-based dedup and message history append",
+    label: "add_messages (LangGraph native: append, dedup & overwrite)",
+    desc: "LangGraph's native addMessages with ID deduplication, message coercion, and Overwrite support",
     typeHint: "messages",
   },
   {

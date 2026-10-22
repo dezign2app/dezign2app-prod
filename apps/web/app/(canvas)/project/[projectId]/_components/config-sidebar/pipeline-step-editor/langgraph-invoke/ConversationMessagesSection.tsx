@@ -95,11 +95,11 @@ export const ConversationMessagesSection: React.FC<ConversationMessagesSectionPr
       <p className="text-[10px] text-muted-foreground leading-relaxed">
         {effectiveMessagesMode === "single" ? (
           <>
-            Wraps the user input as a type-safe <code className="font-mono text-blue-300">HumanMessage</code> and appends it to conversation history. Optionally pass a dynamic <code className="font-mono text-purple-300">SystemMessage</code> for run-specific instructions.
+            Wraps the user input as a type-safe <code className="font-mono text-blue-300">HumanMessage</code> and appends it to conversation history using LangGraph's native <code className="font-mono text-blue-300">add_messages</code> reducer. Optionally pass a dynamic <code className="font-mono text-purple-300">SystemMessage</code> for run-specific instructions.
           </>
         ) : (
           <>
-            Accepts a bulk array of chat messages (<code className="font-mono text-blue-300">&#123; role, content &#125;[]</code>) and converts each item into its corresponding LangChain message class (<code className="font-mono text-blue-300">HumanMessage</code>, <code className="font-mono text-purple-300">SystemMessage</code>, or <code className="font-mono text-emerald-300">AIMessage</code>).
+            Accepts a bulk array of chat messages (<code className="font-mono text-blue-300">&#123; role, content &#125;[]</code>) and converts each item into its corresponding LangChain message class (<code className="font-mono text-blue-300">HumanMessage</code>, <code className="font-mono text-purple-300">SystemMessage</code>, or <code className="font-mono text-emerald-300">AIMessage</code>) with native deduplication.
           </>
         )}
       </p>

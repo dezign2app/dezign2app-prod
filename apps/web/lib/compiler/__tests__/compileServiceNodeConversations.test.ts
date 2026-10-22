@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { Endpoint } from "@workspace/canvas/types";
+import { Endpoint, EndpointWithNode } from "@workspace/canvas/types";
 import { compileServiceNode } from "../compileServiceNode";
 import { generateTypesPackage } from "../generators/typesGenerator";
 import { cleanUnusedImports } from "../utils";
@@ -1072,6 +1072,176 @@ app.use(express.json());
     // Crucial: state must be Record<string, unknown> instead of Record<string, string | number | boolean | null>
     expect(typeCode).toContain("state?: Record<string, unknown>");
     expect(typeCode).not.toContain("state?: Record<string, string | number | boolean | null>");
+  });
+
+  it("compiles endpoint mapping LangGraph step 'response' and 'state' to return_response fields", () => {
+    const serviceNode: BackendNode = {
+      id: "srv-conversation",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "conversations",
+        techStack: "express",
+        port: "8080",
+      },
+    };
+
+    const langGraphNode: BackendNode = {
+      id: "lg-demo",
+      type: "langgraph",
+      position: { x: 300, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "demo",
+        stateChannels: [
+          { key: "messages", type: "messages", reducer: "add_messages" },
+        ],
+      },
+    };
+
+    const endpoint: Endpoint & { nodeId: string } = {
+      id: "ep-send-msg-fields",
+      nodeId: "srv-conversation",
+      name: "/send-message/:id",
+      type: "POST",
+      summary: "Send message with specific LangGraph field mappings",
+      pathParams: [{ id: "p1", name: "id", type: "string", required: true }],
+      pipelineSteps: [
+        {
+          id: "step-demo",
+          name: "demo",
+          type: "langgraph_invoke",
+          langGraphTargetNodeId: "lg-demo",
+          outputVariable: "demoResult",
+          langGraphThreadIdSource: "body.thread_id",
+          langGraphStateMapping: {
+            messages: "body.message",
+          },
+        },
+        {
+          id: "step-ret",
+          name: "Return Response",
+          type: "return_response",
+          statusCode: 201,
+          inputBindings: [
+            {
+              argName: "field_1",
+              source: { kind: "step_output", stepId: "step-demo", field: "response" },
+            },
+            {
+              argName: "field_2",
+              source: { kind: "step_output", stepId: "step-demo", field: "state" },
+            },
+            {
+              argName: "field_3",
+              source: { kind: "step_output", stepId: "step-demo", field: "messages[last].content" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const compiledService = compileServiceNode(
+      serviceNode,
+      [endpoint],
+      [],
+      [serviceNode, langGraphNode],
+      [],
+      [],
+      [],
+      [],
+      "conversations",
+    );
+
+    const routeFile = compiledService.files.find((f) =>
+      f.filename.includes("postSendMessageById.ts"),
+    );
+    expect(routeFile).toBeDefined();
+    const routeCode = routeFile!.content;
+
+    expect(routeCode).toContain("field_1: demoResult.response");
+    expect(routeCode).toContain("field_2: demoResult.state");
+    // messages[last].content alias should also cleanly resolve to demoResult.response
+    expect(routeCode).toContain("field_3: demoResult.response");
+
+    const typesFiles = generateTypesPackage(
+      [serviceNode, langGraphNode],
+      [endpoint],
+      [],
+      [{ id: serviceNode.id, name: "conversations", folderName: "conversations" }],
+      [],
+    );
+    const typesFile = typesFiles.find((f) => f.filename.includes("postSendMessageById.ts"));
+    expect(typesFile).toBeDefined();
+    const typeCode = typesFile!.content;
+
+    expect(typeCode).toContain("field_1: string;");
+    expect(typeCode).toContain("field_2: Record<string, unknown>;");
+    expect(typeCode).toContain("field_3: string;");
+  });
+
+  it("compiles langgraph invoke step with overwrite operation using native __overwrite__ envelope", () => {
+    const langGraphNode: BackendNode = {
+      id: "node-lg-1",
+      type: "langgraph",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "supportAgent",
+        stateChannels: [
+          { key: "messages", type: "messages", reducer: "add_messages" },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "service-1",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: { label: "conversations" },
+    };
+
+    const endpoint: EndpointWithNode = {
+      id: "ep-reset",
+      nodeId: serviceNode.id,
+      name: "/resetConversation",
+      type: "POST",
+      pipelineSteps: [
+        {
+          id: "step-reset",
+          name: "supportAgent",
+          type: "langgraph_invoke",
+          langGraphTargetNodeId: langGraphNode.id,
+          langGraphMessagesConfig: {
+            mode: "single",
+            userMessageSource: "body.message",
+            operation: "overwrite",
+          },
+        },
+      ],
+    };
+
+    const compiledService = compileServiceNode(
+      serviceNode,
+      [endpoint],
+      [],
+      [serviceNode, langGraphNode],
+      [],
+      [],
+      [],
+      [],
+      "conversations",
+    );
+
+    const routeFile = compiledService.files.find((f) =>
+      f.filename.includes("postResetConversation.ts"),
+    );
+    expect(routeFile).toBeDefined();
+    const routeCode = routeFile!.content;
+
+    expect(routeCode).toContain('"messages": { __overwrite__: supportAgentMessages }');
   });
 });
 

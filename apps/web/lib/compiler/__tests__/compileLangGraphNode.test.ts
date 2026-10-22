@@ -130,6 +130,10 @@ describe("compileLangGraph Compiler Fixes", () => {
     expect(stateFile).toContain("reducer: currentMessageReducer,");
     expect(stateFile).toContain('default: () => "",');
     expect(fileMap.get("src/reducers/currentMessageReducer.ts")).toBeDefined();
+    const msgRed = fileMap.get("src/reducers/messagesReducer.ts");
+    expect(msgRed).toBeDefined();
+    expect(msgRed).toContain('import { addMessages } from "@langchain/langgraph";');
+    expect(msgRed).toContain("export const messagesReducer = addMessages;");
     expect(stateFile).toContain("ChatStateType");
     expect(stateFile).toContain("ChatStateUpdateType");
     expect(stateFile).not.toContain("StateSchema");
@@ -510,13 +514,15 @@ describe("compileLangGraph Compiler Fixes", () => {
     expect(stateFile).toContain('import type { BaseMessage } from "@langchain/core/messages";');
     expect(stateFile).toContain("export type StringChannelUpdate");
     expect(stateFile).toContain("export type NumberChannelUpdate");
-    expect(stateFile).toContain("messages: Annotation<BaseMessage[], BaseMessage[] | BaseMessage>({");
+    expect(stateFile).toContain("export type MessagesChannelUpdate");
+    expect(stateFile).toContain("messages: Annotation<BaseMessage[], MessagesChannelUpdate>({");
 
     // 2. Verify messagesReducer strongly types prev without implicit any
     const messagesReducer = fileMap.get("src/reducers/messagesReducer.ts") || "";
     expect(messagesReducer).toContain('import type { BaseMessage } from "@langchain/core/messages";');
+    expect(messagesReducer).toContain('import type { MessagesChannelUpdate } from "../state";');
     expect(messagesReducer).toContain(
-      "export const messagesReducer = (prev: BaseMessage[], next: BaseMessage[] | BaseMessage) =>",
+      "export const messagesReducer = (prev: BaseMessage[], next: MessagesChannelUpdate) =>",
     );
     expect(messagesReducer).not.toContain("(prev,");
 

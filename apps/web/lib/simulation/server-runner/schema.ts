@@ -44,7 +44,7 @@ export function buildGraphAnnotationSchema(
       }
     }
 
-    if (ch.key === "messages" || ch.type === "messages") {
+    if (ch.key === "messages" || ch.type === "messages" || ch.reducer === "add_messages") {
       schemaSpec[ch.key] = Annotation<BaseMessage[]>({
         reducer: addMessages,
         default: () => [],

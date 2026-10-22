@@ -541,18 +541,58 @@ describe("pipeline-validation: isStepInputUnconfigured for langgraph_invoke", ()
     expect(isStepInputUnconfigured(step, [mockAgentNode])).toBe(false);
   });
 
-  it("returns true (unconfigured) when an input binding has an incomplete source", () => {
+  it("returns false (configured) when required message inputChannel is mapped in langGraphMessagesConfig", () => {
+    const agentNodeWithMessageInput = {
+      id: "agent-msg-1",
+      type: "langgraph",
+      data: {
+        label: "Chat Agent",
+        inputChannels: [
+          { key: "message", type: "string", required: true, stateChannelKey: "messages" },
+        ],
+        stateChannels: [{ key: "messages", type: "messages" }],
+      },
+    } as any;
+
     const step: PipelineStepDraft = {
-      id: "step-lg-1",
-      name: "runAgent",
+      id: "step-lg-msg",
+      name: "runChatAgent",
       type: "langgraph_invoke",
       enabled: true,
-      langGraphTargetNodeId: "agent-1",
-      inputBindings: [
-        { argName: "query", source: { kind: "step_output", stepId: "", field: "query" } },
-      ],
+      langGraphTargetNodeId: "agent-msg-1",
+      langGraphMessagesConfig: {
+        mode: "single",
+        userMessageSource: "body.message",
+      },
     };
-    expect(isStepInputUnconfigured(step, [mockAgentNode])).toBe(true);
+    expect(isStepInputUnconfigured(step, [agentNodeWithMessageInput])).toBe(false);
+  });
+
+  it("returns false (configured) when required messages inputChannel is mapped in bulk langGraphMessagesConfig", () => {
+    const agentNodeWithMessagesInput = {
+      id: "agent-msgs-1",
+      type: "langgraph",
+      data: {
+        label: "Chat Agent",
+        inputChannels: [
+          { key: "messages", type: "messages", required: true },
+        ],
+        stateChannels: [{ key: "messages", type: "messages" }],
+      },
+    } as any;
+
+    const step: PipelineStepDraft = {
+      id: "step-lg-msgs",
+      name: "runChatAgent",
+      type: "langgraph_invoke",
+      enabled: true,
+      langGraphTargetNodeId: "agent-msgs-1",
+      langGraphMessagesConfig: {
+        mode: "bulk",
+        bulkMessagesSource: "body.messages",
+      },
+    };
+    expect(isStepInputUnconfigured(step, [agentNodeWithMessagesInput])).toBe(false);
   });
 });
 

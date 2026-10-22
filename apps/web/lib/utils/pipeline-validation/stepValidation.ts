@@ -577,20 +577,64 @@ function isLangGraphStepUnconfigured(
   const inputBindings = step.inputBindings || [];
   const stateMapping = step.langGraphStateMapping || {};
 
-  // If any input bindings are present, ensure they are properly configured
-  if (inputBindings.some((b) => !isBindingSourceConfigured(b))) {
+  // If any input bindings are present, ensure only non-empty named bindings are checked
+  if (inputBindings.some((b) => b.argName?.trim() && !isBindingSourceConfigured(b))) {
     return true;
   }
 
-  const isChannelMapped = (key: string) => {
-    const hasInMapping =
-      key in stateMapping &&
-      stateMapping[key] !== undefined &&
-      stateMapping[key] !== "";
-    const hasInBindings = inputBindings.some(
-      (b) => b.argName === key && isBindingSourceConfigured(b),
-    );
-    return hasInMapping || hasInBindings;
+  // Check if messages channel is mapped via dedicated langGraphMessagesConfig or stateMapping/inputBindings
+  const hasMessagesConfigured = Boolean(
+    (step.langGraphMessagesConfig?.mode === "bulk"
+      ? step.langGraphMessagesConfig.bulkMessagesSource?.trim()
+      : step.langGraphMessagesConfig?.userMessageSource?.trim()) ||
+    (stateMapping["messages"] !== undefined && stateMapping["messages"] !== "") ||
+    (stateMapping["message"] !== undefined && stateMapping["message"] !== "") ||
+    inputBindings.some(
+      (b) =>
+        (b.argName === "messages" || b.argName === "message") &&
+        isBindingSourceConfigured(b),
+    ),
+  );
+
+  const isChannelMapped = (req: { key?: string; stateChannelKey?: string }) => {
+    const key = req.key || "";
+    const stateKey = req.stateChannelKey;
+    const lowerKey = key.toLowerCase();
+
+    // Check if this channel represents conversation messages (either by key or via stateChannelKey alias)
+    const isMessagesChannel =
+      lowerKey === "messages" ||
+      lowerKey === "message" ||
+      (stateKey !== undefined &&
+        stateKey
+          .split(",")
+          .map((s) => s.trim().toLowerCase())
+          .includes("messages"));
+
+    if (isMessagesChannel && hasMessagesConfigured) {
+      return true;
+    }
+
+    const keysToCheck = [key];
+    if (stateKey) {
+      for (const sk of stateKey.split(",")) {
+        const trimmed = sk.trim();
+        if (trimmed && !keysToCheck.includes(trimmed)) {
+          keysToCheck.push(trimmed);
+        }
+      }
+    }
+
+    return keysToCheck.some((k) => {
+      const hasInMapping =
+        k in stateMapping &&
+        stateMapping[k] !== undefined &&
+        stateMapping[k] !== "";
+      const hasInBindings = inputBindings.some(
+        (b) => b.argName === k && isBindingSourceConfigured(b),
+      );
+      return hasInMapping || hasInBindings;
+    });
   };
 
   // Check required input channels declared by the target agent
@@ -603,7 +647,7 @@ function isLangGraphStepUnconfigured(
       // thread_id / threadId is configurable.thread_id (checkpointer config), not a state channel —
       // it is validated separately via langGraphThreadIdSource, so skip it here.
       if (req.key === "thread_id" || req.key === "threadId") continue;
-      if (!isChannelMapped(req.key)) {
+      if (!isChannelMapped(req)) {
         return true;
       }
     }

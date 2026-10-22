@@ -38,6 +38,16 @@ export function resolveLangGraphStepPaths(
     }
   }
 
+  // 1. Assistant text response (primary field)
+  if (!stepPaths.some((p) => p.path === "response")) {
+    stepPaths.push({
+      path: "response",
+      type: "string",
+      description: "Latest assistant message text response",
+    });
+  }
+
+  // 2. Custom state channels from the LangGraph node
   if (channels.length > 0) {
     channels.forEach((ch) => {
       if (!ch.key) return;
@@ -48,31 +58,8 @@ export function resolveLangGraphStepPaths(
           description: `State channel: ${ch.key}`,
         });
       }
-      if (ch.key === "messages" || ch.type === "messages") {
-        if (!stepPaths.some((p) => p.path === "content")) {
-          stepPaths.push({
-            path: "content",
-            type: "string",
-            description: "Latest assistant message text",
-          });
-        }
-        if (!stepPaths.some((p) => p.path === "messages[last].content")) {
-          stepPaths.push({
-            path: "messages[last].content",
-            type: "string",
-            description: "Latest assistant message content",
-          });
-        }
-      }
     });
   } else {
-    if (!stepPaths.some((p) => p.path === "content")) {
-      stepPaths.push({
-        path: "content",
-        type: "string",
-        description: "Latest assistant message text",
-      });
-    }
     if (!stepPaths.some((p) => p.path === "messages")) {
       stepPaths.push({
         path: "messages",
@@ -82,7 +69,7 @@ export function resolveLangGraphStepPaths(
     }
   }
 
-  // Memory thread ID
+  // 3. Memory thread ID
   if (lgNode?.data?.memoryConfig?.enabled !== false) {
     if (!stepPaths.some((p) => p.path === "threadId")) {
       stepPaths.push({
@@ -93,10 +80,10 @@ export function resolveLangGraphStepPaths(
     }
   }
 
-  // Full state object
-  if (!stepPaths.some((p) => p.path === "finalState")) {
+  // 4. Full state object
+  if (!stepPaths.some((p) => p.path === "state")) {
     stepPaths.push({
-      path: "finalState",
+      path: "state",
       type: "object",
       description: "Complete final graph state dictionary",
     });

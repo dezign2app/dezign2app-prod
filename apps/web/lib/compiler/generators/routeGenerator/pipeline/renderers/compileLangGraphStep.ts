@@ -194,7 +194,11 @@ export function renderLangGraphInvokeStep(
 
   if (messagesVarName) {
     mappedFieldKeys.add("messages");
-    stateFields.push(`  "messages": ${messagesVarName},`);
+    if (langGraphMessagesConfig?.operation === "overwrite") {
+      stateFields.push(`  "messages": { __overwrite__: ${messagesVarName} },`);
+    } else {
+      stateFields.push(`  "messages": ${messagesVarName},`);
+    }
   }
 
   if (inputBindings.length > 0) {
@@ -479,6 +483,7 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`const ${outputVariable} = {
   ...${outputVariable}Raw,
   response: ${outputVariable}Response,
+  content: ${outputVariable}Response,
   threadId: ${threadIdExpr || "undefined"},
   state: ${outputVariable}Raw,
 };`);
