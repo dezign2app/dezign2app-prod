@@ -21,7 +21,7 @@ interface BackendCanvasProps {
   view: BackendCanvasView;
 }
 
-function Flow({ projectId, view }: BackendCanvasProps) {
+function Flow({ projectId, projectName, view }: BackendCanvasProps) {
   // Syncs the local zustand store with the remote Convex database
   const { isLoading } = useBackendSync(projectId, view);
 
@@ -73,7 +73,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
     return <SchemaView key={projectId} projectId={projectId} />;
   }
 
-  return <GraphView key={projectId} projectId={projectId} />;
+  return <GraphView key={projectId} projectId={projectId} projectName={projectName} />;
 }
 
 export function BackendCanvas(props: BackendCanvasProps) {
