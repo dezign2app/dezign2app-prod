@@ -80,13 +80,24 @@ export const LangGraphCanvasTypesNode = ({
           </div>
           <div className="flex flex-col min-w-0 flex-1">
             {isEditingName ? (
-              <div className="flex items-center gap-1">
+              <div
+                className="flex items-center gap-1 nodrag nokey nowheel nopan"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
                 <LocalInput
                   value={nameValue}
                   onChange={(e) => setNameValue(e.target.value)}
                   onBlur={handleNameSave}
-                  onKeyDown={(e) => e.key === "Enter" && handleNameSave()}
-                  className="h-6 text-xs px-1.5 py-0 font-medium"
+                  onKeyDown={(e) => {
+                    if (e.key === "Backspace" || e.key === "Delete") {
+                      e.stopPropagation();
+                      e.nativeEvent?.stopImmediatePropagation?.();
+                    }
+                    if (e.key === "Enter") handleNameSave();
+                    if (e.key === "Escape") setIsEditingName(false);
+                  }}
+                  className="h-6 text-xs px-1.5 py-0 font-medium nodrag nokey nowheel nopan"
                   autoFocus
                 />
                 <Button

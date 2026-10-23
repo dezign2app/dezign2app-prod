@@ -146,7 +146,7 @@ export function useCanvasHandlers(projectId: string, view: BackendCanvasView) {
         }
       });
 
-      const allChanges = [...changes, ...additionalChanges];
+      const allChanges = [...filteredChanges, ...additionalChanges];
       if (allChanges.length > 0) {
         onNodesChangeStore(allChanges);
       }

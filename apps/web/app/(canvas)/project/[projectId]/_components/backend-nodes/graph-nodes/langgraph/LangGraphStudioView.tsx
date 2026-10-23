@@ -658,7 +658,7 @@ export function LangGraphStudioView({
             isContentEditable ||
             Boolean(
               el.closest(
-                "input, textarea, select, [contenteditable='true'], [role='textbox'], [role='combobox'], [data-inspector], .inspector-sidebar, .nodrag, .nowheel, .nopan"
+                "input, textarea, select, [contenteditable='true'], [role='textbox'], [role='combobox'], [data-inspector], .inspector-sidebar, .nodrag, .nowheel, .nopan, .nokey"
               )
             )
           );
@@ -674,6 +674,11 @@ export function LangGraphStudioView({
           if (selectedNodeId) {
             handleCloseInspector();
           }
+          return;
+        }
+
+        // Never delete nodes with Backspace (which is used for editing text)
+        if (e.key === "Backspace") {
           return;
         }
 
@@ -780,24 +785,11 @@ export function LangGraphStudioView({
             isValidConnection={isValidConnection}
             nodeTypes={langGraphCanvasNodeTypes}
             edgeTypes={langGraphCanvasEdgeTypes}
-            deleteKeyCode={["Delete"]}
+            deleteKeyCode={null}
             onBeforeDelete={async () => {
-              const activeEl = typeof document !== "undefined" ? document.activeElement : null;
-              if (
-                activeEl instanceof HTMLElement &&
-                (activeEl.tagName === "INPUT" ||
-                  activeEl.tagName === "TEXTAREA" ||
-                  activeEl.tagName === "SELECT" ||
-                  activeEl.isContentEditable ||
-                  Boolean(
-                    activeEl.closest(
-                      "input, textarea, select, [contenteditable='true'], [role='textbox'], [role='combobox'], [data-inspector], .inspector-sidebar, .nodrag"
-                    )
-                  ))
-              ) {
-                return false;
-              }
-              return true;
+              // ReactFlow should not delete any nodes or edges via uncontrolled keypress.
+              // Intentional deletion is handled cleanly by handleDeleteSelected on explicit Delete key.
+              return false;
             }}
             edgesReconnectable={true}
             edgesFocusable={true}

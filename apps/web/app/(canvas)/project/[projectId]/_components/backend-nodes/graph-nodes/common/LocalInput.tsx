@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Input } from "@workspace/ui/components/input";
 import { Textarea } from "@workspace/ui/components/textarea";
+import { cn } from "@workspace/ui/lib/utils";
 
 export interface LocalInputProps
   extends React.ComponentProps<typeof Input> {
@@ -113,6 +114,7 @@ export const LocalInput = React.forwardRef<HTMLInputElement, LocalInputProps>(
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === "Backspace" || e.key === "Delete") {
         e.stopPropagation();
+        e.nativeEvent?.stopImmediatePropagation?.();
       }
       if (e.key === "Enter") {
         flush();
@@ -144,6 +146,7 @@ export const LocalInput = React.forwardRef<HTMLInputElement, LocalInputProps>(
         spellCheck={effectiveSpellCheck}
         data-gramm="false"
         {...props}
+        className={cn("nokey", props.className)}
         value={localValue}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
@@ -269,6 +272,7 @@ export const LocalTextarea = React.forwardRef<
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === "Backspace" || e.key === "Delete") {
         e.stopPropagation();
+        e.nativeEvent?.stopImmediatePropagation?.();
       }
       if (e.key === "Tab") {
         e.preventDefault();
@@ -341,6 +345,7 @@ export const LocalTextarea = React.forwardRef<
         spellCheck={effectiveSpellCheck}
         data-gramm="false"
         {...props}
+        className={cn("nokey", props.className)}
         value={localValue}
         onKeyDown={handleKeyDown}
         onChange={handleChange}
