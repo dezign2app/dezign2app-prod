@@ -278,6 +278,7 @@ export function getChannelMeta(
 import type { StepBinding, AvailableSource } from "@/app/(canvas)/project/[projectId]/_components/config-sidebar/pipeline-step-editor/types";
 import type { LangGraphStateUpdateItem, StateUpdateSource } from "@workspace/canvas";
 import type { Parameter } from "@/types/canvas";
+import { toCamelCase } from "../AgentPromptVariablePicker";
 
 /**
  * Converts a LangGraphStateUpdateItem to a StepBinding for use with BindingSourceEditor.
@@ -325,15 +326,19 @@ export function stateUpdateToBinding(
         };
       }
       if (rawVal.startsWith(`${varName}.`) && !rawVal.includes("\n") && !rawVal.includes(" ")) {
+        const subField = rawVal.slice(varName.length + 1);
+        const isSelfRef = subField === varName || (src.label && subField === toCamelCase(src.label));
         return {
           argName: channelKey,
-          source: { kind: "step_output", stepId, field: rawVal.slice(varName.length + 1) },
+          source: { kind: "step_output", stepId, field: isSelfRef ? "" : subField },
         };
       }
       if (rawVal.startsWith(`${stepId}.`) && !rawVal.includes("\n") && !rawVal.includes(" ")) {
+        const subField = rawVal.slice(stepId.length + 1);
+        const isSelfRef = subField === varName || (src.label && subField === toCamelCase(src.label));
         return {
           argName: channelKey,
-          source: { kind: "step_output", stepId, field: rawVal.slice(stepId.length + 1) },
+          source: { kind: "step_output", stepId, field: isSelfRef ? "" : subField },
         };
       }
     }
@@ -410,9 +415,18 @@ export function bindingToStateUpdate(
     const src = availableSources.find(
       (s) => s.kind === "step_output" && (s.stepId === source.stepId || s.id === `step:${source.stepId}`),
     );
-    const varName = src?.variableName || source.stepId;
+    let varName = src?.variableName || (src?.label ? toCamelCase(src.label) : "");
+    if (!varName || varName.startsWith("llm_") || varName.startsWith("step_")) {
+      varName = src?.label ? toCamelCase(src.label) : "response";
+    }
     const rawField = (source.field || "").trim();
-    const isWhole = !rawField || rawField === `(whole ${varName})` || rawField === `(whole ${source.stepId})`;
+    const isWhole =
+      !rawField ||
+      rawField === `(whole ${varName})` ||
+      rawField === `(whole ${source.stepId})` ||
+      rawField === varName ||
+      (src?.label && rawField === toCamelCase(src.label)) ||
+      rawField === src?.label;
 
     if (isWhole) {
       return {

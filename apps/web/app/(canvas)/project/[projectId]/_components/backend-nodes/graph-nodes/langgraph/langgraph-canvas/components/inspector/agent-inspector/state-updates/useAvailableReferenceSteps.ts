@@ -63,7 +63,15 @@ export function useAvailableReferenceSteps({
     // 2. All Pipeline Steps (LLM steps, transformers, custom code, tools, etc.)
     pipelineSteps.forEach((ps, idx) => {
       const stepNum = idx + 1;
-      const stepVar = ps.outputVariable || ps.id || `step${stepNum}`;
+      const stepVar =
+        ps.outputVariable?.trim() ||
+        (ps.type === "llm_call"
+          ? "response"
+          : ps.type === "tools"
+          ? "toolOutput"
+          : ps.type === "transformer" || ps.type === "transform"
+          ? `transformedData${stepNum}`
+          : `step${stepNum}`);
       const rawStepName = ps.label || ps.name || ps.type;
       const stepName = toCamelCase(rawStepName) || rawStepName;
       const stepLabel = `${stepName} (${stepVar})`;

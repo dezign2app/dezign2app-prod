@@ -46,12 +46,6 @@ import type {
   LangGraphCanvasEdge,
 } from "./langgraph-canvas/types";
 import type { LangGraphStepConfig } from "@/types/canvas";
-import {
-  HANDLE_LLM_IN,
-  HANDLE_TOOL_IN,
-  HANDLE_MIDDLEWARE_IN,
-  HANDLE_MEMORY_IN,
-} from "./langgraph-canvas/constants";
 
 import { useConnectedRoutes } from "./LangGraphNode";
 import { detectInfiniteLoops, type LoopWarning } from "./langgraph-canvas/utils/loopDetection";
@@ -210,46 +204,6 @@ export function LangGraphStudioView({
     useCallback(() => handleLayout("LR"), [handleLayout]),
   );
 
-  const connectedLLMId = useMemo(() => {
-    if (!selectedNodeId) return null;
-    const edge = edges.find(
-      (e) => e.target === selectedNodeId && e.targetHandle === HANDLE_LLM_IN,
-    );
-    return edge ? edge.source : null;
-  }, [edges, selectedNodeId]);
-
-  const connectedToolIds = useMemo(() => {
-    if (!selectedNodeId) return [];
-    return edges
-      .filter(
-        (e) => e.target === selectedNodeId && e.targetHandle === HANDLE_TOOL_IN,
-      )
-      .map((e) => e.source);
-  }, [edges, selectedNodeId]);
-
-  const connectedMiddlewareIds = useMemo(() => {
-    if (!selectedNodeId) return [];
-    return edges
-      .filter(
-        (e) =>
-          e.target === selectedNodeId &&
-          e.targetHandle === HANDLE_MIDDLEWARE_IN,
-      )
-      .map((e) => e.source);
-  }, [edges, selectedNodeId]);
-
-  const connectedMemoryIds = useMemo(() => {
-    if (!selectedNodeId) return [];
-    return edges
-      .filter(
-        (e) =>
-          e.target === selectedNodeId && e.targetHandle === HANDLE_MEMORY_IN,
-      )
-      .map((e) => e.source);
-  }, [edges, selectedNodeId]);
-
-  const connectedToolsCount = connectedToolIds.length;
-  const connectedMiddlewareCount = connectedMiddlewareIds.length;
   const graphSteps = useMemo<LangGraphStepConfig[]>(
     () =>
       nodes
@@ -901,17 +855,11 @@ export function LangGraphStudioView({
           graphEdges={graphPathEdges}
           graphNodeLabels={graphNodeLabels}
           onRunTestCase={runGraphTestCase}
-          connectedToolsCount={connectedToolsCount}
-          connectedMiddlewareCount={connectedMiddlewareCount}
           availableLLMNodes={availableLLMNodes}
           availableToolNodes={availableToolNodes}
           availableMiddlewareNodes={availableMiddlewareNodes}
           availableMemoryNodes={availableMemoryNodes}
           connectedRoutes={connectedRoutes}
-          connectedLLMId={connectedLLMId}
-          connectedToolIds={connectedToolIds}
-          connectedMiddlewareIds={connectedMiddlewareIds}
-          connectedMemoryIds={connectedMemoryIds}
           masterToolNodes={masterToolNodes}
           masterMiddlewareNodes={masterMiddlewareNodes}
           onSelectLLM={(llmId) =>

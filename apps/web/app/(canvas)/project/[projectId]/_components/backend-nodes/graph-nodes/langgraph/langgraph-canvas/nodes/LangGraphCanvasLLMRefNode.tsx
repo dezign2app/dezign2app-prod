@@ -309,7 +309,11 @@ export const LangGraphCanvasLLMRefNode = ({
               <span className="px-1 py-0.2 rounded bg-sky-500/20 text-sky-400 text-[8px] uppercase font-bold">
                 REF
               </span>
-              <span>{data.refId || id}</span>
+              <span>
+                {selectedMaster?.data?.model ||
+                  selectedMaster?.data?.label ||
+                  "Unbound Reference"}
+              </span>
             </span>
           </div>
         </div>
@@ -340,7 +344,7 @@ export const LangGraphCanvasLLMRefNode = ({
           <span>Referenced LLM Config</span>
           {selectedMaster && (
             <span className="text-sky-400 font-mono text-[9px]">
-              {selectedMaster.id}
+              {selectedMaster.data?.label || selectedMaster.data?.model || "Configured"}
             </span>
           )}
         </label>
@@ -359,7 +363,7 @@ export const LangGraphCanvasLLMRefNode = ({
                   <div className="flex items-center gap-2">
                     <Cpu className="w-3 h-3 text-sky-400 shrink-0" />
                     <span className="font-semibold text-foreground">
-                      {master.data?.label || master.id}
+                      {master.data?.label || master.data?.model || "LLM Config"}
                     </span>
                     <span className="text-[9px] text-muted-foreground font-mono">
                       ({master.data?.provider || "custom"} - {master.data?.model || "default"})

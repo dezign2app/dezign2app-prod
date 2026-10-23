@@ -12,9 +12,11 @@ import type {
   LangGraphMiddlewareRefNode,
   LangGraphAgentResponseFormatConfig,
   LangGraphCanvasNode,
+  LangGraphCanvasEdge,
   LangGraphNodePipelineStep,
   LangGraphStateChannel,
 } from "@workspace/canvas";
+import { useConnectedNodeResources } from "../../../hooks/useConnectedNodeResources";
 
 import { AgentAttachedComponentsSection } from "./AgentAttachedComponentsSection";
 import { AgentMiddlewareSection } from "./AgentMiddlewareSection";
@@ -39,6 +41,7 @@ interface AgentLlmStepContentProps {
   masterToolNodes?: ToolNode[];
   masterMiddlewareNodes?: MiddlewareNode[];
   nodes?: LangGraphCanvasNode[];
+  edges?: LangGraphCanvasEdge[];
   connectedLLMId?: string | null;
   connectedToolIds?: string[];
   connectedMiddlewareIds?: string[];
@@ -69,9 +72,10 @@ export function AgentLlmStepContent({
   masterToolNodes = [],
   masterMiddlewareNodes = [],
   nodes = [],
-  connectedLLMId = null,
-  connectedToolIds = [],
-  connectedMiddlewareIds = [],
+  edges = [],
+  connectedLLMId: propConnectedLLMId,
+  connectedToolIds: propConnectedToolIds,
+  connectedMiddlewareIds: propConnectedMiddlewareIds,
   onAddToolRef,
   onRemoveToolRef,
   onAddMiddlewareRef,
@@ -84,6 +88,22 @@ export function AgentLlmStepContent({
   isMiddlewareEnabled,
   handleToggleMiddlewareConfig,
 }: AgentLlmStepContentProps) {
+  const agentNodeId = selectedAgentData.agentId || selectedAgentData.id;
+  const connectedResources = useConnectedNodeResources(agentNodeId, edges);
+
+  const connectedLLMId =
+    propConnectedLLMId !== undefined
+      ? propConnectedLLMId
+      : connectedResources.connectedLLMId;
+  const connectedToolIds =
+    propConnectedToolIds !== undefined
+      ? propConnectedToolIds
+      : connectedResources.connectedToolIds;
+  const connectedMiddlewareIds =
+    propConnectedMiddlewareIds !== undefined
+      ? propConnectedMiddlewareIds
+      : connectedResources.connectedMiddlewareIds;
+
   const [isLlmStructuredOpen, setIsLlmStructuredOpen] = useState(
     Boolean(rfConfig.enabled),
   );

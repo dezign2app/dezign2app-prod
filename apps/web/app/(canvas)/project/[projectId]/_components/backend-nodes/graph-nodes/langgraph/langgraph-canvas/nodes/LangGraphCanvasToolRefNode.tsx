@@ -239,7 +239,11 @@ export const LangGraphCanvasToolRefNode = ({
               <span className="px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-400 text-[8px] uppercase font-bold">
                 REF
               </span>
-              <span>{data.refId || id}</span>
+              <span>
+                {selectedMaster?.data?.name ||
+                  selectedMaster?.data?.label ||
+                  "Unbound Reference"}
+              </span>
             </span>
           </div>
         </div>
@@ -270,7 +274,7 @@ export const LangGraphCanvasToolRefNode = ({
           <span>Referenced Tool</span>
           {selectedMaster && (
             <span className="text-emerald-400 font-mono text-[9px]">
-              {selectedMaster.id}
+              {selectedMaster.data?.name || selectedMaster.data?.label || "Configured"}
             </span>
           )}
         </label>

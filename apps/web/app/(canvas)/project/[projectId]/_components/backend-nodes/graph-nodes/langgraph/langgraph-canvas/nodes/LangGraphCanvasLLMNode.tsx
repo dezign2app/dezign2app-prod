@@ -163,7 +163,7 @@ export const LangGraphCanvasLLMNode = ({
               </span>
             )}
             <span className="text-[9px] font-mono text-muted-foreground">
-              {data.llmId}
+              {data.model || activePreset?.defaultModel || "Model Config"}
             </span>
           </div>
         </div>

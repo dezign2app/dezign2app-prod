@@ -57,11 +57,13 @@ export function buildAgentNodeFile(
   let responseVar = "response";
   let hasLLM = false;
 
+  let outputVarMap = new Map<string, string>();
   if (hasConfiguredSteps) {
     const rendered = renderAgentPipelineSteps(pipelineSteps, d, ctx, llmVar);
     bodyLines = rendered.bodyLines;
     responseVar = rendered.llmOutputVar;
     hasLLM = rendered.hasLLMCall;
+    outputVarMap = rendered.outputVarMap;
 
     if (hasLLM && llmVar && llmMeta) {
       addImport(`../llm/${llmMeta.fileName}`, [llmVar]);
@@ -166,6 +168,31 @@ export function buildAgentNodeFile(
               .replace(/\bresponse\b/g, responseVar);
           }
         }
+      }
+    }
+
+    if (typeof val === "string" && !isValueless) {
+      // 1. Substitute any registered step IDs with their actual in-scope variable name
+      for (const [stepId, varName] of outputVarMap.entries()) {
+        if (!stepId) continue;
+        val = val.replace(new RegExp(`\\b${stepId}\\.${varName}\\b`, "g"), varName);
+        val = val.replace(new RegExp(`\\b${stepId}\\.`, "g"), `${varName}.`);
+        val = val.replace(new RegExp(`\\b${stepId}\\b`, "g"), varName);
+        val = val.replace(new RegExp(`\\b${varName}\\.${varName}\\b`, "g"), varName);
+      }
+      // 2. Fallback for any lingering step / llm internal IDs
+      if (hasLLM) {
+        val = val.replace(/\bllm_[a-zA-Z0-9_]+\.([a-zA-Z0-9_]+)\b/g, (_match, prop) => {
+          if (prop === responseVar || prop === "response" || prop === "llmAg") {
+            return responseVar;
+          }
+          return `${responseVar}?.${prop}`;
+        });
+        val = val.replace(/\bllm_[a-zA-Z0-9_]+\b/g, responseVar);
+      }
+      // 3. Collapse duplicate self-referencing variable names
+      if (responseVar) {
+        val = val.replace(new RegExp(`\\b${responseVar}\\.${responseVar}\\b`, "g"), responseVar);
       }
     }
 
