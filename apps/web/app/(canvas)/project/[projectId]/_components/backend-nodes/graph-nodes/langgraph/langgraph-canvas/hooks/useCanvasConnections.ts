@@ -11,7 +11,9 @@ import {
   type LangGraphCanvasNode,
   type LangGraphCanvasEdge,
   type StepNode,
+  type CanvasNode,
   type LangGraphRouterBranch,
+  type LangGraphLLMNode,
   type LangGraphLLMRefNode,
   type LangGraphMiddlewareRefNode,
   type LangGraphToolRefNode,
@@ -70,6 +72,22 @@ function isMiddlewareRefNode(
 
 function isMiddlewareNode(node: LangGraphCanvasNode): node is MiddlewareNode {
   return node.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE;
+}
+
+function isLLMNode(
+  node?: LangGraphCanvasNode | null,
+): node is LangGraphLLMNode {
+  return node?.type === LANGGRAPH_CANVAS_NODE_LLM;
+}
+
+function isAgentOrStepNode(
+  node?: LangGraphCanvasNode | null,
+): node is CanvasNode | StepNode {
+  return (
+    node?.type === LANGGRAPH_CANVAS_NODE_NODE ||
+    node?.type === LANGGRAPH_CANVAS_NODE_AGENT ||
+    node?.type === LANGGRAPH_CANVAS_NODE_STEP
+  );
 }
 
 interface UseCanvasConnectionsProps {
@@ -431,28 +449,20 @@ export function useCanvasConnections({
         const srcNode = nodes.find((n) => n.id === params.source);
         const targetNode = nodes.find((n) => n.id === params.target);
 
-        const isAgentOrStepNode = (n?: LangGraphCanvasNode) =>
-          n?.type === LANGGRAPH_CANVAS_NODE_NODE ||
-          n?.type === LANGGRAPH_CANVAS_NODE_AGENT ||
-          n?.type === LANGGRAPH_CANVAS_NODE_STEP;
-
         // When a direct edge is drawn between Master LLM and Agent (in either direction),
         // automatically insert/connect an LLM ref node instead of connecting directly.
         const isDirectMasterLLMAndAgent =
-          (srcNode?.type === LANGGRAPH_CANVAS_NODE_LLM &&
-            isAgentOrStepNode(targetNode)) ||
-          (isAgentOrStepNode(srcNode) &&
-            targetNode?.type === LANGGRAPH_CANVAS_NODE_LLM);
+          (isLLMNode(srcNode) && isAgentOrStepNode(targetNode)) ||
+          (isAgentOrStepNode(srcNode) && isLLMNode(targetNode));
 
         if (isDirectMasterLLMAndAgent) {
-          const masterLLMNode =
-            srcNode?.type === LANGGRAPH_CANVAS_NODE_LLM
-              ? (srcNode as LangGraphLLMNode)
-              : (targetNode as LangGraphLLMNode);
-          const agentNode =
-            srcNode?.type === LANGGRAPH_CANVAS_NODE_LLM
-              ? targetNode!
-              : srcNode!;
+          const isSrcLLM = isLLMNode(srcNode) && isAgentOrStepNode(targetNode);
+          const masterLLMNode = isSrcLLM ? srcNode : targetNode;
+          const agentNode = isSrcLLM ? targetNode : srcNode;
+
+          if (!isLLMNode(masterLLMNode) || !isAgentOrStepNode(agentNode)) {
+            return eds;
+          }
 
           // Find previously bound LLM edge targeting this agent
           const prevLlmEdge = eds.find(
@@ -492,24 +502,49 @@ export function useCanvasConnections({
                   };
                 }
                 if (n.id === agentNode.id) {
-                  return {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      llmConfig: {
-                        ...(n.data.llmConfig || {}),
-                        enabled: true,
-                        provider: resolvedProvider,
-                        model: resolvedModel,
-                        temperature: resolvedTemp,
+                  if (n.type === LANGGRAPH_CANVAS_NODE_STEP) {
+                    return {
+                      ...n,
+                      data: {
+                        ...n.data,
+                        llmConfig: {
+                          ...(n.data.llmConfig || {}),
+                          enabled: true,
+                          provider: resolvedProvider,
+                          model: resolvedModel,
+                          temperature: resolvedTemp,
+                        },
+                        modelConfig: {
+                          provider: resolvedProvider,
+                          model: resolvedModel,
+                          temperature: resolvedTemp,
+                        },
                       },
-                      modelConfig: {
-                        provider: resolvedProvider,
-                        model: resolvedModel,
-                        temperature: resolvedTemp,
+                    };
+                  }
+                  if (
+                    n.type === LANGGRAPH_CANVAS_NODE_AGENT ||
+                    n.type === LANGGRAPH_CANVAS_NODE_NODE
+                  ) {
+                    return {
+                      ...n,
+                      data: {
+                        ...n.data,
+                        llmConfig: {
+                          ...(n.data.llmConfig || {}),
+                          enabled: true,
+                          provider: resolvedProvider,
+                          model: resolvedModel,
+                          temperature: resolvedTemp,
+                        },
+                        modelConfig: {
+                          provider: resolvedProvider,
+                          model: resolvedModel,
+                          temperature: resolvedTemp,
+                        },
                       },
-                    },
-                  };
+                    };
+                  }
                 }
                 return n;
               }),
@@ -548,9 +583,9 @@ export function useCanvasConnections({
                   ? nds.filter((n) => n.id !== prevLlmSourceId)
                   : nds;
 
-              return [
-                ...filtered.map((n) => {
-                  if (n.id === agentNode.id) {
+              const updatedNodes: LangGraphCanvasNode[] = filtered.map((n) => {
+                if (n.id === agentNode.id) {
+                  if (n.type === LANGGRAPH_CANVAS_NODE_STEP) {
                     return {
                       ...n,
                       data: {
@@ -570,10 +605,34 @@ export function useCanvasConnections({
                       },
                     };
                   }
-                  return n;
-                }),
-                newLLMRefNode,
-              ];
+                  if (
+                    n.type === LANGGRAPH_CANVAS_NODE_AGENT ||
+                    n.type === LANGGRAPH_CANVAS_NODE_NODE
+                  ) {
+                    return {
+                      ...n,
+                      data: {
+                        ...n.data,
+                        llmConfig: {
+                          ...(n.data.llmConfig || {}),
+                          enabled: true,
+                          provider: resolvedProvider,
+                          model: resolvedModel,
+                          temperature: resolvedTemp,
+                        },
+                        modelConfig: {
+                          provider: resolvedProvider,
+                          model: resolvedModel,
+                          temperature: resolvedTemp,
+                        },
+                      },
+                    };
+                  }
+                }
+                return n;
+              });
+
+              return [...updatedNodes, newLLMRefNode];
             });
           }
 
