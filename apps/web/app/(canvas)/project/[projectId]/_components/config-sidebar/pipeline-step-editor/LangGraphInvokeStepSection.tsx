@@ -17,6 +17,7 @@ import { checkCheckpointerTablesStatus } from "../../backend-nodes/graph-nodes/l
 import { PipelineStepDraft, StepBinding, StepSource, AvailableSource, LangGraphStreamMode } from "./types";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { ensurePageRefConnection } from "./utils";
+import { upsertDerivedConnection, removeDerivedConnection } from "./pushToClientUtils";
 import { ensureWsPackageInService } from "@/lib/stores/backendCanvas/packageTypesSync";
 import {
   stepSourceToAccessor,
@@ -119,7 +120,7 @@ export const LangGraphInvokeStepSection: React.FC<
     // 2. Section actionSteps inside webPages targeting this endpoint
     for (const node of allNodes) {
       if (node.type !== "webPage") continue;
-      const sections = (node.data?.sections || []) as any[];
+      const sections = node.data?.sections || [];
       for (const sec of sections) {
         const actions = sec.actions || [];
         for (const act of actions) {
@@ -198,6 +199,12 @@ export const LangGraphInvokeStepSection: React.FC<
         targetPageIdToConnect || selectedTargetPageId || defaultTargetPage?.id;
       if (!targetPageId) return;
 
+      const store = useBackendCanvasStore.getState();
+      const prevTargetPageId = step.clientDeliveryTargetPageId;
+      if (prevTargetPageId && prevTargetPageId !== targetPageId) {
+        removeDerivedConnection(store, prevTargetPageId, step.id);
+      }
+
       const conn = ensurePageRefConnection({
         targetPageId,
         pageRefNodeId: step.clientDeliveryPageRefNodeId,
@@ -206,12 +213,33 @@ export const LangGraphInvokeStepSection: React.FC<
         stepId: step.id,
       });
 
+      const nextTargetPageId = conn?.targetPageId || targetPageId;
+      const nextRefId = conn?.pageRefNodeId || step.clientDeliveryPageRefNodeId;
+      const nextStep = {
+        ...step,
+        clientDeliveryTargetPageId: nextTargetPageId,
+        clientDeliveryPageRefNodeId: nextRefId,
+      };
+
       if (conn?.pageRefNodeId) {
-        onChange({
-          ...step,
-          clientDeliveryTargetPageId: conn.targetPageId || targetPageId,
-          clientDeliveryPageRefNodeId: conn.pageRefNodeId,
-        });
+        onChange(nextStep);
+      }
+
+      if (step.langGraphStreamingEnabled) {
+        const proto = step.langGraphStreamingProtocol || "sse";
+        if (proto === "sse" || proto === "websocket") {
+          const sourceItemName = endpoint ? endpoint.name || "Endpoint" : undefined;
+          const sourceItemId = endpoint ? endpoint.id : undefined;
+          upsertDerivedConnection(
+            store,
+            nextTargetPageId,
+            nextStep,
+            serviceNodeId,
+            sourceItemName,
+            sourceItemId,
+            "endpoint",
+          );
+        }
       }
     },
     [
@@ -224,13 +252,14 @@ export const LangGraphInvokeStepSection: React.FC<
     ],
   );
 
-  // Auto-connect push to client (page_ref) node when streaming is enabled
+  // Auto-connect push to client (page_ref) node and sync derived realtime connection when streaming is enabled
   useEffect(() => {
     if (!step.langGraphStreamingEnabled || !serviceNodeId) return;
     const proto = step.langGraphStreamingProtocol || "sse";
     if (proto === "sse" || proto === "websocket") {
       const targetPageId = step.clientDeliveryTargetPageId || defaultTargetPage?.id;
-      if (targetPageId && (!step.clientDeliveryPageRefNodeId || !connectedPageRefNode)) {
+      if (targetPageId) {
+        const store = useBackendCanvasStore.getState();
         const conn = ensurePageRefConnection({
           targetPageId,
           pageRefNodeId: step.clientDeliveryPageRefNodeId,
@@ -238,6 +267,9 @@ export const LangGraphInvokeStepSection: React.FC<
           endpointId: endpoint?.id,
           stepId: step.id,
         });
+        const resolvedTargetPageId = conn?.targetPageId || targetPageId;
+        const resolvedPageRefNodeId = conn?.pageRefNodeId || step.clientDeliveryPageRefNodeId;
+
         if (
           conn?.pageRefNodeId &&
           (conn.pageRefNodeId !== step.clientDeliveryPageRefNodeId ||
@@ -245,10 +277,26 @@ export const LangGraphInvokeStepSection: React.FC<
         ) {
           onChange({
             ...step,
-            clientDeliveryTargetPageId: conn.targetPageId || targetPageId,
-            clientDeliveryPageRefNodeId: conn.pageRefNodeId,
+            clientDeliveryTargetPageId: resolvedTargetPageId,
+            clientDeliveryPageRefNodeId: resolvedPageRefNodeId,
           });
         }
+
+        const sourceItemName = endpoint ? endpoint.name || "Endpoint" : undefined;
+        const sourceItemId = endpoint ? endpoint.id : undefined;
+        upsertDerivedConnection(
+          store,
+          resolvedTargetPageId,
+          {
+            ...step,
+            clientDeliveryTargetPageId: resolvedTargetPageId,
+            clientDeliveryPageRefNodeId: resolvedPageRefNodeId,
+          },
+          serviceNodeId,
+          sourceItemName,
+          sourceItemId,
+          "endpoint",
+        );
       }
     }
   }, [
@@ -525,16 +573,39 @@ export const LangGraphInvokeStepSection: React.FC<
         ? otherBindings.filter((b) => b.argName !== "thread_id" && b.argName !== "threadId")
         : [...otherBindings, { argName, source: updated.source }];
     const accessor = stepSourceToAccessor(updated.source, availableSources);
-    onChange({
+    const nextStep = {
       ...step,
       inputBindings: nextBindings,
       [fieldKey]: accessor,
-    });
+    };
+    onChange(nextStep);
     syncAgentInputChannels(
       nextBindings,
       mapping,
       fieldKey === "langGraphThreadIdSource" ? accessor : undefined,
     );
+
+    if (
+      fieldKey === "langGraphStreamingRoom" &&
+      step.langGraphStreamingEnabled &&
+      (step.langGraphStreamingProtocol === "websocket" || streamingProtocol === "websocket")
+    ) {
+      const targetPageId = step.clientDeliveryTargetPageId || defaultTargetPage?.id;
+      if (targetPageId) {
+        const store = useBackendCanvasStore.getState();
+        const sourceItemName = endpoint ? endpoint.name || "Endpoint" : undefined;
+        const sourceItemId = endpoint ? endpoint.id : undefined;
+        upsertDerivedConnection(
+          store,
+          targetPageId,
+          nextStep,
+          serviceNodeId,
+          sourceItemName,
+          sourceItemId,
+          "endpoint",
+        );
+      }
+    }
   };
 
   const handleResetArgBinding = (
@@ -560,6 +631,28 @@ export const LangGraphInvokeStepSection: React.FC<
       mapping,
       fieldKey === "langGraphThreadIdSource" ? undefined : step.langGraphThreadIdSource,
     );
+
+    if (
+      fieldKey === "langGraphStreamingRoom" &&
+      step.langGraphStreamingEnabled &&
+      (step.langGraphStreamingProtocol === "websocket" || streamingProtocol === "websocket")
+    ) {
+      const targetPageId = step.clientDeliveryTargetPageId || defaultTargetPage?.id;
+      if (targetPageId) {
+        const store = useBackendCanvasStore.getState();
+        const sourceItemName = endpoint ? endpoint.name || "Endpoint" : undefined;
+        const sourceItemId = endpoint ? endpoint.id : undefined;
+        upsertDerivedConnection(
+          store,
+          targetPageId,
+          nextStep,
+          serviceNodeId,
+          sourceItemName,
+          sourceItemId,
+          "endpoint",
+        );
+      }
+    }
   };
 
   const handleAddThreadIdToRequestBody = () => {
@@ -1434,12 +1527,16 @@ export const LangGraphInvokeStepSection: React.FC<
     let nextStep: PipelineStepDraft = {
       ...step,
       langGraphStreamingEnabled: enabled,
-      langGraphStreamingProtocol: enabled ? streamingProtocol : undefined,
+      langGraphStreamingProtocol: enabled ? (step.langGraphStreamingProtocol || streamingProtocol || "sse") : undefined,
     };
     const proto = nextStep.langGraphStreamingProtocol || streamingProtocol || "sse";
     if (enabled && serviceNodeId && proto === "websocket") {
       ensureWsPackageInService({ serviceNodeId });
     }
+    const store = useBackendCanvasStore.getState();
+    const sourceItemName = endpoint ? endpoint.name || "Endpoint" : undefined;
+    const sourceItemId = endpoint ? endpoint.id : undefined;
+
     if (enabled && serviceNodeId && (proto === "sse" || proto === "websocket")) {
       const targetPageId = nextStep.clientDeliveryTargetPageId || defaultTargetPage?.id;
       if (targetPageId) {
@@ -1450,14 +1547,25 @@ export const LangGraphInvokeStepSection: React.FC<
           endpointId: endpoint?.id,
           stepId: step.id,
         });
-        if (conn?.pageRefNodeId) {
-          nextStep = {
-            ...nextStep,
-            clientDeliveryTargetPageId: conn.targetPageId || targetPageId,
-            clientDeliveryPageRefNodeId: conn.pageRefNodeId,
-          };
-        }
+        const resolvedPageId = conn?.targetPageId || targetPageId;
+        const resolvedRefId = conn?.pageRefNodeId || nextStep.clientDeliveryPageRefNodeId;
+        nextStep = {
+          ...nextStep,
+          clientDeliveryTargetPageId: resolvedPageId,
+          clientDeliveryPageRefNodeId: resolvedRefId,
+        };
+        upsertDerivedConnection(
+          store,
+          resolvedPageId,
+          nextStep,
+          serviceNodeId,
+          sourceItemName,
+          sourceItemId,
+          "endpoint",
+        );
       }
+    } else if (!enabled && step.clientDeliveryTargetPageId) {
+      removeDerivedConnection(store, step.clientDeliveryTargetPageId, step.id);
     }
     onChange(nextStep);
   };
@@ -1645,12 +1753,33 @@ export const LangGraphInvokeStepSection: React.FC<
         onConnectPushToClient={() => handleConnectPushToClientNode()}
         onToggleStreaming={handleToggleStreaming}
         onProtocolChange={(proto) => {
-          onChange({
+          const nextStep = {
             ...step,
             langGraphStreamingProtocol: proto,
-          });
+          };
+          onChange(nextStep);
           if (proto === "websocket" && serviceNodeId) {
             ensureWsPackageInService({ serviceNodeId });
+          }
+          const store = useBackendCanvasStore.getState();
+          const targetPageId = step.clientDeliveryTargetPageId || defaultTargetPage?.id;
+          const sourceItemName = endpoint ? endpoint.name || "Endpoint" : undefined;
+          const sourceItemId = endpoint ? endpoint.id : undefined;
+
+          if (step.langGraphStreamingEnabled && targetPageId) {
+            if (proto === "sse" || proto === "websocket") {
+              upsertDerivedConnection(
+                store,
+                targetPageId,
+                nextStep,
+                serviceNodeId,
+                sourceItemName,
+                sourceItemId,
+                "endpoint",
+              );
+            } else {
+              removeDerivedConnection(store, targetPageId, step.id);
+            }
           }
         }}
         onToggleStreamMode={(mode) => {

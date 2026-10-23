@@ -129,4 +129,92 @@ describe("compileWebPageNodes Realtime SSE generation", () => {
     expect(code).toContain("es.close()");
     expect(code).toContain("Live Stream Active");
   });
+
+  it("discovers pipeline-derived langgraph_invoke streaming SSE steps connected to page_ref node", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-dashboard",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/dashboard",
+        appSlug: "ai-assistant",
+      },
+    };
+
+    const pageRefNode: BackendNode = {
+      id: "node-page-ref-1",
+      type: "page_ref",
+      position: { x: 700, y: 0 },
+      fractionalIndex: "a2",
+      data: {
+        label: "Dashboard Ref",
+        targetPageId: "node-page-dashboard",
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "node-service-conversations",
+      type: "service",
+      position: { x: 400, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "Conversations",
+        port: "8080",
+      },
+    };
+
+    const endpoints: (Endpoint & { nodeId: string })[] = [
+      {
+        id: "ep-send-msg",
+        name: "sendMessage",
+        type: "POST",
+        nodeId: "node-service-conversations",
+        pipelineSteps: [
+          {
+            id: "step-lg-invoke",
+            name: "invokeLangGraph",
+            type: "langgraph_invoke",
+            enabled: true,
+            langGraphStreamingEnabled: true,
+            langGraphStreamingProtocol: "sse",
+            clientDeliveryPageRefNodeId: "node-page-ref-1",
+          },
+        ],
+      },
+    ];
+
+    const edges: BackendEdge[] = [
+      {
+        id: "edge-ep-to-pref",
+        source: "node-service-conversations",
+        sourceHandle: "ep-send-msg-right",
+        target: "node-page-ref-1",
+        type: "connection",
+        fractionalIndex: "a0",
+      },
+    ];
+
+    const result = compileWebPageNodes(
+      [webPageNode],
+      endpoints,
+      [],
+      [webPageNode, serviceNode, pageRefNode],
+      edges,
+      "AI Assistant",
+    );
+
+    const pageFile = result.files.find((f) => f.filename.includes("page.tsx"));
+    expect(pageFile).toBeDefined();
+
+    const code = pageFile!.content;
+
+    // Verify EventSource connection to the service's SSE endpoint and agent stream listener
+    expect(code).toContain('new EventSource("http://localhost:8080/events", { withCredentials: true })');
+    expect(code).toContain('es.addEventListener("sendMessage"');
+    expect(code).toContain('eventType: "SSE"');
+    expect(code).toContain("es.close()");
+    expect(code).toContain("Live Stream Active");
+  });
 });
+

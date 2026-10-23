@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { Handle, Position } from "@xyflow/react";
 import { Plus, Settings, Trash, Radio, AlertCircle } from "lucide-react";
-import { BackendNode, RealtimeConnection, ClientDeliveryProtocol, PipelineStep } from "@workspace/canvas/types";
+import { BackendNode, RealtimeConnection, ClientDeliveryProtocol, PipelineStep, PipelineStepDraft } from "@workspace/canvas/types";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { generateId } from "../../../common";
@@ -25,15 +25,56 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
 }) => {
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
   const nodes = useBackendCanvasStore((s) => s.nodes);
+  const edges = useBackendCanvasStore((s) => s.edges);
   const events = useBackendCanvasStore((s) => s.events);
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
 
-  // Derive any connections targeted at this page via push_to_client pipeline steps
+  // Derive any connections targeted at this page via push_to_client or langgraph_invoke streaming pipeline steps
   const derivedConnections = useMemo(() => {
     const derived: MergedConnection[] = [];
 
+    const isStepTargetingThisPage = (
+      step: PipelineStep | PipelineStepDraft,
+      sourceItemId: string,
+      sourceNodeId: string,
+    ): boolean => {
+      // 1. Explicit target page ID on step
+      if (step.clientDeliveryTargetPageId === nodeId) return true;
+
+      // 2. Step targets a page_ref node that references this page
+      if (step.clientDeliveryPageRefNodeId) {
+        const pr = nodes.find(
+          (n) =>
+            n.id === step.clientDeliveryPageRefNodeId &&
+            n.type === "page_ref" &&
+            (n.data?.targetPageId === nodeId || n.data?.pageRefId === nodeId),
+        );
+        if (pr) return true;
+      }
+
+      // 3. Canvas edge connects source endpoint/event to a page_ref referencing this page
+      const edgeToPageRef = edges.find((e) => {
+        if (e.source !== sourceNodeId) return false;
+        const matchesHandle =
+          !e.sourceHandle ||
+          e.sourceHandle.includes(sourceItemId) ||
+          e.sourceHandle === `endpoint-out-${sourceItemId}` ||
+          e.sourceHandle === `consumedEvents-out-${sourceItemId}`;
+        if (!matchesHandle) return false;
+        const targetNode = nodes.find((n) => n.id === e.target && n.type === "page_ref");
+        return (
+          targetNode &&
+          (targetNode.data?.targetPageId === nodeId ||
+            targetNode.data?.pageRefId === nodeId)
+        );
+      });
+      if (edgeToPageRef) return true;
+
+      return false;
+    };
+
     const checkSteps = (
-      steps: PipelineStep[] | undefined,
+      steps: (PipelineStep | PipelineStepDraft)[] | undefined,
       sourceNodeId: string,
       sourceItemName: string,
       sourceItemId: string,
@@ -41,19 +82,42 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
     ) => {
       if (!steps) return;
       for (const step of steps) {
-        if (
+        const isPushToClient =
           step.type === "push_to_client" &&
-          step.clientDeliveryTargetPageId === nodeId
-        ) {
+          isStepTargetingThisPage(step, sourceItemId, sourceNodeId);
+
+        const isLangGraphStreaming =
+          step.type === "langgraph_invoke" &&
+          Boolean(step.langGraphStreamingEnabled) &&
+          (step.langGraphStreamingProtocol === "sse" ||
+            step.langGraphStreamingProtocol === "websocket" ||
+            !step.langGraphStreamingProtocol) &&
+          isStepTargetingThisPage(step, sourceItemId, sourceNodeId);
+
+        if (isPushToClient || isLangGraphStreaming) {
           const sourceNode = nodes.find((n) => n.id === sourceNodeId);
+          const proto: ClientDeliveryProtocol = isLangGraphStreaming
+            ? (step.langGraphStreamingProtocol === "websocket" ? "WEBSOCKET" : "SSE")
+            : (step.clientDeliveryProtocol ?? "SSE");
+
+          const eventName =
+            step.clientDeliveryEventName ||
+            (isLangGraphStreaming
+              ? (proto === "WEBSOCKET" ? "agent_stream" : (sourceItemName || step.name || "message"))
+              : (sourceItemName || "message"));
+
+          const room =
+            step.clientDeliveryRoom ||
+            (isLangGraphStreaming ? step.langGraphStreamingRoom : undefined);
+
           derived.push({
             id: step.id,
-            protocol: (step.clientDeliveryProtocol as ClientDeliveryProtocol) || "SSE",
-            eventName: step.clientDeliveryEventName,
-            room: step.clientDeliveryRoom,
+            protocol: proto,
+            eventName,
+            room,
             description: sourceItemName || step.name,
             sourceServiceNodeId: sourceNodeId,
-            sourceServiceLabel: (sourceNode?.data?.label as string) || sourceNode?.type || "Service",
+            sourceServiceLabel: sourceNode?.data?.label || sourceNode?.type || "Service",
             sourceEventId: sourceItemId,
             sourceItemName,
             sourceItemType,
@@ -78,23 +142,49 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
     // 1. Check all consumed / published events
     events.forEach((ev) => {
       if (ev.pipelineSteps && ev.nodeId) {
-        checkSteps(ev.pipelineSteps as PipelineStep[], ev.nodeId, ev.name || "Event", ev.id, "event");
+        checkSteps(ev.pipelineSteps, ev.nodeId, ev.name || "Event", ev.id, "event");
       }
     });
 
     // 2. Check all endpoints
     endpoints.forEach((ep) => {
       if (ep.pipelineSteps && ep.nodeId) {
-        checkSteps(ep.pipelineSteps as PipelineStep[], ep.nodeId, ep.name || "Endpoint", ep.id, "endpoint");
+        checkSteps(ep.pipelineSteps, ep.nodeId, ep.name || "Endpoint", ep.id, "endpoint");
+      }
+    });
+
+    // 3. Check embedded endpoints and consumedEvents on service nodes
+    nodes.forEach((n) => {
+      if (n.type === "service") {
+        n.data?.endpoints?.forEach((ep) => {
+          if (!endpoints.some((e) => e.id === ep.id) && ep.pipelineSteps) {
+            checkSteps(ep.pipelineSteps, n.id, ep.name || "Endpoint", ep.id, "endpoint");
+          }
+        });
+        n.data?.consumedEvents?.forEach((ev) => {
+          if (!events.some((e) => e.id === ev.id) && ev.pipelineSteps) {
+            checkSteps(ev.pipelineSteps, n.id, ev.name || "Event", ev.id, "event");
+          }
+        });
       }
     });
 
     return derived;
-  }, [nodeId, nodes, events, endpoints]);
+  }, [nodeId, nodes, events, endpoints, edges]);
 
-  // Merge manual and derived connections, avoiding duplicates with matching IDs
+  // Merge manual and derived connections, avoiding duplicates with matching IDs and preserving store action bindings
   const allConnections = useMemo(() => {
+    const connectionsMap = new Map((connections || []).map((c) => [c.id, c]));
     const derivedIds = new Set(derivedConnections.map((d) => d.id));
+
+    const derivedWithBindings = derivedConnections.map((d) => {
+      const match = connectionsMap.get(d.id);
+      return {
+        ...d,
+        storeActionBinding: match?.storeActionBinding || d.storeActionBinding,
+      };
+    });
+
     const manualOnly = connections
       .filter((c) => !derivedIds.has(c.id))
       .map((c) => ({
@@ -105,7 +195,7 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
         sourceItemName: undefined,
         sourceItemType: undefined,
       }));
-    return [...derivedConnections, ...manualOnly];
+    return [...derivedWithBindings, ...manualOnly];
   }, [derivedConnections, connections]);
 
   const handleAdd = () => {

@@ -704,7 +704,15 @@ export function useCanvasStepSync({
   const pushStepsKey = useMemo(
     () =>
       allFlatSteps
-        .filter((s) => s.type === "push_to_client")
+        .filter(
+          (s) =>
+            s.type === "push_to_client" ||
+            (s.type === "langgraph_invoke" &&
+              Boolean(s.langGraphStreamingEnabled) &&
+              (s.langGraphStreamingProtocol === "sse" ||
+                s.langGraphStreamingProtocol === "websocket" ||
+                !s.langGraphStreamingProtocol)),
+        )
         .map((s) => `${s.id}:${s.clientDeliveryTargetPageId}:${s.clientDeliveryPageRefNodeId}`)
         .join("|"),
     [allFlatSteps],
@@ -792,7 +800,15 @@ export function useCanvasStepSync({
   // Auto-synchronize connected PageRef nodes and edges for configured push_to_client steps
   useEffect(() => {
     if (isNested || !serviceNodeId) return;
-    const pushSteps = allFlatSteps.filter((s) => s.type === "push_to_client");
+    const pushSteps = allFlatSteps.filter(
+      (s) =>
+        s.type === "push_to_client" ||
+        (s.type === "langgraph_invoke" &&
+          Boolean(s.langGraphStreamingEnabled) &&
+          (s.langGraphStreamingProtocol === "sse" ||
+            s.langGraphStreamingProtocol === "websocket" ||
+            !s.langGraphStreamingProtocol)),
+    );
     if (pushSteps.length === 0) return;
 
     pushSteps.forEach((s) => {

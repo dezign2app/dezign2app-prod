@@ -18,6 +18,10 @@ import {
   getSimulationNodeBorderClass,
 } from "../../common";
 import { useNodePipelineError } from "@/lib/utils/pipelineValidation";
+import {
+  upsertDerivedConnection,
+  removeDerivedConnection,
+} from "@/app/(canvas)/project/[projectId]/_components/config-sidebar/pipeline-step-editor/pushToClientUtils";
 
 export const PageRefNode = ({
   id,
@@ -86,11 +90,25 @@ export const PageRefNode = ({
                 (s.type === "push_to_client" || (s.type === "langgraph_invoke" && s.langGraphStreamingEnabled)) &&
                 (s.clientDeliveryPageRefNodeId === id || !s.clientDeliveryPageRefNodeId)
               ) {
-                return {
+                const prevTargetPageId = s.clientDeliveryTargetPageId;
+                if (prevTargetPageId && prevTargetPageId !== pageId) {
+                  removeDerivedConnection(store, prevTargetPageId, s.id);
+                }
+                const updatedStep = {
                   ...s,
                   clientDeliveryTargetPageId: pageId,
                   clientDeliveryPageRefNodeId: id,
                 };
+                upsertDerivedConnection(
+                  store,
+                  pageId,
+                  updatedStep,
+                  edge.source,
+                  ep.name || "Endpoint",
+                  ep.id,
+                  "endpoint",
+                );
+                return updatedStep;
               }
               return s;
             });
@@ -105,11 +123,25 @@ export const PageRefNode = ({
           if (hasPushStep) {
             const updatedSteps = ev.pipelineSteps.map((s) => {
               if (s.type === "push_to_client" && (s.clientDeliveryPageRefNodeId === id || !s.clientDeliveryPageRefNodeId)) {
-                return {
+                const prevTargetPageId = s.clientDeliveryTargetPageId;
+                if (prevTargetPageId && prevTargetPageId !== pageId) {
+                  removeDerivedConnection(store, prevTargetPageId, s.id);
+                }
+                const updatedStep = {
                   ...s,
                   clientDeliveryTargetPageId: pageId,
                   clientDeliveryPageRefNodeId: id,
                 };
+                upsertDerivedConnection(
+                  store,
+                  pageId,
+                  updatedStep,
+                  edge.source,
+                  ev.name || "Event",
+                  ev.id,
+                  "event",
+                );
+                return updatedStep;
               }
               return s;
             });
