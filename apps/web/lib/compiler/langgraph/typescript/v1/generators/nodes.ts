@@ -57,11 +57,13 @@ export function buildAgentNodeFile(
   let responseVar = "response";
   let hasLLM = false;
 
+  let outputVarMap = new Map<string, string>();
   if (hasConfiguredSteps) {
     const rendered = renderAgentPipelineSteps(pipelineSteps, d, ctx, llmVar);
     bodyLines = rendered.bodyLines;
     responseVar = rendered.llmOutputVar;
     hasLLM = rendered.hasLLMCall;
+    outputVarMap = rendered.outputVarMap;
 
     if (hasLLM && llmVar && llmMeta) {
       addImport(`../llm/${llmMeta.fileName}`, [llmVar]);
@@ -95,6 +97,21 @@ export function buildAgentNodeFile(
       bodyLines.push(`  // Node without LLM execution logic`);
       bodyLines.push(`  const response: Record<string, string | undefined> = {};`);
     }
+
+    const isStructured = Boolean(d.responseFormat?.enabled);
+    if (isStructured && hasLLM) {
+      bodyLines.push(`  let responseParsed: Record<string, any> = {};`);
+      bodyLines.push(`  try {`);
+      bodyLines.push(
+        `    const rawContent = typeof response?.content === "string" ? response.content : (typeof response === "object" && response !== null ? JSON.stringify(response) : "{}");`,
+      );
+      bodyLines.push(`    responseParsed = JSON.parse(rawContent);`);
+      bodyLines.push(`  } catch {`);
+      bodyLines.push(
+        `    responseParsed = (typeof response === "object" && response !== null ? response : {}) as Record<string, any>;`,
+      );
+      bodyLines.push(`  }`);
+    }
   }
 
   const stateUpdates = d.stateUpdates || [];
@@ -103,6 +120,9 @@ export function buildAgentNodeFile(
   if (hasLLM && !hasExplicitMessagesUpdate) {
     returnEntries.push(`    messages: [${responseVar}],`);
   }
+
+  const isAgentStructured = Boolean(d.responseFormat?.enabled);
+  const parsedVar = `${responseVar}Parsed`;
 
   for (const su of stateUpdates) {
     const key = toCamelCase(su.channelKey);
@@ -114,10 +134,14 @@ export function buildAgentNodeFile(
     let val: string = "undefined";
     if (!isValueless) {
       if (su.source === "structured_field" || su.schemaField) {
-        const fieldKey = su.schemaField || su.value;
-        val = `${responseVar}?.${fieldKey}`;
+        const rawField = (su.schemaField || su.value || "")
+          .replace(/^([a-zA-Z0-9_]+)\./, "")
+          .replace(/^response\??\./, "")
+          .trim();
+        const baseAccessor = isAgentStructured ? parsedVar : responseVar;
+        val = rawField ? `${baseAccessor}?.${rawField}` : baseAccessor;
       } else if (su.source === "structured_full") {
-        val = responseVar;
+        val = isAgentStructured ? parsedVar : responseVar;
       } else if (su.source === "expression" || (su.value && su.value.trim().startsWith("{"))) {
         val = su.value || `state.${key}`;
         if (typeof val === "string") {
@@ -169,6 +193,37 @@ export function buildAgentNodeFile(
       }
     }
 
+    if (typeof val === "string" && !isValueless) {
+      // 1. Substitute any registered step IDs with their actual in-scope variable name
+      for (const [stepId, varName] of outputVarMap.entries()) {
+        if (!stepId) continue;
+        val = val.replace(new RegExp(`\\b${stepId}\\.${varName}\\b`, "g"), varName);
+        val = val.replace(new RegExp(`\\b${stepId}\\.`, "g"), `${varName}.`);
+        val = val.replace(new RegExp(`\\b${stepId}\\b`, "g"), varName);
+        val = val.replace(new RegExp(`\\b${varName}\\.${varName}\\b`, "g"), varName);
+      }
+      // 2. Fallback for any lingering step / llm internal IDs
+      if (hasLLM) {
+        val = val.replace(/\bllm_[a-zA-Z0-9_]+\.([a-zA-Z0-9_]+)\b/g, (_match, prop) => {
+          if (prop === responseVar || prop === "response" || prop === "llmAg") {
+            return responseVar;
+          }
+          return isAgentStructured ? `${parsedVar}?.${prop}` : `${responseVar}?.${prop}`;
+        });
+        val = val.replace(/\bllm_[a-zA-Z0-9_]+\b/g, responseVar);
+      }
+      // 3. If structured output is active, route property access on responseVar to parsedVar
+      if (isAgentStructured && hasLLM) {
+        val = val
+          .replace(new RegExp(`\\b${responseVar}\\.(?!content\\b|role\\b|tool_calls\\b)([a-zA-Z0-9_]+)`, "g"), `${parsedVar}?.$1`)
+          .replace(new RegExp(`\\b${responseVar}\\?\\.(?!content\\b|role\\b|tool_calls\\b)([a-zA-Z0-9_]+)`, "g"), `${parsedVar}?.$1`);
+      }
+      // 4. Collapse duplicate self-referencing variable names
+      if (responseVar) {
+        val = val.replace(new RegExp(`\\b${responseVar}\\.${responseVar}\\b`, "g"), responseVar);
+      }
+    }
+
     // Special channel handling for LangGraph `messages` channel:
     // messagesStateReducer expects BaseMessage or BaseMessage[] (or role/content object)
     if (key === "messages" && !isValueless) {
@@ -179,6 +234,12 @@ export function buildAgentNodeFile(
         val === "[response]"
       ) {
         val = `[${responseVar}]`;
+      } else if (
+        val === parsedVar ||
+        val === `${responseVar}Parsed` ||
+        su.source === "structured_full"
+      ) {
+        val = `[{ role: "assistant", content: JSON.stringify(${parsedVar}) }]`;
       } else if (
         val === "response.content" ||
         val === `${responseVar}?.content` ||

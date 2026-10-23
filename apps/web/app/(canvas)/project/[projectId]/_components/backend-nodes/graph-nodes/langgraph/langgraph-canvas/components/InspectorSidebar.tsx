@@ -69,17 +69,11 @@ export interface InspectorSidebarProps {
   }>;
   graphNodeLabels?: Record<string, string>;
   onRunTestCase?: (testCase: SimulationTestCase) => void;
-  connectedToolsCount?: number;
-  connectedMiddlewareCount?: number;
   availableLLMNodes?: (LangGraphLLMNode | LangGraphLLMRefNode)[];
   availableToolNodes?: (ToolNode | LangGraphToolRefNode)[];
   availableMiddlewareNodes?: (MiddlewareNode | LangGraphMiddlewareRefNode)[];
   availableMemoryNodes?: (MemoryNode | LangGraphMemoryRefNode)[];
   connectedRoutes?: ConnectedRouteInfo[];
-  connectedLLMId?: string | null;
-  connectedToolIds?: string[];
-  connectedMiddlewareIds?: string[];
-  connectedMemoryIds?: string[];
   masterToolNodes?: ToolNode[];
   masterMiddlewareNodes?: MiddlewareNode[];
   onAddToolRef?: (masterToolId: string) => void;
@@ -145,17 +139,11 @@ export function InspectorSidebar({
   graphEdges = [],
   graphNodeLabels = {},
   onRunTestCase,
-  connectedToolsCount = 0,
-  connectedMiddlewareCount = 0,
   availableLLMNodes,
   availableToolNodes,
   availableMiddlewareNodes,
   availableMemoryNodes,
   connectedRoutes = [],
-  connectedLLMId,
-  connectedToolIds,
-  connectedMiddlewareIds,
-  connectedMemoryIds,
   masterToolNodes,
   masterMiddlewareNodes,
   onAddToolRef,
@@ -383,8 +371,6 @@ export function InspectorSidebar({
           selectedAgentData={selectedAgentData}
           selectedMemoryData={selectedMemoryData}
           selectedOutputData={selectedOutputData}
-          connectedToolsCount={connectedToolsCount}
-          connectedMiddlewareCount={connectedMiddlewareCount}
           availableLLMNodes={availableLLMNodes}
           availableToolNodes={availableToolNodes}
           availableMiddlewareNodes={availableMiddlewareNodes}
@@ -392,11 +378,9 @@ export function InspectorSidebar({
           masterToolNodes={masterToolNodes}
           masterMiddlewareNodes={masterMiddlewareNodes}
           nodes={nodes}
+          edges={edges}
+          selectedNodeId={selectedNodeId}
           connectedRoutes={connectedRoutes}
-          connectedLLMId={connectedLLMId}
-          connectedToolIds={connectedToolIds}
-          connectedMiddlewareIds={connectedMiddlewareIds}
-          connectedMemoryIds={connectedMemoryIds}
           onSelectLLM={onSelectLLM}
           onToggleTool={onToggleTool}
           onAddToolRef={onAddToolRef}

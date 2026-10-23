@@ -21,6 +21,7 @@ import type {
   LangGraphMemoryRefNode,
   OutputNode,
   LangGraphCanvasNode,
+  LangGraphCanvasEdge,
   TransformerCanvasNodeData,
   LangGraphTypesNodeData,
   LangGraphTypesRefNodeData,
@@ -48,8 +49,6 @@ interface InspectorTabContentProps {
   selectedTransformerRefData?: TransformerCanvasNodeData | null;
   selectedTypesData?: LangGraphTypesNodeData | null;
   selectedTypesRefData?: LangGraphTypesRefNodeData | null;
-  connectedToolsCount?: number;
-  connectedMiddlewareCount?: number;
   availableLLMNodes?: (LangGraphLLMNode | LangGraphLLMRefNode)[];
   availableToolNodes?: (ToolNode | LangGraphToolRefNode)[];
   availableMiddlewareNodes?: (MiddlewareNode | LangGraphMiddlewareRefNode)[];
@@ -58,10 +57,8 @@ interface InspectorTabContentProps {
   masterMiddlewareNodes?: MiddlewareNode[];
   nodes?: LangGraphCanvasNode[];
   connectedRoutes?: ConnectedRouteInfo[];
-  connectedLLMId?: string | null;
-  connectedToolIds?: string[];
-  connectedMiddlewareIds?: string[];
-  connectedMemoryIds?: string[];
+  edges?: LangGraphCanvasEdge[];
+  selectedNodeId?: string | null;
   onAddToolRef?: (masterToolId: string) => void;
   onRemoveToolRef?: (toolRefId: string) => void;
   onAddMiddlewareRef?: (masterMwId: string) => void;
@@ -99,8 +96,6 @@ export function InspectorTabContent({
   selectedTransformerRefData,
   selectedTypesData,
   selectedTypesRefData,
-  connectedToolsCount = 0,
-  connectedMiddlewareCount = 0,
   availableLLMNodes,
   availableToolNodes,
   availableMiddlewareNodes,
@@ -108,11 +103,9 @@ export function InspectorTabContent({
   masterToolNodes,
   masterMiddlewareNodes,
   nodes,
+  edges = [],
+  selectedNodeId,
   connectedRoutes = [],
-  connectedLLMId,
-  connectedToolIds,
-  connectedMiddlewareIds,
-  connectedMemoryIds,
   onAddToolRef,
   onRemoveToolRef,
   onAddMiddlewareRef,
@@ -138,7 +131,7 @@ export function InspectorTabContent({
   onClose,
 }: InspectorTabContentProps) {
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4">
+    <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4 pb-100">
       {onClose && (
         <div className="flex items-center justify-between pb-2.5 border-b border-border/40 shrink-0">
           <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -203,9 +196,8 @@ export function InspectorTabContent({
           masterToolNodes={masterToolNodes}
           masterMiddlewareNodes={masterMiddlewareNodes}
           nodes={nodes}
-          connectedLLMId={connectedLLMId}
-          connectedToolIds={connectedToolIds}
-          connectedMiddlewareIds={connectedMiddlewareIds}
+          edges={edges}
+          selectedNodeId={selectedNodeId}
           onSelectLLM={onSelectLLM}
           onToggleTool={onToggleTool}
           onAddToolRef={onAddToolRef}

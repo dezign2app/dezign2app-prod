@@ -274,3 +274,353 @@ export function getChannelMeta(
     description: matchedCustom?.description,
   };
 }
+
+import type { StepBinding, AvailableSource } from "@/app/(canvas)/project/[projectId]/_components/config-sidebar/pipeline-step-editor/types";
+import type { LangGraphStateUpdateItem, StateUpdateSource } from "@workspace/canvas";
+import type { Parameter } from "@/types/canvas";
+import { toCamelCase } from "../AgentPromptVariablePicker";
+
+/**
+ * Converts a LangGraphStateUpdateItem to a StepBinding for use with BindingSourceEditor.
+ */
+export function stateUpdateToBinding(
+  su: LangGraphStateUpdateItem,
+  schemaFields: Parameter[] = [],
+  availableSources: AvailableSource[] = [],
+): StepBinding {
+  const channelKey = su.channelKey || "";
+  const sourceKind = su.source;
+  const rawVal = su.value !== undefined ? String(su.value).trim() : "";
+
+  // 1. Valueless action / none source
+  if (sourceKind === "none") {
+    return {
+      argName: channelKey,
+      source: { kind: "inline", value: "" },
+    };
+  }
+
+  // 2a. Whole state object (rawVal === "state")
+  if (rawVal === "state") {
+    return {
+      argName: channelKey,
+      source: { kind: "state", field: "" },
+    };
+  }
+
+  // 2b. Explicit state.* path without spaces/newlines
+  if (
+    rawVal.startsWith("state.") &&
+    !rawVal.includes("\n") &&
+    !rawVal.includes("${") &&
+    !rawVal.includes(" ")
+  ) {
+    return {
+      argName: channelKey,
+      source: { kind: "state", field: rawVal.slice(6) },
+    };
+  }
+
+  // 2c. Explicit process.env.* reference
+  if (
+    rawVal.startsWith("process.env.") &&
+    !rawVal.includes("\n") &&
+    !rawVal.includes("${") &&
+    !rawVal.includes(" ")
+  ) {
+    return {
+      argName: channelKey,
+      source: { kind: "env", field: rawVal.slice(12) },
+    };
+  }
+
+  // 3. Check if matches any available step output
+  // Skip plain sources when this is a structured update (handled in step 4)
+  const isStructuredUpdate =
+    sourceKind === "structured_field" || sourceKind === "structured_full" || Boolean(su.schemaField);
+
+  for (const src of availableSources) {
+    if (src.kind === "step_output" && src.stepId) {
+      const isStructuredSrc = src.id.endsWith(":structured") || src.stepId.endsWith(":structured");
+      // Skip non-structured sources for structured updates — handled in step 4
+      if (isStructuredUpdate && !isStructuredSrc) continue;
+
+      const varName = src.variableName || src.stepId;
+      const stepId = src.stepId;
+
+      if (rawVal === varName || rawVal === stepId) {
+        return {
+          argName: channelKey,
+          source: { kind: "step_output", stepId, field: "" },
+        };
+      }
+      if (rawVal.startsWith(`${varName}.`) && !rawVal.includes("\n") && !rawVal.includes(" ")) {
+        const subField = rawVal.slice(varName.length + 1);
+        const isSelfRef = subField === varName || (src.label && subField === toCamelCase(src.label));
+        return {
+          argName: channelKey,
+          source: { kind: "step_output", stepId, field: isSelfRef ? "" : subField },
+        };
+      }
+      if (rawVal.startsWith(`${stepId}.`) && !rawVal.includes("\n") && !rawVal.includes(" ")) {
+        const subField = rawVal.slice(stepId.length + 1);
+        const isSelfRef = subField === varName || (src.label && subField === toCamelCase(src.label));
+        return {
+          argName: channelKey,
+          source: { kind: "step_output", stepId, field: isSelfRef ? "" : subField },
+        };
+      }
+    }
+  }
+
+  // 4. Fallback for legacy configs or structured output sources
+  const structuredSource = availableSources.find(
+    (s) =>
+      s.kind === "step_output" &&
+      (s.id.endsWith(":structured") || s.stepId?.endsWith(":structured")),
+  );
+
+  if (
+    structuredSource &&
+    (sourceKind === "structured_field" ||
+      sourceKind === "structured_full" ||
+      su.schemaField)
+  ) {
+    const fieldName =
+      su.schemaField ||
+      (sourceKind === "structured_full"
+        ? ""
+        : rawVal.replace(/^([a-zA-Z0-9_]+)\./, "").replace(/^response\??\./, ""));
+    return {
+      argName: channelKey,
+      source: {
+        kind: "step_output",
+        stepId:
+          structuredSource.stepId ||
+          structuredSource.id.replace(/^step:/, ""),
+        field: fieldName,
+      },
+    };
+  }
+
+  const firstLlmStep =
+    availableSources.find(
+      (s) => s.kind === "step_output" && s.paths.some((p) => p.path === "content"),
+    ) || availableSources.find((s) => s.kind === "step_output");
+
+  if (firstLlmStep && firstLlmStep.stepId) {
+    const stepId = firstLlmStep.stepId;
+    if (sourceKind === "structured_field" || su.schemaField) {
+      const fieldName = su.schemaField || rawVal.replace(/^response\??\./, "");
+      return {
+        argName: channelKey,
+        source: { kind: "step_output", stepId, field: fieldName },
+      };
+    }
+    if (
+      sourceKind === "structured_full" ||
+      sourceKind === "message_object" ||
+      rawVal === "response" ||
+      rawVal === "${response}"
+    ) {
+      return {
+        argName: channelKey,
+        source: { kind: "step_output", stepId, field: "" },
+      };
+    }
+    if (
+      sourceKind === "message_content" ||
+      rawVal === "response.content" ||
+      rawVal === "${response.content}"
+    ) {
+      return {
+        argName: channelKey,
+        source: { kind: "step_output", stepId, field: "content" },
+      };
+    }
+    if (rawVal.startsWith("response.") && !rawVal.includes("\n") && !rawVal.includes(" ")) {
+      return {
+        argName: channelKey,
+        source: { kind: "step_output", stepId, field: rawVal.slice(9) },
+      };
+    }
+  }
+
+  // 5. Otherwise, inline value (expression, JSON, or literal)
+  return {
+    argName: channelKey,
+    source: {
+      kind: "inline",
+      value: su.value !== undefined ? String(su.value) : "",
+    },
+  };
+}
+
+/**
+ * Converts a StepBinding back into a LangGraphStateUpdateItem.
+ */
+export function bindingToStateUpdate(
+  binding: StepBinding,
+  prevSu: LangGraphStateUpdateItem,
+  schemaFields: Parameter[] = [],
+  availableSources: AvailableSource[] = [],
+): LangGraphStateUpdateItem {
+  const { source, argName } = binding;
+  const channelKey = argName || prevSu.channelKey;
+
+  if (source.kind === "step_output") {
+    const src = availableSources.find(
+      (s) => s.kind === "step_output" && (s.stepId === source.stepId || s.id === `step:${source.stepId}`),
+    );
+    const isStructuredSource = Boolean(
+      source.stepId.endsWith(":structured") || (src?.id && src.id.endsWith(":structured")),
+    );
+    let varName = src?.variableName || "";
+    if (!varName || varName.startsWith("llm_") || varName.startsWith("step_")) {
+      const cleanLabel = (src?.label || "").replace(/:.*/, "").replace(/\s*\(.*\)/, "").trim();
+      varName = cleanLabel ? toCamelCase(cleanLabel) : "response";
+    }
+    const rawField = (source.field || "").trim();
+    const isWhole =
+      !rawField ||
+      rawField === `(whole ${varName})` ||
+      rawField === `(whole ${source.stepId})` ||
+      rawField === "(whole structured output)" ||
+      rawField.startsWith("(whole") ||
+      rawField === varName;
+
+    if (isStructuredSource) {
+      if (isWhole) {
+        return {
+          ...prevSu,
+          channelKey,
+          source: "structured_full",
+          mode: "expression",
+          value: varName,
+          schemaField: undefined,
+        };
+      }
+      return {
+        ...prevSu,
+        channelKey,
+        source: "structured_field",
+        mode: "set",
+        schemaField: rawField,
+        value: `${varName}.${rawField}`,
+      };
+    }
+
+    if (isWhole) {
+      return {
+        ...prevSu,
+        channelKey,
+        source: "expression",
+        mode: "expression",
+        value: varName,
+        schemaField: undefined,
+      };
+    }
+
+    const matchedSf = schemaFields.find(
+      (sf) => sf.name.toLowerCase() === rawField.toLowerCase(),
+    );
+    if (matchedSf) {
+      return {
+        ...prevSu,
+        channelKey,
+        source: "structured_field",
+        mode: "set",
+        schemaField: matchedSf.name,
+        value: `${varName}.${matchedSf.name}`,
+      };
+    }
+
+    return {
+      ...prevSu,
+      channelKey,
+      source: "expression",
+      mode: "expression",
+      value: `${varName}.${rawField}`,
+      schemaField: undefined,
+    };
+  }
+
+  if (source.kind === "state") {
+    const field = (source.field || "").trim();
+    const val = field && field !== "(whole state)" ? `state.${field}` : "state";
+    return {
+      ...prevSu,
+      channelKey,
+      source: "expression",
+      mode: "expression",
+      value: val,
+      schemaField: undefined,
+    };
+  }
+
+  if (source.kind === "env") {
+    const field = (source.field || "").trim();
+    const val = field ? `process.env.${field}` : "process.env";
+    return {
+      ...prevSu,
+      channelKey,
+      source: "expression",
+      mode: "expression",
+      value: val,
+      schemaField: undefined,
+    };
+  }
+
+  if (source.kind === "inline") {
+    const rawVal = source.value !== undefined ? String(source.value) : "";
+    let cleanVal = rawVal;
+    const trimmed = cleanVal.trim();
+    if (
+      trimmed.startsWith("${") &&
+      trimmed.endsWith("}") &&
+      !trimmed.slice(2, -1).includes("${")
+    ) {
+      cleanVal = trimmed.slice(2, -1).trim();
+    }
+
+    let nextSource: StateUpdateSource = "literal";
+    let nextSchemaField: string | undefined = undefined;
+
+    const cleanMatch = cleanVal.replace(/^response\??\./, "").trim();
+    const matchedField = schemaFields.find(
+      (f) => f.name === cleanMatch || f.name === cleanVal,
+    );
+
+    if (matchedField) {
+      nextSource = "structured_field";
+      nextSchemaField = matchedField.name;
+    } else if (cleanVal === "response.content") {
+      nextSource = "message_content";
+    } else if (cleanVal === "response") {
+      nextSource = "message_object";
+    } else if (
+      cleanVal.startsWith("state.") ||
+      cleanVal.includes("${") ||
+      cleanVal.includes("\n") ||
+      cleanVal.startsWith("{")
+    ) {
+      nextSource = "expression";
+    } else {
+      nextSource = "literal";
+    }
+
+    return {
+      ...prevSu,
+      channelKey,
+      value: cleanVal,
+      source: nextSource,
+      schemaField: nextSchemaField,
+      mode: nextSource === "expression" ? "expression" : "set",
+    };
+  }
+
+  return {
+    ...prevSu,
+    channelKey,
+  };
+}

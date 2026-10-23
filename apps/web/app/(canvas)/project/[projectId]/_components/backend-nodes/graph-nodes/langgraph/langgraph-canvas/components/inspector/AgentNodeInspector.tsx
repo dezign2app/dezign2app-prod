@@ -14,7 +14,9 @@ import type {
   LangGraphStateChannel,
   LangGraphCustomReducer,
   LangGraphCanvasNode,
+  LangGraphCanvasEdge,
 } from "@workspace/canvas";
+import { useConnectedNodeResources } from "../../hooks/useConnectedNodeResources";
 
 import {
   LANGGRAPH_STEP_META,
@@ -51,6 +53,8 @@ export interface AgentNodeInspectorProps {
   masterToolNodes?: ToolNode[];
   masterMiddlewareNodes?: MiddlewareNode[];
   nodes?: LangGraphCanvasNode[];
+  edges?: LangGraphCanvasEdge[];
+  selectedNodeId?: string | null;
   connectedLLMId?: string | null;
   connectedToolIds?: string[];
   connectedMiddlewareIds?: string[];
@@ -75,9 +79,10 @@ export function AgentNodeInspector({
   masterToolNodes = [],
   masterMiddlewareNodes = [],
   nodes = [],
-  connectedLLMId = null,
-  connectedToolIds = [],
-  connectedMiddlewareIds = [],
+  edges = [],
+  connectedLLMId: propConnectedLLMId,
+  connectedToolIds: propConnectedToolIds,
+  connectedMiddlewareIds: propConnectedMiddlewareIds,
   onAddToolRef,
   onRemoveToolRef,
   onAddMiddlewareRef,
@@ -88,6 +93,23 @@ export function AgentNodeInspector({
   stateChannels = [],
   customReducers = [],
 }: AgentNodeInspectorProps) {
+  // ─── Connected Resources Extraction ───────────────────────────────────────
+  const agentNodeId = selectedAgentData.agentId || selectedAgentData.id;
+  const connectedResources = useConnectedNodeResources(agentNodeId, edges);
+
+  const connectedLLMId =
+    propConnectedLLMId !== undefined
+      ? propConnectedLLMId
+      : connectedResources.connectedLLMId;
+  const connectedToolIds =
+    propConnectedToolIds !== undefined
+      ? propConnectedToolIds
+      : connectedResources.connectedToolIds;
+  const connectedMiddlewareIds =
+    propConnectedMiddlewareIds !== undefined
+      ? propConnectedMiddlewareIds
+      : connectedResources.connectedMiddlewareIds;
+
   // ─── Response Format & Streaming Configurations ────────────────────────────
   const rfConfig: LangGraphAgentResponseFormatConfig =
     selectedAgentData.responseFormat || {
@@ -276,6 +298,7 @@ export function AgentNodeInspector({
                       masterToolNodes={masterToolNodes}
                       masterMiddlewareNodes={masterMiddlewareNodes}
                       nodes={nodes}
+                      edges={edges}
                       connectedLLMId={connectedLLMId}
                       connectedToolIds={connectedToolIds}
                       connectedMiddlewareIds={connectedMiddlewareIds}

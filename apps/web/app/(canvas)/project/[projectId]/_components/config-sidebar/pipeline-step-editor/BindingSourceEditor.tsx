@@ -19,6 +19,11 @@ export interface BindingSourceEditorProps {
   availableSources: AvailableSource[];
   onChange: (updated: StepBinding) => void;
   serviceNodeId?: string;
+  placeholder?: string;
+  textareaPlaceholder?: string;
+  isExpanded?: boolean;
+  onToggleExpanded?: () => void;
+  extraAction?: React.ReactNode;
 }
 
 export const BindingSourceEditor = ({
@@ -26,6 +31,11 @@ export const BindingSourceEditor = ({
   availableSources,
   onChange,
   serviceNodeId,
+  placeholder,
+  textareaPlaceholder,
+  isExpanded: isExpandedProp,
+  onToggleExpanded,
+  extraAction,
 }: BindingSourceEditorProps) => {
   const { source } = binding;
   const [isExpanded, setIsExpanded] = useState(false);
@@ -179,7 +189,16 @@ export const BindingSourceEditor = ({
 
   const stringVal = String(source.kind === "inline" ? source.value ?? "" : "");
   const hasNewlines = stringVal.includes("\n");
-  const showTextarea = isExpanded || hasNewlines;
+  const effectiveExpanded = isExpandedProp !== undefined ? isExpandedProp : isExpanded;
+  const showTextarea = effectiveExpanded || hasNewlines;
+
+  const handleToggleExpanded = () => {
+    if (onToggleExpanded) {
+      onToggleExpanded();
+    } else {
+      setIsExpanded((v) => !v);
+    }
+  };
 
   const sourceOptions: StepComboboxOption[] = useMemo(() => {
     return uniqueSources
@@ -187,7 +206,12 @@ export const BindingSourceEditor = ({
       .map((s) => ({
         value: s.id,
         label: s.label,
-        group: s.kind === "step_output" ? "Prior Steps" : "Request & Context",
+        group:
+          s.kind === "step_output"
+            ? "Pipeline Steps"
+            : s.kind === "state"
+            ? "Graph State"
+            : "Custom / Context",
       }));
   }, [uniqueSources]);
 
@@ -234,13 +258,15 @@ export const BindingSourceEditor = ({
               <BufferedInput
                 ref={(el) => { inputRef.current = el; }}
                 className="h-7 text-xs font-mono bg-background/60 border-border/60 flex-1 pr-14"
-                placeholder="e.g. chat:${body.thread_id}"
+                placeholder={placeholder || "e.g. chat:${body.thread_id}"}
                 value={stringVal}
                 onCommit={(val) =>
                   onChange({ ...binding, source: { ...source, value: val } })
                 }
               />
             ) : null}
+
+            {extraAction}
 
             {/* Expand / Collapse toggle */}
             <button
@@ -249,7 +275,7 @@ export const BindingSourceEditor = ({
                 "p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted transition-colors shrink-0",
                 showTextarea && "bg-muted text-foreground",
               )}
-              onClick={() => setIsExpanded((v) => !v)}
+              onClick={handleToggleExpanded}
               title={showTextarea ? "Collapse to single line" : "Expand to multi-line editor"}
             >
               {showTextarea ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
@@ -264,7 +290,8 @@ export const BindingSourceEditor = ({
                   title="Insert dynamic variable token ${...}"
                 >
                   <Braces size={11} className="text-primary" />
-                  <span>{`\${}`}</span>
+                  <span>Map</span>
+                  <span className="text-[9px] text-muted-foreground font-mono">{`\${}`}</span>
                 </button>
               </PopoverTrigger>
 
@@ -288,7 +315,7 @@ export const BindingSourceEditor = ({
                   >
                     <div className="flex flex-col min-w-0 pr-1">
                       <span className="truncate text-[11px] font-semibold text-foreground group-hover:text-primary">
-                        {item.token}
+                        + Insert {item.token}
                       </span>
                       <span className="text-[9px] text-muted-foreground truncate">
                         {item.category}: {item.label}
@@ -309,19 +336,19 @@ export const BindingSourceEditor = ({
 
       {/* Expanded Multi-line Textarea */}
       {source.kind === "inline" && showTextarea && (
-        <div className="w-full flex flex-col gap-1 pl-[186px]">
+        <div className="w-full flex flex-col gap-1 pl-0 sm:pl-[186px]">
           <BufferedTextarea
             ref={(el) => { inputRef.current = el; }}
             rows={4}
             className="text-xs font-mono bg-background/80 border-border/60 w-full resize-y min-h-[80px]"
-            placeholder={'Instructions: You are an AI assistant.\nQuery: ${body.query}\n\nOr JSON:\n{\n  name: `demo ${body.query}`\n}'}
+            placeholder={textareaPlaceholder || 'Instructions: You are an AI assistant.\nQuery: ${body.query}\n\nOr JSON:\n{\n  name: `demo ${body.query}`\n}'}
             value={stringVal}
             onCommit={(val) =>
               onChange({ ...binding, source: { ...source, value: val } })
             }
           />
           <span className="text-[9px] text-muted-foreground/60 font-sans">
-            Combine hardcoded text/JSON with dynamic tokens like <code className="font-mono text-primary">{`\${body.query}`}</code> or <code className="font-mono text-primary">{`\${params.id}`}</code>.
+            Combine hardcoded text/JSON with dynamic tokens like <code className="font-mono text-primary">{`\${body.query}`}</code> or <code className="font-mono text-primary">{`\${response.content}`}</code>.
           </span>
         </div>
       )}

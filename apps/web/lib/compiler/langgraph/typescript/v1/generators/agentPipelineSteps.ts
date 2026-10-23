@@ -416,6 +416,21 @@ function renderSinglePipelineStep(
             `  ${decl}${outVar} = await ${llmVar}.invoke(state.messages);`,
           );
         }
+
+        const isStructured = Boolean(agentData.responseFormat?.enabled);
+        if (isStructured) {
+          bodyLines.push(`  let ${outVar}Parsed: Record<string, any> = {};`);
+          bodyLines.push(`  try {`);
+          bodyLines.push(
+            `    const rawContent = typeof ${outVar}?.content === "string" ? ${outVar}.content : (typeof ${outVar} === "object" && ${outVar} !== null ? JSON.stringify(${outVar}) : "{}");`,
+          );
+          bodyLines.push(`    ${outVar}Parsed = JSON.parse(rawContent);`);
+          bodyLines.push(`  } catch {`);
+          bodyLines.push(
+            `    ${outVar}Parsed = (typeof ${outVar} === "object" && ${outVar} !== null ? ${outVar} : {}) as Record<string, any>;`,
+          );
+          bodyLines.push(`  }`);
+        }
       } else {
         bodyLines.push(`  ${decl}${outVar} = { content: "No LLM attached" };`);
       }

@@ -160,7 +160,11 @@ export const LangGraphCanvasMemoryRefNode = ({
               <span className="px-1 py-0.2 rounded bg-amber-500/20 text-amber-400 text-[8px] uppercase font-bold">
                 REF
               </span>
-              <span>{data.refId || id}</span>
+              <span>
+                {selectedMaster?.data?.label ||
+                  selectedMaster?.data?.checkpointer ||
+                  "Unbound Reference"}
+              </span>
             </span>
           </div>
         </div>
@@ -191,7 +195,7 @@ export const LangGraphCanvasMemoryRefNode = ({
           <span>Referenced Memory / DB</span>
           {selectedMaster && (
             <span className="text-amber-400 font-mono text-[9px]">
-              {selectedMaster.id}
+              {selectedMaster.data?.label || selectedMaster.data?.checkpointer || "Configured"}
             </span>
           )}
         </label>
