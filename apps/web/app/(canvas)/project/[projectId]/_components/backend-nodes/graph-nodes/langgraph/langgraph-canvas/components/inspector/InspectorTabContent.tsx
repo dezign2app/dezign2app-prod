@@ -138,7 +138,7 @@ export function InspectorTabContent({
   onClose,
 }: InspectorTabContentProps) {
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4">
+    <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4 pb-100">
       {onClose && (
         <div className="flex items-center justify-between pb-2.5 border-b border-border/40 shrink-0">
           <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">

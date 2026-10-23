@@ -112,10 +112,10 @@ export function AgentStateUpdatesHeader({
       {stateUpdatesCount > 0 && (
         <div className="flex items-center justify-between px-2 text-[9px] font-bold text-muted-foreground uppercase tracking-wider">
           <div className="flex items-center gap-2">
-            <span className="w-[170px]">1. State Channel</span>
-            <span className="w-[150px]">2. Reducer Action</span>
+            <span className="w-[160px]">1. State Channel</span>
+            <span className="w-[140px]">2. Reducer Action</span>
             <span className="text-muted-foreground/50 font-mono">←</span>
-            <span>Source Step &amp; Field</span>
+            <span>3. New Value / Mapping</span>
           </div>
           <span className="text-[10px] font-mono text-muted-foreground">
             {stateUpdatesCount} update{stateUpdatesCount > 1 ? "s" : ""}

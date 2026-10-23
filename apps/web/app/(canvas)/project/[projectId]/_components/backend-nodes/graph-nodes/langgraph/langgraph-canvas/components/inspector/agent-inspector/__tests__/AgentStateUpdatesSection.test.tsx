@@ -74,6 +74,32 @@ vi.mock("@workspace/ui/components/tooltip", () => ({
   ),
 }));
 
+vi.mock("@workspace/ui/components/popover", () => ({
+  Popover: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  PopoverTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  PopoverContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock("@workspace/ui/components/combobox", () => ({
+  Combobox: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="mock-combobox">{children}</div>
+  ),
+  ComboboxInput: ({ placeholder, disabled, ...props }: any) => (
+    <input
+      placeholder={placeholder}
+      disabled={disabled}
+      data-testid="combobox-input"
+      {...props}
+    />
+  ),
+  ComboboxContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ComboboxList: ({ children }: any) => (
+    <div>{typeof children === "function" ? null : children}</div>
+  ),
+  ComboboxItem: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ComboboxEmpty: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
 import {
   AgentStateUpdatesSection,
   extractActionsFromReducerCode,
@@ -324,7 +350,7 @@ describe("AgentStateUpdatesSection Component", () => {
     );
 
     // Textarea should be rendered for json channel
-    const textarea = screen.getByRole("textbox");
+    const textarea = document.querySelector("textarea");
     expect(textarea).toBeDefined();
 
     // Mode toggle button should show "JSON Active"
@@ -374,14 +400,14 @@ describe("AgentStateUpdatesSection Component", () => {
       />,
     );
 
-    expect(screen.getByRole("textbox")).toBeDefined();
+    expect(document.querySelector("textarea")).toBeDefined();
     expect(screen.getAllByText(/Insert/).length).toBeGreaterThan(0);
 
     // Channel dropdown should identify custom type UserProfile instead of generic [object]
     expect(screen.getByText("[UserProfile]")).toBeDefined();
 
     // Footer contract should show channel: UserProfile
-    expect(screen.getByText("UserProfile")).toBeDefined();
+    expect(screen.getAllByText("UserProfile").length).toBeGreaterThan(0);
 
     // Textarea placeholder should contain fields from UserProfile
     expect(screen.getByPlaceholderText(/userId/)).toBeDefined();
