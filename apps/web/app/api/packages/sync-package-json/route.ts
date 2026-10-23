@@ -9,6 +9,7 @@ export interface SyncPackageJsonRequestBody {
   isDev?: boolean;
   nodeType?: "service" | "webApp" | "webPage" | "transformer";
   outputDir?: string;
+  serviceName?: string;
 }
 
 export interface SyncPackageJsonResponse {
@@ -23,9 +24,14 @@ export interface SyncPackageJsonResponse {
 interface PackageJsonShape {
   name?: string;
   version?: string;
+  private?: boolean;
+  description?: string;
+  main?: string;
+  types?: string;
+  exports?: Record<string, string>;
+  scripts?: Record<string, string>;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
-  [key: string]: unknown;
 }
 
 /**
@@ -35,6 +41,7 @@ interface PackageJsonShape {
 function findTargetPackageJson(
   nodeType: string | undefined,
   cleanOutputDir: string,
+  serviceName?: string,
 ): string | null {
   if (nodeType === "transformer") {
     const transformerDir = path.join(cleanOutputDir, "packages", "transformers");
@@ -93,6 +100,20 @@ function findTargetPackageJson(
   }
 
   if (nodeType === "service") {
+    // 0. If serviceName provided, look directly in apps/<serviceName> or packages/<serviceName>
+    if (serviceName) {
+      const trimmedService = serviceName.trim().replace(/^@workspace\//, "");
+      const candidates = [
+        path.join(cleanOutputDir, "apps", trimmedService, "package.json"),
+        path.join(cleanOutputDir, "apps", trimmedService.toLowerCase(), "package.json"),
+        path.join(cleanOutputDir, "packages", trimmedService, "package.json"),
+        path.join(cleanOutputDir, "packages", trimmedService.toLowerCase(), "package.json"),
+      ];
+      for (const cand of candidates) {
+        if (fs.existsSync(cand)) return cand;
+      }
+    }
+
     // 1. Direct candidate: packages/backend/package.json
     const backendCandidates = [
       path.join(cleanOutputDir, "packages", "backend", "package.json"),
@@ -101,13 +122,13 @@ function findTargetPackageJson(
       if (fs.existsSync(cand)) return cand;
     }
 
-    // 2. apps/* services
+    // 2. apps/* services (skipping web app)
     const appsDir = path.join(cleanOutputDir, "apps");
     if (fs.existsSync(appsDir)) {
       try {
         const subs = fs.readdirSync(appsDir, { withFileTypes: true });
         for (const s of subs) {
-          if (s.isDirectory()) {
+          if (s.isDirectory() && s.name !== "web") {
             const p = path.join(appsDir, s.name, "package.json");
             if (fs.existsSync(p)) return p;
           }
@@ -172,8 +193,8 @@ function sortObjectKeys(obj: Record<string, string>): Record<string, string> {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as SyncPackageJsonRequestBody;
-    const { action, name, isDev, nodeType, outputDir } = body;
+    const body: SyncPackageJsonRequestBody = await request.json();
+    const { action, name, isDev, nodeType, outputDir, serviceName } = body;
     let { version } = body;
 
     const trimmedName = name?.trim();
@@ -215,7 +236,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const pkgPath = findTargetPackageJson(nodeType, cleanOutputDir);
+    const pkgPath = findTargetPackageJson(nodeType, cleanOutputDir, serviceName);
     if (!pkgPath) {
       return NextResponse.json<SyncPackageJsonResponse>(
         {
@@ -229,7 +250,7 @@ export async function POST(request: NextRequest) {
     }
 
     const raw = fs.readFileSync(pkgPath, "utf-8");
-    const pkg = JSON.parse(raw) as PackageJsonShape;
+    const pkg: PackageJsonShape = JSON.parse(raw);
 
     // Normalize version
     if (!version || version.trim() === "" || version.trim() === "latest") {

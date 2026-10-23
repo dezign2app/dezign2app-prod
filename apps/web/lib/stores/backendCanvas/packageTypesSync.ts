@@ -138,6 +138,7 @@ export async function syncPackageToDiskPackageJson(params: {
   version?: string;
   isDev?: boolean;
   nodeType?: "service" | "webApp" | "webPage" | "transformer";
+  serviceName?: string;
   outputDir?: string;
   projectId?: string;
 }): Promise<boolean> {
@@ -161,6 +162,94 @@ export async function syncPackageToDiskPackageJson(params: {
   } catch {
     return false;
   }
+}
+
+export interface EnsureWsPackageInServiceParams {
+  serviceNodeId: string;
+  projectId?: string;
+  outputDir?: string;
+}
+
+/**
+ * Ensures 'ws' and '@types/ws' are registered on the service node and synced to package.json.
+ * Triggered whenever WebSocket protocol is selected on canvas (pipeline steps, page ref, or realtime connection).
+ */
+export function ensureWsPackageInService({
+  serviceNodeId,
+  projectId,
+  outputDir,
+}: EnsureWsPackageInServiceParams): boolean {
+  if (!serviceNodeId) return false;
+  const store = useBackendCanvasStore.getState();
+  const service = store.nodes.find((n) => n.id === serviceNodeId);
+  if (!service) return false;
+
+  const currentDeps = Array.isArray(service.data?.customDependencies)
+    ? [...service.data.customDependencies]
+    : [];
+
+  const hasWs = currentDeps.some((d) => d && d.name === "ws");
+  const hasWsTypes = currentDeps.some((d) => d && d.name === "@types/ws");
+
+  let changed = false;
+  if (!hasWs) {
+    currentDeps.push({
+      name: "ws",
+      version: "^8.18.0",
+      isDev: false,
+    });
+    changed = true;
+  }
+  if (!hasWsTypes) {
+    currentDeps.push({
+      name: "@types/ws",
+      version: "^8.5.12",
+      isDev: true,
+    });
+    changed = true;
+  }
+
+  const needsEnableWs = service.data?.enableWebSocket !== true;
+
+  if (changed || needsEnableWs) {
+    store.updateNode(serviceNodeId, {
+      data: {
+        ...service.data,
+        enableWebSocket: true,
+        customDependencies: currentDeps,
+      },
+    });
+  }
+
+  const serviceName = service.data?.label || service.id;
+
+  // Sync to disk package.json if outputDir / active project exists
+  if (!hasWs) {
+    syncPackageToDiskPackageJson({
+      action: "add",
+      name: "ws",
+      version: "^8.18.0",
+      isDev: false,
+      nodeType: "service",
+      serviceName,
+      projectId,
+      outputDir,
+    });
+  }
+  if (!hasWsTypes) {
+    syncPackageToDiskPackageJson({
+      action: "add",
+      name: "@types/ws",
+      version: "^8.5.12",
+      isDev: true,
+      nodeType: "service",
+      serviceName,
+      projectId,
+      outputDir,
+    });
+  }
+
+  return true;
 }
 
 /**

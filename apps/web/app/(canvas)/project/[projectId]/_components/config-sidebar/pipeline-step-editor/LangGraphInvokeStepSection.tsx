@@ -17,6 +17,7 @@ import { checkCheckpointerTablesStatus } from "../../backend-nodes/graph-nodes/l
 import { PipelineStepDraft, StepBinding, StepSource, AvailableSource, LangGraphStreamMode } from "./types";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { ensurePageRefConnection } from "./utils";
+import { ensureWsPackageInService } from "@/lib/stores/backendCanvas/packageTypesSync";
 import {
   stepSourceToAccessor,
   accessorToStepSource,
@@ -1436,6 +1437,9 @@ export const LangGraphInvokeStepSection: React.FC<
       langGraphStreamingProtocol: enabled ? streamingProtocol : undefined,
     };
     const proto = nextStep.langGraphStreamingProtocol || streamingProtocol || "sse";
+    if (enabled && serviceNodeId && proto === "websocket") {
+      ensureWsPackageInService({ serviceNodeId });
+    }
     if (enabled && serviceNodeId && (proto === "sse" || proto === "websocket")) {
       const targetPageId = nextStep.clientDeliveryTargetPageId || defaultTargetPage?.id;
       if (targetPageId) {
@@ -1640,12 +1644,15 @@ export const LangGraphInvokeStepSection: React.FC<
         onTargetPageChange={(newPageId) => handleConnectPushToClientNode(newPageId)}
         onConnectPushToClient={() => handleConnectPushToClientNode()}
         onToggleStreaming={handleToggleStreaming}
-        onProtocolChange={(proto) =>
+        onProtocolChange={(proto) => {
           onChange({
             ...step,
             langGraphStreamingProtocol: proto,
-          })
-        }
+          });
+          if (proto === "websocket" && serviceNodeId) {
+            ensureWsPackageInService({ serviceNodeId });
+          }
+        }}
         onToggleStreamMode={(mode) => {
           const current: LangGraphStreamMode[] =
             step.langGraphStreamModes && step.langGraphStreamModes.length > 0

@@ -32,6 +32,7 @@ import {
   INTER_SERVICE_PROTOCOL_GRPC,
   INTER_SERVICE_PROTOCOL_HTTP,
 } from "@workspace/canvas";
+import { resolveServiceRealtimeCapabilities } from "@/lib/compiler/generators/configGenerator";
 
 interface ServiceConfigProps {
   id: string;
@@ -132,6 +133,29 @@ export const ServiceConfig: React.FC<ServiceConfigProps> = ({ id, nodeId }) => {
     );
   }
 
+  const thisServiceNode = allNodes.find((n) => n.id === nodeId);
+  const { hasSse, hasWs } = resolveServiceRealtimeCapabilities(
+    thisServiceNode,
+    nodeEndpoints,
+    nodeConsumedEvents,
+    allNodes,
+    allEdges,
+  );
+  const hasWsOrRealtime = Boolean(
+    hasWs ||
+    hasSse ||
+    thisServiceNode?.data?.enableWebSocket ||
+    thisServiceNode?.data?.enableRealtime,
+  );
+
+  if (!isNextjs && hasWsOrRealtime) {
+    inferredDeps.push({
+      name: "ws",
+      version: "^8.18.0",
+      reason: hasWs ? "WebSocket realtime delivery enabled" : "Realtime SSE / WS delivery infrastructure",
+    });
+  }
+
   const inferredDevDeps: { name: string; version: string; reason: string }[] = isNextjs
     ? [
         { name: "@workspace/typescript-config", version: "workspace:*", reason: "Workspace TS configuration" },
@@ -145,9 +169,8 @@ export const ServiceConfig: React.FC<ServiceConfigProps> = ({ id, nodeId }) => {
         { name: "@types/express", version: "^4.17.21", reason: "Express TypeScript types" },
         { name: "@types/cors", version: "^2.8.17", reason: "CORS types" },
         { name: "@types/node", version: "^20.11.0", reason: "Node.js types" },
+        ...(hasWsOrRealtime ? [{ name: "@types/ws", version: "^8.5.12", reason: "WebSocket TypeScript types" }] : []),
         { name: "ts-node-dev", version: "^2.0.0", reason: "Development hot reloader" },
-        { name: "typescript", version: "^5.3.3", reason: "TypeScript compiler" },
-        { name: "vitest", version: "^1.6.0", reason: "Unit testing runner" },
       ];
 
   return (

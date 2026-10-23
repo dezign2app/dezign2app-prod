@@ -14,6 +14,7 @@ import {
   WebRtcCapabilitiesSection,
   RealtimeStateStoreSection,
 } from "./web-page-realtime-config";
+import { ensureWsPackageInService } from "@/lib/stores/backendCanvas/packageTypesSync";
 
 export type { WebPageRealtimeConnectionConfigProps };
 
@@ -85,6 +86,9 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
         realtimeConnections: existing,
       },
     });
+    if (changes.protocol === "WEBSOCKET" && conn.sourceServiceNodeId) {
+      ensureWsPackageInService({ serviceNodeId: conn.sourceServiceNodeId });
+    }
   };
 
   const stateStoreNodes = useMemo(() => {
