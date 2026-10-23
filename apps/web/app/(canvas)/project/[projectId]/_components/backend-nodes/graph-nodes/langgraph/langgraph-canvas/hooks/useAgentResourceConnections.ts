@@ -49,13 +49,9 @@ export function useAgentResourceConnections({
   setNodes,
 }: UseAgentResourceConnectionsProps) {
   const availableLLMNodes = useMemo(() => {
-    const refs = nodes.filter(
-      (n): n is LangGraphLLMRefNode => n.type === LANGGRAPH_CANVAS_NODE_LLM_REF,
-    );
-    const masters = nodes.filter(
+    return nodes.filter(
       (n): n is LangGraphLLMNode => n.type === LANGGRAPH_CANVAS_NODE_LLM,
     );
-    return [...refs, ...masters];
   }, [nodes]);
 
   const availableToolNodes = useMemo(() => {

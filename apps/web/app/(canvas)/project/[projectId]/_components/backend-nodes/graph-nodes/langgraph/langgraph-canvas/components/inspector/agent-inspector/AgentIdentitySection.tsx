@@ -3,6 +3,7 @@ import { Bot, Trash, Sparkles } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
 import { LocalInput, LocalTextarea } from "../../../../../common";
 import type { AgentNodeData } from "../../../types";
+import { toCamelCase } from "./AgentPromptVariablePicker";
 
 interface AgentIdentitySectionProps {
   selectedAgentData: AgentNodeData;
@@ -29,7 +30,7 @@ export function AgentIdentitySection({
               </div>
               <div>
                 <h2 className="text-sm font-bold text-foreground font-mono truncate max-w-[150px]">
-                  {selectedAgentData.name || "AI Agent"}
+                  {toCamelCase(selectedAgentData.name || "") || "agentNode"}
                 </h2>
                 <p className="text-[10px] font-mono text-muted-foreground opacity-70">
                   {selectedAgentData.agentId || selectedAgentData.id}
@@ -72,8 +73,14 @@ export function AgentIdentitySection({
           <LocalInput
             value={selectedAgentData.name || ""}
             onChange={(e) => onUpdateAgent({ name: e.target.value })}
+            onBlur={(e) => {
+              const cc = toCamelCase(e.target.value);
+              if (cc && cc !== selectedAgentData.name) {
+                onUpdateAgent({ name: cc });
+              }
+            }}
             className="h-7 text-xs font-mono bg-background"
-            placeholder="search_assistant"
+            placeholder="agentNode"
           />
         </div>
 

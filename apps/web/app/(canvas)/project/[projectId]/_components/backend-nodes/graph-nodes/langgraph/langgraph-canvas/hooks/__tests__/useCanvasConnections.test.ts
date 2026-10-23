@@ -48,7 +48,11 @@ describe("useCanvasConnections node deletion prevention", () => {
     // setNodes should not even be called when only remove changes are passed
     expect(setNodes).not.toHaveBeenCalled();
     expect(currentNodes).toHaveLength(1);
-    expect(currentNodes[0].id).toBe("step_node_1");
+    const firstNode = currentNodes[0];
+    if (!firstNode) {
+      throw new Error("Expected firstNode to be defined");
+    }
+    expect(firstNode.id).toBe("step_node_1");
   });
 
   it("still applies legitimate node position changes", () => {
@@ -82,6 +86,10 @@ describe("useCanvasConnections node deletion prevention", () => {
     });
 
     expect(setNodes).toHaveBeenCalled();
-    expect(currentNodes[0].position).toEqual({ x: 250, y: 350 });
+    const updatedNode = currentNodes[0];
+    if (!updatedNode) {
+      throw new Error("Expected updatedNode to be defined");
+    }
+    expect(updatedNode.position).toEqual({ x: 250, y: 350 });
   });
 });

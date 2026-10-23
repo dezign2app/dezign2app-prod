@@ -267,5 +267,147 @@ describe("LLM Ref Node Attachment Behavior", () => {
     const updatedAgent = nodes.find((n) => n.id === "agent_node_1") as CanvasNode;
     expect(updatedAgent.data.middlewareConfig?.enabled).toBe(true);
   });
+
+  it("availableLLMNodes only includes master LLM nodes, excluding LLM ref nodes", () => {
+    const refNode: LangGraphCanvasNode = {
+      id: "llm_ref_1",
+      type: LANGGRAPH_CANVAS_NODE_LLM_REF,
+      position: { x: 200, y: 100 },
+      data: {
+        label: "GPT-4o Master (Ref)",
+        refId: "llm_ref_1",
+        llmRef: "llm_master_1",
+      },
+    };
+
+    const nodes: LangGraphCanvasNode[] = [masterLLM, refNode, agentNode];
+    const edges: LangGraphCanvasEdge[] = [];
+    const setEdges = vi.fn();
+    const setNodes = vi.fn();
+
+    const { result } = renderHook(() =>
+      useAgentResourceConnections({
+        nodes,
+        edges,
+        setEdges,
+        setNodes,
+      }),
+    );
+
+    // Only masterLLM should be returned, NOT refNode
+    expect(result.current.availableLLMNodes).toHaveLength(1);
+    expect(result.current.availableLLMNodes[0]?.id).toBe("llm_master_1");
+    expect(result.current.availableLLMNodes[0]?.type).toBe(LANGGRAPH_CANVAS_NODE_LLM);
+  });
+
+  it("automatically generates an LLM Ref node when dragging connection from Agent Node to Master LLM Node (reverse direction)", () => {
+    let nodes: LangGraphCanvasNode[] = [masterLLM, agentNode];
+    let edges: LangGraphCanvasEdge[] = [];
+
+    const setNodes = vi.fn((updater) => {
+      nodes = typeof updater === "function" ? updater(nodes) : updater;
+    });
+    const setEdges = vi.fn((updater) => {
+      edges = typeof updater === "function" ? updater(edges) : updater;
+    });
+
+    const { result } = renderHook(() =>
+      useCanvasConnections({
+        nodes,
+        edges,
+        setNodes,
+        setEdges,
+      }),
+    );
+
+    act(() => {
+      // Connect from agent node to master LLM node
+      result.current.onConnect({
+        source: "agent_node_1",
+        target: "llm_master_1",
+      });
+    });
+
+    // Should create an LLM Ref node
+    const refNode = nodes.find(
+      (n) =>
+        n.type === LANGGRAPH_CANVAS_NODE_LLM_REF &&
+        (n.data as { llmRef?: string }).llmRef === "llm_master_1",
+    );
+    expect(refNode).toBeDefined();
+
+    // The edge source should point to the generated ref node, target should be agent node
+    expect(edges.length).toBeGreaterThan(0);
+    const connectingEdge = edges[0];
+    expect(connectingEdge?.source).toBe(refNode?.id);
+    expect(connectingEdge?.target).toBe("agent_node_1");
+    expect(connectingEdge?.targetHandle).toBe(HANDLE_LLM_IN);
+
+    // Agent node llmConfig should be enabled
+    const updatedAgent = nodes.find((n) => n.id === "agent_node_1") as CanvasNode;
+    expect(updatedAgent.data.llmConfig?.enabled).toBe(true);
+    expect(updatedAgent.data.modelConfig?.model).toBe("gpt-4o");
+  });
+
+  it("reuses and updates existing LLM Ref node when connecting another Master LLM to an Agent with an existing ref node", () => {
+    const existingRefNode: LangGraphCanvasNode = {
+      id: "llm_ref_existing",
+      type: LANGGRAPH_CANVAS_NODE_LLM_REF,
+      position: { x: 200, y: 100 },
+      data: {
+        label: "Old Master (Ref)",
+        refId: "llm_ref_existing",
+        llmRef: "old_llm_master",
+      },
+    };
+
+    const existingEdge: LangGraphCanvasEdge = {
+      id: `xy-edge__llm_ref_existing${HANDLE_LLM_OUT}-agent_node_1${HANDLE_LLM_IN}`,
+      source: "llm_ref_existing",
+      sourceHandle: HANDLE_LLM_OUT,
+      target: "agent_node_1",
+      targetHandle: HANDLE_LLM_IN,
+    };
+
+    let nodes: LangGraphCanvasNode[] = [masterLLM, existingRefNode, agentNode];
+    let edges: LangGraphCanvasEdge[] = [existingEdge];
+
+    const setNodes = vi.fn((updater) => {
+      nodes = typeof updater === "function" ? updater(nodes) : updater;
+    });
+    const setEdges = vi.fn((updater) => {
+      edges = typeof updater === "function" ? updater(edges) : updater;
+    });
+
+    const { result } = renderHook(() =>
+      useCanvasConnections({
+        nodes,
+        edges,
+        setNodes,
+        setEdges,
+      }),
+    );
+
+    act(() => {
+      result.current.onConnect({
+        source: "llm_master_1",
+        sourceHandle: HANDLE_LLM_OUT,
+        target: "agent_node_1",
+        targetHandle: HANDLE_LLM_IN,
+      });
+    });
+
+    // Should NOT create a second ref node; should update existing ref node
+    const refNodes = nodes.filter((n) => n.type === LANGGRAPH_CANVAS_NODE_LLM_REF);
+    expect(refNodes).toHaveLength(1);
+    expect(refNodes[0]?.id).toBe("llm_ref_existing");
+    expect((refNodes[0]?.data as { llmRef?: string }).llmRef).toBe("llm_master_1");
+    expect((refNodes[0]?.data as { label?: string }).label).toBe("GPT-4o Master (Ref)");
+
+    // Only one edge should exist pointing from existing ref to agent
+    expect(edges).toHaveLength(1);
+    expect(edges[0]?.source).toBe("llm_ref_existing");
+    expect(edges[0]?.target).toBe("agent_node_1");
+  });
 });
 

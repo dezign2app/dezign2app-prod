@@ -48,9 +48,6 @@ vi.mock("../AgentMiddlewareSection", () => ({
 vi.mock("../AgentStructuredOutputSection", () => ({
   AgentStructuredOutputSection: () => <div data-testid="structured-output-section" />,
 }));
-vi.mock("../AgentEventStreamingSection", () => ({
-  AgentEventStreamingSection: () => <div data-testid="event-streaming-section" />,
-}));
 
 import { AgentLlmStepContent } from "../AgentLlmStepContent";
 import type {

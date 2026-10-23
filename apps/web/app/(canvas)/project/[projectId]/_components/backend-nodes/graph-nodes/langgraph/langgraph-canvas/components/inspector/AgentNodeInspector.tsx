@@ -173,15 +173,21 @@ export function AgentNodeInspector({
   });
 
   // ─── Summary Formatter Helpers ─────────────────────────────────────────────
-  const connectedLLM = availableLLMNodes.find((l) => l.id === connectedLLMId);
   let connectedLLMName = connectedLLMId ? "Bound LLM" : "No LLM Bound";
-  if (connectedLLM) {
-    if (connectedLLM.type === "langgraph_llm") {
-      connectedLLMName =
-        connectedLLM.data.model || connectedLLM.data.label || connectedLLMName;
-    } else if (connectedLLM.type === "langgraph_llm_ref") {
-      connectedLLMName = connectedLLM.data.label || connectedLLMName;
-    }
+  const connectedNode = nodes.find((n) => n.id === connectedLLMId);
+  if (connectedNode?.type === "langgraph_llm") {
+    connectedLLMName =
+      (connectedNode.data as { model?: string; label?: string }).model ||
+      (connectedNode.data as { model?: string; label?: string }).label ||
+      connectedLLMName;
+  } else if (connectedNode?.type === "langgraph_llm_ref") {
+    const masterId = (connectedNode.data as { llmRef?: string }).llmRef;
+    const masterNode = nodes.find((n) => n.id === masterId);
+    connectedLLMName =
+      (masterNode?.data as { model?: string; label?: string })?.model ||
+      (masterNode?.data as { model?: string; label?: string })?.label ||
+      (connectedNode.data as { label?: string }).label ||
+      connectedLLMName;
   }
 
   const schemaFields = useMemo(() => {

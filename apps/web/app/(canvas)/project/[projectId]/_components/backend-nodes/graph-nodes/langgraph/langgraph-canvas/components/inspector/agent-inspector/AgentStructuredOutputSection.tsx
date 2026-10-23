@@ -2,8 +2,6 @@ import React, { useState, useMemo, useCallback } from "react";
 import {
   FileJson,
   Settings,
-  MessageSquare,
-  AlertTriangle,
   RotateCcw,
 } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
@@ -16,7 +14,6 @@ import {
 } from "@workspace/ui/components/select";
 import { Switch } from "@workspace/ui/components/switch";
 import { Button } from "@workspace/ui/components/button";
-import { LocalInput } from "../../../../../common";
 import {
   RequestBodyEditor,
   RequestBodyMode,
@@ -376,75 +373,6 @@ export function AgentStructuredOutputSection({
               }
             />
           </div>
-
-          {/* Tool Strategy Specific Options */}
-          {(rfConfig.strategy === "tool" ||
-            rfConfig.strategy === "auto" ||
-            !rfConfig.strategy) && (
-            <div className="flex flex-col gap-3 pt-2 border-t border-border/50">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground font-mono">
-                Tool Calling Strategy Options
-              </span>
-
-              {/* Custom Tool Message Content */}
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" />
-                  Custom Tool Message Content
-                </Label>
-                <LocalInput
-                  value={rfConfig.toolMessageContent || ""}
-                  onChange={(e) =>
-                    updateResponseFormat({ toolMessageContent: e.target.value })
-                  }
-                  className="h-7 text-xs font-mono bg-background"
-                  placeholder="Action item captured and added to state!"
-                />
-                <p className="text-[9px] text-muted-foreground">
-                  Custom message in conversation history when structured output
-                  is generated.
-                </p>
-              </div>
-
-              {/* Error Handling Strategy */}
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 text-muted-foreground" />
-                  Schema Error Handling
-                </Label>
-                <Select
-                  value={rfConfig.handleErrorMode || "default"}
-                  onValueChange={(
-                    val: "default" | "custom_message" | "disabled",
-                  ) => updateResponseFormat({ handleErrorMode: val })}
-                >
-                  <SelectTrigger className="h-7 text-xs bg-background font-mono">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="default">Default Auto-Retry</SelectItem>
-                    <SelectItem value="custom_message">
-                      Custom Error Prompt
-                    </SelectItem>
-                    <SelectItem value="disabled">Disable Retry</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                {rfConfig.handleErrorMode === "custom_message" && (
-                  <LocalInput
-                    value={rfConfig.customErrorMessage || ""}
-                    onChange={(e) =>
-                      updateResponseFormat({
-                        customErrorMessage: e.target.value,
-                      })
-                    }
-                    className="h-7 text-xs font-mono bg-background mt-1"
-                    placeholder="Please provide valid rating between 1-5..."
-                  />
-                )}
-              </div>
-            </div>
-          )}
 
           <div className="p-2 rounded bg-secondary/20 border border-border/50 text-[10px] font-mono text-muted-foreground">
             Output will be captured in{" "}

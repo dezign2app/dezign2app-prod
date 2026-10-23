@@ -62,8 +62,36 @@ export function extractPromptVariables(prompt?: string): string[] {
 }
 
 /**
+ * Formats a string identifier or variable into valid camelCase.
+ * Examples:
+ * - "transformedData_1" -> "transformedData1"
+ * - "transformed_data_1" -> "transformedData1"
+ * - "db_result_1" -> "dbResult1"
+ * - "user_name" -> "userName"
+ * - "Step 1 Result" -> "step1Result"
+ */
+export function toCamelCase(str: string): string {
+  if (!str) return "";
+  const formatted = str
+    .replace(/[-_]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[^a-zA-Z0-9 ]/g, "")
+    .trim();
+  if (!formatted) return "";
+  const words = formatted.split(/\s+/);
+  return words
+    .map((w, i) => {
+      const lower = w.toLowerCase();
+      if (i === 0) return lower;
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join("")
+    .replace(/^([0-9])/, "var$1");
+}
+
+/**
  * Derives available sources (State and ONLY prior steps that run before this step)
- * and their respective accessible fields.
+ * and their respective accessible fields formatted to camelCase.
  */
 export function derivePromptSources(
   stateChannels: LangGraphStateChannel[] = [],
@@ -78,10 +106,11 @@ export function derivePromptSources(
     for (const ch of stateChannels) {
       if (!ch.key?.trim()) continue;
       const key = ch.key.trim();
+      const camelKey = toCamelCase(key) || key;
       const typeLabel = ch.customTypeName || ch.type || "string";
       stateFields.push({
-        value: key,
-        label: `${key} (${typeLabel})`,
+        value: camelKey,
+        label: `${camelKey} (${typeLabel})`,
         type: typeLabel,
       });
     }
@@ -106,13 +135,14 @@ export function derivePromptSources(
     priorSteps.forEach((pStep, i) => {
       const stepIdx = i + 1;
       const stepLabel = pStep.label || `Step ${stepIdx}`;
-      const outVar =
+      const rawOutVar =
         pStep.outputVariable ||
         (pStep.type === "transformer" || pStep.type === "transform"
-          ? `transformedData_${stepIdx}`
+          ? `transformedData${stepIdx}`
           : pStep.type === "llm_call"
             ? `response`
             : `step${stepIdx}Result`);
+      const outVar = toCamelCase(rawOutVar) || `step${stepIdx}Result`;
 
       const stepFields: PromptFieldOption[] = [];
 
@@ -129,9 +159,10 @@ export function derivePromptSources(
           hasExplicit = true;
           for (const f of pStep.outputSchema) {
             if (!f.name?.trim()) continue;
+            const fieldName = toCamelCase(f.name.trim()) || f.name.trim();
             stepFields.push({
-              value: f.name.trim(),
-              label: `${f.name} (${f.type || "string"})`,
+              value: fieldName,
+              label: `${fieldName} (${f.type || "string"})`,
               type: f.type || "string",
             });
           }
@@ -147,10 +178,11 @@ export function derivePromptSources(
             hasExplicit = true;
             for (const f of masterNode.data.returnSchema) {
               if (!f.name?.trim()) continue;
-              if (!stepFields.some((item) => item.value === f.name.trim())) {
+              const fieldName = toCamelCase(f.name.trim()) || f.name.trim();
+              if (!stepFields.some((item) => item.value === fieldName)) {
                 stepFields.push({
-                  value: f.name.trim(),
-                  label: `${f.name} (${f.type || "string"})`,
+                  value: fieldName,
+                  label: `${fieldName} (${f.type || "string"})`,
                   type: f.type || "string",
                 });
               }
@@ -259,8 +291,15 @@ export function AgentPromptVariablePicker({
   // Compute live token: e.g. ${state.msg} or ${step1Result.field1}
   const currentToken = useMemo(() => {
     if (!currentSource) return "";
-    const prefix = currentSource.outVar; // "state" or "step1Result"
-    const fieldPart = isCustomField ? customFieldText.trim() : selectedField;
+    const prefix =
+      currentSource.category === "state"
+        ? "state"
+        : toCamelCase(currentSource.outVar) || currentSource.outVar;
+    const rawFieldPart = isCustomField ? customFieldText.trim() : selectedField;
+    const fieldPart =
+      isCustomField && rawFieldPart
+        ? toCamelCase(rawFieldPart) || rawFieldPart
+        : rawFieldPart;
 
     if (!fieldPart) {
       return `\${${prefix}}`;

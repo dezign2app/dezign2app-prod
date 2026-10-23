@@ -7,6 +7,7 @@ import type {
   LangGraphAgentResponseFormatConfig,
 } from "@workspace/canvas";
 import { deriveInitialPipelineSteps } from "./stepTypes";
+import { toCamelCase } from "./AgentPromptVariablePicker";
 
 interface UseAgentPipelineStepsProps {
   selectedAgentData: AgentNodeData;
@@ -47,6 +48,39 @@ export function useAgentPipelineSteps({
   useEffect(() => {
     setActivePipelineSteps(initialPipelineSteps);
   }, [initialPipelineSteps]);
+
+  useEffect(() => {
+    if (selectedAgentData.pipelineSteps && selectedAgentData.pipelineSteps.length > 0) {
+      let needsUpdate = false;
+      const normalized = selectedAgentData.pipelineSteps.map((step) => {
+        const rawLabel = step.label || step.name || "";
+        const camelLabel = toCamelCase(rawLabel) || rawLabel;
+        const camelName = toCamelCase(step.name || rawLabel) || camelLabel;
+        const camelOutVar = step.outputVariable
+          ? toCamelCase(step.outputVariable) || step.outputVariable
+          : step.outputVariable;
+        if (
+          step.label !== camelLabel ||
+          step.name !== camelName ||
+          step.outputVariable !== camelOutVar
+        ) {
+          needsUpdate = true;
+          return {
+            ...step,
+            label: camelLabel,
+            name: camelName,
+            outputVariable: camelOutVar,
+          };
+        }
+        return step;
+      });
+
+      if (needsUpdate) {
+        setActivePipelineSteps(normalized);
+        onUpdateAgent({ pipelineSteps: normalized });
+      }
+    }
+  }, [selectedAgentData.pipelineSteps, onUpdateAgent]);
 
   // Expanded state per step instance ID
   const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>(() => {
@@ -125,18 +159,18 @@ export function useAgentPipelineSteps({
       const newStepId = `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       const typeCount = activePipelineSteps.filter((s) => s.type === type).length + 1;
 
-      let defaultLabel = `Step ${activePipelineSteps.length + 1}`;
+      let defaultLabel = `step${activePipelineSteps.length + 1}`;
       if (type === "transformer" || type === "transform") {
         const hasLLM = activePipelineSteps.some((s) => s.type === "llm_call");
         const existingTransCount = activePipelineSteps.filter(
           (s) => s.type === "transformer" || s.type === "transform",
         ).length;
         if (!hasLLM && existingTransCount === 0) {
-          defaultLabel = "Data Preparation";
+          defaultLabel = "dataPreparation";
         } else if (hasLLM && existingTransCount === 0) {
-          defaultLabel = "Response Transform";
+          defaultLabel = "responseTransform";
         } else {
-          defaultLabel = `Transformer ${existingTransCount + 1}`;
+          defaultLabel = `transformer${existingTransCount + 1}`;
         }
       } else if (type === "custom_code") {
         const hasLLM = activePipelineSteps.some((s) => s.type === "llm_call");
@@ -144,40 +178,40 @@ export function useAgentPipelineSteps({
           (s) => s.type === "custom_code",
         ).length;
         if (!hasLLM && existingCodeCount === 0) {
-          defaultLabel = "Pre-processing";
+          defaultLabel = "preProcessing";
         } else if (hasLLM && existingCodeCount === 0) {
-          defaultLabel = "Post-processing";
+          defaultLabel = "postProcessing";
         } else {
-          defaultLabel = `Custom Code ${existingCodeCount + 1}`;
+          defaultLabel = `customCode${existingCodeCount + 1}`;
         }
       } else if (type === "llm_call") {
-        defaultLabel = typeCount > 1 ? `LLM Agent ${typeCount}` : "LLM Agent";
+        defaultLabel = typeCount > 1 ? `llmAgent${typeCount}` : "llmAgent";
       } else if (type === "db_operation") {
-        defaultLabel = `DB Operation ${typeCount}`;
+        defaultLabel = `dbOperation${typeCount}`;
       } else if (type === "redis_operation") {
-        defaultLabel = `Redis ${typeCount}`;
+        defaultLabel = `redis${typeCount}`;
       } else if (type === "storage_operation") {
-        defaultLabel = `Storage ${typeCount}`;
+        defaultLabel = `storage${typeCount}`;
       } else if (type === "kafka_publish") {
-        defaultLabel = `Kafka Publish ${typeCount}`;
+        defaultLabel = `kafkaPublish${typeCount}`;
       } else if (type === "external_call") {
-        defaultLabel = `External API ${typeCount}`;
+        defaultLabel = `externalApi${typeCount}`;
       } else if (type === "service_call") {
-        defaultLabel = `Service Call ${typeCount}`;
+        defaultLabel = `serviceCall${typeCount}`;
       } else if (type === "variable") {
-        defaultLabel = `Variable ${typeCount}`;
+        defaultLabel = `variable${typeCount}`;
       } else if (type === "condition") {
-        defaultLabel = `If / Else ${typeCount}`;
+        defaultLabel = `ifElse${typeCount}`;
       } else if (type === "try_catch") {
-        defaultLabel = `Try / Catch ${typeCount}`;
+        defaultLabel = `tryCatch${typeCount}`;
       } else if (type === "push_to_client") {
-        defaultLabel = `Push to Client ${typeCount}`;
+        defaultLabel = `pushToClient${typeCount}`;
       }
 
       let stepSpecificProps: Partial<LangGraphNodePipelineStep> = {};
       if (type === "transformer" || type === "transform") {
         stepSpecificProps = {
-          outputVariable: `transformedData_${activePipelineSteps.length + 1}`,
+          outputVariable: `transformedData${activePipelineSteps.length + 1}`,
           outputSchema: [{ name: "result", type: "string", required: true }],
           inputBindings: [],
         };
@@ -187,47 +221,48 @@ export function useAgentPipelineSteps({
         };
       } else if (type === "llm_call") {
         stepSpecificProps = {
+          outputVariable: typeCount > 1 ? `llmResponse${typeCount}` : "response",
           llmConfig: { enabled: true },
         };
       } else if (type === "db_operation") {
         stepSpecificProps = {
-          outputVariable: `dbResult_${typeCount}`,
+          outputVariable: `dbResult${typeCount}`,
           declarationKind: "const",
           inputBindings: [],
         };
       } else if (type === "redis_operation") {
         stepSpecificProps = {
-          outputVariable: `cachedData_${typeCount}`,
+          outputVariable: `cachedData${typeCount}`,
           declarationKind: "const",
           inputBindings: [],
         };
       } else if (type === "storage_operation") {
         stepSpecificProps = {
-          outputVariable: `storageResult_${typeCount}`,
+          outputVariable: `storageResult${typeCount}`,
           declarationKind: "const",
           inputBindings: [],
         };
       } else if (type === "kafka_publish") {
         stepSpecificProps = {
-          outputVariable: `publishResult_${typeCount}`,
+          outputVariable: `publishResult${typeCount}`,
           declarationKind: "const",
           inputBindings: [],
         };
       } else if (type === "external_call") {
         stepSpecificProps = {
-          outputVariable: `apiResponse_${typeCount}`,
+          outputVariable: `apiResponse${typeCount}`,
           declarationKind: "const",
           inputBindings: [],
         };
       } else if (type === "service_call") {
         stepSpecificProps = {
-          outputVariable: `serviceResponse_${typeCount}`,
+          outputVariable: `serviceResponse${typeCount}`,
           declarationKind: "const",
           inputBindings: [],
         };
       } else if (type === "variable") {
         stepSpecificProps = {
-          outputVariable: `myVar_${typeCount}`,
+          outputVariable: `myVar${typeCount}`,
           variableOperation: "declare",
           declarationKind: "const",
           variableDataType: "string",
@@ -340,7 +375,7 @@ export function useAgentPipelineSteps({
   const handleUpdateStepLabel = useCallback(
     (stepId: string, label: string) => {
       const next = activePipelineSteps.map((s) =>
-        s.id === stepId ? { ...s, label } : s,
+        s.id === stepId ? { ...s, label, name: label } : s,
       );
       setActivePipelineSteps(next);
       onUpdateAgent({
