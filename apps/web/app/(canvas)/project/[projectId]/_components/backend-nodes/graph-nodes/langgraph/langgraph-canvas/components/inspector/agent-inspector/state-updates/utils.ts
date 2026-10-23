@@ -300,7 +300,15 @@ export function stateUpdateToBinding(
     };
   }
 
-  // 2. Explicit state.* path without spaces/newlines
+  // 2a. Whole state object (rawVal === "state")
+  if (rawVal === "state") {
+    return {
+      argName: channelKey,
+      source: { kind: "state", field: "" },
+    };
+  }
+
+  // 2b. Explicit state.* path without spaces/newlines
   if (
     rawVal.startsWith("state.") &&
     !rawVal.includes("\n") &&
@@ -313,9 +321,30 @@ export function stateUpdateToBinding(
     };
   }
 
+  // 2c. Explicit process.env.* reference
+  if (
+    rawVal.startsWith("process.env.") &&
+    !rawVal.includes("\n") &&
+    !rawVal.includes("${") &&
+    !rawVal.includes(" ")
+  ) {
+    return {
+      argName: channelKey,
+      source: { kind: "env", field: rawVal.slice(12) },
+    };
+  }
+
   // 3. Check if matches any available step output
+  // Skip plain sources when this is a structured update (handled in step 4)
+  const isStructuredUpdate =
+    sourceKind === "structured_field" || sourceKind === "structured_full" || Boolean(su.schemaField);
+
   for (const src of availableSources) {
     if (src.kind === "step_output" && src.stepId) {
+      const isStructuredSrc = src.id.endsWith(":structured") || src.stepId.endsWith(":structured");
+      // Skip non-structured sources for structured updates — handled in step 4
+      if (isStructuredUpdate && !isStructuredSrc) continue;
+
       const varName = src.variableName || src.stepId;
       const stepId = src.stepId;
 
@@ -344,8 +373,36 @@ export function stateUpdateToBinding(
     }
   }
 
-  // 4. Fallback for legacy configs that used response.* or structured_field:
-  // Map them to the agent's LLM step or first available step
+  // 4. Fallback for legacy configs or structured output sources
+  const structuredSource = availableSources.find(
+    (s) =>
+      s.kind === "step_output" &&
+      (s.id.endsWith(":structured") || s.stepId?.endsWith(":structured")),
+  );
+
+  if (
+    structuredSource &&
+    (sourceKind === "structured_field" ||
+      sourceKind === "structured_full" ||
+      su.schemaField)
+  ) {
+    const fieldName =
+      su.schemaField ||
+      (sourceKind === "structured_full"
+        ? ""
+        : rawVal.replace(/^([a-zA-Z0-9_]+)\./, "").replace(/^response\??\./, ""));
+    return {
+      argName: channelKey,
+      source: {
+        kind: "step_output",
+        stepId:
+          structuredSource.stepId ||
+          structuredSource.id.replace(/^step:/, ""),
+        field: fieldName,
+      },
+    };
+  }
+
   const firstLlmStep =
     availableSources.find(
       (s) => s.kind === "step_output" && s.paths.some((p) => p.path === "content"),
@@ -415,18 +472,43 @@ export function bindingToStateUpdate(
     const src = availableSources.find(
       (s) => s.kind === "step_output" && (s.stepId === source.stepId || s.id === `step:${source.stepId}`),
     );
-    let varName = src?.variableName || (src?.label ? toCamelCase(src.label) : "");
+    const isStructuredSource = Boolean(
+      source.stepId.endsWith(":structured") || (src?.id && src.id.endsWith(":structured")),
+    );
+    let varName = src?.variableName || "";
     if (!varName || varName.startsWith("llm_") || varName.startsWith("step_")) {
-      varName = src?.label ? toCamelCase(src.label) : "response";
+      const cleanLabel = (src?.label || "").replace(/:.*/, "").replace(/\s*\(.*\)/, "").trim();
+      varName = cleanLabel ? toCamelCase(cleanLabel) : "response";
     }
     const rawField = (source.field || "").trim();
     const isWhole =
       !rawField ||
       rawField === `(whole ${varName})` ||
       rawField === `(whole ${source.stepId})` ||
-      rawField === varName ||
-      (src?.label && rawField === toCamelCase(src.label)) ||
-      rawField === src?.label;
+      rawField === "(whole structured output)" ||
+      rawField.startsWith("(whole") ||
+      rawField === varName;
+
+    if (isStructuredSource) {
+      if (isWhole) {
+        return {
+          ...prevSu,
+          channelKey,
+          source: "structured_full",
+          mode: "expression",
+          value: varName,
+          schemaField: undefined,
+        };
+      }
+      return {
+        ...prevSu,
+        channelKey,
+        source: "structured_field",
+        mode: "set",
+        schemaField: rawField,
+        value: `${varName}.${rawField}`,
+      };
+    }
 
     if (isWhole) {
       return {

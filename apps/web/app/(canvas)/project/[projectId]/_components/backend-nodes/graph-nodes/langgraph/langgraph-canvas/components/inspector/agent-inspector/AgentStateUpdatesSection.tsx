@@ -117,74 +117,136 @@ export function AgentStateUpdatesSection({
 
     // 1. Pipeline Steps (e.g. llmAg, tools, custom code)
     const pSteps = selectedAgentData.pipelineSteps || [];
-    pSteps.forEach((ps, idx) => {
-      const stepNum = idx + 1;
-      const stepVar =
-        ps.outputVariable?.trim() ||
-        (ps.type === "llm_call"
-          ? "response"
-          : ps.type === "tools"
-          ? "toolOutput"
-          : ps.type === "transformer" || ps.type === "transform"
-          ? `transformedData${stepNum}`
-          : `step${stepNum}`);
-      const rawStepName = ps.label || ps.name || ps.type;
-      const stepName = toCamelCase(rawStepName) || rawStepName;
-      const stepLabel = `${stepName} (${stepVar})`;
+    if (pSteps.length === 0) {
+      const stepVar = "response";
+      const stepName = toCamelCase(selectedAgentData.name || selectedAgentData.label || "agent");
+      list.push({
+        id: "step:response",
+        label: `${stepName} (response)`,
+        kind: "step_output",
+        stepId: "response",
+        variableName: stepVar,
+        rootVariableName: stepVar,
+        paths: [
+          { path: "", type: "object", description: `Whole response (${stepVar})` },
+          { path: "content", type: "string", description: "LLM text content" },
+          { path: "role", type: "string", description: "Message role (assistant)" },
+          { path: "tool_calls", type: "array", description: "Tool calls array" },
+        ],
+      });
 
-      const stepPaths: AvailablePath[] = [
-        { path: "", type: "object", description: `Whole step output (${stepVar})` },
-      ];
+      if (isStructured && schemaFields.length > 0) {
+        const structuredPaths: AvailablePath[] = [
+          {
+            path: "",
+            type: "object",
+            description: `Whole structured output (${stepVar})`,
+          },
+        ];
+        for (const sf of schemaFields) {
+          if (!sf.name?.trim()) continue;
+          structuredPaths.push({
+            path: sf.name.trim(),
+            type: sf.type || "string",
+            description: sf.description || `Field: ${sf.name.trim()}`,
+          });
+        }
 
-      const returnSchema = ps.outputSchema || ps.functionRef?.returnSchema || [];
-      returnSchema.forEach((rf) => {
-        if (rf.name?.trim()) {
-          stepPaths.push({
-            path: rf.name.trim(),
-            type: rf.type || "string",
-            description: rf.description || `${stepVar}.${rf.name.trim()}`,
+        list.push({
+          id: "step:response:structured",
+          label: `${stepName}: structured output`,
+          kind: "step_output",
+          stepId: "response:structured",
+          variableName: stepVar,
+          rootVariableName: stepVar,
+          paths: structuredPaths,
+        });
+      }
+    } else {
+      pSteps.forEach((ps, idx) => {
+        const stepNum = idx + 1;
+        const stepVar =
+          ps.outputVariable?.trim() ||
+          (ps.type === "llm_call"
+            ? "response"
+            : ps.type === "tools"
+            ? "toolOutput"
+            : ps.type === "transformer" || ps.type === "transform"
+            ? `transformedData${stepNum}`
+            : `step${stepNum}`);
+        const rawStepName = ps.label || ps.name || ps.type;
+        const stepName = toCamelCase(rawStepName) || rawStepName;
+        const stepLabel = `${stepName} (${stepVar})`;
+
+        const stepPaths: AvailablePath[] = [
+          { path: "", type: "object", description: `Whole step output (${stepVar})` },
+        ];
+
+        const returnSchema = ps.outputSchema || ps.functionRef?.returnSchema || [];
+        returnSchema.forEach((rf) => {
+          if (rf.name?.trim()) {
+            stepPaths.push({
+              path: rf.name.trim(),
+              type: rf.type || "string",
+              description: rf.description || `${stepVar}.${rf.name.trim()}`,
+            });
+          }
+        });
+
+        if (ps.type === "custom_code") {
+          stepPaths.push({ path: "result", type: "string", description: "Execution result" });
+        } else if (ps.type === "tools") {
+          stepPaths.push(
+            { path: "output", type: "object", description: "Tool output" },
+            { path: "content", type: "string", description: "Tool text content" },
+          );
+        } else if (ps.type === "llm_call") {
+          stepPaths.push(
+            { path: "content", type: "string", description: "LLM text content" },
+            { path: "role", type: "string", description: "Message role (assistant)" },
+            { path: "tool_calls", type: "array", description: "Tool calls array" },
+          );
+        }
+
+        list.push({
+          id: `step:${ps.id || stepVar}`,
+          label: stepLabel,
+          kind: "step_output",
+          stepId: ps.id || stepVar,
+          variableName: stepVar,
+          rootVariableName: stepVar,
+          paths: stepPaths,
+        });
+
+        if (ps.type === "llm_call" && isStructured && schemaFields.length > 0) {
+          const structuredPaths: AvailablePath[] = [
+            {
+              path: "",
+              type: "object",
+              description: `Whole structured output (${stepVar})`,
+            },
+          ];
+          for (const sf of schemaFields) {
+            if (!sf.name?.trim()) continue;
+            structuredPaths.push({
+              path: sf.name.trim(),
+              type: sf.type || "string",
+              description: sf.description || `Field: ${sf.name.trim()}`,
+            });
+          }
+
+          list.push({
+            id: `step:${ps.id || stepVar}:structured`,
+            label: `${stepName}: structured output`,
+            kind: "step_output",
+            stepId: `${ps.id || stepVar}:structured`,
+            variableName: stepVar,
+            rootVariableName: stepVar,
+            paths: structuredPaths,
           });
         }
       });
-
-      if (ps.type === "custom_code") {
-        stepPaths.push({ path: "result", type: "string", description: "Execution result" });
-      } else if (ps.type === "tools") {
-        stepPaths.push(
-          { path: "output", type: "object", description: "Tool output" },
-          { path: "content", type: "string", description: "Tool text content" },
-        );
-      } else if (ps.type === "llm_call") {
-        stepPaths.push(
-          { path: "content", type: "string", description: "LLM text content" },
-          { path: "response", type: "object", description: "LLM response object" },
-        );
-        if (isStructured && schemaFields.length > 0) {
-          for (const sf of schemaFields) {
-            if (!sf.name?.trim()) continue;
-            stepPaths.push({
-              path: sf.name.trim(),
-              type: sf.type || "string",
-              description: sf.description || `Structured field: ${sf.name.trim()}`,
-            });
-          }
-        }
-        stepPaths.push(
-          { path: "role", type: "string", description: "Message role (assistant)" },
-          { path: "tool_calls", type: "array", description: "Tool calls array" },
-        );
-      }
-
-      list.push({
-        id: `step:${ps.id || stepVar}`,
-        label: stepLabel,
-        kind: "step_output",
-        stepId: ps.id || stepVar,
-        variableName: stepVar,
-        rootVariableName: stepVar,
-        paths: stepPaths,
-      });
-    });
+    }
 
     // 3. Graph State
     if (stateChannels.length > 0) {
@@ -346,18 +408,6 @@ export function AgentStateUpdatesSection({
     onUpdateAgent,
   ]);
 
-  // Find unmapped schema fields
-  const unmappedSchemaFields = useMemo(() => {
-    if (!isStructured || schemaFields.length === 0) return [];
-    return schemaFields.filter(
-      (f) =>
-        !stateUpdates.some(
-          (su) =>
-            su.source === "structured_field" &&
-            (su.schemaField === f.name || su.value === f.name),
-        ),
-    );
-  }, [isStructured, schemaFields, stateUpdates]);
 
   // Auto-map matching schema fields to channels with identical or similar names
   const handleAutoMap = () => {
@@ -448,35 +498,6 @@ export function AgentStateUpdatesSection({
     onUpdateAgent({ stateUpdates: nextUpdates });
   };
 
-  // Quick add a mapping row for a specific schema field
-  const handleAddSchemaFieldUpdate = (fieldName: string) => {
-    const matchedChannel =
-      stateChannels.find(
-        (c) => c.key.toLowerCase() === fieldName.toLowerCase(),
-      ) ||
-      stateChannels.find(
-        (c) => !stateUpdates.some((u) => u.channelKey === c.key),
-      ) ||
-      stateChannels[0];
-
-    const defaultKey = matchedChannel?.key || fieldName;
-    const defaultReducer = matchedChannel?.reducer || "replace";
-
-    onUpdateAgent({
-      stateUpdates: [
-        ...stateUpdates,
-        {
-          channelKey: defaultKey,
-          reducer: defaultReducer,
-          action: "replace",
-          source: "structured_field",
-          schemaField: fieldName,
-          mode: "set",
-          value: fieldName,
-        },
-      ],
-    });
-  };
 
   const handleAddUpdate = () => {
     const defaultChannel =
@@ -598,30 +619,6 @@ export function AgentStateUpdatesSection({
           />
         ))}
 
-        {/* Unmapped Schema Fields Banner */}
-        {isStructured && unmappedSchemaFields.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-border/30">
-            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-              Unmapped Schema Fields:
-            </span>
-            {unmappedSchemaFields.map((f) => (
-              <button
-                key={f.name}
-                type="button"
-                onClick={() => handleAddSchemaFieldUpdate(f.name)}
-                className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/25 text-purple-300 hover:bg-purple-500/25 hover:border-purple-500/40 transition-colors cursor-pointer"
-                title={`Map schema field '${f.name}' to a channel`}
-              >
-                <Plus className="w-3 h-3 text-purple-400" />
-                <span>{f.name}</span>
-                <span className="text-[9px] text-muted-foreground font-sans">
-                  ({f.type || "string"})
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* Empty State */}
         {stateUpdates.length === 0 && (
           <div className="p-3 rounded-lg border border-dashed border-border/70 bg-secondary/10 flex flex-col gap-1 text-center">
@@ -631,11 +628,7 @@ export function AgentStateUpdatesSection({
             <span className="text-[11px] text-muted-foreground">
               This node outputs standard{" "}
               <code className="text-amber-500 font-mono">messages</code> to the
-              graph. Click &quot;+ Add Update&quot;
-              {isStructured && schemaFields.length > 0
-                ? " or an unmapped field pill above "
-                : " "}
-              to select a reducer and map actions with new values.
+              graph. Click &quot;+ Add Update&quot; to select a reducer and map actions with new values.
             </span>
           </div>
         )}
