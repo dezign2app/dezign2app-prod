@@ -29,6 +29,7 @@ import type {
   LangGraphNodePipelineStep,
   PipelineStepDraft,
 } from "@workspace/canvas";
+import { toCamelCase } from "./AgentPromptVariablePicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Step Metadata Configuration
@@ -61,7 +62,7 @@ export const LANGGRAPH_STEP_META: Record<LangGraphNodeStepType, LangGraphStepMet
     color: "text-sky-400",
     borderColor: "border-sky-500/40",
     badgeBg: "bg-sky-500/10 text-sky-300 border-sky-500/25",
-    description: "Model, prompt, tools, structured output, middleware & streaming",
+    description: "Model, prompt, tools, structured output & middleware",
   },
   custom_code: {
     type: "custom_code",
@@ -300,9 +301,22 @@ export function deriveInitialPipelineSteps(
   connectedToolIds?: string[],
   connectedMiddlewareIds?: string[],
 ): LangGraphNodePipelineStep[] {
-  // If user already saved pipelineSteps, return them directly (including empty array)
+  // If user already saved pipelineSteps, normalize labels and names to camelCase
   if (Array.isArray(data.pipelineSteps)) {
-    return data.pipelineSteps;
+    return data.pipelineSteps.map((step) => {
+      const rawLabel = step.label || step.name || "";
+      const camelLabel = toCamelCase(rawLabel) || rawLabel;
+      const camelName = toCamelCase(step.name || rawLabel) || camelLabel;
+      const camelOutVar = step.outputVariable
+        ? toCamelCase(step.outputVariable) || step.outputVariable
+        : step.outputVariable;
+      return {
+        ...step,
+        label: camelLabel,
+        name: camelName,
+        outputVariable: camelOutVar,
+      };
+    });
   }
 
   // If user saved legacy nodeSteps, normalize and map to pipeline steps with stable IDs
@@ -326,23 +340,25 @@ export function deriveInitialPipelineSteps(
       const s = data.nodeSteps[i];
       if (s === "transformer" || s === "transform") {
         codeIndex++;
+        const name = `transformer${codeIndex}`;
         steps.push({
           id: `step_trans_${codeIndex}`,
           type: "transformer",
-          label: `Transformer ${codeIndex}`,
-          name: `Transformer ${codeIndex}`,
-          outputVariable: `transformedData_${codeIndex}`,
+          label: name,
+          name: name,
+          outputVariable: `transformedData${codeIndex}`,
           outputSchema: [{ name: "result", type: "string", required: true }],
           inputBindings: [],
         });
       } else if (s === "custom_code") {
         codeIndex++;
+        const name = `customCode${codeIndex}`;
         steps.push({
           id: `step_trans_${codeIndex}`,
           type: "transformer",
-          label: `Transformer ${codeIndex}`,
-          name: `Transformer ${codeIndex}`,
-          outputVariable: `transformedData_${codeIndex}`,
+          label: name,
+          name: name,
+          outputVariable: `transformedData${codeIndex}`,
           outputSchema: [{ name: "result", type: "string", required: true }],
           inputBindings: [],
         });
@@ -355,98 +371,108 @@ export function deriveInitialPipelineSteps(
       ) {
         if (!steps.some((st) => st.type === "llm_call")) {
           llmIndex++;
+          const name = llmIndex > 1 ? `llmAgent${llmIndex}` : "llmAgent";
           steps.push({
             id: `step_llm_${llmIndex}`,
             type: "llm_call",
-            label: "LLM Agent",
-            name: "LLM Agent",
+            label: name,
+            name: name,
+            outputVariable: llmIndex > 1 ? `llmResponse${llmIndex}` : "response",
           });
         }
       } else if (s === "db_operation") {
         dbIndex++;
+        const name = `dbOperation${dbIndex}`;
         steps.push({
           id: `step_db_${dbIndex}`,
           type: "db_operation",
-          label: `DB Operation ${dbIndex}`,
-          name: `DB Operation ${dbIndex}`,
-          outputVariable: `dbResult_${dbIndex}`,
+          label: name,
+          name: name,
+          outputVariable: `dbResult${dbIndex}`,
           declarationKind: "const",
           inputBindings: [],
         });
       } else if (s === "redis_operation") {
         redisIndex++;
+        const name = `redis${redisIndex}`;
         steps.push({
           id: `step_redis_${redisIndex}`,
           type: "redis_operation",
-          label: `Redis ${redisIndex}`,
-          name: `Redis ${redisIndex}`,
-          outputVariable: `cachedData_${redisIndex}`,
+          label: name,
+          name: name,
+          outputVariable: `cachedData${redisIndex}`,
           declarationKind: "const",
           inputBindings: [],
         });
       } else if (s === "storage_operation") {
         storageIndex++;
+        const name = `storage${storageIndex}`;
         steps.push({
           id: `step_storage_${storageIndex}`,
           type: "storage_operation",
-          label: `Storage ${storageIndex}`,
-          name: `Storage ${storageIndex}`,
-          outputVariable: `storageResult_${storageIndex}`,
+          label: name,
+          name: name,
+          outputVariable: `storageResult${storageIndex}`,
           declarationKind: "const",
           inputBindings: [],
         });
       } else if (s === "kafka_publish") {
         kafkaIndex++;
+        const name = `kafkaPublish${kafkaIndex}`;
         steps.push({
           id: `step_kafka_${kafkaIndex}`,
           type: "kafka_publish",
-          label: `Kafka Publish ${kafkaIndex}`,
-          name: `Kafka Publish ${kafkaIndex}`,
-          outputVariable: `publishResult_${kafkaIndex}`,
+          label: name,
+          name: name,
+          outputVariable: `publishResult${kafkaIndex}`,
           declarationKind: "const",
           inputBindings: [],
         });
       } else if (s === "external_call") {
         apiIndex++;
+        const name = `externalApi${apiIndex}`;
         steps.push({
           id: `step_api_${apiIndex}`,
           type: "external_call",
-          label: `External API ${apiIndex}`,
-          name: `External API ${apiIndex}`,
-          outputVariable: `apiResponse_${apiIndex}`,
+          label: name,
+          name: name,
+          outputVariable: `apiResponse${apiIndex}`,
           declarationKind: "const",
           inputBindings: [],
         });
       } else if (s === "service_call") {
         serviceIndex++;
+        const name = `serviceCall${serviceIndex}`;
         steps.push({
           id: `step_service_${serviceIndex}`,
           type: "service_call",
-          label: `Service Call ${serviceIndex}`,
-          name: `Service Call ${serviceIndex}`,
-          outputVariable: `serviceResponse_${serviceIndex}`,
+          label: name,
+          name: name,
+          outputVariable: `serviceResponse${serviceIndex}`,
           declarationKind: "const",
           inputBindings: [],
         });
       } else if (s === "variable") {
         varIndex++;
+        const name = `variable${varIndex}`;
         steps.push({
           id: `step_var_${varIndex}`,
           type: "variable",
-          label: `Variable ${varIndex}`,
-          name: `Variable ${varIndex}`,
-          outputVariable: `myVar_${varIndex}`,
+          label: name,
+          name: name,
+          outputVariable: `myVar${varIndex}`,
           variableOperation: "declare",
           declarationKind: "const",
           variableDataType: "string",
         });
       } else if (s) {
         genericIndex++;
+        const name = `step${genericIndex}`;
         steps.push({
           id: `step_gen_${genericIndex}`,
           type: s as LangGraphNodeStepType,
-          label: `Step ${genericIndex}`,
-          name: `Step ${genericIndex}`,
+          label: name,
+          name: name,
           enabled: true,
         });
       }
@@ -484,18 +510,20 @@ export function deriveInitialPipelineSteps(
     steps.push({
       id: "step_llm_1",
       type: "llm_call",
-      label: "LLM Agent",
-      name: "LLM Agent",
+      label: "llmAgent",
+      name: "llmAgent",
+      outputVariable: "response",
     });
   }
 
   if (data.customCode?.body && data.customCode.body.trim().length > 0) {
+    const label = steps.length > 0 ? "responseTransform" : "transformer";
     steps.push({
       id: `step_trans_${steps.length + 1}`,
       type: "transformer",
-      label: steps.length > 0 ? "Response Transform" : "Transformer",
-      name: steps.length > 0 ? "Response Transform" : "Transformer",
-      outputVariable: `transformedData_${steps.length + 1}`,
+      label,
+      name: label,
+      outputVariable: `transformedData${steps.length + 1}`,
       outputSchema: [{ name: "result", type: "string", required: true }],
       inputBindings: [],
     });

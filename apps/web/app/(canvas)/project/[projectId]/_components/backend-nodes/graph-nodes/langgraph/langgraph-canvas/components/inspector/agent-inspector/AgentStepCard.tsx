@@ -27,6 +27,7 @@ import type {
 } from "@workspace/canvas";
 
 import { LANGGRAPH_STEP_META, isGenericPipelineStep } from "./stepTypes";
+import { toCamelCase } from "./AgentPromptVariablePicker";
 import { AgentLlmStepContent } from "./AgentLlmStepContent";
 import { AgentTransformerStepSection } from "./AgentTransformerStepSection";
 import { AgentStateUpdatesSection } from "./AgentStateUpdatesSection";
@@ -474,7 +475,13 @@ export function AgentStepCard({
                 <LocalInput
                   value={step.label || ""}
                   onChange={(e) => onUpdateLabel(e.target.value)}
-                  placeholder={meta.label}
+                  onBlur={(e) => {
+                    const cc = toCamelCase(e.target.value);
+                    if (cc && cc !== step.label) {
+                      onUpdateLabel(cc);
+                    }
+                  }}
+                  placeholder={toCamelCase(meta.label) || meta.label}
                   className="h-5 text-[11px] font-medium text-foreground bg-transparent hover:bg-background/50 focus:bg-background border border-transparent hover:border-border/40 focus:border-primary/50 px-1 py-0 rounded truncate"
                   title="Click to rename step"
                 />

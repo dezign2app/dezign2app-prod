@@ -11,6 +11,7 @@ import {
   resolveCustomTypeForChannel,
   extractFieldsFromCustomType,
 } from "./utils";
+import { toCamelCase } from "../AgentPromptVariablePicker";
 
 interface UseAvailableReferenceStepsParams {
   isStructured: boolean;
@@ -55,7 +56,7 @@ export function useAvailableReferenceSteps({
 
     steps.push({
       id: "response",
-      label: "LLM Agent (response)",
+      label: "llmAgent (response)",
       fields: llmFields,
     });
 
@@ -63,9 +64,9 @@ export function useAvailableReferenceSteps({
     pipelineSteps.forEach((ps, idx) => {
       const stepNum = idx + 1;
       const stepVar = ps.outputVariable || ps.id || `step${stepNum}`;
-      const stepLabel = ps.label
-        ? `${ps.label} (${stepVar})`
-        : `Step ${stepNum}: ${ps.type} (${stepVar})`;
+      const rawStepName = ps.label || ps.name || ps.type;
+      const stepName = toCamelCase(rawStepName) || rawStepName;
+      const stepLabel = `${stepName} (${stepVar})`;
 
       const pFields: ReferenceStepField[] = [
         { path: stepVar, label: `${stepVar} (Whole Output)`, short: stepVar, type: "object" },

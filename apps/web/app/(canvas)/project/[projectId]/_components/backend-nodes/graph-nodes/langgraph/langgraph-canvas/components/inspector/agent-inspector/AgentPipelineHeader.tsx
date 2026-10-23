@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Bot, ChevronsUpDown, ChevronsDownUp, Trash2, Zap } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 import { LocalInput } from "../../../../../common";
 import type { AgentNodeData, LangGraphNodePipelineStep } from "@workspace/canvas";
 import { LANGGRAPH_STEP_META } from "./stepTypes";
+import { toCamelCase } from "./AgentPromptVariablePicker";
 
 interface AgentPipelineHeaderProps {
   selectedAgentData: AgentNodeData;
@@ -35,6 +36,15 @@ export function AgentPipelineHeader({
   onToggleStateUpdates,
   isStateUpdatesEnabled,
 }: AgentPipelineHeaderProps) {
+  useEffect(() => {
+    if (selectedAgentData.name) {
+      const camel = toCamelCase(selectedAgentData.name);
+      if (camel && camel !== selectedAgentData.name) {
+        onUpdateAgent({ name: camel });
+      }
+    }
+  }, [selectedAgentData.name, onUpdateAgent]);
+
   return (
     <div className="flex flex-col gap-2 p-3 bg-secondary/20 rounded-xl border border-border/50">
       <div className="flex items-center justify-between">
@@ -47,7 +57,13 @@ export function AgentPipelineHeader({
               <LocalInput
                 value={selectedAgentData.name || ""}
                 onChange={(e) => onUpdateAgent({ name: e.target.value })}
-                placeholder="Node Name"
+                onBlur={(e) => {
+                  const cc = toCamelCase(e.target.value);
+                  if (cc && cc !== selectedAgentData.name) {
+                    onUpdateAgent({ name: cc });
+                  }
+                }}
+                placeholder="nodeName"
                 className="h-6 text-xs font-bold text-foreground font-mono bg-background/40 border border-border/40 focus:border-purple-400 px-1.5 py-0 max-w-[170px] truncate rounded"
                 title="Edit Node Name"
               />
@@ -102,6 +118,7 @@ export function AgentPipelineHeader({
         {activePipelineSteps.map((step, index) => {
           const meta = LANGGRAPH_STEP_META[step.type];
           const isExpanded = Boolean(expandedSteps[step.id]);
+          const stepDisplayName = toCamelCase(step.label || step.name || meta?.label || step.type);
           return (
             <button
               key={step.id}
@@ -112,10 +129,10 @@ export function AgentPipelineHeader({
                   ? "bg-primary/15 text-primary border border-primary/30 font-semibold"
                   : "bg-background/40 hover:bg-secondary/40 text-muted-foreground border border-border/40"
               }`}
-              title={`Toggle ${step.label || meta?.label || step.type}`}
+              title={`Toggle ${stepDisplayName}`}
             >
               <span className="w-3.5 text-center font-bold">{index + 1}</span>
-              <span className="truncate max-w-[90px]">{step.label || meta?.label || step.type}</span>
+              <span className="truncate max-w-[90px]">{stepDisplayName}</span>
             </button>
           );
         })}

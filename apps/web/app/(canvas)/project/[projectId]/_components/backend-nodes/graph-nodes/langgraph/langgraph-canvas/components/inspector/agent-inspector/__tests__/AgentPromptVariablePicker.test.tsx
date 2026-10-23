@@ -22,6 +22,7 @@ vi.mock("@workspace/ui/components/select", () => ({
 import {
   derivePromptSources,
   extractPromptVariables,
+  toCamelCase,
   AgentPromptVariablePicker,
   PromptActiveVariablesBar,
 } from "../AgentPromptVariablePicker";
@@ -31,30 +32,40 @@ import type {
 } from "@workspace/canvas";
 
 describe("AgentPromptVariablePicker logic", () => {
-  it("derives state source and channels correctly", () => {
+  it("formats variable names to camelCase correctly", () => {
+    expect(toCamelCase("transformedData_1")).toBe("transformedData1");
+    expect(toCamelCase("transformed_data_1")).toBe("transformedData1");
+    expect(toCamelCase("db_result_1")).toBe("dbResult1");
+    expect(toCamelCase("Step 1 Result")).toBe("step1Result");
+    expect(toCamelCase("user_name")).toBe("userName");
+    expect(toCamelCase("msg")).toBe("msg");
+    expect(toCamelCase("response")).toBe("response");
+  });
+
+  it("derives state source and channels correctly with camelCase formatting", () => {
     const channels: LangGraphStateChannel[] = [
       { key: "msg", type: "string", reducer: "replace" },
-      { key: "user", type: "object", reducer: "merge_object" },
+      { key: "user_profile", type: "object", reducer: "merge_object" },
     ];
 
     const sources = derivePromptSources(channels, [], []);
     expect(sources.length).toBe(1);
     expect(sources[0]?.id).toBe("state");
     expect(sources[0]?.fields.some((f) => f.value === "msg")).toBe(true);
-    expect(sources[0]?.fields.some((f) => f.value === "user")).toBe(true);
+    expect(sources[0]?.fields.some((f) => f.value === "userProfile")).toBe(true);
   });
 
-  it("derives prior step sources only when prior steps exist", () => {
+  it("derives prior step sources with camelCase outVar and schema fields", () => {
     const priorSteps: LangGraphNodePipelineStep[] = [
       {
         id: "step_trans_1",
         name: "Data Prep",
         type: "transformer",
         label: "Data Prep",
-        outputVariable: "step1Result",
+        outputVariable: "transformedData_1",
         outputSchema: [
-          { name: "field1", type: "string", required: true },
-          { name: "field2", type: "number", required: false },
+          { name: "field_one", type: "string", required: true },
+          { name: "field_two", type: "number", required: false },
         ],
       },
     ];
@@ -63,8 +74,9 @@ describe("AgentPromptVariablePicker logic", () => {
     expect(sources.length).toBe(2); // state + 1 prior step
     const stepSource = sources.find((s) => s.id === "step_trans_1");
     expect(stepSource).toBeDefined();
-    expect(stepSource?.outVar).toBe("step1Result");
-    expect(stepSource?.fields.some((f) => f.value === "field1")).toBe(true);
+    expect(stepSource?.outVar).toBe("transformedData1");
+    expect(stepSource?.fields.some((f) => f.value === "fieldOne")).toBe(true);
+    expect(stepSource?.fields.some((f) => f.value === "fieldTwo")).toBe(true);
   });
 
   it("does NOT include any step sources when priorSteps is empty", () => {
