@@ -24,7 +24,7 @@ import { useSchemaAutoLayout } from "./hooks/useAutoLayout";
 import { useAutoLayoutShortcut } from "./hooks/useAutoLayoutShortcut";
 import { LayoutTemplate, AlertTriangle } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
-import { useSidebarStore } from "@/lib/stores/sidebarStore";
+import { useSidebarStore, getEffectiveConfigSidebarWidth } from "@/lib/stores/sidebarStore";
 
 const edgeTypes = {
   "foreign-key": ForeignKeyEdge,
@@ -60,6 +60,11 @@ export function SchemaView({ projectId }: SchemaViewProps) {
   const terminalHeight = useSidebarStore((s) => s.terminalHeight);
   const paletteOpen = useSidebarStore((s) => s.paletteOpen);
   const paletteWidth = useSidebarStore((s) => s.paletteWidth);
+  const configSidebarWidth = useSidebarStore((s) => s.configSidebarWidth);
+  const configSidebarOpen = useSidebarStore((s) => s.configSidebarOpen);
+  const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
+  const isConfigOpen = Boolean(activeConfigItem) || configSidebarOpen;
+  const effectiveConfigWidth = getEffectiveConfigSidebarWidth(configSidebarWidth);
   const schemaNodes = React.useMemo(() => {
     const filtered = nodes.filter(
       (n) =>
@@ -230,7 +235,11 @@ export function SchemaView({ projectId }: SchemaViewProps) {
           position="bottom-right"
           style={{
             bottom: terminalOpen ? `${terminalHeight + 14}px` : "16px",
-            right: aiPanelOpen ? `${aiPanelWidth + 16}px` : "16px",
+            right: isConfigOpen
+              ? `${effectiveConfigWidth + 16}px`
+              : aiPanelOpen
+                ? `${aiPanelWidth + 16}px`
+                : "16px",
             transition: "all 0.2s cubic-bezier(0.16,1,0.3,1)",
           }}
         />

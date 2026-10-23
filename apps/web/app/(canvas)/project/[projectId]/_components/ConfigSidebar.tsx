@@ -8,7 +8,7 @@ import {
 } from "@workspace/ui/components/sheet";
 import { ChevronLeft, X } from "lucide-react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { useSidebarStore } from "@/lib/stores/sidebarStore";
+import { useSidebarStore, getEffectiveConfigSidebarWidth } from "@/lib/stores/sidebarStore";
 import { EndpointConfig } from "./config-sidebar/EndpointConfig";
 import { WebPageEventConfig } from "./config-sidebar/WebPageEventConfig";
 import { EventConfig } from "./config-sidebar/EventConfig";
@@ -52,6 +52,7 @@ export const ConfigSidebar = () => {
 
   const width = useSidebarStore((s) => s.configSidebarWidth);
   const setWidth = useSidebarStore((s) => s.setConfigSidebarWidth);
+  const setConfigSidebarOpen = useSidebarStore((s) => s.setConfigSidebarOpen);
   const isDragging = useRef(false);
 
   type ConfigItem = NonNullable<typeof activeConfigItem>;
@@ -115,16 +116,9 @@ export const ConfigSidebar = () => {
     }
   };
 
-  // Compute effective width: default to ~28% of screen width (clamped nicely on desktop)
+  // Compute effective width: matches layout spacer exactly
   const effectiveWidth = React.useMemo(() => {
-    if (typeof window !== "undefined") {
-      const target28vw = Math.round(window.innerWidth * 0.28);
-      // If width is unassigned or less than 25% of viewport on desktop, default to 28%
-      if (!width || (window.innerWidth >= 1280 && width < window.innerWidth * 0.25)) {
-        return Math.max(540, target28vw);
-      }
-    }
-    return width || 540;
+    return getEffectiveConfigSidebarWidth(width);
   }, [width]);
 
   useEffect(() => {
@@ -149,6 +143,13 @@ export const ConfigSidebar = () => {
   }, [setWidth]);
 
   const open = activeConfigItem !== null;
+
+  useEffect(() => {
+    setConfigSidebarOpen(open);
+    return () => {
+      setConfigSidebarOpen(false);
+    };
+  }, [open, setConfigSidebarOpen]);
 
   if (!open) return null;
 

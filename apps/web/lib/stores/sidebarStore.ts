@@ -1,6 +1,18 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
+export function getEffectiveConfigSidebarWidth(width?: number): number {
+  if (typeof window !== "undefined") {
+    const minW = Math.max(360, Math.round(window.innerWidth * 0.18));
+    const maxW = Math.min(1200, Math.round(window.innerWidth * 0.50));
+    if (!width || width < minW) {
+      return Math.max(540, Math.min(840, Math.round(window.innerWidth * 0.28)));
+    }
+    return Math.max(minW, Math.min(maxW, width));
+  }
+  return width || 560;
+}
+
 export interface SidebarState {
   // Palette / Tool sidebar (shared across GraphView & UI Editor)
   paletteOpen: boolean;
@@ -24,7 +36,9 @@ export interface SidebarState {
   setPageAiPanelWidth: (width: number | ((prev: number) => number)) => void;
 
   // Config Sidebar (Node property inspector)
+  configSidebarOpen: boolean;
   configSidebarWidth: number;
+  setConfigSidebarOpen: (open: boolean) => void;
   setConfigSidebarWidth: (width: number | ((prev: number) => number)) => void;
 
   // Terminal Drawer (Docked at bottom of Canvas / UI Editor)
@@ -47,7 +61,7 @@ export interface SidebarState {
 
 export const useSidebarStore = create<SidebarState>()(
   persist(
-    (set) => ({
+    (set): SidebarState => ({
       // Palette sidebar defaults
       paletteOpen: true,
       paletteWidth: 220,
@@ -105,19 +119,25 @@ export const useSidebarStore = create<SidebarState>()(
         }),
 
       // Config Sidebar defaults (28-30% of screen width on modern displays)
+      configSidebarOpen: false,
       configSidebarWidth:
         typeof window !== "undefined"
           ? Math.max(540, Math.min(840, Math.round(window.innerWidth * 0.28)))
           : 560,
+      setConfigSidebarOpen: (open) => set({ configSidebarOpen: open }),
       setConfigSidebarWidth: (width) =>
         set((state) => {
           const val =
             typeof width === "function" ? width(state.configSidebarWidth) : width;
+          const minW =
+            typeof window !== "undefined"
+              ? Math.max(360, Math.round(window.innerWidth * 0.18))
+              : 360;
           const maxVal =
             typeof window !== "undefined"
               ? Math.min(1200, Math.round(window.innerWidth * 0.5))
               : 1000;
-          return { configSidebarWidth: Math.max(340, Math.min(maxVal, val)) };
+          return { configSidebarWidth: Math.max(minW, Math.min(maxVal, val)) };
         }),
 
       // Terminal defaults

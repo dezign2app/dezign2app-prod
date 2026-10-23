@@ -8,7 +8,10 @@ import { usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { useTerminalWorkspace } from "./terminal/hooks/useTerminalWorkspace";
 import { ProjectFolderModal } from "./ProjectFolderModal";
-import { useSidebarStore } from "@/lib/stores/sidebarStore";
+import {
+  useSidebarStore,
+  getEffectiveConfigSidebarWidth,
+} from "@/lib/stores/sidebarStore";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodePaletteSidebar } from "./NodePaletteSidebar";
 import { AiPanel } from "./AiPanel";
@@ -54,6 +57,14 @@ export function ProjectCanvasLayout({
   const langGraphInspectorWidth = useSidebarStore(
     (s) => s.langGraphInspectorWidth
   );
+  const configSidebarOpen = useSidebarStore((s) => s.configSidebarOpen);
+  const configSidebarWidth = useSidebarStore((s) => s.configSidebarWidth);
+  const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
+
+  const isConfigSidebarOpen =
+    !isLangGraph && (Boolean(activeConfigItem) || configSidebarOpen);
+  const effectiveConfigWidth =
+    getEffectiveConfigSidebarWidth(configSidebarWidth);
 
   // Read the current canvas view from the store (set by each page via setStoreView)
   const canvasView = useBackendCanvasStore((s) => s.canvasView);
@@ -135,13 +146,21 @@ export function ProjectCanvasLayout({
               />
             </div>
 
-            {/* Right: AI Assistant Sidebar in GraphView, or spacer matching InspectorSidebar in LangGraph */}
+            {/* Right: AI Assistant Sidebar & ConfigSidebar spacer in GraphView, or spacer matching InspectorSidebar in LangGraph */}
             {!isLangGraph ? (
-              <AiPanel
-                projectId={projectId}
-                isOpen={aiPanelOpen}
-                onClose={() => setAiPanelOpen(false)}
-              />
+              <>
+                {isConfigSidebarOpen && (
+                  <div
+                    style={{ width: `${effectiveConfigWidth}px` }}
+                    className="shrink-0 pointer-events-none"
+                  />
+                )}
+                <AiPanel
+                  projectId={projectId}
+                  isOpen={aiPanelOpen && !isConfigSidebarOpen}
+                  onClose={() => setAiPanelOpen(false)}
+                />
+              </>
             ) : (
               langGraphInspectorOpen && (
                 <div
