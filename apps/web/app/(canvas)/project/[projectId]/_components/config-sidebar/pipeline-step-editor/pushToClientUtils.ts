@@ -49,17 +49,35 @@ export function upsertDerivedConnection(
   const existing = page.data?.realtimeConnections ?? [];
   const serviceNode = serviceNodeId ? store.nodes.find((n) => n.id === serviceNodeId) : undefined;
 
-  const isRtc = step.clientDeliveryProtocol === "WEBRTC";
+  const isLangGraph = step.type === "langgraph_invoke";
+  const isRtc = !isLangGraph && step.clientDeliveryProtocol === "WEBRTC";
   const caps = isRtc ? resolveWebRtcCapabilitiesFromStep(step) : undefined;
   const derivedMediaMode = isRtc
     ? (caps ? computeMediaMode(caps) : (step.clientDeliveryMediaMode || "data"))
     : undefined;
 
+  const protocol: ClientDeliveryProtocol = isLangGraph
+    ? (step.langGraphStreamingProtocol === "websocket" || step.clientDeliveryProtocol === "WEBSOCKET"
+      ? "WEBSOCKET"
+      : "SSE")
+    : (step.clientDeliveryProtocol ?? "SSE");
+
+  const eventName =
+    step.clientDeliveryEventName ||
+    (isLangGraph
+      ? (protocol === "WEBSOCKET" ? "agent_stream" : (sourceItemName || step.name || "message"))
+      : (sourceItemName || "message"));
+
+  const room = step.clientDeliveryRoom || (isLangGraph ? step.langGraphStreamingRoom : undefined);
+
+  // Preserve existing storeActionBinding if this connection was already bound to a store
+  const existingConn = existing.find((c) => c.id === step.id);
+
   const derived: RealtimeConnection = {
     id: step.id,
-    protocol: step.clientDeliveryProtocol || "SSE",
-    eventName: step.clientDeliveryEventName || sourceItemName || "message",
-    room: step.clientDeliveryRoom,
+    protocol,
+    eventName,
+    room,
     mediaMode: derivedMediaMode,
     enableDataChannel: isRtc ? (caps ? caps.enableDataChannel : (step.clientDeliveryEnableDataChannel !== false)) : undefined,
     enableMic: isRtc ? (caps ? caps.enableMic : false) : undefined,
@@ -74,10 +92,11 @@ export function upsertDerivedConnection(
     sourceEventId: sourceItemId,
     sourceItemName,
     sourceItemType,
+    storeActionBinding: existingConn?.storeActionBinding,
   };
 
   const without = existing.filter(
-    (c) => c.id !== step.id && (!serviceNodeId || c.sourceServiceNodeId !== serviceNodeId),
+    (c) => c.id !== step.id && (!sourceItemId || c.sourceEventId !== sourceItemId),
   );
   store.updateNode(targetPageId, {
     data: {

@@ -257,6 +257,19 @@ export function handleStepUpdateCanvasEffects({
         consumedEventId,
         remainingSteps,
       });
+      if (prevStep.clientDeliveryPageRefNodeId || prevStep.clientDeliveryTargetPageId) {
+        cleanupPageRefConnection({
+          pageRefNodeId: prevStep.clientDeliveryPageRefNodeId,
+          serviceNodeId,
+          endpointId,
+          consumedEventId,
+          remainingSteps,
+        });
+        if (prevStep.clientDeliveryTargetPageId) {
+          const store = useBackendCanvasStore.getState();
+          removeDerivedConnection(store, prevStep.clientDeliveryTargetPageId, prevStep.id);
+        }
+      }
     }
   } else if (
     (prevStep.type === "langgraph_invoke" && updatedStep.type === "langgraph_invoke") ||
@@ -361,6 +374,19 @@ export function handleStepDeleteCanvasEffects({
       consumedEventId,
       remainingSteps,
     });
+    if (stepToDelete.clientDeliveryPageRefNodeId || stepToDelete.clientDeliveryTargetPageId) {
+      cleanupPageRefConnection({
+        pageRefNodeId: stepToDelete.clientDeliveryPageRefNodeId,
+        serviceNodeId,
+        endpointId: endpoint?.id,
+        consumedEventId,
+        remainingSteps,
+      });
+      if (stepToDelete.clientDeliveryTargetPageId) {
+        const store = useBackendCanvasStore.getState();
+        removeDerivedConnection(store, stepToDelete.clientDeliveryTargetPageId, stepToDelete.id);
+      }
+    }
   }
 
   if (stepToDelete.type === "push_to_client") {

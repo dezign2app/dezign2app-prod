@@ -40,12 +40,25 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
       const ev = events.find((e) => e.id === derivedInfo.sourceEventId);
       const ep = endpoints.find((e) => e.id === derivedInfo.sourceEndpointId);
       const sourceItemName = ep ? ep.name || "Endpoint" : ev ? ev.name : undefined;
-      const isRtc = s.clientDeliveryProtocol === "WEBRTC";
+      const isLangGraph = s.type === "langgraph_invoke";
+      const isRtc = !isLangGraph && s.clientDeliveryProtocol === "WEBRTC";
+      const protocol: RealtimeConnection["protocol"] = isLangGraph
+        ? (s.langGraphStreamingProtocol === "websocket" || s.clientDeliveryProtocol === "WEBSOCKET"
+          ? "WEBSOCKET"
+          : "SSE")
+        : (s.clientDeliveryProtocol || "SSE");
+      const eventName =
+        s.clientDeliveryEventName ||
+        (isLangGraph
+          ? (protocol === "WEBSOCKET" ? "agent_stream" : (sourceItemName || s.name || "message"))
+          : (sourceItemName || "message"));
+      const room = s.clientDeliveryRoom || (isLangGraph ? s.langGraphStreamingRoom : undefined);
+
       return {
         id,
-        protocol: s.clientDeliveryProtocol || "SSE",
-        eventName: s.clientDeliveryEventName,
-        room: s.clientDeliveryRoom,
+        protocol,
+        eventName,
+        room,
         mediaMode: isRtc ? s.clientDeliveryMediaMode : undefined,
         enableDataChannel: isRtc ? s.clientDeliveryEnableDataChannel : undefined,
         enableMic: isRtc ? (s.clientDeliveryEnableMic ?? s.clientDeliveryEnableAudio) : undefined,
@@ -60,6 +73,7 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
         sourceEventId: derivedInfo.sourceEventId || derivedInfo.sourceEndpointId || undefined,
         sourceItemName,
         sourceItemType: ep ? "endpoint" : ev ? "event" : undefined,
+        storeActionBinding: manualConn?.storeActionBinding,
       };
     }
     if (manualConn) return manualConn;
@@ -77,13 +91,21 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
   );
 
   const handleUpdateManual = (changes: Partial<RealtimeConnection>) => {
-    if (isDerived || !pageNode) return;
-    const existing = connections.map((c) => (c.id === id ? { ...c, ...changes } : c));
+    if (!pageNode) return;
+    // Protocol / capabilities cannot be edited manually for derived connections
+    if (isDerived && !changes.storeActionBinding && changes.storeActionBinding !== null) {
+      return;
+    }
+    const isAlreadyInExisting = connections.some((c) => c.id === id);
+    const updatedList = isAlreadyInExisting
+      ? connections.map((c) => (c.id === id ? { ...c, ...changes } : c))
+      : [...connections, { ...conn, ...changes }];
+
     updateNode(nodeId, {
       data: {
         ...pageNode.data,
         label: pageNode.data.label || "",
-        realtimeConnections: existing,
+        realtimeConnections: updatedList,
       },
     });
     if (changes.protocol === "WEBSOCKET" && conn.sourceServiceNodeId) {

@@ -240,14 +240,41 @@ export function resolvePagesInfo(
     ) => {
       if (!steps) return;
       for (const step of steps) {
+        let isTargetPage = step.clientDeliveryTargetPageId === node.id;
+        if (!isTargetPage && step.clientDeliveryPageRefNodeId) {
+          const pr = allNodes.find(
+            (n) =>
+              n.id === step.clientDeliveryPageRefNodeId &&
+              n.type === "page_ref" &&
+              (n.data?.targetPageId === node.id || n.data?.pageRefId === node.id),
+          );
+          if (pr) isTargetPage = true;
+        }
+        if (!isTargetPage) {
+          const edgeToPageRef = allEdges.find(
+            (e) =>
+              e.source === srcNodeId &&
+              (!sourceItemId || !e.sourceHandle || e.sourceHandle.includes(sourceItemId)) &&
+              allNodes.some(
+                (n) =>
+                  n.id === e.target &&
+                  n.type === "page_ref" &&
+                  (n.data?.targetPageId === node.id || n.data?.pageRefId === node.id),
+              ),
+          );
+          if (edgeToPageRef) isTargetPage = true;
+        }
+
         const isLangGraphStreaming =
           step.type === "langgraph_invoke" &&
           step.langGraphStreamingEnabled &&
-          step.clientDeliveryTargetPageId === node.id;
+          (step.langGraphStreamingProtocol === "sse" ||
+            step.langGraphStreamingProtocol === "websocket" ||
+            !step.langGraphStreamingProtocol) &&
+          isTargetPage;
 
         if (
-          (step.type === "push_to_client" &&
-            step.clientDeliveryTargetPageId === node.id) ||
+          (step.type === "push_to_client" && isTargetPage) ||
           isLangGraphStreaming
         ) {
           const srcNode = allNodes.find((n) => n.id === srcNodeId);
@@ -449,7 +476,7 @@ export function resolvePagesInfo(
           : "SSE";
 
       const port = serviceNode ? getServicePort(serviceNode) : undefined;
-      let streamUrl: string | undefined = (conn as any).streamUrl;
+      let streamUrl: string | undefined = conn.streamUrl;
       if (port && !streamUrl) {
         if (protocol === "WEBSOCKET" || protocol === "WEBRTC") {
           streamUrl = `ws://localhost:${port}/ws`;

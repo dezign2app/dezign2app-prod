@@ -11,15 +11,25 @@ export function useDerivedRealtimeInfo(
   nodes: BackendNode[],
 ): DerivedRealtimeInfo | null {
   return useMemo(() => {
+    const isStepMatch = (step: PipelineStep): boolean => {
+      if (step.id !== id) return false;
+      if (step.type === "push_to_client") return true;
+      if (
+        step.type === "langgraph_invoke" &&
+        step.langGraphStreamingEnabled &&
+        (step.langGraphStreamingProtocol === "sse" ||
+          step.langGraphStreamingProtocol === "websocket" ||
+          !step.langGraphStreamingProtocol)
+      ) {
+        return true;
+      }
+      return false;
+    };
+
     const findInSteps = (steps: PipelineStep[] | undefined): PipelineStep | null => {
       if (!steps) return null;
       for (const step of steps) {
-        if (
-          step.id === id ||
-          (step.type === "push_to_client" &&
-            step.clientDeliveryTargetPageId === nodeId &&
-            step.id === id)
-        ) {
+        if (isStepMatch(step)) {
           return step;
         }
         const found =
@@ -73,6 +83,40 @@ export function useDerivedRealtimeInfo(
             sourceEventId: null,
             sourceEndpointId: ep.id,
           };
+        }
+      }
+    }
+
+    // Check embedded endpoints/consumedEvents in service nodes
+    for (const n of nodes) {
+      if (n.type === "service" && Array.isArray(n.data?.endpoints)) {
+        for (const ep of n.data.endpoints) {
+          if (ep.pipelineSteps) {
+            const step = findInSteps(ep.pipelineSteps);
+            if (step) {
+              return {
+                step,
+                sourceNode: n,
+                sourceEventId: null,
+                sourceEndpointId: ep.id,
+              };
+            }
+          }
+        }
+      }
+      if (n.type === "service" && Array.isArray(n.data?.consumedEvents)) {
+        for (const ev of n.data.consumedEvents) {
+          if (ev.pipelineSteps) {
+            const step = findInSteps(ev.pipelineSteps);
+            if (step) {
+              return {
+                step,
+                sourceNode: n,
+                sourceEventId: ev.id,
+                sourceEndpointId: null,
+              };
+            }
+          }
         }
       }
     }
