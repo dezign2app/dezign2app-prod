@@ -34,6 +34,12 @@ export interface SidebarState {
   toggleTerminal: () => void;
   setTerminalHeight: (height: number | ((prev: number) => number)) => void;
 
+  // LangGraph Inspector Sidebar state
+  langGraphInspectorOpen: boolean;
+  langGraphInspectorWidth: number;
+  setLangGraphInspectorOpen: (open: boolean) => void;
+  setLangGraphInspectorWidth: (width: number | ((prev: number) => number)) => void;
+
   // Project Folder Selection Modal
   projectFolderModalOpen: boolean;
   setProjectFolderModalOpen: (open: boolean) => void;
@@ -137,6 +143,28 @@ export const useSidebarStore = create<SidebarState>()(
       // Project Folder Selection Modal defaults
       projectFolderModalOpen: false,
       setProjectFolderModalOpen: (open) => set({ projectFolderModalOpen: open }),
+
+      // LangGraph Inspector Sidebar defaults
+      langGraphInspectorOpen: false,
+      langGraphInspectorWidth:
+        typeof window !== "undefined"
+          ? Math.max(480, Math.min(840, Math.round(window.innerWidth * 0.28)))
+          : 520,
+      setLangGraphInspectorOpen: (open) => set({ langGraphInspectorOpen: open }),
+      setLangGraphInspectorWidth: (width) =>
+        set((state) => {
+          const val =
+            typeof width === "function" ? width(state.langGraphInspectorWidth) : width;
+          const minW =
+            typeof window !== "undefined"
+              ? Math.max(340, Math.round(window.innerWidth * 0.18))
+              : 340;
+          const maxW =
+            typeof window !== "undefined"
+              ? Math.min(1100, Math.round(window.innerWidth * 0.48))
+              : 1100;
+          return { langGraphInspectorWidth: Math.min(Math.max(val, minW), maxW) };
+        }),
     }),
     {
       name: "dezign2app_sidebar_layout_state_v1",
@@ -149,6 +177,7 @@ export const useSidebarStore = create<SidebarState>()(
         configSidebarWidth: state.configSidebarWidth,
         terminalOpen: state.terminalOpen,
         terminalHeight: state.terminalHeight,
+        langGraphInspectorWidth: state.langGraphInspectorWidth,
       }),
     },
   ),

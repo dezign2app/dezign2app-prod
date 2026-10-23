@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { X } from "lucide-react";
+import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import type {
   LangGraphStateChannel,
   LangGraphInputChannel,
@@ -192,23 +193,11 @@ export function InspectorSidebar({
   edges = [],
   graphLabel,
 }: InspectorSidebarProps) {
-  const [width, setWidth] = useState(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("dezign2app_lg_inspector_width");
-      if (saved) {
-        const num = Number(saved);
-        if (
-          !isNaN(num) &&
-          num >= Math.round(window.innerWidth * 0.2) &&
-          num <= Math.round(window.innerWidth * 0.5)
-        ) {
-          return num;
-        }
-      }
-      return Math.max(480, Math.min(840, Math.round(window.innerWidth * 0.28)));
-    }
-    return 520;
-  });
+  const width = useSidebarStore((s) => s.langGraphInspectorWidth);
+  const setWidth = useSidebarStore((s) => s.setLangGraphInspectorWidth);
+  const setLangGraphInspectorOpen = useSidebarStore(
+    (s) => s.setLangGraphInspectorOpen,
+  );
   const [isResizing, setIsResizing] = useState(false);
 
   const startResizing = useCallback(
@@ -222,13 +211,7 @@ export function InspectorSidebar({
 
       const onMouseMove = (mouseMoveEvent: MouseEvent) => {
         const deltaX = startX - mouseMoveEvent.clientX;
-        const minW = Math.max(340, Math.round(window.innerWidth * 0.18));
-        const maxW = Math.min(1100, Math.round(window.innerWidth * 0.48));
-        const newWidth = Math.min(Math.max(startWidth + deltaX, minW), maxW);
-        setWidth(newWidth);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("dezign2app_lg_inspector_width", String(newWidth));
-        }
+        setWidth(startWidth + deltaX);
       };
 
       const onMouseUp = () => {
@@ -240,7 +223,7 @@ export function InspectorSidebar({
       window.addEventListener("mousemove", onMouseMove);
       window.addEventListener("mouseup", onMouseUp);
     },
-    [width],
+    [width, setWidth],
   );
 
   useEffect(() => {
@@ -290,6 +273,13 @@ export function InspectorSidebar({
         isStartSelected ||
         isMemorySelected),
   );
+
+  useEffect(() => {
+    setLangGraphInspectorOpen(hasSelectedNode);
+    return () => {
+      setLangGraphInspectorOpen(false);
+    };
+  }, [hasSelectedNode, setLangGraphInspectorOpen]);
 
   if (!hasSelectedNode) return null;
 

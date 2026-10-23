@@ -48,6 +48,12 @@ export function ProjectCanvasLayout({
   const setProjectFolderModalOpen = useSidebarStore(
     (s) => s.setProjectFolderModalOpen
   );
+  const langGraphInspectorOpen = useSidebarStore(
+    (s) => s.langGraphInspectorOpen
+  );
+  const langGraphInspectorWidth = useSidebarStore(
+    (s) => s.langGraphInspectorWidth
+  );
 
   // Read the current canvas view from the store (set by each page via setStoreView)
   const canvasView = useBackendCanvasStore((s) => s.canvasView);
@@ -100,19 +106,22 @@ export function ProjectCanvasLayout({
 
         {/* ======================================================================== */}
         {/* SHARED UI OVERLAY - Sidebars + Terminal (persists across all tab routes)  */}
-        {/* NodePalette & AI Panel are hidden in LangGraph Studio; Terminal persists  */}
+        {/* In GraphView: Squeezed between NodePalette & AI Panel                     */}
+        {/* In LangGraph: Squeezed between ToolsSidebar (w-60) & InspectorSidebar    */}
         {/* ======================================================================== */}
         <div className="absolute inset-0 w-full h-full z-20 pointer-events-none flex flex-col overflow-hidden">
           {/* Top spacer: matches toolbar height so sidebars start below the toolbar */}
           <div className="shrink-0 h-14" />
           <div className="flex-1 min-h-0 w-full flex overflow-hidden relative pointer-events-none">
-            {/* Left: Node Palette Sidebar */}
-            {!isLangGraph && (
+            {/* Left: Node Palette Sidebar in GraphView, or spacer matching ToolsSidebar (w-60 = 240px) in LangGraph */}
+            {!isLangGraph ? (
               <NodePaletteSidebar
                 view={canvasView ?? "graph"}
                 isOpen={paletteOpen}
                 onToggle={() => setPaletteOpen(!paletteOpen)}
               />
+            ) : (
+              <div className="w-60 shrink-0 pointer-events-none" />
             )}
 
             {/* Center Column: Transparent canvas area + Terminal docked at bottom */}
@@ -126,13 +135,20 @@ export function ProjectCanvasLayout({
               />
             </div>
 
-            {/* Right: AI Assistant Sidebar */}
-            {!isLangGraph && (
+            {/* Right: AI Assistant Sidebar in GraphView, or spacer matching InspectorSidebar in LangGraph */}
+            {!isLangGraph ? (
               <AiPanel
                 projectId={projectId}
                 isOpen={aiPanelOpen}
                 onClose={() => setAiPanelOpen(false)}
               />
+            ) : (
+              langGraphInspectorOpen && (
+                <div
+                  style={{ width: `${langGraphInspectorWidth}px` }}
+                  className="shrink-0 pointer-events-none"
+                />
+              )
             )}
           </div>
         </div>
