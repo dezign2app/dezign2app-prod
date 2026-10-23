@@ -108,17 +108,27 @@ function ChannelRow({ ch, idx, stateChannels, onUpdate, onDelete }: ChannelRowPr
     return (
       <div
         ref={rowRef}
-        className="flex flex-col gap-1 px-2.5 py-1.5 bg-secondary/40 border-b border-border/40 nodrag"
+        className="flex flex-col gap-1 px-2.5 py-1.5 bg-secondary/40 border-b border-border/40 nodrag nokey nowheel nopan"
         onClick={stop}
+        onKeyDown={(e) => {
+          if (e.key === "Backspace" || e.key === "Delete") {
+            e.stopPropagation();
+            e.nativeEvent?.stopImmediatePropagation?.();
+          }
+        }}
       >
         {/* Key + type */}
         <div className="flex items-center gap-1">
           <LocalInput
-            className="h-6 text-[10px] font-mono bg-background flex-1 nodrag"
+            className="h-6 text-[10px] font-mono bg-background flex-1 nodrag nokey nowheel nopan"
             value={ch.key}
             autoFocus
             onChange={(e) => onUpdate(idx, { key: e.target.value })}
             onKeyDown={(e) => {
+              if (e.key === "Backspace" || e.key === "Delete") {
+                e.stopPropagation();
+                e.nativeEvent?.stopImmediatePropagation?.();
+              }
               if (e.key === "Enter" || e.key === "Escape") {
                 setIsEditing(false);
               }

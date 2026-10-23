@@ -108,7 +108,7 @@ export const LangGraphCanvasToolNode = ({
           <div className="flex flex-col min-w-0 flex-1">
             {isEditingName ? (
               <div
-                className="nodrag"
+                className="nodrag nokey nowheel nopan"
                 onClick={(e) => e.stopPropagation()}
                 onDoubleClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
@@ -116,12 +116,15 @@ export const LangGraphCanvasToolNode = ({
               >
                 <LocalInput
                   autoFocus
-                  className="h-6 text-xs bg-background p-1 font-bold font-mono text-emerald-500 flex-1 nodrag"
+                  className="h-6 text-xs bg-background p-1 font-bold font-mono text-emerald-500 flex-1 nodrag nokey nowheel nopan"
                   value={nameValue}
                   onChange={(e) => setNameValue(e.target.value)}
                   onBlur={handleNameSave}
                   onKeyDown={(e) => {
-                    e.stopPropagation();
+                    if (e.key === "Backspace" || e.key === "Delete") {
+                      e.stopPropagation();
+                      e.nativeEvent?.stopImmediatePropagation?.();
+                    }
                     if (e.key === "Enter") handleNameSave();
                     if (e.key === "Escape") {
                       setNameValue(data.name || "my_tool");

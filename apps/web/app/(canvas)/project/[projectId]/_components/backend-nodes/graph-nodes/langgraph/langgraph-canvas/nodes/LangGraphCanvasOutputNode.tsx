@@ -102,9 +102,15 @@ export const LangGraphCanvasOutputNode = ({
                 value={nameValue}
                 onChange={(e) => setNameValue(e.target.value)}
                 onBlur={handleNameSave}
-                onKeyDown={(e) => e.key === "Enter" && handleNameSave()}
+                onKeyDown={(e) => {
+                  if (e.key === "Backspace" || e.key === "Delete") {
+                    e.stopPropagation();
+                    e.nativeEvent?.stopImmediatePropagation?.();
+                  }
+                  if (e.key === "Enter") handleNameSave();
+                }}
                 autoFocus
-                className="bg-background text-foreground text-xs font-bold px-1 py-0.5 rounded border border-primary outline-none w-full"
+                className="bg-background text-foreground text-xs font-bold px-1 py-0.5 rounded border border-primary outline-none w-full nodrag nokey nowheel nopan"
               />
             ) : (
               <span

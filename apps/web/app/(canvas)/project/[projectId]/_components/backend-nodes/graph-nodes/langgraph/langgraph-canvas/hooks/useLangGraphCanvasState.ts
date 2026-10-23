@@ -750,7 +750,7 @@ export function useLangGraphCanvasState({
         activeEl.isContentEditable ||
         Boolean(
           activeEl.closest(
-            "input, textarea, select, [contenteditable='true'], [role='textbox'], [role='combobox'], [data-inspector], .inspector-sidebar, .nodrag"
+            "input, textarea, select, [contenteditable='true'], [role='textbox'], [role='combobox'], [data-inspector], .inspector-sidebar, .nodrag, .nowheel, .nopan, .nokey"
           )
         ));
     if (isTyping) {

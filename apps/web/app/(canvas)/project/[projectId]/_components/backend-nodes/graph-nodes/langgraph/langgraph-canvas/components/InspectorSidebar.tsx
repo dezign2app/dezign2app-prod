@@ -297,17 +297,19 @@ export function InspectorSidebar({
     <div
       data-inspector="true"
       style={{ width: `${width}px` }}
-      className={`inspector-sidebar relative shrink-0 h-full flex flex-col ${
+      className={`inspector-sidebar relative shrink-0 h-full flex flex-col nokey ${
         isResizing ? "select-none" : ""
       }`}
       onKeyDown={(e) => {
         if (e.key === "Backspace" || e.key === "Delete") {
           e.stopPropagation();
+          e.nativeEvent?.stopImmediatePropagation?.();
         }
       }}
       onKeyDownCapture={(e) => {
         if (e.key === "Backspace" || e.key === "Delete") {
           e.stopPropagation();
+          e.nativeEvent?.stopImmediatePropagation?.();
         }
       }}
     >

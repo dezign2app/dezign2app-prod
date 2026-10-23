@@ -87,23 +87,9 @@ export function useCanvasConnections({
 }: UseCanvasConnectionsProps) {
   const onNodesChange = useCallback(
     (changes: NodeChange<LangGraphCanvasNode>[]) => {
-      // Prevent accidental node deletion when user is typing in an input/textarea/inspector
-      const activeEl = typeof document !== "undefined" ? document.activeElement : null;
-      const isTyping =
-        activeEl instanceof HTMLElement &&
-        (activeEl.tagName === "INPUT" ||
-          activeEl.tagName === "TEXTAREA" ||
-          activeEl.tagName === "SELECT" ||
-          activeEl.isContentEditable ||
-          Boolean(
-            activeEl.closest(
-              "input, textarea, select, [contenteditable='true'], [role='textbox'], [role='combobox'], [data-inspector], .inspector-sidebar, .nodrag"
-            )
-          ));
-
-      const effectiveChanges = isTyping
-        ? changes.filter((c) => c.type !== "remove")
-        : changes;
+      // LangGraph canvas handles intentional node deletion directly via handleDeleteSelected / handleDeleteStep.
+      // onNodesChange should never remove nodes while typing or from uncontrolled ReactFlow key events.
+      const effectiveChanges = changes.filter((c) => c.type !== "remove");
 
       if (effectiveChanges.length === 0) return;
 
@@ -124,7 +110,7 @@ export function useCanvasConnections({
           activeEl.isContentEditable ||
           Boolean(
             activeEl.closest(
-              "input, textarea, select, [contenteditable='true'], [role='textbox'], [role='combobox'], [data-inspector], .inspector-sidebar, .nodrag"
+              "input, textarea, select, [contenteditable='true'], [role='textbox'], [role='combobox'], [data-inspector], .inspector-sidebar, .nodrag, .nowheel, .nopan, .nokey"
             )
           ));
 
