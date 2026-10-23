@@ -157,6 +157,37 @@ export function AgentStateUpdatesSection({
             mode: "expression",
           };
         }
+
+        // Auto-heal standalone ${...} in non-JSON channels (e.g. "${response.content}" -> "response" or "response.content")
+        if (!expectsJson && currentItem.value) {
+          const trimmed = currentItem.value.trim();
+          if (
+            trimmed.startsWith("${") &&
+            trimmed.endsWith("}") &&
+            !trimmed.slice(2, -1).includes("${")
+          ) {
+            hasChanges = true;
+            const unwrapped = trimmed.slice(2, -1).trim();
+            const isMessages =
+              currentItem.channelKey === "messages" || channel?.type === "messages";
+            const finalVal =
+              isMessages && (unwrapped === "response.content" || unwrapped === "response")
+                ? "response"
+                : unwrapped;
+            const finalSource =
+              finalVal === "response"
+                ? "message_object"
+                : finalVal === "response.content"
+                  ? "message_content"
+                  : "expression";
+            return {
+              ...currentItem,
+              value: finalVal,
+              source: finalSource,
+              mode: finalSource === "expression" ? "expression" : "set",
+            };
+          }
+        }
         return currentItem;
       },
     );
@@ -411,6 +442,17 @@ export function AgentStateUpdatesSection({
     } else {
       nextVal = currentVal ? `${currentVal} ${refString}` : refString;
       nextCursor = nextVal.length;
+    }
+
+    if (!isRowJsonMode) {
+      const trimmed = nextVal.trim();
+      if (
+        trimmed.startsWith("${") &&
+        trimmed.endsWith("}") &&
+        !trimmed.slice(2, -1).includes("${")
+      ) {
+        nextVal = trimmed.slice(2, -1).trim();
+      }
     }
 
     let nextSource: StateUpdateSource = "literal";

@@ -120,11 +120,24 @@ export function buildAgentNodeFile(
         val = responseVar;
       } else if (su.source === "expression" || (su.value && su.value.trim().startsWith("{"))) {
         val = su.value || `state.${key}`;
-        if (typeof val === "string" && val.includes("${")) {
-          val = val
-            .replace(/["`]\$\{response\.([a-zA-Z0-9_]+)\}["`]/g, `${responseVar}?.$1`)
-            .replace(/["`]\$\{state\.([a-zA-Z0-9_]+)\}["`]/g, "state?.$1")
-            .replace(/["`]\$\{([^}]+)\}["`]/g, "$1");
+        if (typeof val === "string") {
+          const trimmed = val.trim();
+          if (trimmed.startsWith("${") && trimmed.endsWith("}") && !trimmed.slice(2, -1).includes("${")) {
+            val = trimmed.slice(2, -1).trim();
+          }
+          if (val.includes("${")) {
+            val = val
+              .replace(/["`]?\$\{response\.([a-zA-Z0-9_]+)\}["`]?/g, `${responseVar}?.$1`)
+              .replace(/["`]?\$\{state\.([a-zA-Z0-9_]+)\}["`]?/g, "state?.$1")
+              .replace(/["`]?\$\{response\}["`]?/g, responseVar)
+              .replace(/["`]?\$\{state\}["`]?/g, "state")
+              .replace(/["`]?\$\{([^}]+)\}["`]?/g, "$1");
+          }
+          if (responseVar !== "response") {
+            val = val
+              .replace(/\bresponse\.([a-zA-Z0-9_]+)\b/g, `${responseVar}?.$1`)
+              .replace(/\bresponse\b/g, responseVar);
+          }
         }
       } else if (su.source === "message_content") {
         val = `typeof ${responseVar}?.content === "string" ? ${responseVar}.content : JSON.stringify(${responseVar}?.content ?? "")`;
@@ -134,6 +147,47 @@ export function buildAgentNodeFile(
         val = JSON.stringify(su.value ?? "");
       } else {
         val = su.value ? `${su.value}` : `state.${key}`;
+        if (typeof val === "string") {
+          const trimmed = val.trim();
+          if (trimmed.startsWith("${") && trimmed.endsWith("}") && !trimmed.slice(2, -1).includes("${")) {
+            val = trimmed.slice(2, -1).trim();
+          }
+          if (val.includes("${")) {
+            val = val
+              .replace(/["`]?\$\{response\.([a-zA-Z0-9_]+)\}["`]?/g, `${responseVar}?.$1`)
+              .replace(/["`]?\$\{state\.([a-zA-Z0-9_]+)\}["`]?/g, "state?.$1")
+              .replace(/["`]?\$\{response\}["`]?/g, responseVar)
+              .replace(/["`]?\$\{state\}["`]?/g, "state")
+              .replace(/["`]?\$\{([^}]+)\}["`]?/g, "$1");
+          }
+          if (responseVar !== "response") {
+            val = val
+              .replace(/\bresponse\.([a-zA-Z0-9_]+)\b/g, `${responseVar}?.$1`)
+              .replace(/\bresponse\b/g, responseVar);
+          }
+        }
+      }
+    }
+
+    // Special channel handling for LangGraph `messages` channel:
+    // messagesStateReducer expects BaseMessage or BaseMessage[] (or role/content object)
+    if (key === "messages" && !isValueless) {
+      if (
+        val === responseVar ||
+        val === "response" ||
+        val === `[${responseVar}]` ||
+        val === "[response]"
+      ) {
+        val = `[${responseVar}]`;
+      } else if (
+        val === "response.content" ||
+        val === `${responseVar}?.content` ||
+        val === `${responseVar}.content` ||
+        su.source === "message_content"
+      ) {
+        val = hasLLM ? `[${responseVar}]` : `[{ role: "assistant", content: ${val} }]`;
+      } else if (!val.startsWith("[") && !val.endsWith("]") && !val.startsWith("state.")) {
+        val = `[${val}]`;
       }
     }
 
