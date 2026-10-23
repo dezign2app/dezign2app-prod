@@ -1,5 +1,5 @@
 import type { LayoutNode, LayoutEdge } from "./types";
-import { getNodeDimensions, getHandleYRatio } from "./nodeDimensions";
+import { getNodeDimensions } from "./nodeDimensions";
 
 export interface HangingStateStoreLayoutParams {
   nodes: LayoutNode[];
@@ -13,10 +13,15 @@ export interface HangingStateStoreLayoutParams {
   }>;
 }
 
+export const STATE_STORE_WEBAPP_GAP = 50;
+export const STATE_STORE_VERTICAL_GAP = 30;
+
 /**
- * Positions hanging StateStore nodes (Zustand state stores)
- * in a dedicated column immediately preceding (to the left of) the WebPage node they connect to.
- * This prevents StateStore nodes from being aligned with the WebApp node in the root rank.
+ * Positions StateStore nodes (Zustand state stores) directly on top of the WebApp node
+ * in the same column where only WebApp stays.
+ *
+ * If multiple StateStore nodes exist, they stack vertically above the WebApp node.
+ * If no WebApp node exists, falls back gracefully to placing above the connected WebPage node.
  */
 export function layoutHangingStateStoreNodes({
   nodes,
@@ -24,278 +29,133 @@ export function layoutHangingStateStoreNodes({
   hangingStateStoreEdges,
   hangingStateStoreNodes,
   isHorizontal = true,
-  stackedZonesList = [],
 }: HangingStateStoreLayoutParams): void {
   if (hangingStateStoreNodes.length === 0) return;
 
-  // Group hanging StateStore nodes by their connected target WebPage node ID
-  const storesByWebPage = new Map<string, LayoutNode[]>();
-  const unattachedStores: LayoutNode[] = [];
+  const webAppNodes = nodes.filter((n) => n.type === "webApp");
 
-  hangingStateStoreNodes.forEach((storeNode) => {
-    // 1. Direct edge connection to a webPage node
+  if (webAppNodes.length > 0) {
+    // Map each store to its matching webApp (if multiple webApps, match via page connection or default to first)
+    const storesByWebApp = new Map<string, LayoutNode[]>();
+    webAppNodes.forEach((w) => storesByWebApp.set(w.id, []));
+
+    hangingStateStoreNodes.forEach((storeNode) => {
+      // Find connected webPage
+      const edge = hangingStateStoreEdges.find(
+        (e) =>
+          (e.source === storeNode.id && nodes.find((n) => n.id === e.target)?.type === "webPage") ||
+          (e.target === storeNode.id && nodes.find((n) => n.id === e.source)?.type === "webPage"),
+      );
+
+      let targetPageId = edge
+        ? edge.source === storeNode.id
+          ? edge.target
+          : edge.source
+        : undefined;
+
+      if (!targetPageId && storeNode.data && typeof storeNode.data === "object" && "targetPageId" in storeNode.data) {
+        const candidateId = (storeNode.data as any).targetPageId;
+        if (candidateId && nodes.some((n) => n.id === candidateId && n.type === "webPage")) {
+          targetPageId = candidateId;
+        }
+      }
+
+      // Check if target page is associated with a specific webApp
+      let matchedWebApp = webAppNodes[0]!;
+      if (targetPageId) {
+        const parentWebApp = webAppNodes.find((w) => {
+          if (!w.data || typeof w.data !== "object") return false;
+          const zones = Array.isArray((w.data as any).zones) ? (w.data as any).zones : [];
+          return zones.some((z: any) => {
+            const page = nodes.find((n) => n.id === targetPageId);
+            return (
+              (page?.data as any)?.zoneId === z.id ||
+              (page?.data as any)?.zoneName === z.name
+            );
+          });
+        });
+        if (parentWebApp) {
+          matchedWebApp = parentWebApp;
+        }
+      }
+
+      storesByWebApp.get(matchedWebApp.id)?.push(storeNode);
+    });
+
+    // Layout stores on top of each webApp
+    storesByWebApp.forEach((stores, webAppId) => {
+      if (stores.length === 0) return;
+      const webAppNode = webAppNodes.find((w) => w.id === webAppId);
+      const webAppPos = positionsMap.get(webAppId);
+      if (!webAppNode || !webAppPos) return;
+
+      const { width: webAppW } = getNodeDimensions(webAppNode);
+
+      // Stable sort: by label / storeName / id
+      stores.sort((a, b) => {
+        const nameA = (a.data?.label || (a.data as any)?.storeName || a.id) as string;
+        const nameB = (b.data?.label || (b.data as any)?.storeName || b.id) as string;
+        return nameA.localeCompare(nameB);
+      });
+
+      // Stack vertically directly on top of the webApp node:
+      // Store 1 is closest above webApp, Store 2 above Store 1, etc.
+      let currentBottomY = webAppPos.y - STATE_STORE_WEBAPP_GAP;
+
+      for (let i = stores.length - 1; i >= 0; i--) {
+        const storeNode = stores[i]!;
+        const { width: storeW, height: storeH } = getNodeDimensions(storeNode);
+        const posX = webAppPos.x + Math.round((webAppW - storeW) / 2);
+        const posY = currentBottomY - storeH;
+
+        positionsMap.set(storeNode.id, {
+          x: posX,
+          y: posY,
+        });
+
+        currentBottomY = posY - STATE_STORE_VERTICAL_GAP;
+      }
+    });
+
+    return;
+  }
+
+  // Fallback: If no WebApp node exists on the canvas (e.g. standalone page + store),
+  // place StateStore node on top of its connected WebPage node.
+  hangingStateStoreNodes.forEach((storeNode, idx) => {
     const edge = hangingStateStoreEdges.find(
       (e) =>
         (e.source === storeNode.id && nodes.find((n) => n.id === e.target)?.type === "webPage") ||
         (e.target === storeNode.id && nodes.find((n) => n.id === e.source)?.type === "webPage"),
     );
-
-    let targetPageId = edge
+    const targetPageId = edge
       ? edge.source === storeNode.id
         ? edge.target
         : edge.source
       : undefined;
 
-    // 2. Fallback: check storeNode.data?.targetPageId
-    if (!targetPageId && storeNode.data && typeof storeNode.data === "object" && "targetPageId" in storeNode.data) {
-      const candidateId = (storeNode.data as any).targetPageId;
-      if (candidateId && nodes.some((n) => n.id === candidateId && n.type === "webPage")) {
-        targetPageId = candidateId;
-      }
-    }
+    const pageNode = nodes.find((n) => n.id === targetPageId);
+    const pagePos = targetPageId ? positionsMap.get(targetPageId) : undefined;
 
-    // 3. Fallback: check if any WebPage has section actions bound to this store
-    if (!targetPageId) {
-      const pageWithBinding = nodes.find((n) => {
-        if (n.type !== "webPage" || !n.data || typeof n.data !== "object") return false;
-        const sections = Array.isArray((n.data as any).sections) ? (n.data as any).sections : [];
-        return sections.some((sec: any) =>
-          Array.isArray(sec.actions) &&
-          sec.actions.some((a: any) => a.storeActionBinding?.storeNodeId === storeNode.id),
-        );
-      });
-      if (pageWithBinding) {
-        targetPageId = pageWithBinding.id;
-      }
-    }
+    const { width: storeW, height: storeH } = getNodeDimensions(storeNode);
 
-    if (!targetPageId) {
-      unattachedStores.push(storeNode);
-      return;
-    }
-
-    if (!storesByWebPage.has(targetPageId)) {
-      storesByWebPage.set(targetPageId, []);
-    }
-    storesByWebPage.get(targetPageId)!.push(storeNode);
-  });
-
-  storesByWebPage.forEach((stores, pageId) => {
-    const pageNode = nodes.find((n) => n.id === pageId);
-    const pagePos = positionsMap.get(pageId);
-    if (!pageNode || !pagePos) return;
-
-    // If the target WebPage is part of a Hand-of-Cards stack, find the stack's leftmost boundary
-    const stack = stackedZonesList.find((st) =>
-      st.sortedPages.some((p) => p.id === pageId),
-    );
-    const leadPos = stack ? positionsMap.get(stack.leadPage.id) : undefined;
-    // leadPos.x is the minimum / leftmost X coordinate of all cards in the stack
-    const stackLeftX = leadPos ? leadPos.x : pagePos.x;
-
-    const { width: pageW, height: pageH } = getNodeDimensions(pageNode);
-
-    if (isHorizontal) {
-      // LR Layout: State stores sit in a dedicated column immediately to the left of the WebPage (or WebPage stack)
-      const gapX = 80;
-      const minVerticalGap = 16;
-
-      const maxStoreW = Math.max(
-        ...stores.map((s) => getNodeDimensions(s).width),
-      );
-
-      // Find the rightmost edge of any node strictly to the left of this page/stack (e.g. WebApp node)
-      let maxPrecedingRight = -Infinity;
-      positionsMap.forEach((pos, id) => {
-        if (
-          id === pageId ||
-          stack?.sortedPages.some((p) => p.id === id) ||
-          stores.some((s) => s.id === id)
-        ) {
-          return;
-        }
-        const otherNode = nodes.find((n) => n.id === id);
-        if (!otherNode) return;
-        const { width: otherW } = getNodeDimensions(otherNode);
-        const otherRight = pos.x + otherW;
-        if (otherRight <= stackLeftX && otherRight > maxPrecedingRight) {
-          maxPrecedingRight = otherRight;
-        }
-      });
-
-      let effectiveStackLeftX = stackLeftX;
-      const minPrecedingGap = 60;
-      if (maxPrecedingRight !== -Infinity) {
-        const minRequiredStackX = maxPrecedingRight + minPrecedingGap + maxStoreW + gapX;
-        if (effectiveStackLeftX < minRequiredStackX) {
-          const shiftX = minRequiredStackX - effectiveStackLeftX;
-          effectiveStackLeftX = minRequiredStackX;
-
-          // Shift all pages in this stack (or this page) rightward
-          const pagesToShift = stack ? stack.sortedPages : [pageNode];
-          const shiftedIdSet = new Set(pagesToShift.map((p) => p.id));
-          pagesToShift.forEach((p) => {
-            const currentPos = positionsMap.get(p.id);
-            if (currentPos) {
-              positionsMap.set(p.id, {
-                ...currentPos,
-                x: currentPos.x + shiftX,
-              });
-            }
-          });
-
-          // Also shift any downstream nodes that were placed at or to the right of stackLeftX
-          positionsMap.forEach((pos, id) => {
-            if (
-              !shiftedIdSet.has(id) &&
-              !stores.some((s) => s.id === id) &&
-              pos.x >= stackLeftX
-            ) {
-              positionsMap.set(id, {
-                ...pos,
-                x: pos.x + shiftX,
-              });
-            }
-          });
-        }
-      }
-
-      const targetX = effectiveStackLeftX - maxStoreW - gapX;
-
-      interface StoreItem {
-        node: LayoutNode;
-        width: number;
-        height: number;
-        idealY: number;
-        y: number;
-      }
-
-      const items: StoreItem[] = stores.map((storeNode) => {
-        const { width, height } = getNodeDimensions(storeNode);
-        const edge = hangingStateStoreEdges.find(
-          (e) =>
-            (e.source === storeNode.id && e.target === pageId) ||
-            (e.source === pageId && e.target === storeNode.id),
-        );
-
-        const pageHandle =
-          edge?.source === pageId ? edge?.sourceHandle : edge?.targetHandle;
-        const storeHandle =
-          edge?.source === storeNode.id ? edge?.sourceHandle : edge?.targetHandle;
-
-        const pageHandleRatio = getHandleYRatio(pageNode, pageHandle);
-        const storeHandleRatio = getHandleYRatio(storeNode, storeHandle);
-
-        const targetHandleY = pagePos.y + pageHandleRatio * pageH;
-        const storeHandleOffset = storeHandleRatio * height;
-        const idealY = targetHandleY - storeHandleOffset;
-
-        return {
-          node: storeNode,
-          width,
-          height,
-          idealY,
-          y: idealY,
-        };
-      });
-
-      // Sort by ideal Y
-      items.sort((a, b) => a.idealY - b.idealY);
-
-      // Relax / resolve collisions so no state store nodes overlap
-      if (items.length > 1) {
-        // Forward pass: push overlapping items down
-        for (let i = 1; i < items.length; i++) {
-          const prev = items[i - 1]!;
-          const curr = items[i]!;
-          const minAllowedY = prev.y + prev.height + minVerticalGap;
-          if (curr.y < minAllowedY) {
-            curr.y = minAllowedY;
-          }
-        }
-
-        // Calculate shift to center the stack around the average ideal Y
-        const avgIdeal =
-          items.reduce((sum, item) => sum + item.idealY + item.height / 2, 0) /
-          items.length;
-        const totalStackH =
-          items[items.length - 1]!.y +
-          items[items.length - 1]!.height -
-          items[0]!.y;
-        const currentCenter = items[0]!.y + totalStackH / 2;
-        const shiftY = avgIdeal - currentCenter;
-
-        items.forEach((item) => {
-          item.y += shiftY;
-        });
-      }
-
-      // Store final positions
-      items.forEach((item) => {
-        const posX = targetX + (maxStoreW - item.width) / 2;
-        positionsMap.set(item.node.id, {
-          x: posX,
-          y: item.y,
-        });
-      });
+    if (pageNode && pagePos) {
+      const { width: pageW } = getNodeDimensions(pageNode);
+      const posX = pagePos.x + Math.round((pageW - storeW) / 2);
+      const posY = pagePos.y - STATE_STORE_WEBAPP_GAP - (idx + 1) * (storeH + STATE_STORE_VERTICAL_GAP);
+      positionsMap.set(storeNode.id, { x: posX, y: posY });
     } else {
-      // TB Layout: State store nodes sit in a row above the WebPage node
-      const gapY = 60;
-      const minHorizontalGap = 20;
-
-      const maxStoreH = Math.max(
-        ...stores.map((s) => getNodeDimensions(s).height),
-      );
-      const targetY = pagePos.y - maxStoreH - gapY;
-
-      const items = stores.map((sNode) => {
-        const { width, height } = getNodeDimensions(sNode);
-        return {
-          node: sNode,
-          width,
-          height,
-          x: pagePos.x + pageW / 2 - width / 2,
-        };
+      // Unattached store without webApp or page
+      let maxX = 60;
+      let maxY = 60;
+      positionsMap.forEach((pos) => {
+        if (pos.x > maxX) maxX = pos.x;
+        if (pos.y > maxY) maxY = pos.y;
       });
-
-      const totalW =
-        items.reduce((s, it) => s + it.width, 0) +
-        (items.length - 1) * minHorizontalGap;
-      let startX = pagePos.x + pageW / 2 - totalW / 2;
-
-      items.forEach((item) => {
-        positionsMap.set(item.node.id, {
-          x: startX,
-          y: targetY + (maxStoreH - item.height) / 2,
-        });
-        startX += item.width + minHorizontalGap;
+      positionsMap.set(storeNode.id, {
+        x: 60 + idx * (storeW + 30),
+        y: 60,
       });
     }
   });
-
-  // If there are unattached StateStore nodes, place them gracefully
-  if (unattachedStores.length > 0) {
-    let maxY = 0;
-    let maxX = 0;
-    positionsMap.forEach((pos) => {
-      if (pos.y > maxY) maxY = pos.y;
-      if (pos.x > maxX) maxX = pos.x;
-    });
-
-    unattachedStores.forEach((node, idx) => {
-      if (!positionsMap.has(node.id)) {
-        if (node.position && (node.position.x !== 0 || node.position.y !== 0)) {
-          positionsMap.set(node.id, {
-            x: node.position.x,
-            y: node.position.y,
-          });
-        } else {
-          positionsMap.set(node.id, {
-            x: isHorizontal ? maxX + 80 : 80 + idx * 280,
-            y: isHorizontal ? 80 + idx * 260 : maxY + 80,
-          });
-        }
-      }
-    });
-  }
 }
