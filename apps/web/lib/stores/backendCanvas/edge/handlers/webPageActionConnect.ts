@@ -5,6 +5,7 @@ import {
   PageSection,
   UIEventItem,
   FrontendActionStepDraft,
+  RealtimeConnection,
 } from "@/types/canvas";
 import { ConnectionContext } from "../types";
 import { buildInitialBindingsFromEndpoint } from "@/app/(canvas)/project/[projectId]/_components/config-sidebar/web-page-event-config/action-flow/utils";
@@ -44,12 +45,14 @@ export function handleWebPageActionConnect({
     webHandle.startsWith("events-") ||
     webHandle.startsWith("event-in-") ||
     webHandle.startsWith("pageload-in-") ||
-    webHandle.startsWith("action-in-");
+    webHandle.startsWith("action-in-") ||
+    webHandle.startsWith("rtc-out-") ||
+    webHandle.startsWith("rtc-in-");
 
   if (!isActionHandle) return false;
 
   const actionId = webHandle.replace(
-    /^(?:events-|event-in-|pageload-in-|action-in-)/,
+    /^(?:events-|event-in-|pageload-in-|action-in-|rtc-out-|rtc-in-)/,
     "",
   );
 
@@ -339,12 +342,64 @@ export function handleWebPageActionConnect({
     return evt;
   });
 
+  const realtimeConnections: RealtimeConnection[] = webPageNode.data?.realtimeConnections || [];
+  let updatedRealtime = realtimeConnections;
+  if (!foundAction && realtimeConnections.some((c) => c.id === actionId)) {
+    updatedRealtime = realtimeConnections.map((c) => {
+      if (c.id === actionId) {
+        foundAction = true;
+        actionName = c.eventName || c.description || "Realtime connection";
+        const existingSteps: FrontendActionStepDraft[] = c.actionSteps || [];
+        const existingIdx = existingSteps.findIndex(
+          (s) =>
+            s.edgeId === newEdge.id ||
+            (stepTemplate.type === "api_call" &&
+              s.serviceNodeId === stepTemplate.serviceNodeId &&
+              s.endpointId === stepTemplate.endpointId) ||
+            (stepTemplate.type === "storage_put" &&
+              s.storageRefNodeId === stepTemplate.storageRefNodeId &&
+              s.bucketId === stepTemplate.bucketId) ||
+            (stepTemplate.type === "transform" &&
+              (s.transformerRefNodeId === stepTemplate.transformerRefNodeId ||
+                s.transformerNodeId === stepTemplate.transformerNodeId)) ||
+            (stepTemplate.type === "browser_storage" &&
+              s.browserStorageNodeId === stepTemplate.browserStorageNodeId),
+        );
+
+        calculatedStepNumber =
+          existingIdx >= 0
+            ? (existingSteps[existingIdx]?.order ?? 1)
+            : existingSteps.length + 1;
+
+        const stepToApply: FrontendActionStepDraft = {
+          ...stepTemplate,
+          order: calculatedStepNumber,
+          id: existingIdx >= 0 ? (existingSteps[existingIdx]?.id ?? stepTemplate.id) : stepTemplate.id,
+        };
+
+        const nextSteps =
+          existingIdx >= 0
+            ? existingSteps.map((s, i) =>
+                i === existingIdx ? stepToApply : s,
+              )
+            : [...existingSteps, stepToApply];
+
+        return {
+          ...c,
+          actionSteps: nextSteps,
+        };
+      }
+      return c;
+    });
+  }
+
   if (foundAction) {
     get().updateNode(webPageNode.id, {
       data: {
         ...webPageNode.data,
         sections: updatedSections,
         ...(events.length > 0 ? { events: updatedEvents } : {}),
+        realtimeConnections: updatedRealtime,
       },
     });
 

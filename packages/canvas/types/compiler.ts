@@ -3,6 +3,7 @@ import type { BackendEdge } from "./edges";
 import type { Endpoint } from "../schemas";
 import type { RealtimeProtocol } from "./realtime";
 import type { StoreActionType, StoreActionBinding } from "./web-app";
+import type { FrontendActionStepDraft } from "./simulation";
 
 export interface ServiceInfo {
   id: string;
@@ -190,6 +191,7 @@ export interface LinkedRealtimeConnectionInfo {
   streamUrl?: string;
   storeActionBinding?: StoreActionBinding;
   storeActionBindings?: StoreActionBinding[];
+  actionSteps?: FrontendActionStepDraft[];
 }
 
 export interface PageInfo {

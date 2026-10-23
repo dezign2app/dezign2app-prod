@@ -553,6 +553,8 @@ export function resolvePagesInfo(
         sourceServicePort: port,
         streamUrl,
         storeActionBinding: conn.storeActionBinding,
+        storeActionBindings: conn.storeActionBindings,
+        actionSteps: conn.actionSteps,
       };
     });
 

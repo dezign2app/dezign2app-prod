@@ -799,6 +799,7 @@ export const realtimeConnectionConvexValidator = v.object({
   ),
   storeActionBinding: v.optional(storeActionBindingConvexValidator),
   storeActionBindings: v.optional(v.array(storeActionBindingConvexValidator)),
+  actionSteps: v.optional(v.array(v.any())),
 });
 
 // Web Page Node Data Validator
