@@ -118,7 +118,11 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
     try {${threadIdLine}
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");${hasMemory ? `\n      res.setHeader("X-Thread-Id", threadId);\n      res.write(\`data: \${JSON.stringify({ type: "session", thread_id: threadId })}\\n\\n\`);` : ""}
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
+      if (typeof res.flushHeaders === "function") {
+        res.flushHeaders();
+      }${hasMemory ? `\n      res.setHeader("X-Thread-Id", threadId);\n      res.write(\`data: \${JSON.stringify({ type: "session", thread_id: threadId })}\\n\\n\`);` : ""}
 
       const state: Partial<${toPascalCase(ctx.graphId)}StateUpdateType> = ${stateInit};${preInvokeBlock}
       const streamOptions = { streamMode: "messages"${configLine ? `, ${configLine.replace(/^, /, "")}` : ""} };
@@ -180,6 +184,9 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
           res.write(\`data: \${JSON.stringify({ type: "update", mode: "updates", node: nodeName, data: payload })}\\n\\n\`);
         } else if (mode === "custom" || mode === "values") {
           res.write(\`data: \${JSON.stringify({ type: mode, mode, data: payload })}\\n\\n\`);
+        }
+        if (typeof (res as any).flush === "function") {
+          (res as any).flush();
         }
       }
       if (!isAborted) {

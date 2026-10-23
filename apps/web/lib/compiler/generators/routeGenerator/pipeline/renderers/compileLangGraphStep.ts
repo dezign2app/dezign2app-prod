@@ -293,11 +293,15 @@ export function renderLangGraphInvokeStep(
         rawLines.push(`res.setHeader("Cache-Control", "no-cache");`);
         rawLines.push(`res.setHeader("Connection", "keep-alive");`);
       }
+      rawLines.push(`res.setHeader("X-Accel-Buffering", "no");`);
       if (threadIdExpr) {
         rawLines.push(`if (${threadIdExpr} && typeof res.setHeader === "function") {`);
         rawLines.push(`  res.setHeader("X-Thread-Id", String(${threadIdExpr}));`);
         rawLines.push(`}`);
       }
+      rawLines.push(`if (typeof res.flushHeaders === "function") {`);
+      rawLines.push(`  res.flushHeaders();`);
+      rawLines.push(`}`);
       rawLines.push(
         `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
       );
@@ -418,6 +422,9 @@ export function renderLangGraphInvokeStep(
       } else {
         rawLines.push(`    res.write(\`data: \${JSON.stringify({ type: "values", mode: "values", data: payload })}\\n\\n\`);`);
       }
+      rawLines.push(`  }`);
+      rawLines.push(`  if (typeof (res as any).flush === "function") {`);
+      rawLines.push(`    (res as any).flush();`);
       rawLines.push(`  }`);
       rawLines.push(`}`);
       rawLines.push(`if (!res.writableEnded && !res.destroyed) {`);

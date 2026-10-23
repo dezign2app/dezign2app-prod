@@ -172,11 +172,15 @@ export function AgentStateUpdateRow({
         (su.value && (su.value.includes("\n") || su.value.trim().startsWith("{")));
 
   // Active cascading reference step & field
+  const isMessagesChannel = su.channelKey === "messages" || channelMeta.type === "messages";
   const activeStepObj =
     availableReferenceSteps.find((st) => st.id === activeRefStep) ||
     availableReferenceSteps[0];
   const activeFieldPath =
-    activeRefField || activeStepObj?.fields[0]?.path || "response.content";
+    activeRefField ||
+    (isMessagesChannel
+      ? (activeStepObj?.fields.find((f) => f.path === "response")?.path || "response")
+      : (activeStepObj?.fields[0]?.path || "response.content"));
   const activeFieldObj =
     activeStepObj?.fields.find((f) => f.path === activeFieldPath) ||
     activeStepObj?.fields[0];
@@ -205,28 +209,36 @@ export function AgentStateUpdateRow({
   const valueDisplay = displayVal || (isValueless ? "" : '""');
 
   const handleRawValueChange = (raw: string) => {
+    let cleanVal = raw;
+    if (!isRowJsonMode) {
+      const trimmed = cleanVal.trim();
+      if (trimmed.startsWith("${") && trimmed.endsWith("}") && !trimmed.slice(2, -1).includes("${")) {
+        cleanVal = trimmed.slice(2, -1).trim();
+      }
+    }
+
     let nextSource: StateUpdateSource = "literal";
     let nextSchemaField: string | undefined = undefined;
 
-    const cleanMatch = raw.replace(/^response\??\./, "").trim();
+    const cleanMatch = cleanVal.replace(/^response\??\./, "").trim();
     const matchedField = schemaFields.find(
-      (f) => f.name === cleanMatch || f.name === raw,
+      (f) => f.name === cleanMatch || f.name === cleanVal,
     );
 
     if (matchedField) {
       nextSource = "structured_field";
       nextSchemaField = matchedField.name;
-    } else if (raw === "response.content") {
+    } else if (cleanVal === "response.content") {
       nextSource = "message_content";
-    } else if (raw === "response") {
+    } else if (cleanVal === "response") {
       nextSource = "message_object";
     } else if (
-      raw.startsWith("state.") ||
-      raw.includes("${") ||
+      cleanVal.startsWith("state.") ||
+      cleanVal.includes("${") ||
       transformerSteps.some(
         (ts) =>
           ts.outputVariable &&
-          (raw === ts.outputVariable || raw.startsWith(`${ts.outputVariable}.`)),
+          (cleanVal === ts.outputVariable || cleanVal.startsWith(`${ts.outputVariable}.`)),
       )
     ) {
       nextSource = "expression";
@@ -236,7 +248,7 @@ export function AgentStateUpdateRow({
 
     onUpdateRow((cur) => ({
       ...cur,
-      value: raw,
+      value: cleanVal,
       source: nextSource,
       schemaField: nextSchemaField,
       mode: nextSource === "expression" ? "expression" : "set",
@@ -247,6 +259,7 @@ export function AgentStateUpdateRow({
     const chMeta = getChannelMeta(v, stateChannels, customReducers, availableCustomTypes);
     const isCustom = Boolean(chMeta.customTypeName || chMeta.customTypeSchema);
     const channelExpectsJson = chMeta.type === "object" || chMeta.reducer === "merge_object" || isCustom;
+    const isTargetMessages = v === "messages" || chMeta.type === "messages";
 
     let nextValue = su.value;
     let nextSource = su.source;
@@ -269,6 +282,16 @@ export function AgentStateUpdateRow({
       );
       nextSource = "expression";
       nextMode = "expression";
+    } else if (
+      isTargetMessages &&
+      (!nextValue ||
+        nextValue === "response.content" ||
+        nextValue === "${response.content}" ||
+        nextValue === "${response}")
+    ) {
+      nextValue = "response";
+      nextSource = "message_object";
+      nextMode = "set";
     }
 
     const chActions = getActionsForReducer(
@@ -508,10 +531,10 @@ export function AgentStateUpdateRow({
               size="sm"
               variant="secondary"
               className="h-6 px-2 text-[10px] font-mono gap-1 bg-purple-500/15 hover:bg-purple-500/25 text-purple-200 border border-purple-500/30 cursor-pointer"
-              onClick={() => onInsertRefAtCursor(`\${${activeFieldPath}}`)}
-              title={`Insert \${${activeFieldPath}} at cursor position`}
+              onClick={() => onInsertRefAtCursor(isRowJsonMode ? `\${${activeFieldPath}}` : activeFieldPath)}
+              title={isRowJsonMode ? `Insert \${${activeFieldPath}} at cursor position` : `Insert ${activeFieldPath} at cursor position`}
             >
-              + Insert {'${'}{activeFieldObj?.short || activeFieldPath}{'}'}
+              + Insert {isRowJsonMode ? `\${${activeFieldObj?.short || activeFieldPath}}` : (activeFieldObj?.short || activeFieldPath)}
             </Button>
 
             {/* Set Value Directly */}
@@ -597,10 +620,12 @@ export function AgentStateUpdateRow({
                       <DropdownMenuItem
                         key={f.path}
                         className="text-[11px] font-mono flex items-center justify-between cursor-pointer py-1 px-2"
-                        onClick={() => onInsertRefAtCursor(`\${${f.path}}`)}
+                        onClick={() => onInsertRefAtCursor(isRowJsonMode ? `\${${f.path}}` : f.path)}
                       >
                         <span className="font-semibold text-foreground truncate">{f.label}</span>
-                        <span className="text-[9px] text-purple-400/80 shrink-0 ml-1">+ insert</span>
+                        <span className="text-[9px] text-purple-400/80 shrink-0 ml-1">
+                          + {isRowJsonMode ? `\${${f.short || f.path}}` : (f.short || f.path)}
+                        </span>
                       </DropdownMenuItem>
                     ))}
                     <DropdownMenuSeparator />
@@ -633,19 +658,38 @@ export function AgentStateUpdateRow({
                 <span>+ Generate {channelDisplayType} Body</span>
               </button>
             )}
+            {isMessagesChannel ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onInsertRefAtCursor(isRowJsonMode ? "${response}" : "response")}
+                  className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-purple-500/40 bg-purple-500/15 hover:bg-purple-500/25 text-purple-200 transition-colors cursor-pointer font-semibold"
+                >
+                  + {isRowJsonMode ? "${response}" : "response"} (Message)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onInsertRefAtCursor(isRowJsonMode ? "${response.content}" : "response.content")}
+                  className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-border/60 bg-secondary/30 hover:bg-secondary/60 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                >
+                  + {isRowJsonMode ? "${response.content}" : "response.content"}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onInsertRefAtCursor(isRowJsonMode ? "${response.content}" : "response.content")}
+                className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-border/60 bg-secondary/30 hover:bg-secondary/60 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              >
+                + {isRowJsonMode ? "${response.content}" : "response.content"}
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => onInsertRefAtCursor("${response.content}")}
+              onClick={() => onInsertRefAtCursor(isRowJsonMode ? "${state.messages}" : "state.messages")}
               className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-border/60 bg-secondary/30 hover:bg-secondary/60 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
             >
-              + ${`{response.content}`}
-            </button>
-            <button
-              type="button"
-              onClick={() => onInsertRefAtCursor("${state.messages}")}
-              className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-border/60 bg-secondary/30 hover:bg-secondary/60 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-            >
-              + ${`{state.messages}`}
+              + {isRowJsonMode ? "${state.messages}" : "state.messages"}
             </button>
             {stateChannels
               .filter((c) => c.key !== "messages" && c.key !== su.channelKey)
@@ -654,10 +698,10 @@ export function AgentStateUpdateRow({
                 <button
                   key={c.key}
                   type="button"
-                  onClick={() => onInsertRefAtCursor(`\${state.${c.key}}`)}
+                  onClick={() => onInsertRefAtCursor(isRowJsonMode ? `\${state.${c.key}}` : `state.${c.key}`)}
                   className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-border/60 bg-secondary/30 hover:bg-secondary/60 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                 >
-                  + ${`{state.${c.key}}`}
+                  + {isRowJsonMode ? `\${state.${c.key}}` : `state.${c.key}`}
                 </button>
               ))}
           </div>

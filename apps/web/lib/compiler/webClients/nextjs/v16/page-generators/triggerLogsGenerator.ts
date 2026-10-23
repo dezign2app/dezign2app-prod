@@ -14,6 +14,7 @@ export function generateTriggerLogsState(hasLogsSection: boolean): string {
     payload?: unknown;
     data: unknown;
     error?: string;
+    isStreaming?: boolean;
   }>>([]);
 
 `;
@@ -34,6 +35,7 @@ export function generateTriggerHandler(hasApiActions: boolean): string {
     const timestamp = new Date().toLocaleTimeString();
     const logId = Math.random().toString(36).substring(2, 9);
     try {
+      let streamInitialized = false;
       const result = await executeApiAction({
         eventName,
         eventType,
@@ -43,23 +45,70 @@ export function generateTriggerHandler(hasApiActions: boolean): string {
         customHeaders,
         queryParams,
         requestBody,
+        onStream: (streamData) => {
+          if (!streamInitialized) {
+            streamInitialized = true;
+            setTriggerLogs((prev) => [
+              {
+                id: logId,
+                eventName,
+                eventType: "SSE",
+                timestamp,
+                url: url || "N/A",
+                method: method || "TRIGGER",
+                status: 200,
+                payload: requestBody,
+                data: streamData,
+                isStreaming: true,
+              },
+              ...prev,
+            ]);
+          } else {
+            setTriggerLogs((prev) =>
+              prev.map((log) =>
+                log.id === logId
+                  ? { ...log, data: streamData, isStreaming: true }
+                  : log,
+              ),
+            );
+          }
+        },
       });
 
-      setTriggerLogs((prev) => [
-        {
-          id: logId,
-          eventName,
-          eventType,
-          timestamp,
-          url: result.url || result.targetUrl || "N/A",
-          method: method || "TRIGGER",
-          status: result.status,
-          payload: requestBody,
-          data: result.data,
-          error: result.error,
-        },
-        ...prev,
-      ]);
+      if (streamInitialized) {
+        setTriggerLogs((prev) =>
+          prev.map((log) =>
+            log.id === logId
+              ? {
+                  ...log,
+                  url: result.url || result.targetUrl || log.url,
+                  method: method || "TRIGGER",
+                  status: result.status,
+                  data: result.data,
+                  error: result.error,
+                  isStreaming: false,
+                }
+              : log,
+          ),
+        );
+      } else {
+        setTriggerLogs((prev) => [
+          {
+            id: logId,
+            eventName,
+            eventType: result.data && typeof result.data === "object" && (result.data as any).streamed ? "SSE" : eventType,
+            timestamp,
+            url: result.url || result.targetUrl || "N/A",
+            method: method || "TRIGGER",
+            status: result.status,
+            payload: requestBody,
+            data: result.data,
+            error: result.error,
+            isStreaming: false,
+          },
+          ...prev,
+        ]);
+      }
       return (result.data && typeof result.data === "object" ? { ...result, ...(result.data as object) } : result) as unknown as Record<string, string | number | boolean | null | undefined>;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Request failed";
@@ -73,6 +122,7 @@ export function generateTriggerHandler(hasApiActions: boolean): string {
           method: method || "TRIGGER",
           error: errorMessage,
           data: null,
+          isStreaming: false,
         },
         ...prev,
       ]);
@@ -135,13 +185,18 @@ export function generateTriggerLogsSection(options: {
                     <div className="flex items-center justify-between text-muted-foreground border-b border-border pb-2">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-foreground">{log.eventName}</span>
-                        {log.eventType === "pageLoad" ? (
+                        {log.isStreaming ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                            <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
+                            STREAMING
+                          </span>
+                        ) : log.eventType === "pageLoad" ? (
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30">
                             PAGE LOAD
                           </span>
-                        ) : log.eventType === "SSE" ? (
+                        ) : log.eventType === "SSE" || (log.data && typeof log.data === "object" && (log.data as any).streamed) ? (
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-                            SSE
+                            STREAM
                           </span>
                         ) : log.eventType === "WebSocket" ? (
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30">
@@ -167,6 +222,28 @@ export function generateTriggerLogsSection(options: {
                     {log.error ? (
                       <div className="text-destructive bg-destructive/10 p-2 rounded border border-destructive/20">
                         Error: {log.error}
+                      </div>
+                    ) : log.data && typeof log.data === "object" && (log.data as any).streamed ? (
+                      <div className="space-y-2">
+                        {Boolean((log.data as any).reasoning) && (
+                          <div className="p-2.5 rounded bg-muted/70 border border-border/60 text-muted-foreground text-xs italic">
+                            <div className="font-semibold text-[10px] uppercase tracking-wider text-muted-foreground/90 mb-1 flex items-center gap-1.5">
+                              <span>Thinking Process</span>
+                            </div>
+                            <div className="whitespace-pre-wrap">{(log.data as any).reasoning}</div>
+                          </div>
+                        )}
+                        <pre className="text-foreground/90 bg-background/80 p-3 rounded border border-border/50 overflow-x-auto whitespace-pre-wrap font-sans text-xs leading-relaxed">
+                          {(log.data as any).content || (log.isStreaming ? "" : JSON.stringify(log.data, null, 2))}
+                          {log.isStreaming && (
+                            <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-primary animate-pulse align-middle" />
+                          )}
+                        </pre>
+                        {Array.isArray((log.data as any).updates) && (log.data as any).updates.length > 0 && !(log.data as any).content && (
+                          <pre className="text-foreground/90 bg-background/80 p-3 rounded border border-border/50 overflow-x-auto whitespace-pre-wrap">
+                            {JSON.stringify((log.data as any).updates, null, 2)}
+                          </pre>
+                        )}
                       </div>
                     ) : (
                       <pre className="text-foreground/90 bg-background/80 p-3 rounded border border-border/50 overflow-x-auto whitespace-pre-wrap">

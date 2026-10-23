@@ -209,6 +209,12 @@ export function generateDispatchBodyForChannel(
     return `{\n  "field": \`${cleanRef}\`\n}`;
   }
 
+  // Messages channel
+  if (channel.type === "messages" || channel.key === "messages") {
+    const clean = fallbackRef.replace(/^\$\{/, "").replace(/\}$/, "").trim();
+    return clean && clean !== "response.content" ? clean : "response";
+  }
+
   // Array channel
   if (channel.type === "array") {
     const cleanRef =
@@ -222,9 +228,8 @@ export function generateDispatchBodyForChannel(
   if (channel.type === "number") return "0";
   if (channel.type === "boolean") return "true";
 
-  return fallbackRef.startsWith("${") && fallbackRef.endsWith("}")
-    ? fallbackRef
-    : `\${${fallbackRef || "response.content"}}`;
+  // Default scalar / string channel
+  return fallbackRef.replace(/^\$\{/, "").replace(/\}$/, "").trim() || "response.content";
 }
 
 /**
