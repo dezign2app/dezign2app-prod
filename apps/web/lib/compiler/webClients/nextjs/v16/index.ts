@@ -158,8 +158,8 @@ export function compileNextjsV16WebClient(
   const graphStateStores: GlobalStoreDefinition[] = associatedStateStoreNodes.map((sn) => {
     const d = sn.data || {};
     const storeName = d.storeName || d.label || "App";
-    const scope = d.scope || "global";
-    const storage = d.storage || "memory";
+    const scope = "global";
+    const storage = "memory";
 
     // If local store, attempt to map to connected or target page
     let targetPage = enrichedWebClientNodes.find((p) => p.id === d.targetPageId);
@@ -175,14 +175,6 @@ export function compileNextjsV16WebClient(
           : connectedPageEdge.target;
         targetPage = enrichedWebClientNodes.find((p) => p.id === pageId);
       }
-    }
-
-    if (scope === "local" && targetPage) {
-      const pagePath = targetPage.data?.path || targetPage.data?.route || targetPage.data?.pageSlug || "page";
-      const cleanPath = pagePath.replace(/^\/+|\/+$/g, "");
-      const baseName = storeName.replace(/Store$/i, "");
-      const hookName = `use${baseName.charAt(0).toUpperCase() + baseName.slice(1)}Store`;
-      localStorePaths[sn.id] = `app/${cleanPath}/_stores/${hookName}.ts`;
     }
 
     return {

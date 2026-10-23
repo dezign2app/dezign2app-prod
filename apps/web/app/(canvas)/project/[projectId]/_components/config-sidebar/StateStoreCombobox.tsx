@@ -175,7 +175,7 @@ export const StateStoreCombobox: React.FC<StateStoreComboboxProps> = ({
                         )}
                       </div>
                       <span className="text-[10px] text-muted-foreground font-mono truncate">
-                        {store.data?.storage || "memory"} • {fieldCount} {fieldCount === 1 ? "field" : "fields"}
+                        {fieldCount} {fieldCount === 1 ? "field" : "fields"}
                       </span>
                     </div>
                   </div>

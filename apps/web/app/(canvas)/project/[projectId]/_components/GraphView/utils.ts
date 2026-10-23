@@ -296,8 +296,6 @@ function getRawGraphNodeData(
       ...baseData,
       label: defaultLabel,
       storeName: defaultLabel,
-      scope: "global",
-      storage: "memory",
       fields: [
         { id: crypto.randomUUID(), name: "value", type: "string", defaultValue: "" },
       ],

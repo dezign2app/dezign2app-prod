@@ -61,6 +61,9 @@ export const globalStoreFieldSchema = z.object({
   required: z.boolean().optional(),
   defaultValue: z.any().optional(),
   description: z.string().optional(),
+  reducer: z.string().optional(),
+  customReducerCode: z.string().optional(),
+  actions: z.array(z.string()).optional(),
 });
 
 export type GlobalStoreFieldSchemaType = z.infer<typeof globalStoreFieldSchema>;
@@ -110,13 +113,8 @@ export type StateStoreTestCaseSchemaType = z.infer<typeof stateStoreTestCaseSche
 export const stateStoreNodeDataSchema = baseNodeDataSchema
   .extend({
     storeName: z.string().optional(),
-    scope: z.enum(["global", "local"]).optional().default("global"),
     targetWebAppId: z.string().optional(),
     targetPageId: z.string().optional(),
-    storage: z
-      .enum(["memory", "localStorage", "sessionStorage"])
-      .optional()
-      .default("memory"),
     fields: z.array(globalStoreFieldSchema).optional(),
     actions: z.array(globalStoreActionSchema).optional(),
     testCases: z.array(stateStoreTestCaseSchema).optional(),

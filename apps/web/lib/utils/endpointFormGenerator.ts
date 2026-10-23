@@ -584,8 +584,6 @@ export function generateFormFromEndpoint({
         data: {
           label: storeLabel,
           storeName: cleanStoreName,
-          scope: "global",
-          storage: "memory",
           fields: storeFields,
           actions: storeActions,
         },

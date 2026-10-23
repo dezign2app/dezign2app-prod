@@ -787,9 +787,7 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
     lines.push("");
     lines.push("## Client State Stores (Zustand & Hooks)");
     for (const store of stateStoreNodes) {
-      const scope = store.data.scope ? ` (${store.data.scope})` : "";
-      lines.push(`### State Store: \`${store.data.label || store.data.name}\`${scope}`);
-      if (store.data.storage) lines.push(`- **Persistence**: ${store.data.storage}`);
+      lines.push(`### State Store: \`${store.data.label || store.data.name}\``);
       if (store.data.fields && store.data.fields.length > 0) {
         const fieldsStr = store.data.fields.map((f) => `${f.name}: ${f.type}`).join(", ");
         lines.push(`- **State Fields**: \`{ ${fieldsStr} }\``);
