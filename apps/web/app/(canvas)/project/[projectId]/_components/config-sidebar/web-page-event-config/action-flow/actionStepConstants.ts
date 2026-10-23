@@ -84,12 +84,19 @@ export const FRONTEND_STEP_TYPE_META: Record<
     color: "text-slate-400 bg-slate-500/10 border-slate-500/30",
     description: "Clear form fields and reset validation status",
   },
+  browser_storage: {
+    label: "Browser Storage",
+    icon: React.createElement(HardDrive, { size: 12 }),
+    color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/30",
+    description: "Get, set, or remove keys in localStorage or sessionStorage",
+  },
 };
 
 export const FRONTEND_ADDABLE_STEP_TYPES: readonly FrontendActionStepType[] = [
   "api_call",
   "storage_put",
   "state_mutation",
+  "browser_storage",
   "navigation",
   "update_query_params",
   "transform",

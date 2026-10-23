@@ -26,6 +26,7 @@ import {
   generatePageAndComponentFiles,
 } from "./pageFileGenerator";
 import { generateZustandStores } from "./storeGenerators";
+import { generateBrowserStorageHelper } from "./browserStorageGenerator";
 import { resolveAppProviders } from "./providerGenerators";
 import { isServiceAssociatedWithWebApp } from "./serviceResolver";
 import { generateNextjsRoutes } from "../../../services/nextjs/v16/routeGenerator";
@@ -194,6 +195,33 @@ export function compileNextjsV16WebClient(
   const allStores = [...appGlobalStores, ...pageStores, ...graphStateStores];
   if (allStores.length > 0) {
     files.push(...generateZustandStores(allStores, { localStorePaths }));
+  }
+
+  // 2.6 Resolve Browser Storage Nodes (localStorage / sessionStorage)
+  const associatedBrowserStorageNodes = (allNodes || []).filter((n) => {
+    if (n.type !== "browser_storage") return false;
+    const targetWebAppId = n.data?.targetWebAppId;
+    if (targetWebAppId && webAppNode?.id && targetWebAppId === webAppNode.id) return true;
+    const isDirectlyConnectedToPage = allEdges.some((e) => {
+      const isSrc = e.source === n.id && webClientNodeIds.has(e.target);
+      const isTgt = e.target === n.id && webClientNodeIds.has(e.source);
+      return isSrc || isTgt;
+    });
+    if (isDirectlyConnectedToPage) return true;
+    if (!targetWebAppId) return true;
+    return false;
+  });
+
+  const hasBrowserStorageStepAnywhere = enrichedWebClientNodes.some((p) =>
+    (p.data?.sections || []).some((s) =>
+      (s.actions || []).some((a) =>
+        (a.actionSteps || []).some((st) => st.type === "browser_storage")
+      )
+    )
+  );
+
+  if (associatedBrowserStorageNodes.length > 0 || hasBrowserStorageStepAnywhere) {
+    files.push(generateBrowserStorageHelper(associatedBrowserStorageNodes));
   }
 
   // 3. Project Configuration Files

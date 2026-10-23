@@ -351,6 +351,26 @@ export function handleFrontendConnect({
     (sourceNode.type === "webPage" && targetNode.type === "state_store") ||
     (sourceNode.type === "state_store" && targetNode.type === "webPage");
 
+  // Case 5B: WebPage <-> BrowserStorage
+  const isWebPageToBrowserStorage =
+    (sourceNode.type === "webPage" && targetNode.type === "browser_storage") ||
+    (sourceNode.type === "browser_storage" && targetNode.type === "webPage");
+
+  if (isWebPageToBrowserStorage) {
+    const webPageNode = sourceNode.type === "webPage" ? sourceNode : targetNode;
+    const storageNode = sourceNode.type === "browser_storage" ? sourceNode : targetNode;
+    const existingTargetPageIds = storageNode.data?.targetPageIds || [];
+    if (!existingTargetPageIds.includes(webPageNode.id)) {
+      get().updateNode(storageNode.id, {
+        data: {
+          ...storageNode.data,
+          targetPageId: webPageNode.id,
+          targetPageIds: [...existingTargetPageIds, webPageNode.id],
+        },
+      });
+    }
+  }
+
   if (isWebPageToStateStore) {
     const webPageNode = sourceNode.type === "webPage" ? sourceNode : targetNode;
     const storeNode = sourceNode.type === "state_store" ? sourceNode : targetNode;

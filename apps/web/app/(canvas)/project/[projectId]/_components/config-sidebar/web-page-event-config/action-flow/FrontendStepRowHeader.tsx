@@ -122,6 +122,17 @@ export function formatStepCodePreview(
       const val = formatSource(step.queryParamValueSource);
       return `queryParams.set("${key}", ${val}) (${nav})`;
     }
+
+    case "browser_storage": {
+      const engine = step.storageEngine || "localStorage";
+      const op = step.storageOperation || "set";
+      const key = step.storageKey || "key";
+      if (op === "clear") return `${engine}.clear()`;
+      if (op === "remove") return `${engine}.removeItem("${key}")`;
+      if (op === "toggle") return `${engine}.toggle("${key}")`;
+      if (op === "append") return `${engine}.append("${key}", ...)`;
+      return `${engine}.setItem("${key}", ...)`;
+    }
   }
 }
 

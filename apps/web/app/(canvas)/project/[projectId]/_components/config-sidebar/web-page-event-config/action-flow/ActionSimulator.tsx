@@ -78,6 +78,13 @@ interface SimulatedStepLog {
     navigation?: {
       targetRoute: string;
     };
+    storage?: {
+      engine: string;
+      operation: string;
+      key: string;
+      prevValue?: string;
+      nextValue?: string;
+    };
   };
 }
 
@@ -529,6 +536,72 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
             },
           },
         });
+      } else if (step.type === "browser_storage") {
+        const engine = step.storageEngine || "localStorage";
+        const op = step.storageOperation || "set";
+        const key = step.storageKey || "auth_token";
+        const targetStorage =
+          engine === "sessionStorage"
+            ? runtimeState.sessionStorage
+            : runtimeState.localStorage;
+        const prevVal = targetStorage[key];
+        let nextVal: string | undefined = prevVal;
+
+        if (op === "clear") {
+          if (engine === "sessionStorage") runtimeState.sessionStorage = {};
+          else runtimeState.localStorage = {};
+          nextVal = undefined;
+        } else if (op === "remove") {
+          delete targetStorage[key];
+          nextVal = undefined;
+        } else if (op === "toggle") {
+          const isTrue = prevVal === "true";
+          nextVal = (!isTrue).toString();
+          targetStorage[key] = nextVal;
+        } else if (op === "append") {
+          const resolved = resolveSourceValue(step.storageValueSource);
+          let list: (JSONValue | undefined)[] = [];
+          try {
+            const parsed = JSON.parse(prevVal || "[]");
+            if (Array.isArray(parsed)) {
+              list = parsed;
+            } else if (prevVal !== undefined) {
+              list = [prevVal];
+            }
+          } catch {
+            list = prevVal !== undefined ? [prevVal] : [];
+          }
+          if (resolved !== undefined) {
+            list.push(resolved);
+          }
+          nextVal = JSON.stringify(list);
+          targetStorage[key] = nextVal;
+        } else {
+          // "set"
+          const resolved = resolveSourceValue(step.storageValueSource);
+          nextVal =
+            typeof resolved === "object"
+              ? JSON.stringify(resolved)
+              : String(resolved ?? "");
+          targetStorage[key] = nextVal;
+        }
+
+        logs.push({
+          stepIndex: idx + 1,
+          stepId: step.id,
+          type: "browser_storage",
+          name: stepName || `${engine}.${op}(${key})`,
+          status: "success",
+          details: {
+            storage: {
+              engine,
+              operation: op,
+              key,
+              prevValue: prevVal,
+              nextValue: nextVal,
+            },
+          },
+        });
       } else {
         logs.push({
           stepIndex: idx + 1,
@@ -901,6 +974,28 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
                         <div className="flex items-center gap-1.5 p-2 rounded bg-background border text-indigo-400">
                           <Navigation size={12} />
                           <span>Navigated to: {log.details.navigation.targetRoute}</span>
+                        </div>
+                      )}
+
+                      {log.details.storage && (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                            <HardDrive size={11} className="text-emerald-500" />
+                            <span>Browser Storage Operation:</span>
+                          </span>
+                          <div className="p-2 rounded bg-background border text-[10px] flex items-center gap-2">
+                            <span className="text-emerald-500 font-semibold">
+                              {log.details.storage.engine}.{log.details.storage.operation}(&quot;{log.details.storage.key}&quot;)
+                            </span>
+                            {log.details.storage.nextValue !== undefined && (
+                              <>
+                                <span className="text-muted-foreground">=&gt;</span>
+                                <span className="text-cyan-400 font-bold truncate">
+                                  {log.details.storage.nextValue}
+                                </span>
+                              </>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>

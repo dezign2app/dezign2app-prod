@@ -303,6 +303,28 @@ function getRawGraphNodeData(
     };
   }
 
+  if (type === "browser_storage") {
+    const existingStores = existingNodes.filter((n) => n.type === "browser_storage");
+    const count = existingStores.length;
+    const defaultLabel = label || `BrowserStorage${count > 0 ? count + 1 : ""}`;
+    return {
+      ...baseData,
+      label: defaultLabel,
+      storageName: defaultLabel,
+      storageEngine: "localStorage",
+      namespace: "",
+      keys: [
+        {
+          id: crypto.randomUUID(),
+          name: "auth_token",
+          type: "string",
+          defaultValue: "",
+          description: "Authentication / Session Token",
+        },
+      ],
+    };
+  }
+
   if (type === "payments") {
     return {
       ...baseData,

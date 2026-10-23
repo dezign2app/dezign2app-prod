@@ -154,6 +154,7 @@ export type ConfigItemType =
   | "vector_db_ref"
   | "realtimeConnection"
   | "state_store"
+  | "browser_storage"
   | "storage"
   | "storage_ref"
   | "storage_operation_ref"

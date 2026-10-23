@@ -134,5 +134,21 @@ export function createDefaultFrontendStep(
         ],
         ...defaults,
       };
+
+    case "browser_storage":
+      return {
+        id,
+        order,
+        type: "browser_storage",
+        name: "Browser Storage",
+        storageEngine: "localStorage",
+        storageOperation: "set",
+        storageKey: "auth_token",
+        storageValueSource: {
+          kind: "literal",
+          value: "",
+        },
+        ...defaults,
+      };
   }
 }

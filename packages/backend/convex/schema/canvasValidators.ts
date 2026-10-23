@@ -42,6 +42,7 @@ import {
   hookRefDataSchema,
   typesNodeDataSchema,
   stateStoreNodeDataSchema,
+  browserStorageNodeDataSchema,
   identityProviderSchema,
   publishedEventSchema,
   consumedEventSchema,
@@ -1044,6 +1045,50 @@ export const stateStoreConvexDataValidator = v.object({
   height: v.optional(v.number()),
 });
 
+// Browser Storage Node Data Validator
+export const browserStorageKeyConvexValidator = v.object({
+  id: v.string(),
+  name: v.string(),
+  type: v.string(),
+  defaultValue: v.optional(v.any()),
+  description: v.optional(v.string()),
+});
+
+export const browserStorageConvexDataValidator = v.object({
+  label: v.optional(v.string()),
+  storageName: v.optional(v.string()),
+  description: v.optional(v.string()),
+  storageEngine: v.optional(
+    v.union(v.literal("localStorage"), v.literal("sessionStorage")),
+  ),
+  namespace: v.optional(v.string()),
+  keys: v.optional(v.array(browserStorageKeyConvexValidator)),
+  targetWebAppId: v.optional(v.string()),
+  targetPageId: v.optional(v.string()),
+  targetPageIds: v.optional(v.array(v.string())),
+  color: v.optional(v.string()),
+  parentId: v.optional(v.string()),
+  groupId: v.optional(v.string()),
+  group: v.optional(v.string()),
+  badge: v.optional(v.string()),
+  position: v.optional(v.object({ x: v.number(), y: v.number() })),
+  graphPosition: v.optional(v.object({ x: v.number(), y: v.number() })),
+  style: v.optional(
+    v.record(
+      v.string(),
+      v.union(v.string(), v.number(), v.boolean(), v.null()),
+    ),
+  ),
+  width: v.optional(v.number()),
+  height: v.optional(v.number()),
+  aiEditing: v.optional(v.boolean()),
+  envVars: v.optional(v.array(envVarConvexValidator)),
+  systemBadge: v.optional(v.string()),
+  readOnly: v.optional(v.boolean()),
+  isReadOnly: v.optional(v.boolean()),
+  stackOrder: v.optional(v.number()),
+});
+
 // Node Data Validator
 // Using zodToConvex & explicit validators to keep database schemas in sync
 export const backendNodeDataValidator = v.union(
@@ -1084,6 +1129,8 @@ export const backendNodeDataValidator = v.union(
   zodToConvex(typesNodeDataSchema),
   stateStoreConvexDataValidator,
   zodToConvex(stateStoreNodeDataSchema),
+  browserStorageConvexDataValidator,
+  zodToConvex(browserStorageNodeDataSchema),
   // Fallback for partial updates (label is always present on real nodes)
   v.object({
     label: v.string(),
@@ -1132,6 +1179,11 @@ export const backendNodeDataValidator = v.union(
     importedTransformerIds: v.optional(v.array(v.string())),
     packageImports: v.optional(v.array(v.any())),
     customDependencies: v.optional(v.array(nodeDependencyItemConvexValidator)),
+    storageEngine: v.optional(v.string()),
+    storageName: v.optional(v.string()),
+    namespace: v.optional(v.string()),
+    keys: v.optional(v.array(v.any())),
+    targetPageIds: v.optional(v.array(v.string())),
   }),
 );
 
@@ -1161,3 +1213,6 @@ export const backendStorageOperationRefDataValidator = zodToConvex(
 
 export const backendStorageBucketRefDataValidator =
   backendStorageOperationRefDataValidator;
+
+export const backendBrowserStorageDataValidator =
+  browserStorageConvexDataValidator;

@@ -28,6 +28,7 @@ import type {
   CanvasHookNodeData,
   CanvasHookRefNodeData,
   CanvasStateStoreNodeData,
+  CanvasBrowserStorageNodeData,
 } from "./web-app";
 import type {
   CanvasWorkerNodeData,
@@ -88,7 +89,8 @@ export type BackendNodeType =
   | "hook"
   | "hook_ref"
   | "types"
-  | "state_store";
+  | "state_store"
+  | "browser_storage";
 
 /** Core fields present on every canvas node. */
 export interface BaseNodeData {
@@ -309,7 +311,8 @@ export type BackendNodeData = BaseNodeData &
       CanvasHookNodeData &
       CanvasHookRefNodeData &
       CanvasTypesNodeData &
-      CanvasStateStoreNodeData
+      CanvasStateStoreNodeData &
+      CanvasBrowserStorageNodeData
   >;
 
 export type BackendNode = {

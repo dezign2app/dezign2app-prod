@@ -40,6 +40,7 @@ import {
   hookNodeDataSchema,
   hookRefDataSchema,
   stateStoreNodeDataSchema,
+  browserStorageNodeDataSchema,
 } from "./frontend";
 
 export const nodeDataSchemas: Record<string, z.ZodSchema> = {
@@ -87,4 +88,5 @@ export const nodeDataSchemas: Record<string, z.ZodSchema> = {
   hook: hookNodeDataSchema,
   hook_ref: hookRefDataSchema,
   state_store: stateStoreNodeDataSchema,
+  browser_storage: browserStorageNodeDataSchema,
 };

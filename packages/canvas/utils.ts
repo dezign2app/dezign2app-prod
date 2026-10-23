@@ -57,6 +57,7 @@ const ALL_BACKEND_NODE_TYPES = [
   "hook_ref",
   "types",
   "state_store",
+  "browser_storage",
 ] as const;
 
 export function isBackendNode(type: string): type is BackendNodeType {
@@ -368,7 +369,7 @@ export function classifyHandle(
   ) {
     return "store-out";
   }
-  if (nodeType === "state_store") {
+  if (nodeType === "state_store" || nodeType === "browser_storage") {
     return handleDirection === "target" ? "store-in" : "store-out";
   }
 

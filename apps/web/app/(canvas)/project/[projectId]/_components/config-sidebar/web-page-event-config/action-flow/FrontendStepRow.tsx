@@ -14,6 +14,7 @@ import { CustomCodeStep } from "./CustomCodeStep";
 import { ConditionStep } from "./ConditionStep";
 import { NotificationStep } from "./NotificationStep";
 import { ResetFormStep } from "./ResetFormStep";
+import { BrowserStorageStep } from "./BrowserStorageStep";
 
 export interface FrontendStepRowProps {
   step: FrontendActionStepDraft;
@@ -114,6 +115,19 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   stepIndex={index}
                   allNodes={allNodes}
                   webPageNodeId={webPageNodeId}
+                  onChange={onChange}
+                />
+              )}
+
+              {step.type === "browser_storage" && (
+                <BrowserStorageStep
+                  draft={step}
+                  allSteps={allSteps}
+                  stepIndex={index}
+                  allNodes={allNodes}
+                  endpoints={endpoints}
+                  webPageNodeId={webPageNodeId}
+                  actionId={actionId}
                   onChange={onChange}
                 />
               )}
