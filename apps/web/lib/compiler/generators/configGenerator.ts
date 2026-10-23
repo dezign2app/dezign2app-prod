@@ -103,7 +103,7 @@ export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
 /**
  * Broadcasts an event and data payload to all connected SSE clients.
  */
-export function sseBroadcast(eventName: string, data: JsonValue): void {
+export function sseBroadcast(eventName: string, data: Record<string, JsonValue | undefined>): void {
   logger.info(\`Broadcasting SSE event: "\${eventName}" to \${sseClients.size} client(s)\`);
   const payloadStr = typeof data === "string" ? data : JSON.stringify(data);
   for (const client of sseClients) {
@@ -242,7 +242,7 @@ export function getWebSocketServer(): WebSocketServer | null {
 /**
  * Broadcasts an event to WebSocket clients. If room is provided, only broadcasts to clients in that room.
  */
-export function wsBroadcast(eventName: string, data: JsonValue, room?: string): void {
+export function wsBroadcast(eventName: string, data: Record<string, JsonValue | undefined>, room?: string): void {
   logger.info(\`Broadcasting WebSocket event: "\${eventName}"\${room ? \` to room "\${room}"\` : ""}\`, data);
   const payloadStr = JSON.stringify({
     event: eventName,
@@ -267,7 +267,7 @@ export function wsBroadcast(eventName: string, data: JsonValue, room?: string): 
  * Broadcasts an event via WebRTC Data Channels / signaling relay.
  * If room is provided, only broadcasts to clients in that room.
  */
-export function webrtcBroadcast(eventName: string, data: JsonValue, room?: string): void {
+export function webrtcBroadcast(eventName: string, data: Record<string, JsonValue | undefined>, room?: string): void {
   logger.info(\`Broadcasting WebRTC event: "\${eventName}"\${room ? \` to room "\${room}"\` : ""}\`, data);
   const payloadStr = JSON.stringify({
     type: "webrtc-data",
@@ -360,6 +360,15 @@ export function resolveServiceRealtimeCapabilities(
       if (s.enabled !== false && s.type === "push_to_client") {
         const proto = String(s.clientDeliveryProtocol || "SSE").toUpperCase();
         protocols.add(proto);
+      }
+      // langgraph_invoke with websocket streaming also requires WS infrastructure
+      if (
+        s.enabled !== false &&
+        s.type === "langgraph_invoke" &&
+        s.langGraphStreamingEnabled &&
+        s.langGraphStreamingProtocol === "websocket"
+      ) {
+        protocols.add("WEBSOCKET");
       }
       if (s.thenSteps) checkSteps(s.thenSteps);
       if (s.elseSteps) checkSteps(s.elseSteps);
