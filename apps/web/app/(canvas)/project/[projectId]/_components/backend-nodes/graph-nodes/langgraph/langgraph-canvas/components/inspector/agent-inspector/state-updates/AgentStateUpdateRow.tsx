@@ -363,13 +363,13 @@ export function AgentStateUpdateRow({
 
   return (
     <div className="flex flex-col gap-2.5 p-3 rounded-xl border bg-background/60 text-xs shadow-xs transition-all hover:border-border/80">
-      {/* ─── Top Row: 1. State Channel | 2. Reducer Action | Valueless Pill | Delete ─── */}
-      <div className="flex items-center justify-between gap-2 min-w-0">
-        <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap sm:flex-nowrap">
+      {/* ─── Top Step Mapping Row (Similar to ReturnResponseStepRow) ─── */}
+      <div className="flex items-center justify-between gap-1.5 min-w-0">
+        <div className="flex items-center gap-1.5 flex-1 min-w-0 flex-wrap sm:flex-nowrap">
           {/* 1. Target Channel */}
-          <div className="w-[180px] shrink-0">
+          <div className="w-[170px] shrink-0">
             <Select value={su.channelKey} onValueChange={handleChannelSelect}>
-              <SelectTrigger className="h-8 text-xs bg-background font-mono truncate">
+              <SelectTrigger className="h-7 text-xs bg-background font-mono truncate">
                 <SelectValue placeholder="Select channel..." />
               </SelectTrigger>
               <SelectContent>
@@ -394,7 +394,7 @@ export function AgentStateUpdateRow({
           </div>
 
           {/* 2. Reducer Action Dropdown */}
-          <div className="w-[170px] shrink-0">
+          <div className="w-[150px] shrink-0">
             <Select
               value={
                 su.action && su.action !== "custom" && availableActions.some((a) => a.action === su.action)
@@ -403,7 +403,7 @@ export function AgentStateUpdateRow({
               }
               onValueChange={handleActionSelect}
             >
-              <SelectTrigger className="h-8 text-xs bg-background font-mono truncate border-border/80">
+              <SelectTrigger className="h-7 text-xs bg-background font-mono truncate border-border/80">
                 <SelectValue placeholder="Action..." />
               </SelectTrigger>
               <SelectContent>
@@ -426,11 +426,122 @@ export function AgentStateUpdateRow({
             </Select>
           </div>
 
-          {/* Valueless indicator badge */}
-          {isValueless && (
+          {/* Arrow: ← */}
+          <span className="text-[11px] text-muted-foreground/50 font-mono px-0.5 select-none shrink-0">
+            ←
+          </span>
+
+          {/* Source Step Mapping (or Valueless indicator) */}
+          {isValueless ? (
             <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-secondary/50 border border-border text-muted-foreground text-[11px] font-mono">
               <Info className="w-3 h-3 text-muted-foreground/70" />
               <span>No value required ({su.action || "action"})</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 flex-1 min-w-[260px]">
+              {/* Source Step Selector */}
+              <div className="w-[160px] shrink-0">
+                <Select
+                  value={activeStepObj?.id || "response"}
+                  onValueChange={(val: string) => {
+                    onChangeRefStep(val);
+                    const step = availableReferenceSteps.find((s) => s.id === val);
+                    if (step && step.fields.length > 0) {
+                      const firstField = step.fields[0]?.path || "";
+                      onChangeRefField(firstField);
+                      if (!isRowJsonMode) {
+                        handleRawValueChange(firstField);
+                      }
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-7 text-xs font-mono bg-background border-border truncate">
+                    <SelectValue placeholder="Source Step..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectLabel className="text-[10px] font-sans text-muted-foreground">
+                        Agent Output
+                      </SelectLabel>
+                      {availableReferenceSteps
+                        .filter((st) => st.id === "response")
+                        .map((st) => (
+                          <SelectItem key={st.id} value={st.id} className="text-xs font-mono">
+                            {st.label}
+                          </SelectItem>
+                        ))}
+                    </SelectGroup>
+
+                    {availableReferenceSteps.some((st) => st.id !== "response" && st.id !== "state") && (
+                      <SelectGroup>
+                        <SelectLabel className="text-[10px] font-sans text-muted-foreground">
+                          Prior Pipeline Steps
+                        </SelectLabel>
+                        {availableReferenceSteps
+                          .filter((st) => st.id !== "response" && st.id !== "state")
+                          .map((st) => (
+                            <SelectItem key={st.id} value={st.id} className="text-xs font-mono">
+                              {st.label}
+                            </SelectItem>
+                          ))}
+                      </SelectGroup>
+                    )}
+
+                    {availableReferenceSteps.some((st) => st.id === "state") && (
+                      <SelectGroup>
+                        <SelectLabel className="text-[10px] font-sans text-muted-foreground">
+                          Graph State
+                        </SelectLabel>
+                        {availableReferenceSteps
+                          .filter((st) => st.id === "state")
+                          .map((st) => (
+                            <SelectItem key={st.id} value={st.id} className="text-xs font-mono">
+                              {st.label}
+                            </SelectItem>
+                          ))}
+                      </SelectGroup>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <span className="text-muted-foreground/50 text-[10px] select-none shrink-0 font-mono">➔</span>
+
+              {/* Field Selector */}
+              <div className="flex-1 min-w-[140px]">
+                <Select
+                  value={activeFieldPath}
+                  onValueChange={(val: string) => {
+                    onChangeRefField(val);
+                    if (!isRowJsonMode) {
+                      handleRawValueChange(val);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-7 text-xs font-mono bg-background border-border truncate">
+                    <SelectValue placeholder="Field / Path..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectLabel className="text-[10px] font-sans text-muted-foreground">
+                        Fields in {activeStepObj?.label || "Step"}
+                      </SelectLabel>
+                      {activeStepObj?.fields.map((f) => (
+                        <SelectItem key={f.path} value={f.path} className="text-xs font-mono">
+                          <div className="flex items-center justify-between w-full gap-2">
+                            <span className="font-semibold text-foreground truncate">{f.label}</span>
+                            {f.type && (
+                              <span className="text-[9px] text-muted-foreground/60 px-1 py-0.2 rounded bg-muted/40 font-sans shrink-0">
+                                {f.type}
+                              </span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           )}
         </div>
@@ -475,56 +586,8 @@ export function AgentStateUpdateRow({
             </div>
           </div>
 
-          {/* Cascading Reference Insertion Toolbar */}
+          {/* Action Helpers Toolbar */}
           <div className="flex items-center gap-1.5 flex-wrap p-1.5 rounded-lg bg-secondary/30 border border-border/60 text-xs">
-            <span className="text-[9px] font-bold font-mono text-muted-foreground uppercase tracking-wider px-1">
-              Insert Reference:
-            </span>
-
-            {/* Cascading 1: Step Selector */}
-            <Select
-              value={activeStepObj?.id || "response"}
-              onValueChange={(val: string) => {
-                onChangeRefStep(val);
-                const step = availableReferenceSteps.find((s) => s.id === val);
-                if (step && step.fields.length > 0) {
-                  onChangeRefField(step.fields[0]?.path || "");
-                }
-              }}
-            >
-              <SelectTrigger className="h-6 text-[11px] font-mono bg-background border-border max-w-[170px] truncate">
-                <SelectValue placeholder="Step..." />
-              </SelectTrigger>
-              <SelectContent>
-                {availableReferenceSteps.map((st) => (
-                  <SelectItem key={st.id} value={st.id} className="text-xs font-mono">
-                    {st.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <span className="text-muted-foreground/50 text-[10px]">➔</span>
-
-            {/* Cascading 2: Field Selector */}
-            <Select
-              value={activeFieldPath}
-              onValueChange={(val: string) => onChangeRefField(val)}
-            >
-              <SelectTrigger className="h-6 text-[11px] font-mono bg-background border-border max-w-[200px] truncate">
-                <SelectValue placeholder="Field..." />
-              </SelectTrigger>
-              <SelectContent>
-                {activeStepObj?.fields.map((f) => (
-                  <SelectItem key={f.path} value={f.path} className="text-xs font-mono">
-                    <span className="font-semibold text-foreground">{f.label}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <span className="text-muted-foreground/50 text-[10px]">➔</span>
-
             {/* Insert Button */}
             <Button
               type="button"
