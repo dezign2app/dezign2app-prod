@@ -59,6 +59,12 @@ interface SimulatedStepLog {
       status: number;
       data: JSONValue;
     };
+    transformer?: {
+      functionName: string;
+      inputs: Record<string, JSONValue>;
+      output: Record<string, JSONValue>;
+      outputVariable: string;
+    };
     mutation?: {
       targetStore?: string;
       field: string;
@@ -484,6 +490,45 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
             },
           },
         });
+      } else if (step.type === "transform") {
+        const trNode = allNodes.find(
+          (n) =>
+            n.id === step.transformerNodeId ||
+            n.id === step.transformerRefNodeId ||
+            (n.type === "transformer_ref" &&
+              n.data?.transformerRef === step.transformerNodeId),
+        );
+        const resolvedInputs: Record<string, JSONValue> = {};
+        (step.transformBindings || []).forEach((b) => {
+          resolvedInputs[b.argName] = resolveSourceValue(b.source) ?? "";
+        });
+
+        const mockOutput: Record<string, JSONValue> = {
+          result: `Transformed(${Object.values(resolvedInputs).join(", ") || "data"})`,
+        };
+        (step.functionRef?.returnSchema || trNode?.data?.returnSchema || []).forEach((ret: { name?: string }) => {
+          if (ret.name) {
+            mockOutput[ret.name] = `mock_${ret.name}_val`;
+          }
+        });
+
+        stepResponses[step.id] = mockOutput;
+
+        logs.push({
+          stepIndex: idx + 1,
+          stepId: step.id,
+          type: "transform",
+          name: stepName || step.transformerName || "Transformer",
+          status: "success",
+          details: {
+            transformer: {
+              functionName: step.functionRef?.name || step.transformerName || "transformer",
+              inputs: resolvedInputs,
+              output: mockOutput,
+              outputVariable: step.outputVariable || `${step.transformerName || "transform"}Result`,
+            },
+          },
+        });
       } else {
         logs.push({
           stepIndex: idx + 1,
@@ -806,6 +851,24 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
                           </span>
                           <div className="p-2 rounded bg-background border text-[10px] whitespace-pre-wrap text-emerald-600 dark:text-emerald-400">
                             {JSON.stringify(log.details.response.data, null, 2)}
+                          </div>
+                        </div>
+                      )}
+
+                      {log.details.transformer && (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase">
+                            Transformer Execution ({log.details.transformer.functionName}):
+                          </span>
+                          <div className="p-2 rounded bg-background border text-[10px] whitespace-pre-wrap flex flex-col gap-1">
+                            <div>
+                              <span className="text-muted-foreground">Inputs: </span>
+                              {JSON.stringify(log.details.transformer.inputs, null, 2)}
+                            </div>
+                            <div className="text-purple-400">
+                              <span className="text-muted-foreground">Result ({log.details.transformer.outputVariable}): </span>
+                              {JSON.stringify(log.details.transformer.output, null, 2)}
+                            </div>
                           </div>
                         </div>
                       )}

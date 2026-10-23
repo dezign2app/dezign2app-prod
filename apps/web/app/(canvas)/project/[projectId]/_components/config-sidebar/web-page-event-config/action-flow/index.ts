@@ -9,6 +9,7 @@ export { StoragePutStep } from "./StoragePutStep";
 export { StateMutationStep } from "./StateMutationStep";
 export { NavigationStep } from "./NavigationStep";
 export { QueryParamsStep } from "./QueryParamsStep";
+export { TransformerStep } from "./TransformerStep";
 export { CustomCodeStep } from "./CustomCodeStep";
 export { ConditionStep } from "./ConditionStep";
 export { NotificationStep } from "./NotificationStep";

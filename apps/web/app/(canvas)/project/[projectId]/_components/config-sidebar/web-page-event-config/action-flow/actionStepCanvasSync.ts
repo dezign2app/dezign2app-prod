@@ -341,6 +341,112 @@ export function ensureActionStorageConnection({
   return { edgeId: newEdgeId, refNodeId: refNode.id };
 }
 
+export interface EnsureActionTransformerConnectionParams {
+  webPageNodeId: string;
+  actionId: string;
+  transformerNodeId: string;
+  stepOrder: number;
+  previousEdgeId?: string;
+}
+
+export function ensureActionTransformerConnection({
+  webPageNodeId,
+  actionId,
+  transformerNodeId,
+  stepOrder,
+  previousEdgeId,
+}: EnsureActionTransformerConnectionParams): string | undefined {
+  if (!webPageNodeId || !actionId || !transformerNodeId) return undefined;
+
+  const store = useBackendCanvasStore.getState();
+  const sourceHandle = `events-${actionId}`;
+  const targetHandle = "transformer-in";
+
+  // 1. Identify previous edge for this step (if any)
+  const prevEdge =
+    (previousEdgeId ? store.edges.find((e) => e.id === previousEdgeId) : undefined) ||
+    store.edges.find(
+      (e) =>
+        e.source === webPageNodeId &&
+        e.sourceHandle === sourceHandle &&
+        (e.data?.sequenceOrder === stepOrder ||
+          e.data?.label === String(stepOrder)),
+    );
+
+  // 2. Find existing edge already targeting this transformer
+  const existingTargetEdge = store.edges.find(
+    (e) =>
+      e.source === webPageNodeId &&
+      e.target === transformerNodeId &&
+      e.sourceHandle === sourceHandle,
+  );
+
+  if (prevEdge) {
+    if (existingTargetEdge && existingTargetEdge.id !== prevEdge.id) {
+      store.deleteEdge(prevEdge.id);
+      if (
+        existingTargetEdge.data?.sequenceOrder !== stepOrder ||
+        existingTargetEdge.data?.label !== String(stepOrder)
+      ) {
+        store.updateEdge(existingTargetEdge.id, {
+          targetHandle,
+          data: {
+            ...existingTargetEdge.data,
+            sequenceOrder: stepOrder,
+            label: String(stepOrder),
+          },
+        });
+      }
+      return existingTargetEdge.id;
+    }
+
+    store.updateEdge(prevEdge.id, {
+      target: transformerNodeId,
+      targetHandle,
+      data: {
+        ...prevEdge.data,
+        sequenceOrder: stepOrder,
+        label: String(stepOrder),
+      },
+    });
+    return prevEdge.id;
+  }
+
+  if (existingTargetEdge) {
+    if (
+      existingTargetEdge.data?.sequenceOrder !== stepOrder ||
+      existingTargetEdge.data?.label !== String(stepOrder)
+    ) {
+      store.updateEdge(existingTargetEdge.id, {
+        targetHandle,
+        data: {
+          ...existingTargetEdge.data,
+          sequenceOrder: stepOrder,
+          label: String(stepOrder),
+        },
+      });
+    }
+    return existingTargetEdge.id;
+  }
+
+  // Draw new edge automatically on canvas
+  const newEdgeId = `edge-action-${actionId}-${transformerNodeId}-${Date.now()}`;
+  store.addEdge({
+    id: newEdgeId,
+    source: webPageNodeId,
+    target: transformerNodeId,
+    sourceHandle,
+    targetHandle,
+    type: "connection",
+    data: {
+      sequenceOrder: stepOrder,
+      label: String(stepOrder),
+    },
+  });
+
+  return newEdgeId;
+}
+
 export function cleanupActionStepEdge(edgeId: string): void {
   if (!edgeId) return;
   const store = useBackendCanvasStore.getState();

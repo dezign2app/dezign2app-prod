@@ -20,9 +20,11 @@ import { createDefaultFrontendStep } from "./frontendStepFactory";
 import {
   ensureActionServiceConnection,
   ensureActionStorageConnection,
+  ensureActionTransformerConnection,
   cleanupActionStepEdge,
   reorderActionStepEdges,
 } from "./actionStepCanvasSync";
+import { toVarName } from "@/lib/compiler/utils";
 
 export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
   item,
@@ -125,6 +127,62 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
           storageNodeId: storageNode?.id,
           storageRefNodeId: res?.refNodeId,
           edgeId: res?.edgeId,
+        };
+      }
+    }
+
+    // Auto-draw canvas edge if adding a transform step and a transformer node is available
+    if (type === "transform") {
+      const transformerNodes = allNodes.filter(
+        (n) => n.type === "transformer" || n.type === "transformer_ref",
+      );
+      const firstTransformer = transformerNodes[0];
+      if (firstTransformer && webPageNodeId && actionId) {
+        const trNodeId =
+          firstTransformer.type === "transformer_ref"
+            ? firstTransformer.data?.transformerRef || firstTransformer.id
+            : firstTransformer.id;
+        const edgeId = ensureActionTransformerConnection({
+          webPageNodeId,
+          actionId,
+          transformerNodeId: firstTransformer.id,
+          stepOrder: newOrder,
+        });
+        const trName =
+          firstTransformer.data?.label ||
+          firstTransformer.data?.functionName ||
+          "transformer";
+        const cleanFn = toVarName(trName);
+        const defaultVar = `${cleanFn}Result`;
+        const isGlobal =
+          firstTransformer.data?.scope === "global" ||
+          firstTransformer.type === "transformer_ref";
+
+        initialDefaults = {
+          name: defaultVar,
+          outputVariable: defaultVar,
+          transformerNodeId: trNodeId,
+          transformerRefNodeId:
+            firstTransformer.type === "transformer_ref"
+              ? firstTransformer.id
+              : undefined,
+          transformerName: trName,
+          edgeId,
+          functionRef: {
+            name: cleanFn,
+            importPath: isGlobal
+              ? "@workspace/transformers"
+              : `../transformers/${cleanFn}`,
+            isGlobal,
+            inputSchema: firstTransformer.data?.inputSchema,
+            returnSchema: firstTransformer.data?.returnSchema,
+          },
+          transformBindings: (firstTransformer.data?.inputSchema || []).map(
+            (field: { name: string }) => ({
+              argName: field.name,
+              source: { kind: "literal", value: "" },
+            }),
+          ),
         };
       }
     }

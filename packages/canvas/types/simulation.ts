@@ -306,7 +306,8 @@ export type FrontendActionStepType =
   | "condition"
   | "notification"
   | "reset_form"
-  | "update_query_params";
+  | "update_query_params"
+  | "transform";
 
 export type QueryParamUpdateItem = {
   key: string;
@@ -342,6 +343,11 @@ export type FrontendRequestFieldBinding = {
   id: string;
   slot: BindingSlot;
   targetField: string;
+  source: FrontendFieldSource;
+};
+
+export type FrontendTransformBinding = {
+  argName: string;
   source: FrontendFieldSource;
 };
 
@@ -410,6 +416,25 @@ export type FrontendActionStepDraft = {
   queryParamNavMode?: "replace" | "push";
   queryParamScroll?: boolean;
   queryParamsUpdates?: QueryParamUpdateItem[];
+
+  // --- For type === "transform" ---
+  transformerNodeId?: string;
+  transformerRefNodeId?: string;
+  transformerName?: string;
+  outputVariable?: string;
+  functionRef?: {
+    name: string;
+    importPath: string;
+    signature?: string;
+    isGlobal?: boolean;
+    inputSchema?: Array<{ name: string; type: string; required?: boolean }>;
+    returnSchema?: Array<{ name: string; type: string; required?: boolean }>;
+  };
+  transformBindings?: FrontendTransformBinding[];
+  responseSource?: {
+    stepId: string;
+    fieldPath?: string;
+  };
 };
 
 export type UIEventItem = {
