@@ -236,7 +236,7 @@ export function AgentAttachedComponentsSection({
     );
   }, [attachedMwRefs, mwSearch]);
 
-  // Options for LLM Combobox
+  // Options for LLM Combobox - Only show master LLM config nodes (no llmrefs)
   const llmOptions = useMemo<LLMComboboxOption[]>(() => {
     const list: LLMComboboxOption[] = [
       {
@@ -247,27 +247,36 @@ export function AgentAttachedComponentsSection({
       },
     ];
     availableLLMNodes.forEach((node) => {
-      const isRef = node.type === "langgraph_llm_ref";
-      const modelSubtitle =
-        node.type === "langgraph_llm"
-          ? node.data.model || "custom"
-          : "referenced config";
-      list.push({
-        value: node.id,
-        label: node.data.label || node.id,
-        model: modelSubtitle,
-        isRef,
-      });
+      if (node.type === "langgraph_llm") {
+        list.push({
+          value: node.id,
+          label: node.data.label || node.data.model || node.id,
+          model: node.data.model || "custom",
+          isRef: false,
+        });
+      }
     });
     return list;
   }, [availableLLMNodes]);
 
   const selectedLLMOption = useMemo(() => {
-    return (
-      llmOptions.find((l) => l.value === (connectedLLMId || "none")) ??
-      llmOptions[0]
-    );
-  }, [llmOptions, connectedLLMId]);
+    if (!connectedLLMId || connectedLLMId === "none") {
+      return llmOptions[0];
+    }
+    // Direct match (if connectedLLMId is already a master LLM node id)
+    const directMatch = llmOptions.find((l) => l.value === connectedLLMId);
+    if (directMatch) return directMatch;
+
+    // If connectedLLMId is an LLM Ref node, resolve its referenced master LLM id
+    const connectedNode = nodes.find((n) => n.id === connectedLLMId);
+    if (connectedNode?.type === "langgraph_llm_ref") {
+      const masterId = (connectedNode.data as { llmRef?: string }).llmRef;
+      const refMatch = llmOptions.find((l) => l.value === masterId);
+      if (refMatch) return refMatch;
+    }
+
+    return llmOptions[0];
+  }, [llmOptions, connectedLLMId, nodes]);
 
   // Set of master tool IDs that are already attached to this agent
   const attachedMasterToolIds = useMemo(() => {
