@@ -361,14 +361,17 @@ export function resolveServiceRealtimeCapabilities(
         const proto = String(s.clientDeliveryProtocol || "SSE").toUpperCase();
         protocols.add(proto);
       }
-      // langgraph_invoke with websocket streaming also requires WS infrastructure
+      // langgraph_invoke streaming requires SSE / WS infrastructure
       if (
         s.enabled !== false &&
         s.type === "langgraph_invoke" &&
-        s.langGraphStreamingEnabled &&
-        s.langGraphStreamingProtocol === "websocket"
+        s.langGraphStreamingEnabled
       ) {
-        protocols.add("WEBSOCKET");
+        if (s.langGraphStreamingProtocol === "websocket") {
+          protocols.add("WEBSOCKET");
+        } else if (s.langGraphStreamingProtocol === "sse" || !s.langGraphStreamingProtocol) {
+          protocols.add("SSE");
+        }
       }
       if (s.thenSteps) checkSteps(s.thenSteps);
       if (s.elseSteps) checkSteps(s.elseSteps);

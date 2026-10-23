@@ -16,6 +16,7 @@ import {
 import { checkCheckpointerTablesStatus } from "../../backend-nodes/graph-nodes/langgraph/langgraph-canvas/utils/checkpointerTables";
 import { PipelineStepDraft, StepBinding, StepSource, AvailableSource, LangGraphStreamMode } from "./types";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { ensurePageRefConnection } from "./utils";
 import {
   stepSourceToAccessor,
   accessorToStepSource,
@@ -79,6 +80,188 @@ export const LangGraphInvokeStepSection: React.FC<
   const kafkaBrokerNodes = useMemo(() => {
     return allNodes.filter((n) => n.type === "kafka" || n.type === "eventstream");
   }, [allNodes]);
+
+  // 1b. Target Web Page & Push to Client (PageRef) Node resolution
+  const allWebPages = useMemo(() => {
+    return allNodes.filter((n) => n.type === "webPage");
+  }, [allNodes]);
+
+  // Detect which WebPage node invokes/connects to this endpoint
+  const invokingPage = useMemo(() => {
+    if (!serviceNodeId) return undefined;
+    const epId = endpoint?.id;
+
+    // 1. Direct edge from a webPage to this service/endpoint
+    for (const edge of allEdges) {
+      const isSrcPage = allNodes.some((n) => n.id === edge.source && n.type === "webPage");
+      const isTgtPage = allNodes.some((n) => n.id === edge.target && n.type === "webPage");
+      if (!isSrcPage && !isTgtPage) continue;
+
+      const pageId = isSrcPage ? edge.source : edge.target;
+      const otherId = isSrcPage ? edge.target : edge.source;
+      const otherHandle = isSrcPage ? (edge.targetHandle || "") : (edge.sourceHandle || "");
+
+      if (otherId === serviceNodeId) {
+        if (
+          epId &&
+          (otherHandle.includes(epId) ||
+            otherHandle === `endpoint-in-${epId}` ||
+            otherHandle === `endpoint-out-${epId}` ||
+            otherHandle === `endpoints-in-${epId}` ||
+            otherHandle === `routeEndpoints-in-${epId}`)
+        ) {
+          return allNodes.find((n) => n.id === pageId && n.type === "webPage");
+        }
+      }
+    }
+
+    // 2. Section actionSteps inside webPages targeting this endpoint
+    for (const node of allNodes) {
+      if (node.type !== "webPage") continue;
+      const sections = (node.data?.sections || []) as any[];
+      for (const sec of sections) {
+        const actions = sec.actions || [];
+        for (const act of actions) {
+          const steps = act.actionSteps || [];
+          for (const s of steps) {
+            if (
+              (epId && s.endpointId === epId) ||
+              (s.serviceNodeId === serviceNodeId && (!s.endpointId || s.endpointId === epId))
+            ) {
+              return node;
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Fallback: Any direct edge between webPage and serviceNodeId
+    for (const edge of allEdges) {
+      if (edge.source === serviceNodeId) {
+        const p = allNodes.find((n) => n.id === edge.target && n.type === "webPage");
+        if (p) return p;
+      } else if (edge.target === serviceNodeId) {
+        const p = allNodes.find((n) => n.id === edge.source && n.type === "webPage");
+        if (p) return p;
+      }
+    }
+
+    return undefined;
+  }, [allEdges, allNodes, endpoint, serviceNodeId]);
+
+  // Default target page: the invoking page, or root page, or first webPage
+  const defaultTargetPage = useMemo(() => {
+    return (
+      invokingPage ||
+      allWebPages.find((p) => p.data?.isRoot === true || p.data?.label === "/") ||
+      allWebPages[0]
+    );
+  }, [invokingPage, allWebPages]);
+
+  const selectedTargetPageId =
+    step.clientDeliveryTargetPageId || defaultTargetPage?.id || "";
+
+  // Connected push to client (page_ref) node on canvas
+  const connectedPageRefNode = useMemo(() => {
+    if (!serviceNodeId) return undefined;
+    const epId = endpoint?.id;
+    for (const edge of allEdges) {
+      const isSrc = edge.source === serviceNodeId;
+      const isTgt = edge.target === serviceNodeId;
+      if (!isSrc && !isTgt) continue;
+
+      const otherId = isSrc ? edge.target : edge.source;
+      const handle = isSrc ? (edge.sourceHandle || "") : (edge.targetHandle || "");
+
+      const matchesHandle = epId ? (!handle || handle.includes(epId)) : true;
+      if (matchesHandle) {
+        const candidate = allNodes.find((n) => n.id === otherId && n.type === "page_ref");
+        if (candidate) return candidate;
+      }
+    }
+    if (step.clientDeliveryPageRefNodeId) {
+      const byId = allNodes.find(
+        (n) => n.id === step.clientDeliveryPageRefNodeId && n.type === "page_ref",
+      );
+      if (byId) return byId;
+    }
+    return undefined;
+  }, [allEdges, allNodes, endpoint, serviceNodeId, step.clientDeliveryPageRefNodeId]);
+
+  const ssePageRefNode = connectedPageRefNode;
+
+  const handleConnectPushToClientNode = useCallback(
+    (targetPageIdToConnect?: string) => {
+      if (!serviceNodeId) return;
+      const targetPageId =
+        targetPageIdToConnect || selectedTargetPageId || defaultTargetPage?.id;
+      if (!targetPageId) return;
+
+      const conn = ensurePageRefConnection({
+        targetPageId,
+        pageRefNodeId: step.clientDeliveryPageRefNodeId,
+        serviceNodeId,
+        endpointId: endpoint?.id,
+        stepId: step.id,
+      });
+
+      if (conn?.pageRefNodeId) {
+        onChange({
+          ...step,
+          clientDeliveryTargetPageId: conn.targetPageId || targetPageId,
+          clientDeliveryPageRefNodeId: conn.pageRefNodeId,
+        });
+      }
+    },
+    [
+      serviceNodeId,
+      selectedTargetPageId,
+      defaultTargetPage,
+      step,
+      endpoint,
+      onChange,
+    ],
+  );
+
+  // Auto-connect push to client (page_ref) node when streaming is enabled
+  useEffect(() => {
+    if (!step.langGraphStreamingEnabled || !serviceNodeId) return;
+    const proto = step.langGraphStreamingProtocol || "sse";
+    if (proto === "sse" || proto === "websocket") {
+      const targetPageId = step.clientDeliveryTargetPageId || defaultTargetPage?.id;
+      if (targetPageId && (!step.clientDeliveryPageRefNodeId || !connectedPageRefNode)) {
+        const conn = ensurePageRefConnection({
+          targetPageId,
+          pageRefNodeId: step.clientDeliveryPageRefNodeId,
+          serviceNodeId,
+          endpointId: endpoint?.id,
+          stepId: step.id,
+        });
+        if (
+          conn?.pageRefNodeId &&
+          (conn.pageRefNodeId !== step.clientDeliveryPageRefNodeId ||
+            conn.targetPageId !== step.clientDeliveryTargetPageId)
+        ) {
+          onChange({
+            ...step,
+            clientDeliveryTargetPageId: conn.targetPageId || targetPageId,
+            clientDeliveryPageRefNodeId: conn.pageRefNodeId,
+          });
+        }
+      }
+    }
+  }, [
+    step.langGraphStreamingEnabled,
+    step.langGraphStreamingProtocol,
+    step.clientDeliveryTargetPageId,
+    step.clientDeliveryPageRefNodeId,
+    connectedPageRefNode,
+    defaultTargetPage,
+    serviceNodeId,
+    endpoint,
+    step,
+    onChange,
+  ]);
 
   const selectedKafkaBrokerNode = useMemo(() => {
     if (step.langGraphStreamingKafkaNodeId) {
@@ -1247,11 +1430,32 @@ export const LangGraphInvokeStepSection: React.FC<
   };
 
   const handleToggleStreaming = (enabled: boolean) => {
-    onChange({
+    let nextStep: PipelineStepDraft = {
       ...step,
       langGraphStreamingEnabled: enabled,
       langGraphStreamingProtocol: enabled ? streamingProtocol : undefined,
-    });
+    };
+    const proto = nextStep.langGraphStreamingProtocol || streamingProtocol || "sse";
+    if (enabled && serviceNodeId && (proto === "sse" || proto === "websocket")) {
+      const targetPageId = nextStep.clientDeliveryTargetPageId || defaultTargetPage?.id;
+      if (targetPageId) {
+        const conn = ensurePageRefConnection({
+          targetPageId,
+          pageRefNodeId: nextStep.clientDeliveryPageRefNodeId,
+          serviceNodeId,
+          endpointId: endpoint?.id,
+          stepId: step.id,
+        });
+        if (conn?.pageRefNodeId) {
+          nextStep = {
+            ...nextStep,
+            clientDeliveryTargetPageId: conn.targetPageId || targetPageId,
+            clientDeliveryPageRefNodeId: conn.pageRefNodeId,
+          };
+        }
+      }
+    }
+    onChange(nextStep);
   };
 
   const handleToggleStreamingField = (channelKey: string) => {
@@ -1428,6 +1632,13 @@ export const LangGraphInvokeStepSection: React.FC<
         }
         includeReasoning={step.langGraphStreamIncludeReasoning !== false}
         includeSubgraphs={Boolean(step.langGraphStreamSubgraphs)}
+        ssePageRefNode={ssePageRefNode}
+        allWebPages={allWebPages}
+        invokingPage={invokingPage}
+        selectedTargetPageId={selectedTargetPageId}
+        connectedPageRefNode={connectedPageRefNode}
+        onTargetPageChange={(newPageId) => handleConnectPushToClientNode(newPageId)}
+        onConnectPushToClient={() => handleConnectPushToClientNode()}
         onToggleStreaming={handleToggleStreaming}
         onProtocolChange={(proto) =>
           onChange({

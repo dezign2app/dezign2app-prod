@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Brain, Database, Flame, Key, Layers, Radio, Sparkles, Trash2 } from "lucide-react";
+import { Brain, Compass, Database, Flame, Key, Layers, Plus, Radio, Sparkles, Trash2 } from "lucide-react";
 import { BackendNode } from "@workspace/canvas/types";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
@@ -29,6 +29,20 @@ export interface StreamingAndOutputSectionProps {
   streamingFields: string[];
   outputFields: string[];
   stateChannels: Array<{ key: string; type: string }>;
+  /** Auto-detected page_ref node connected via a canvas edge (for SSE). Read-only — user draws the edge. */
+  ssePageRefNode?: BackendNode;
+  /** All available WebPage nodes on canvas */
+  allWebPages?: BackendNode[];
+  /** The WebPage node that invoked/connected to this endpoint (default stream target) */
+  invokingPage?: BackendNode;
+  /** Currently selected target WebPage ID */
+  selectedTargetPageId?: string;
+  /** Connected PageRef (push-to-client) node on canvas */
+  connectedPageRefNode?: BackendNode;
+  /** Callback when target page is changed in dropdown */
+  onTargetPageChange?: (pageId: string) => void;
+  /** Callback to connect or re-connect push-to-client node to this endpoint */
+  onConnectPushToClient?: () => void;
   kafkaBrokerNodes: BackendNode[];
   selectedKafkaBrokerNode: BackendNode | undefined;
   availableKafkaTopics: string[];
@@ -76,6 +90,13 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
   streamingFields,
   outputFields,
   stateChannels,
+  ssePageRefNode,
+  allWebPages = [],
+  invokingPage,
+  selectedTargetPageId,
+  connectedPageRefNode,
+  onTargetPageChange,
+  onConnectPushToClient,
   kafkaBrokerNodes,
   selectedKafkaBrokerNode,
   availableKafkaTopics,
@@ -303,6 +324,7 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
               </Button>
             </div>
           </div>
+
 
           {/* WebSocket Config */}
           {streamingProtocol === "websocket" && (
@@ -635,6 +657,110 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
               })}
             </div>
           </div>
+
+          {/* Stream Target Page (Page Ref / Push to Client) — only for client protocols (SSE & WebSocket) */}
+          {(streamingProtocol === "sse" || streamingProtocol === "websocket") && (
+            <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-background/50 border border-border/40 mt-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Compass className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                  <span className="text-[11px] font-medium text-foreground">
+                    Stream Target Page (Page Ref)
+                  </span>
+                </div>
+                {connectedPageRefNode ? (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono bg-indigo-500/15 border border-indigo-500/30 text-indigo-300">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Connected Node
+                  </span>
+                ) : (
+                  onConnectPushToClient && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-6 text-[10px] px-2 gap-1 text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/10 hover:text-indigo-300"
+                      onClick={onConnectPushToClient}
+                      title="Connect Push to Client (PageRef) node on canvas"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Connect Push Node
+                    </Button>
+                  )
+                )}
+              </div>
+
+              <p className="text-[9.5px] text-muted-foreground leading-tight">
+                {invokingPage
+                  ? `Defaulting to the invoking page (${invokingPage.data?.label || invokingPage.id}) connected to this endpoint.`
+                  : "Select which web page receives this stream. A Push to Client (page_ref) node connects to this endpoint."}
+              </p>
+
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <Select
+                    value={selectedTargetPageId || "__none__"}
+                    onValueChange={(val) => {
+                      if (val !== "__none__" && onTargetPageChange) {
+                        onTargetPageChange(val);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-7 text-xs bg-background/80 border-border/70">
+                      <SelectValue placeholder="Select target web page…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {!allWebPages || allWebPages.length === 0 ? (
+                        <SelectItem value="__none__" disabled className="text-xs">
+                          No WebPage nodes on canvas
+                        </SelectItem>
+                      ) : (
+                        allWebPages.map((page) => {
+                          const isInvoking = invokingPage?.id === page.id;
+                          const label = page.data?.label || page.id;
+                          return (
+                            <SelectItem key={page.id} value={page.id} className="text-xs">
+                              <span className="font-mono">{label}</span>
+                              {isInvoking && (
+                                <span className="ml-1.5 text-[9px] text-indigo-400 font-sans">
+                                  (invoking page)
+                                </span>
+                              )}
+                            </SelectItem>
+                          );
+                        })
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {connectedPageRefNode && onConnectPushToClient && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-[10px] text-muted-foreground hover:text-foreground shrink-0"
+                    onClick={onConnectPushToClient}
+                    title="Re-sync edge and PageRef node"
+                  >
+                    Re-sync
+                  </Button>
+                )}
+              </div>
+
+              {connectedPageRefNode && (
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded text-[9.5px] text-indigo-300">
+                  <span className="font-semibold">Push to Client:</span>
+                  <span className="font-mono font-bold truncate">
+                    {connectedPageRefNode.data?.label || connectedPageRefNode.id}
+                  </span>
+                  <span className="text-muted-foreground ml-auto shrink-0 font-mono text-[9px]">
+                    endpoint-out → page-ref-in
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center gap-1.5 p-2 bg-purple-500/10 border border-purple-500/20 rounded-lg text-purple-200 text-[10px] mt-1">
             <Flame className="w-3.5 h-3.5 text-purple-400 shrink-0" />

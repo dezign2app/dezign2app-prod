@@ -240,12 +240,20 @@ export function resolvePagesInfo(
     ) => {
       if (!steps) return;
       for (const step of steps) {
+        const isLangGraphStreaming =
+          step.type === "langgraph_invoke" &&
+          step.langGraphStreamingEnabled &&
+          step.clientDeliveryTargetPageId === node.id;
+
         if (
-          step.type === "push_to_client" &&
-          step.clientDeliveryTargetPageId === node.id
+          (step.type === "push_to_client" &&
+            step.clientDeliveryTargetPageId === node.id) ||
+          isLangGraphStreaming
         ) {
           const srcNode = allNodes.find((n) => n.id === srcNodeId);
-          const stepProtocol = step.clientDeliveryProtocol;
+          const stepProtocol = isLangGraphStreaming
+            ? (step.langGraphStreamingProtocol === "websocket" ? "WEBSOCKET" : "SSE")
+            : step.clientDeliveryProtocol;
           const deliveryProto: RealtimeProtocol =
             stepProtocol === "WEBSOCKET"
               ? "WEBSOCKET"
@@ -263,8 +271,8 @@ export function resolvePagesInfo(
           derivedConnections.push({
             id: step.id,
             protocol: deliveryProto,
-            eventName: step.clientDeliveryEventName || sourceItemName || "message",
-            room: step.clientDeliveryRoom,
+            eventName: step.clientDeliveryEventName || sourceItemName || "agent_stream",
+            room: step.clientDeliveryRoom || step.langGraphStreamingRoom,
             mediaMode: isStepRtc
               ? (stepCaps ? computeMediaMode(stepCaps) : (step.clientDeliveryMediaMode || "data"))
               : undefined,
