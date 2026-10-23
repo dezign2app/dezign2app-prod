@@ -1,6 +1,15 @@
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import type { BackendNode, BackendEdge } from "@workspace/canvas";
+import type { BackendNode, BackendEdge, RealtimeConnection } from "@workspace/canvas";
 import type { FrontendActionStepDraft } from "./types";
+
+export function getWebPageSourceHandle(webPageNodeId: string, actionId: string): string {
+  const store = useBackendCanvasStore.getState();
+  const wpNode = store.nodes.find((n) => n.id === webPageNodeId);
+  const isRealtime =
+    actionId.startsWith("rtc-") ||
+    Boolean(wpNode?.data?.realtimeConnections?.some((c: RealtimeConnection) => c.id === actionId));
+  return isRealtime ? `rtc-out-${actionId}` : `events-${actionId}`;
+}
 
 export interface EnsureActionServiceConnectionParams {
   webPageNodeId: string;
@@ -22,7 +31,7 @@ export function ensureActionServiceConnection({
   if (!webPageNodeId || !actionId || !serviceNodeId || !endpointId) return undefined;
 
   const store = useBackendCanvasStore.getState();
-  const sourceHandle = `events-${actionId}`;
+  const sourceHandle = getWebPageSourceHandle(webPageNodeId, actionId);
   const targetHandle = `endpoint-in-${endpointId}`;
 
   // 1. Identify previous edge for this step (if any)
@@ -158,7 +167,7 @@ export function ensureActionStorageConnection({
 
   const store = useBackendCanvasStore.getState();
   const allNodes = store.nodes;
-  const sourceHandle = `events-${actionId}`;
+  const sourceHandle = getWebPageSourceHandle(webPageNodeId, actionId);
 
   // 1. Look for an existing StorageBucketRefNode for this bucket
   let refNode = allNodes.find((n) => {
@@ -359,7 +368,7 @@ export function ensureActionTransformerConnection({
   if (!webPageNodeId || !actionId || !transformerNodeId) return undefined;
 
   const store = useBackendCanvasStore.getState();
-  const sourceHandle = `events-${actionId}`;
+  const sourceHandle = getWebPageSourceHandle(webPageNodeId, actionId);
   const targetHandle = "transformer-in";
 
   // 1. Identify previous edge for this step (if any)
@@ -459,7 +468,7 @@ export function reorderActionStepEdges(
   actionId: string,
 ): void {
   const store = useBackendCanvasStore.getState();
-  const sourceHandle = `events-${actionId}`;
+  const sourceHandle = getWebPageSourceHandle(webPageNodeId, actionId);
 
   steps.forEach((step, idx) => {
     const newOrder = idx + 1;

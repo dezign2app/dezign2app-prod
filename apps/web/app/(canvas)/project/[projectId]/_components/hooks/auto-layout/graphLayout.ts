@@ -795,7 +795,7 @@ export function performGraphLayout({
     });
   });
 
-  // 6.69. Layout hanging StateStore nodes immediately preceding their connected WebPage node
+  // 6.69. Layout StateStore nodes directly on top of the WebApp node in the WebApp column
   layoutHangingStateStoreNodes({
     nodes: graphNodes,
     positionsMap,

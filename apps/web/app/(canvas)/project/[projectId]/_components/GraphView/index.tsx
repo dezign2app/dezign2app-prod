@@ -9,7 +9,7 @@ import {
 } from "@xyflow/react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
-import { useSidebarStore } from "@/lib/stores/sidebarStore";
+import { useSidebarStore, getEffectiveConfigSidebarWidth } from "@/lib/stores/sidebarStore";
 import { nodeTypes } from "../backend-nodes/Nodes";
 import { ForeignKeyEdge } from "../backend-nodes/ForeignKeyEdge";
 import {
@@ -63,6 +63,10 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
   const terminalHeight = useSidebarStore((s) => s.terminalHeight);
   const paletteOpen = useSidebarStore((s) => s.paletteOpen);
   const paletteWidth = useSidebarStore((s) => s.paletteWidth);
+  const configSidebarWidth = useSidebarStore((s) => s.configSidebarWidth);
+  const configSidebarOpen = useSidebarStore((s) => s.configSidebarOpen);
+  const isConfigOpen = Boolean(activeConfigItem) || configSidebarOpen;
+  const effectiveConfigWidth = getEffectiveConfigSidebarWidth(configSidebarWidth);
 
   const [caseNameDialog, setCaseNameDialog] = useState<{
     mode: "create" | "rename";
@@ -505,7 +509,11 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
           position="bottom-right"
           style={{
             bottom: terminalOpen ? `${terminalHeight + 14}px` : "16px",
-            right: aiPanelOpen ? `${aiPanelWidth + 16}px` : "16px",
+            right: isConfigOpen
+              ? `${effectiveConfigWidth + 16}px`
+              : aiPanelOpen
+                ? `${aiPanelWidth + 16}px`
+                : "16px",
             transition: "all 0.2s cubic-bezier(0.16,1,0.3,1)",
           }}
         />

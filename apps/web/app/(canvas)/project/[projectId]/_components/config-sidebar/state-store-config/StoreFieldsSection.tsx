@@ -19,7 +19,20 @@ import {
   Braces,
   Play,
   Zap,
+  Maximize2,
+  Minimize2,
+  Copy,
+  Check,
+  Expand,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@workspace/ui/components/dialog";
 import {
   GlobalStoreField,
   GlobalStoreAction,
@@ -183,6 +196,9 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
 }: StoreVariableCardProps) {
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
   const [showCodeEditor, setShowCodeEditor] = useState<boolean>(true);
+  const [isTallEditor, setIsTallEditor] = useState<boolean>(false);
+  const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
+  const [copied, setCopied] = useState<boolean>(false);
 
   const isArray = Boolean(field.isArray || field.type?.endsWith("[]"));
   const baseType = (field.type || "string").replace(/\[\]$/, "").trim();
@@ -199,6 +215,18 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
   }, [baseType, matchedCustomType]);
 
   const currentCode = field.customReducerCode || recommendedCode;
+
+  const lineCount = useMemo(
+    () => (currentCode ? currentCode.split("\n").length : 0),
+    [currentCode],
+  );
+
+  const handleCopyCode = useCallback(() => {
+    if (!currentCode) return;
+    navigator.clipboard.writeText(currentCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  }, [currentCode]);
 
   // Auto-detect action types from reducer code + type defaults
   const detectedActions = useMemo(() => {
@@ -758,19 +786,288 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
               </div>
 
               {/* Code Editor */}
-              <div className="space-y-1">
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between px-0.5 text-[10px] text-muted-foreground font-mono">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-foreground/85 flex items-center gap-1">
+                      <Code2 size={12} className="text-indigo-400" />
+                      <span>Reducer Implementation</span>
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className="text-[8.5px] px-1.5 py-0 h-4 border-border/60 text-muted-foreground font-mono"
+                    >
+                      {lineCount} lines
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCopyCode}
+                      className="h-5 px-1.5 text-[9px] text-muted-foreground hover:text-foreground cursor-pointer gap-1"
+                      title="Copy reducer code to clipboard"
+                    >
+                      {copied ? (
+                        <>
+                          <Check size={10} className="text-emerald-400" />
+                          <span className="text-emerald-400 font-semibold">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={10} />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </Button>
+                    <div className="h-3 w-px bg-border/50 mx-0.5" />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsTallEditor((prev) => !prev)}
+                      className={cn(
+                        "h-5 px-1.5 text-[9px] cursor-pointer gap-1 transition-colors",
+                        isTallEditor
+                          ? "bg-indigo-500/20 text-indigo-300 font-semibold"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                      title={
+                        isTallEditor
+                          ? "Switch to standard height (340px)"
+                          : "Expand height (520px)"
+                      }
+                    >
+                      {isTallEditor ? <Minimize2 size={10} /> : <Maximize2 size={10} />}
+                      <span>{isTallEditor ? "Compact" : "Expand"}</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsDialogOpen(true)}
+                      className="h-5 px-1.5 text-[9px] text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 cursor-pointer gap-1 font-medium"
+                      title="Open in full modal editor"
+                    >
+                      <Expand size={10} />
+                      <span>Modal</span>
+                    </Button>
+                  </div>
+                </div>
+
                 <LocalTextarea
                   value={currentCode}
                   onChange={(e) => handleCodeChange(e.target.value)}
-                  debounceMs={250}
-                  className="font-mono text-[10px] h-32 bg-background/90 border-border/70 leading-relaxed text-foreground resize-y w-full rounded-md p-2"
+                  debounceMs={200}
+                  className={cn(
+                    "font-mono text-xs bg-zinc-950/90 border-border/80 leading-relaxed text-zinc-100 resize-y w-full rounded-md p-3 focus-visible:ring-indigo-500/40 focus-visible:border-indigo-500/60 transition-all shadow-inner",
+                    isTallEditor ? "min-h-[460px] h-[520px]" : "min-h-[280px] h-[340px]",
+                  )}
                   placeholder="(prev, next) => next"
+                  spellCheck={false}
                 />
-                <div className="text-[9px] font-mono text-muted-foreground/70 flex items-center justify-between">
-                  <span>Signature: <code>(prev, next) =&gt; newState</code></span>
+
+                <div className="text-[9.5px] font-mono text-muted-foreground/75 flex items-center justify-between px-0.5 pt-0.5">
+                  <span className="flex items-center gap-1">
+                    <span className="text-muted-foreground/60">Signature:</span>
+                    <code className="text-indigo-300 font-semibold">(prev, next) =&gt; newState</code>
+                  </span>
                   <span>Dispatch <code>&#123; action, value &#125;</code> or direct values</span>
                 </div>
               </div>
+
+              {/* Fullscreen / Modal Reducer Editor Dialog */}
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogContent className="max-w-4xl w-[94vw] h-[86vh] flex flex-col p-0 gap-0 overflow-hidden font-sans border-border/80 bg-background/95 backdrop-blur-xl shadow-2xl">
+                  <DialogHeader className="p-4 pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between shrink-0">
+                    <div>
+                      <DialogTitle className="text-base font-bold font-mono flex items-center gap-2 text-foreground">
+                        <Code2 className="w-4 h-4 text-indigo-400" />
+                        <span>Reducer Function: {reducerName}</span>
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] font-mono text-indigo-400 border-indigo-500/40 bg-indigo-500/10"
+                        >
+                          {field.type}
+                        </Badge>
+                      </DialogTitle>
+                      <DialogDescription className="text-xs text-muted-foreground mt-0.5 font-mono">
+                        Target State Variable: <span className="text-foreground font-semibold font-mono">{field.name}</span> • Dispatches to {detectedActions.length} actions
+                      </DialogDescription>
+                    </div>
+                  </DialogHeader>
+
+                  <div className="flex-1 p-4 flex flex-col gap-3 min-h-0 bg-background/50 overflow-hidden">
+                    {/* Action Presets in Dialog */}
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-indigo-500/5 border border-indigo-500/20 text-xs shrink-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] text-muted-foreground font-mono flex items-center gap-1">
+                          <Sparkles size={12} className="text-amber-400" />
+                          <span>Presets for {field.type}:</span>
+                        </span>
+                        {baseType === "string" && !isArray && (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleApplyPreset(STRING_REDUCER_PRESETS.standard)}
+                              className="text-[9px] px-2 py-0.5 rounded bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 font-mono transition-colors cursor-pointer border border-indigo-500/30 font-semibold"
+                            >
+                              ⚡ Actions (set/append/prepend/reset)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleApplyPreset(STRING_REDUCER_PRESETS.replace)}
+                              className="text-[9px] px-2 py-0.5 rounded bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300/80 font-mono transition-colors cursor-pointer border border-indigo-500/20"
+                            >
+                              ⚡ Replace Only
+                            </button>
+                          </div>
+                        )}
+                        {baseType === "number" && !isArray && (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleApplyPreset(NUMBER_REDUCER_PRESETS.standard)}
+                              className="text-[9px] px-2 py-0.5 rounded bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 font-mono transition-colors cursor-pointer border border-indigo-500/30 font-semibold"
+                            >
+                              ⚡ Actions (inc/dec/set/reset)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleApplyPreset(NUMBER_REDUCER_PRESETS.sum)}
+                              className="text-[9px] px-2 py-0.5 rounded bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300/80 font-mono transition-colors cursor-pointer border border-indigo-500/20"
+                            >
+                              ⚡ Sum (delta)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleApplyPreset(NUMBER_REDUCER_PRESETS.replace)}
+                              className="text-[9px] px-2 py-0.5 rounded bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300/80 font-mono transition-colors cursor-pointer border border-indigo-500/20"
+                            >
+                              ⚡ Replace Only
+                            </button>
+                          </div>
+                        )}
+                        {baseType === "boolean" && !isArray && (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleApplyPreset(BOOLEAN_REDUCER_PRESETS.standard)}
+                              className="text-[9px] px-2 py-0.5 rounded bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 font-mono transition-colors cursor-pointer border border-indigo-500/30 font-semibold"
+                            >
+                              ⚡ Actions (set/toggle/reset)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleApplyPreset(BOOLEAN_REDUCER_PRESETS.replace)}
+                              className="text-[9px] px-2 py-0.5 rounded bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300/80 font-mono transition-colors cursor-pointer border border-indigo-500/20"
+                            >
+                              ⚡ Replace Only
+                            </button>
+                          </div>
+                        )}
+                        {isArray && (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleApplyPreset(ARRAY_REDUCER_PRESETS.standard)}
+                              className="text-[9px] px-2 py-0.5 rounded bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 font-mono transition-colors cursor-pointer border border-indigo-500/30 font-semibold"
+                            >
+                              ⚡ Actions (set/append/pop/remove/reset)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleApplyPreset(ARRAY_REDUCER_PRESETS.appendOnly)}
+                              className="text-[9px] px-2 py-0.5 rounded bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300/80 font-mono transition-colors cursor-pointer border border-indigo-500/20"
+                            >
+                              ⚡ Append Only
+                            </button>
+                          </div>
+                        )}
+                        {!isArray && (baseType === "object" || matchedCustomType) && (
+                          <div className="flex items-center gap-1.5">
+                            {matchedCustomType ? (
+                              <button
+                                type="button"
+                                onClick={() => handleApplyPreset(generateSchemaAwareReducerCode(matchedCustomType))}
+                                className="text-[9px] px-2 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 font-mono transition-colors cursor-pointer border border-cyan-500/40 font-semibold flex items-center gap-1"
+                              >
+                                <Braces size={9} />
+                                <span>⚡ Type-Safe ({matchedCustomType.name})</span>
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => handleApplyPreset(REDUCER_CODE_PRESETS.object)}
+                              className="text-[9px] px-2 py-0.5 rounded bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 font-mono transition-colors cursor-pointer border border-indigo-500/30 font-semibold"
+                            >
+                              ⚡ Generic Merge
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
+                          onClick={handleResetToSuggested}
+                        >
+                          <RotateCcw size={10} className="mr-1 text-indigo-400" />
+                          <span>Reset</span>
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Dialog Textarea */}
+                    <div className="flex-1 min-h-0 flex flex-col">
+                      <LocalTextarea
+                        value={currentCode}
+                        onChange={(e) => handleCodeChange(e.target.value)}
+                        debounceMs={150}
+                        className="flex-1 w-full font-mono text-xs bg-zinc-950 text-zinc-100 p-4 leading-relaxed border-border/80 resize-none rounded-md focus-visible:ring-indigo-500/50 shadow-inner"
+                        placeholder="(prev, next) => next"
+                        spellCheck={false}
+                      />
+                    </div>
+
+                    {/* Dialog Footer Actions Info */}
+                    <div className="flex items-center justify-between text-xs pt-1 border-t border-border/40 font-mono shrink-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-muted-foreground text-[10px]">Detected Actions ({detectedActions.length}):</span>
+                        {detectedActions.map((act) => (
+                          <Badge
+                            key={act}
+                            variant="outline"
+                            className="text-[9.5px] px-1.5 py-0.5 border-indigo-500/30 bg-indigo-500/10 text-indigo-300"
+                          >
+                            {act}
+                          </Badge>
+                        ))}
+                      </div>
+                      <span className="text-[10px] text-muted-foreground">{lineCount} lines</span>
+                    </div>
+                  </div>
+
+                  <DialogFooter className="p-3 border-t border-border/50 bg-muted/20 flex items-center justify-between sm:justify-between shrink-0">
+                    <span className="text-[10px] text-muted-foreground font-mono">
+                      Signature: <code>(prev: {field.type}, next: any) =&gt; {field.type}</code>
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-8 px-4 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer"
+                      onClick={() => setIsDialogOpen(false)}
+                    >
+                      Done
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           )}
         </div>

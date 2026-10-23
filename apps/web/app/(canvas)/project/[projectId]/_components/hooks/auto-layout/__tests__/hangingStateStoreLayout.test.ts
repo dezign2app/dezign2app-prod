@@ -3,7 +3,7 @@ import { performGraphLayout } from "../graphLayout";
 import type { LayoutNode, LayoutEdge, PositionNodeChange } from "../types";
 
 describe("hangingStateStoreLayout - Auto-Layout for Hanging State Store Nodes", () => {
-  it("positions a StateStore node in a dedicated column immediately before the WebPage node it connects to, NOT aligned with WebApp", () => {
+  it("positions a StateStore node on top of the WebApp node in the webapp column", () => {
     const nodes: LayoutNode[] = [
       {
         id: "web-app-1",
@@ -94,16 +94,13 @@ describe("hangingStateStoreLayout - Auto-Layout for Hanging State Store Nodes", 
     // 2. WebPage is on the right
     expect(webPagePos.x).toBeGreaterThan(webAppPos.x);
 
-    // 3. StateStore does NOT align with WebApp node and does not overlap WebApp
-    const webAppRight = webAppPos.x + 330;
-    expect(storePos.x).toBeGreaterThanOrEqual(webAppRight);
-
-    // 4. StateStore sits in its dedicated column immediately before the WebPage node
+    // 3. StateStore sits directly on top of the WebApp node in the same column
+    expect(storePos.y + 140).toBeLessThanOrEqual(webAppPos.y);
+    expect(storePos.x).toBeGreaterThanOrEqual(webAppPos.x);
     expect(storePos.x).toBeLessThan(webPagePos.x);
-    expect(webPagePos.x - (storePos.x + 260)).toBeCloseTo(80, 0);
   });
 
-  it("positions StateStore relative to WebPage when pages are in a Hand-of-Cards stack", () => {
+  it("positions StateStore on top of WebApp when pages are in a Hand-of-Cards stack", () => {
     const nodes: LayoutNode[] = [
       {
         id: "web-app-1",
@@ -195,15 +192,15 @@ describe("hangingStateStoreLayout - Auto-Layout for Hanging State Store Nodes", 
     const storePos = posMap.get("store-conv")!;
     const pageConvPos = posMap.get("page-conv")!;
 
-    // StateStore does not align with WebApp and is strictly to the right of WebApp
-    const webAppRight = webAppPos.x + 330;
-    expect(storePos.x).toBeGreaterThanOrEqual(webAppRight);
+    // StateStore sits directly on top of WebApp in its column
+    expect(storePos.y + 140).toBeLessThanOrEqual(webAppPos.y);
+    expect(storePos.x).toBeGreaterThanOrEqual(webAppPos.x);
 
-    // StateStore is to the left of the page stack
-    expect(storePos.x).toBeLessThan(pageConvPos.x);
+    // WebPages stay to the right of WebApp
+    expect(pageConvPos.x).toBeGreaterThan(webAppPos.x);
   });
 
-  it("handles multiple StateStore nodes connected to the same WebPage without collision", () => {
+  it("handles multiple StateStore nodes stacked vertically on top of WebApp without collision", () => {
     const nodes: LayoutNode[] = [
       {
         id: "web-app-1",
@@ -259,11 +256,13 @@ describe("hangingStateStoreLayout - Auto-Layout for Hanging State Store Nodes", 
     const themeStorePos = posMap.get("store-theme")!;
     const webAppPos = posMap.get("web-app-1")!;
 
-    // Both stores share the same column before the page
+    // Both stores share the webApp column on top of webApp
     expect(userStorePos.x).toBeCloseTo(themeStorePos.x, 0);
+    expect(userStorePos.x).toBeGreaterThanOrEqual(webAppPos.x);
 
-    // Neither aligns with WebApp
-    expect(userStorePos.x).toBeGreaterThan(webAppPos.x);
+    // Both are placed on top of WebApp
+    expect(userStorePos.y + 140).toBeLessThanOrEqual(webAppPos.y);
+    expect(themeStorePos.y + 140).toBeLessThanOrEqual(webAppPos.y);
 
     // They do not vertically overlap
     const userTop = userStorePos.y;
@@ -274,7 +273,7 @@ describe("hangingStateStoreLayout - Auto-Layout for Hanging State Store Nodes", 
     expect(overlaps).toBe(false);
   });
 
-  it("handles unattached StateStore nodes gracefully without colliding with WebApp", () => {
+  it("handles unattached StateStore nodes placed on top of WebApp gracefully", () => {
     const nodes: LayoutNode[] = [
       {
         id: "web-app-1",
@@ -307,9 +306,10 @@ describe("hangingStateStoreLayout - Auto-Layout for Hanging State Store Nodes", 
     });
 
     const posMap = new Map(appliedChanges.map((c) => [c.id, c.position]));
+    const webAppPos = posMap.get("web-app-1")!;
     const storePos = posMap.get("unattached-store")!;
     expect(storePos).toBeDefined();
-    // Does not collapse onto webApp (which is at x >= 60 after margin shift)
-    expect(storePos.x).toBeGreaterThanOrEqual(60);
+    expect(storePos.y + 140).toBeLessThanOrEqual(webAppPos.y);
+    expect(storePos.x).toBeGreaterThanOrEqual(webAppPos.x);
   });
 });

@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { Plus, Settings, Trash, Radio, AlertCircle } from "lucide-react";
+import { Plus, Settings, Trash, Radio, AlertCircle, Play } from "lucide-react";
 import { BackendNode, RealtimeConnection, ClientDeliveryProtocol, PipelineStep, PipelineStepDraft } from "@workspace/canvas/types";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -182,6 +182,8 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
       return {
         ...d,
         storeActionBinding: match?.storeActionBinding || d.storeActionBinding,
+        storeActionBindings: match?.storeActionBindings || d.storeActionBindings,
+        actionSteps: match?.actionSteps || d.actionSteps,
       };
     });
 
@@ -401,6 +403,23 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
                       ⚡{item.storeActionBinding.actionName || item.storeActionBinding.actionType || "store"}()
                     </span>
                   )}
+
+                  {item.actionSteps && item.actionSteps.length > 0 && (
+                    <span
+                      className="text-[7px] font-mono px-1 py-0.2 rounded bg-primary/15 text-primary hover:bg-primary/25 border border-primary/30 font-semibold cursor-pointer max-w-[100px] truncate shrink-0 transition-colors"
+                      title={`${item.actionSteps.length} action step(s):\n${item.actionSteps.map((s, idx) => `${idx + 1}. ${s.name || s.type}`).join("\n")}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveConfigItem({
+                          type: "realtimeConnection",
+                          id: item.id,
+                          nodeId,
+                        });
+                      }}
+                    >
+                      {item.actionSteps.length} {item.actionSteps.length === 1 ? "step" : "steps"}
+                    </span>
+                  )}
                 </div>
 
                 {/* Source handle for wiring realtime messages to downstream State Store */}
@@ -414,6 +433,23 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
                 />
 
               <div className="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-all shrink-0">
+                {Boolean(item.actionSteps?.length) && (
+                  <button
+                    type="button"
+                    className="flex items-center justify-center p-1 rounded hover:bg-green-500/10 text-green-500 transition-all cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveConfigItem({
+                        type: "realtimeConnection",
+                        id: item.id,
+                        nodeId,
+                      });
+                    }}
+                    title={`Simulate real-time action pipeline (${item.actionSteps?.length ?? 0} steps)`}
+                  >
+                    <Play size={10} className="fill-green-600 text-green-600" />
+                  </button>
+                )}
                 <button
                   type="button"
                   className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"

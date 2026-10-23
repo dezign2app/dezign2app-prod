@@ -5,6 +5,7 @@ import {
   KafkaTopic,
   MESSAGING_TYPES,
   FrontendActionStepDraft,
+  RealtimeConnection,
 } from "@workspace/canvas/types";
 import { PageSection, UIEventItem } from "@/types/canvas";
 import { BackendCanvasState } from "./types";
@@ -1032,6 +1033,21 @@ export function cleanupDeletedEdgesState(
           });
         }
 
+        let nextWpRealtime: RealtimeConnection[] | undefined = wpNode.data?.realtimeConnections;
+        if (nextWpRealtime) {
+          nextWpRealtime = nextWpRealtime.map((conn: RealtimeConnection): RealtimeConnection => {
+            if (conn.id === actionId || !actionId) {
+              const currentSteps: FrontendActionStepDraft[] = conn.actionSteps || [];
+              const updatedSteps: FrontendActionStepDraft[] = cleanupSteps(currentSteps);
+              if (updatedSteps.length !== currentSteps.length) {
+                wpChanged = true;
+              }
+              return { ...conn, actionSteps: updatedSteps };
+            }
+            return conn;
+          });
+        }
+
         if (wpChanged) {
           nodesChanged = true;
           const updatedWp = {
@@ -1040,6 +1056,7 @@ export function cleanupDeletedEdgesState(
               ...wpNode.data,
               ...(nextSections ? { sections: nextSections } : {}),
               ...(nextWpEvents ? { events: nextWpEvents } : {}),
+              ...(nextWpRealtime ? { realtimeConnections: nextWpRealtime } : {}),
             },
           };
           nextNodes = nextNodes.map((n) => (n.id === wpNode.id ? updatedWp : n));
