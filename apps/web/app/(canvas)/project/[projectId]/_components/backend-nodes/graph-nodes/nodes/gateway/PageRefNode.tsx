@@ -77,10 +77,15 @@ export const PageRefNode = ({
         const epId = edge.sourceHandle.replace("endpoint-out-", "");
         const ep = store.endpoints.find((e) => e.id === epId);
         if (ep && ep.pipelineSteps) {
-          const hasPushStep = ep.pipelineSteps.some((s) => s.type === "push_to_client");
+          const hasPushStep = ep.pipelineSteps.some(
+            (s) => s.type === "push_to_client" || (s.type === "langgraph_invoke" && s.langGraphStreamingEnabled),
+          );
           if (hasPushStep) {
             const updatedSteps = ep.pipelineSteps.map((s) => {
-              if (s.type === "push_to_client" && (s.clientDeliveryPageRefNodeId === id || !s.clientDeliveryPageRefNodeId)) {
+              if (
+                (s.type === "push_to_client" || (s.type === "langgraph_invoke" && s.langGraphStreamingEnabled)) &&
+                (s.clientDeliveryPageRefNodeId === id || !s.clientDeliveryPageRefNodeId)
+              ) {
                 return {
                   ...s,
                   clientDeliveryTargetPageId: pageId,

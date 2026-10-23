@@ -21,6 +21,20 @@ describe("Realtime WebSocket Server Generation", () => {
     expect(realtimeFile?.content).toContain('room.startsWith("private:")');
     expect(realtimeFile?.content).toContain("Authentication required for private rooms");
 
+    // Strict typing checks: no implicit or explicit any/unknown, typed callbacks
+    expect(realtimeFile?.content).toContain('import { Server as HttpServer, IncomingMessage } from "http";');
+    expect(realtimeFile?.content).toContain('import { WebSocketServer, WebSocket, RawData } from "ws";');
+    expect(realtimeFile?.content).toContain('(ws: WebSocket, req: IncomingMessage)');
+    expect(realtimeFile?.content).toContain('(raw: RawData)');
+    expect(realtimeFile?.content).toContain('(err: Error)');
+    expect(realtimeFile?.content).not.toMatch(/\(ws:\s*WebSocket,\s*req\)\s*=>/);
+    expect(realtimeFile?.content).not.toMatch(/\(raw\)\s*=>/);
+    expect(realtimeFile?.content).not.toMatch(/\(err\)\s*=>/);
+    expect(realtimeFile?.content).not.toMatch(/:\s*any\b/);
+    expect(realtimeFile?.content).not.toMatch(/:\s*unknown\b/);
+    expect(realtimeFile?.content).not.toMatch(/\bas\s+any\b/);
+    expect(realtimeFile?.content).not.toMatch(/\bas\s+unknown\b/);
+
     // Re-exported in index
     expect(indexFile).toBeDefined();
     expect(indexFile?.content).toContain('export * from "./realtime";');

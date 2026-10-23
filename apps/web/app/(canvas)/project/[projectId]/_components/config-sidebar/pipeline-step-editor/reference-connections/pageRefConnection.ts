@@ -77,6 +77,16 @@ export function ensurePageRefConnection({
     }
   }
 
+  // 2b. If not found by edge, look for existing page_ref node targeting resolvedTargetPageId
+  if (!pageRefNode && resolvedTargetPageId) {
+    pageRefNode = allNodes.find(
+      (n) =>
+        n.type === "page_ref" &&
+        (n.data?.targetPageId === resolvedTargetPageId ||
+          n.data?.pageRefId === resolvedTargetPageId),
+    );
+  }
+
   // 3. If no page_ref node exists, create one!
   if (!pageRefNode) {
     const serviceNode = allNodes.find((n) => n.id === serviceNodeId);
@@ -186,9 +196,9 @@ export function cleanupPageRefConnection({
   const allRemainingSteps = flattenAllPipelineSteps(remainingSteps);
   const isStillUsed = allRemainingSteps.some(
     (s) =>
-      s.type === "push_to_client" &&
+      (s.type === "push_to_client" || (s.type === "langgraph_invoke" && s.langGraphStreamingEnabled)) &&
       ((pageRefNodeId && s.clientDeliveryPageRefNodeId === pageRefNodeId) ||
-        (!pageRefNodeId && s.type === "push_to_client")),
+        (!pageRefNodeId && (s.type === "push_to_client" || s.type === "langgraph_invoke"))),
   );
   if (isStillUsed) return;
 

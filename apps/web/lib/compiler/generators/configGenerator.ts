@@ -42,8 +42,8 @@ ${dbExport}${realtimeExport}export function formatResponse<T>(data: T, message =
 `;
 
   const realtimeCode = `import { Request, Response } from "express";
-import { Server as HttpServer } from "http";
-import { WebSocketServer, WebSocket } from "ws";
+import { Server as HttpServer, IncomingMessage } from "http";
+import { WebSocketServer, WebSocket, RawData } from "ws";
 import { createLogger } from "@workspace/logger";
 
 const logger = createLogger("Realtime");
@@ -64,8 +64,8 @@ export function handleSseConnection(req: Request, res: Response): void {
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
-  if (typeof (res as any).flushHeaders === "function") {
-    (res as any).flushHeaders();
+  if (typeof res.flushHeaders === "function") {
+    res.flushHeaders();
   }
 
   if (req.socket) {
@@ -103,7 +103,7 @@ export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
 /**
  * Broadcasts an event and data payload to all connected SSE clients.
  */
-export function sseBroadcast(eventName: string, data: JsonValue): void {
+export function sseBroadcast(eventName: string, data: Record<string, JsonValue | undefined>): void {
   logger.info(\`Broadcasting SSE event: "\${eventName}" to \${sseClients.size} client(s)\`);
   const payloadStr = typeof data === "string" ? data : JSON.stringify(data);
   for (const client of sseClients) {
@@ -147,7 +147,7 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
 
   wssInstance = new WebSocketServer({ server, path: "/ws" });
 
-  wssInstance.on("connection", (ws: WebSocket, req) => {
+  wssInstance.on("connection", (ws: WebSocket, req: IncomingMessage) => {
     const clientId = \`\${Date.now()}-\${Math.random().toString(36).substring(2, 9)}\`;
     const urlObj = new URL(req.url || "/ws", "http://localhost");
     const token = urlObj.searchParams.get("token") || undefined;
@@ -163,9 +163,9 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
 
     ws.send(JSON.stringify({ type: "connected", clientId }));
 
-    ws.on("message", (raw) => {
+    ws.on("message", (raw: RawData) => {
       try {
-        const msg = JSON.parse(raw.toString()) as WebSocketInboundMessage;
+        const msg: WebSocketInboundMessage = JSON.parse(raw.toString());
         const action = msg.action || msg.type;
 
         if (action === "join") {
@@ -224,7 +224,7 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
       logger.info(\`Client disconnected from WebSocket: \${clientId} (remaining: \${wsClients.size})\`);
     });
 
-    ws.on("error", (err) => {
+    ws.on("error", (err: Error) => {
       logger.error(\`WebSocket error on client \${clientId}:\`, err);
     });
   });
@@ -242,7 +242,7 @@ export function getWebSocketServer(): WebSocketServer | null {
 /**
  * Broadcasts an event to WebSocket clients. If room is provided, only broadcasts to clients in that room.
  */
-export function wsBroadcast(eventName: string, data: JsonValue, room?: string): void {
+export function wsBroadcast(eventName: string, data: Record<string, JsonValue | undefined>, room?: string): void {
   logger.info(\`Broadcasting WebSocket event: "\${eventName}"\${room ? \` to room "\${room}"\` : ""}\`, data);
   const payloadStr = JSON.stringify({
     event: eventName,
@@ -267,7 +267,7 @@ export function wsBroadcast(eventName: string, data: JsonValue, room?: string): 
  * Broadcasts an event via WebRTC Data Channels / signaling relay.
  * If room is provided, only broadcasts to clients in that room.
  */
-export function webrtcBroadcast(eventName: string, data: JsonValue, room?: string): void {
+export function webrtcBroadcast(eventName: string, data: Record<string, JsonValue | undefined>, room?: string): void {
   logger.info(\`Broadcasting WebRTC event: "\${eventName}"\${room ? \` to room "\${room}"\` : ""}\`, data);
   const payloadStr = JSON.stringify({
     type: "webrtc-data",
@@ -344,10 +344,10 @@ export function resolveServiceRealtimeCapabilities(
   allNodes: BackendNode[] = [],
   allEdges: BackendEdge[] = [],
 ): ServiceRealtimeCapabilities {
-  const data = (node?.data || {}) as Record<string, any>;
-  const explicitWs = typeof data.enableWebSocket === "boolean" ? data.enableWebSocket : undefined;
-  const explicitSse = typeof data.enableSse === "boolean" ? data.enableSse : undefined;
-  const explicitRealtime = typeof data.enableRealtime === "boolean" ? data.enableRealtime : undefined;
+  const data = node?.data;
+  const explicitWs = typeof data?.enableWebSocket === "boolean" ? data.enableWebSocket : undefined;
+  const explicitSse = typeof data?.enableSse === "boolean" ? data.enableSse : undefined;
+  const explicitRealtime = typeof data?.enableRealtime === "boolean" ? data.enableRealtime : undefined;
 
   let hasSse = explicitSse ?? explicitRealtime ?? false;
   let hasWs = explicitWs ?? explicitRealtime ?? false;
@@ -360,6 +360,15 @@ export function resolveServiceRealtimeCapabilities(
       if (s.enabled !== false && s.type === "push_to_client") {
         const proto = String(s.clientDeliveryProtocol || "SSE").toUpperCase();
         protocols.add(proto);
+      }
+      // langgraph_invoke streaming requires SSE / WS infrastructure
+      if (s.enabled !== false && s.type === "langgraph_invoke") {
+        const streamProto = String(s.langGraphStreamingProtocol || "").toLowerCase();
+        if (streamProto === "websocket" || streamProto === "ws") {
+          protocols.add("WEBSOCKET");
+        } else if (s.langGraphStreamingEnabled && (streamProto === "sse" || !s.langGraphStreamingProtocol)) {
+          protocols.add("SSE");
+        }
       }
       if (s.thenSteps) checkSteps(s.thenSteps);
       if (s.elseSteps) checkSteps(s.elseSteps);
@@ -374,31 +383,46 @@ export function resolveServiceRealtimeCapabilities(
   };
 
   // Inspect endpoints
-  endpoints.forEach((ep) => checkSteps(ep.pipelineSteps as PipelineStep[]));
-  if (Array.isArray(data.endpoints)) {
-    (data.endpoints as Endpoint[]).forEach((ep) => checkSteps(ep.pipelineSteps as PipelineStep[]));
+  endpoints.forEach((ep) => checkSteps(ep.pipelineSteps));
+  if (Array.isArray(data?.endpoints)) {
+    data.endpoints.forEach((ep) => checkSteps(ep.pipelineSteps));
   }
-  if (Array.isArray(data.routeGroups)) {
-    data.routeGroups.forEach((g: any) => {
+  if (Array.isArray(data?.routeGroups)) {
+    data.routeGroups.forEach((g) => {
       if (Array.isArray(g.endpoints)) {
-        g.endpoints.forEach((ep: Endpoint) => checkSteps(ep.pipelineSteps as PipelineStep[]));
+        g.endpoints.forEach((ep) => checkSteps(ep.pipelineSteps));
       }
     });
   }
 
   // Inspect consumed events
-  events.forEach((ev) => checkSteps(ev.pipelineSteps as PipelineStep[]));
-  if (Array.isArray(data.consumedEvents)) {
-    (data.consumedEvents as AnyMessagingResource[]).forEach((ev) => checkSteps(ev.pipelineSteps as PipelineStep[]));
+  events.forEach((ev) => checkSteps(ev.pipelineSteps));
+  if (Array.isArray(data?.consumedEvents)) {
+    data.consumedEvents.forEach((ev) => checkSteps(ev.pipelineSteps));
   }
 
   if (protocols.has("SSE")) hasSse = true;
   if (protocols.has("WEBSOCKET") || protocols.has("WS") || protocols.has("WEBRTC")) hasWs = true;
 
-  // Inspect connected WebPage nodes on canvas
+  // Inspect connected WebPage nodes and page_ref nodes on canvas
   if (node) {
     const serviceNodes = allNodes.filter((n) => n.type === "service");
     const isSingleService = serviceNodes.length === 1;
+
+    // Track webPage IDs directly connected or linked via page_ref nodes to this service
+    const connectedPageIds = new Set<string>();
+    for (const edge of allEdges) {
+      if (edge.source === node.id || edge.target === node.id) {
+        const otherId = edge.source === node.id ? edge.target : edge.source;
+        const otherNode = allNodes.find((n) => n.id === otherId);
+        if (otherNode?.type === "webPage") {
+          connectedPageIds.add(otherNode.id);
+        } else if (otherNode?.type === "page_ref") {
+          if (otherNode.data?.targetPageId) connectedPageIds.add(String(otherNode.data.targetPageId));
+          if (otherNode.data?.pageRefId) connectedPageIds.add(String(otherNode.data.pageRefId));
+        }
+      }
+    }
 
     for (const n of allNodes) {
       if (n.type === "webPage") {
@@ -415,7 +439,8 @@ export function resolveServiceRealtimeCapabilities(
               (e) =>
                 (e.source === node.id && e.target === n.id) ||
                 (e.target === node.id && e.source === n.id),
-            )
+            ) ||
+            connectedPageIds.has(n.id)
           ) {
             targetsThisService = true;
           } else if (isSingleService) {
@@ -489,13 +514,13 @@ export function generateServerFile(
   })[] = [],
 ): CompiledFile {
   const grpcEnabled = node ? isGrpcEnabledForService(node, allNodes, allEdges) : false;
-  const grpcPort = node?.data?.grpcPort || (node?.data as any)?.server?.grpcPort || "50051";
+  const grpcPort = String(node?.data?.grpcPort || node?.data?.server?.grpcPort || "50051");
   const { hasSse, hasWs } = resolveServiceRealtimeCapabilities(node, endpoints, events, allNodes, allEdges);
 
   const parsedRateLimit = parseRateLimit(
     node?.data?.rateLimit ||
-    (node?.data as any)?.server?.rateLimit ||
-    (node?.data as any)?.serverConfig?.rateLimit,
+    node?.data?.server?.rateLimit ||
+    node?.data?.serverConfig?.rateLimit,
   );
   const rateLimitImportLine = parsedRateLimit ? `import rateLimit from "express-rate-limit";\n` : "";
   const corsImportLine = cors ? `import cors from "cors";\n` : "";
@@ -561,7 +586,7 @@ app.get("/sse", handleSseConnection);
 ` : ""}
 
 // --- Initialize Event Consumers ---
-initConsumers().catch((err: unknown) => {
+initConsumers().catch((err: Error) => {
   logger.error("Failed to initialize event consumers:", err);
 });
 `;
@@ -675,7 +700,14 @@ export function generateConfigFiles(
     }
   }
 
-  const { hasWs } = resolveServiceRealtimeCapabilities(node, endpoints, events, allNodes, allEdges);
+  const { hasSse, hasWs } = resolveServiceRealtimeCapabilities(node, endpoints, events, allNodes, allEdges);
+  const hasRealtime = hasSse || hasWs;
+  const hasWsOrRealtime = Boolean(
+    hasWs ||
+    hasRealtime ||
+    node.data?.enableWebSocket ||
+    node.data?.enableRealtime,
+  );
 
   const dbDeps: Record<string, string> = {};
   if (hasDb) {
@@ -700,21 +732,9 @@ export function generateConfigFiles(
           (node.data?.label && e.nodeId === node.data.label.toLowerCase()))),
   );
 
-  function checkStepsForLangGraph(steps: unknown[]) {
-    if (!Array.isArray(steps)) return;
-    for (const s of steps) {
-      const step = s as {
-        type?: string;
-        enabled?: boolean;
-        name?: string;
-        langGraphTargetNodeId?: string;
-        functionRef?: { importPath?: string; isGlobal?: boolean };
-        thenSteps?: unknown[];
-        elseSteps?: unknown[];
-        trySteps?: unknown[];
-        catchSteps?: unknown[];
-        loopBody?: unknown[];
-      };
+  function checkStepsForLangGraph(steps: PipelineStep[] | undefined) {
+    if (!steps || !Array.isArray(steps)) return;
+    for (const step of steps) {
       if (step.enabled === false) continue;
       // Detect global transformer imports → @workspace/transformers dependency
       if (step.type === "transform") {
@@ -810,13 +830,13 @@ export function generateConfigFiles(
     dotenv: "^16.4.5",
     zod: "^3.24.2",
     jose: "^5.9.6",
-    ...(hasWs ? { ws: "^8.18.0" } : {}),
+    ...(hasWsOrRealtime ? { ws: "^8.18.0" } : {}),
   };
 
   const parsedRateLimit = parseRateLimit(
     node.data?.rateLimit ||
-    (node.data as any)?.server?.rateLimit ||
-    (node.data as any)?.serverConfig?.rateLimit,
+    node.data?.server?.rateLimit ||
+    node.data?.serverConfig?.rateLimit,
   );
   if (parsedRateLimit) {
     dependencies["express-rate-limit"] = "^7.5.0";
@@ -832,7 +852,7 @@ export function generateConfigFiles(
     "@types/express": "^4.17.21",
     "@types/cors": "^2.8.17",
     "@types/node": "^20.11.0",
-    ...(hasWs ? { "@types/ws": "^8.5.12" } : {}),
+    ...(hasWsOrRealtime ? { "@types/ws": "^8.5.12" } : {}),
     "ts-node-dev": "^2.0.0",
     typescript: "^5.3.3",
     vitest: "^1.6.0",

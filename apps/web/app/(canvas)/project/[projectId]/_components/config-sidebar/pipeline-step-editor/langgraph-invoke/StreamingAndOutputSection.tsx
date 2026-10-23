@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Brain, Database, Flame, Key, Layers, Radio, Sparkles, Trash2 } from "lucide-react";
+import { Brain, Compass, Database, Flame, Key, Layers, Plus, Radio, Sparkles, Trash2 } from "lucide-react";
 import { BackendNode } from "@workspace/canvas/types";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
@@ -29,6 +29,20 @@ export interface StreamingAndOutputSectionProps {
   streamingFields: string[];
   outputFields: string[];
   stateChannels: Array<{ key: string; type: string }>;
+  /** Auto-detected page_ref node connected via a canvas edge (for SSE). Read-only — user draws the edge. */
+  ssePageRefNode?: BackendNode;
+  /** All available WebPage nodes on canvas */
+  allWebPages?: BackendNode[];
+  /** The WebPage node that invoked/connected to this endpoint (default stream target) */
+  invokingPage?: BackendNode;
+  /** Currently selected target WebPage ID */
+  selectedTargetPageId?: string;
+  /** Connected PageRef (push-to-client) node on canvas */
+  connectedPageRefNode?: BackendNode;
+  /** Callback when target page is changed in dropdown */
+  onTargetPageChange?: (pageId: string) => void;
+  /** Callback to connect or re-connect push-to-client node to this endpoint */
+  onConnectPushToClient?: () => void;
   kafkaBrokerNodes: BackendNode[];
   selectedKafkaBrokerNode: BackendNode | undefined;
   availableKafkaTopics: string[];
@@ -76,6 +90,13 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
   streamingFields,
   outputFields,
   stateChannels,
+  ssePageRefNode,
+  allWebPages = [],
+  invokingPage,
+  selectedTargetPageId,
+  connectedPageRefNode,
+  onTargetPageChange,
+  onConnectPushToClient,
   kafkaBrokerNodes,
   selectedKafkaBrokerNode,
   availableKafkaTopics,
@@ -138,6 +159,117 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
         </div>
       </div>
 
+      {/* LangGraph Invocation Modes — always visible regardless of streaming toggle */}
+      <div className="flex flex-col gap-2 pt-2 border-t border-border/30">
+        <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-background/50 border border-border/40">
+          <div className="flex items-center justify-between">
+            <Label className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3 text-purple-400" />
+              <span>Stream Modes (streamMode)</span>
+            </Label>
+            <span className="text-[9px] text-muted-foreground font-mono">
+              {effectiveStreamModes.length > 1 ? "Multi-Mode" : effectiveStreamModes[0] ?? "messages"}
+            </span>
+          </div>
+
+          <p className="text-[9.5px] text-muted-foreground leading-tight">
+            Controls what data LangGraph emits per chunk. Enable multiple modes to receive LLM tokens and node-progress events simultaneously:
+          </p>
+
+          <div className="grid grid-cols-2 gap-1.5">
+            {[
+              {
+                id: "messages" as const,
+                label: "LLM Tokens",
+                badge: "messages",
+                desc: "Live (token, metadata) tuples from nodes where LLM runs",
+              },
+              {
+                id: "updates" as const,
+                label: "Agent Progress",
+                badge: "updates",
+                desc: "State delta emitted after each node completes",
+              },
+              {
+                id: "values" as const,
+                label: "Full State",
+                badge: "values",
+                desc: "Complete state snapshot after each step",
+              },
+              {
+                id: "custom" as const,
+                label: "Custom Events",
+                badge: "custom",
+                desc: "Arbitrary events via config.writer",
+              },
+            ].map((m) => {
+              const isSelected = effectiveStreamModes.includes(m.id);
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => onToggleStreamMode?.(m.id)}
+                  className={`flex flex-col text-left p-2 rounded-lg border transition-all ${
+                    isSelected
+                      ? "bg-purple-500/15 border-purple-500/50 text-purple-200"
+                      : "bg-background/60 border-border/40 text-muted-foreground hover:bg-secondary/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full gap-1">
+                    <span className="text-[10.5px] font-semibold truncate">{m.label}</span>
+                    <span
+                      className={`shrink-0 text-[8.5px] px-1 rounded font-bold font-mono ${
+                        isSelected ? "bg-purple-500/30 text-purple-300" : "bg-border/40 text-muted-foreground/60"
+                      }`}
+                    >
+                      {isSelected ? "ON" : "OFF"}
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-mono text-purple-400/70 mt-0.5">{m.badge}</span>
+                  <span className="text-[9px] text-muted-foreground/80 mt-0.5 leading-snug">
+                    {m.desc}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Extended Thinking & Reasoning Tokens Toggle */}
+          <div className="flex items-center justify-between pt-1.5 border-t border-border/20">
+            <div className="flex flex-col">
+              <span className="text-[10px] font-medium text-foreground flex items-center gap-1">
+                <Brain className="w-3 h-3 text-pink-400" />
+                Stream Reasoning Tokens
+              </span>
+              <span className="text-[9px] text-muted-foreground">
+                Surface thinking blocks in real time (Claude 3.7+, o1/o3, Gemini Flash)
+              </span>
+            </div>
+            <Switch
+              checked={includeReasoning !== false}
+              onCheckedChange={(val) => onToggleIncludeReasoning?.(val)}
+            />
+          </div>
+
+          {/* Subgraphs Output Toggle */}
+          <div className="flex items-center justify-between pt-1.5 border-t border-border/20">
+            <div className="flex flex-col">
+              <span className="text-[10px] font-medium text-foreground flex items-center gap-1">
+                <Layers className="w-3 h-3 text-sky-400" />
+                Include Subgraph Outputs
+              </span>
+              <span className="text-[9px] text-muted-foreground">
+                Prefix chunks with subgraph namespace (subgraphs: true)
+              </span>
+            </div>
+            <Switch
+              checked={Boolean(includeSubgraphs)}
+              onCheckedChange={(val) => onToggleIncludeSubgraphs?.(val)}
+            />
+          </div>
+        </div>
+      </div>
+
       {isStreaming ? (
         <div className="flex flex-col gap-2.5 pt-2 border-t border-border/30">
           <div className="flex flex-col gap-1.5 text-xs">
@@ -193,111 +325,6 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
             </div>
           </div>
 
-          {/* LangGraph Streaming Modes Selection (as per official LangChain docs) */}
-          <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-background/50 border border-border/40">
-            <div className="flex items-center justify-between">
-              <Label className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1.5">
-                <Sparkles className="w-3 h-3 text-purple-400" />
-                <span>Stream Modes (streamMode)</span>
-              </Label>
-              <span className="text-[9px] text-muted-foreground font-mono">
-                {effectiveStreamModes.length > 1 ? "Multi-Mode List" : "Single-Mode"}
-              </span>
-            </div>
-
-            <p className="text-[9.5px] text-muted-foreground leading-tight">
-              Select stream modes as per LangGraph doc. Combine multiple modes to stream tokens and node progress simultaneously:
-            </p>
-
-            <div className="grid grid-cols-2 gap-1.5">
-              {[
-                {
-                  id: "messages" as const,
-                  label: "LLM Tokens (messages)",
-                  desc: "Live (token, metadata) tuples from nodes where LLM runs",
-                },
-                {
-                  id: "updates" as const,
-                  label: "Agent Progress (updates)",
-                  desc: "State updates after each node step completes",
-                },
-                {
-                  id: "values" as const,
-                  label: "Full State (values)",
-                  desc: "Complete state channel snapshot after each step",
-                },
-                {
-                  id: "custom" as const,
-                  label: "Custom Data (custom)",
-                  desc: "Arbitrary user events emitted via config.writer",
-                },
-              ].map((m) => {
-                const isSelected = effectiveStreamModes.includes(m.id);
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => onToggleStreamMode?.(m.id)}
-                    className={`flex flex-col text-left p-2 rounded-lg border transition-all ${
-                      isSelected
-                        ? "bg-purple-500/15 border-purple-500/50 text-purple-200"
-                        : "bg-background/60 border-border/40 text-muted-foreground hover:bg-secondary/40"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <span className="text-[10.5px] font-semibold font-mono">
-                        {m.label}
-                      </span>
-                      <span
-                        className={`text-[8.5px] px-1 py-0.2 rounded font-bold ${
-                          isSelected ? "bg-purple-500/30 text-purple-300" : "text-muted-foreground/60"
-                        }`}
-                      >
-                        {isSelected ? "ACTIVE" : "OFF"}
-                      </span>
-                    </div>
-                    <span className="text-[9px] text-muted-foreground/80 mt-0.5 leading-snug">
-                      {m.desc}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Extended Thinking & Reasoning Tokens Toggle */}
-            <div className="flex items-center justify-between pt-1 border-t border-border/20">
-              <div className="flex flex-col">
-                <span className="text-[10px] font-medium text-foreground flex items-center gap-1">
-                  <Brain className="w-3 h-3 text-pink-400" />
-                  Stream Thinking / Reasoning Tokens
-                </span>
-                <span className="text-[9px] text-muted-foreground">
-                  Surface model internal reasoning/thinking blocks in real time (Claude 3.7+, o1/o3, Gemini Flash)
-                </span>
-              </div>
-              <Switch
-                checked={includeReasoning !== false}
-                onCheckedChange={(val) => onToggleIncludeReasoning?.(val)}
-              />
-            </div>
-
-            {/* Subgraphs Output Toggle */}
-            <div className="flex items-center justify-between pt-1 border-t border-border/20">
-              <div className="flex flex-col">
-                <span className="text-[10px] font-medium text-foreground flex items-center gap-1">
-                  <Layers className="w-3 h-3 text-sky-400" />
-                  Include Subgraph Outputs
-                </span>
-                <span className="text-[9px] text-muted-foreground">
-                  Prefix message chunks and state with subgraph namespace (subgraphs: true)
-                </span>
-              </div>
-              <Switch
-                checked={Boolean(includeSubgraphs)}
-                onCheckedChange={(val) => onToggleIncludeSubgraphs?.(val)}
-              />
-            </div>
-          </div>
 
           {/* WebSocket Config */}
           {streamingProtocol === "websocket" && (
@@ -630,6 +657,110 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
               })}
             </div>
           </div>
+
+          {/* Stream Target Page (Page Ref / Push to Client) — only for client protocols (SSE & WebSocket) */}
+          {(streamingProtocol === "sse" || streamingProtocol === "websocket") && (
+            <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-background/50 border border-border/40 mt-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Compass className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                  <span className="text-[11px] font-medium text-foreground">
+                    Stream Target Page (Page Ref)
+                  </span>
+                </div>
+                {connectedPageRefNode ? (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono bg-indigo-500/15 border border-indigo-500/30 text-indigo-300">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Connected Node
+                  </span>
+                ) : (
+                  onConnectPushToClient && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-6 text-[10px] px-2 gap-1 text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/10 hover:text-indigo-300"
+                      onClick={onConnectPushToClient}
+                      title="Connect Push to Client (PageRef) node on canvas"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Connect Push Node
+                    </Button>
+                  )
+                )}
+              </div>
+
+              <p className="text-[9.5px] text-muted-foreground leading-tight">
+                {invokingPage
+                  ? `Defaulting to the invoking page (${invokingPage.data?.label || invokingPage.id}) connected to this endpoint.`
+                  : "Select which web page receives this stream. A Push to Client (page_ref) node connects to this endpoint."}
+              </p>
+
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <Select
+                    value={selectedTargetPageId || "__none__"}
+                    onValueChange={(val) => {
+                      if (val !== "__none__" && onTargetPageChange) {
+                        onTargetPageChange(val);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-7 text-xs bg-background/80 border-border/70">
+                      <SelectValue placeholder="Select target web page…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {!allWebPages || allWebPages.length === 0 ? (
+                        <SelectItem value="__none__" disabled className="text-xs">
+                          No WebPage nodes on canvas
+                        </SelectItem>
+                      ) : (
+                        allWebPages.map((page) => {
+                          const isInvoking = invokingPage?.id === page.id;
+                          const label = page.data?.label || page.id;
+                          return (
+                            <SelectItem key={page.id} value={page.id} className="text-xs">
+                              <span className="font-mono">{label}</span>
+                              {isInvoking && (
+                                <span className="ml-1.5 text-[9px] text-indigo-400 font-sans">
+                                  (invoking page)
+                                </span>
+                              )}
+                            </SelectItem>
+                          );
+                        })
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {connectedPageRefNode && onConnectPushToClient && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-[10px] text-muted-foreground hover:text-foreground shrink-0"
+                    onClick={onConnectPushToClient}
+                    title="Re-sync edge and PageRef node"
+                  >
+                    Re-sync
+                  </Button>
+                )}
+              </div>
+
+              {connectedPageRefNode && (
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded text-[9.5px] text-indigo-300">
+                  <span className="font-semibold">Push to Client:</span>
+                  <span className="font-mono font-bold truncate">
+                    {connectedPageRefNode.data?.label || connectedPageRefNode.id}
+                  </span>
+                  <span className="text-muted-foreground ml-auto shrink-0 font-mono text-[9px]">
+                    endpoint-out → page-ref-in
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center gap-1.5 p-2 bg-purple-500/10 border border-purple-500/20 rounded-lg text-purple-200 text-[10px] mt-1">
             <Flame className="w-3.5 h-3.5 text-purple-400 shrink-0" />

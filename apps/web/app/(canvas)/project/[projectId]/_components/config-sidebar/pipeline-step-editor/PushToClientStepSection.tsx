@@ -42,6 +42,7 @@ import {
 } from "./pushToClientUtils";
 import { WebRtcCapabilitiesEditor } from "./WebRtcCapabilitiesEditor";
 import { PushToClientPayloadMapping } from "./PushToClientPayloadMapping";
+import { ensureWsPackageInService } from "@/lib/stores/backendCanvas/packageTypesSync";
 
 // Re-export utilities and subcomponents for backward compatibility
 export * from "./pushToClientUtils";
@@ -402,6 +403,9 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
           value={protocol}
           onValueChange={(val) => {
             if (!isClientDeliveryProtocol(val)) return;
+            if (val === "WEBSOCKET" && serviceNodeId) {
+              ensureWsPackageInService({ serviceNodeId });
+            }
             if (val !== "WEBRTC") {
               update({
                 clientDeliveryProtocol: val,
