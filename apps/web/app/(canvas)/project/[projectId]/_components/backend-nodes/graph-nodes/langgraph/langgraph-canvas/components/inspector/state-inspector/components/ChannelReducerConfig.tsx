@@ -579,7 +579,7 @@ export function ChannelReducerConfig({
 
         {/* ── Code Editor Textarea ── */}
         <LocalTextarea
-          className="min-h-[220px] text-xs font-mono bg-background leading-relaxed p-2.5 border-purple-500/30 focus-visible:ring-purple-500/40 resize-y"
+          className="min-h-[280px] h-[340px] text-xs font-mono bg-background leading-relaxed p-2.5 border-purple-500/30 focus-visible:ring-purple-500/40 resize-y"
           placeholder="(prev, next) => next"
           value={customCode}
           onChange={(e) => handleCodeChange(e.target.value)}

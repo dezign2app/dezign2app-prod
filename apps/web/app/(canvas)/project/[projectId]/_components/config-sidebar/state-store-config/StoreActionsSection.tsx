@@ -569,7 +569,7 @@ export const StoreActionsSection: React.FC<StoreActionsSectionProps> = ({
                         onChange={(e) => onUpdateAction(act.id, { code: e.target.value })}
                         debounceMs={200}
                         placeholder={`// Write mutation body logic (e.g. set({ ${targetField?.name || "field"}: payload }))\nset((state) => ({\n  ${targetField?.name || "field"}: payload\n}));`}
-                        className="min-h-[110px] font-mono text-[11px] bg-background/90 resize-y p-2.5 leading-relaxed border-border/80"
+                        className="min-h-[160px] h-[180px] font-mono text-xs bg-background/90 resize-y p-2.5 leading-relaxed border-border/80"
                       />
 
                       {/* Natural Language Prompt & Generator (commented out for now) */}

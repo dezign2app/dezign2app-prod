@@ -844,7 +844,7 @@ export const StoreDefaultManipulatorsSection: React.FC<
                       }
                       debounceMs={200}
                       placeholder={item.defaultCode}
-                      className="min-h-[90px] font-mono text-[11px] bg-background/80 resize-y p-2 leading-relaxed border-border/80"
+                      className="min-h-[150px] h-[170px] font-mono text-xs bg-background/80 resize-y p-2 leading-relaxed border-border/80"
                     />
 
                     {/* AI Prompt / Instruction */}

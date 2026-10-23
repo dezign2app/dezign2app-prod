@@ -968,7 +968,7 @@ const StateStoreConfigContent: React.FC<
   return (
     <div
       className={cn(
-        "flex flex-col h-full overflow-y-auto hide-scrollbar p-4 text-xs gap-4 select-none",
+        "flex flex-col h-full overflow-y-auto hide-scrollbar p-4 text-xs gap-4 select-none pb-60",
         className,
       )}
     >
@@ -1083,22 +1083,6 @@ const StateStoreConfigContent: React.FC<
             onSelectFieldAction={handleSelectFieldAction}
             onOpenTestForField={() => setActiveTab("playground")}
           />
-
-          {/* Store Architecture & Hydration Utilities */}
-          <div className="flex items-start gap-2.5 p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/20 text-xs">
-            <GitMerge className="text-indigo-400 mt-0.5 shrink-0" size={15} />
-            <div className="flex flex-col gap-1">
-              <span className="font-semibold text-foreground text-[11px] flex items-center gap-1.5">
-                <span>State Store Architecture</span>
-                <Badge variant="outline" className="text-[8px] h-3.5 px-1 py-0 uppercase font-mono text-indigo-400 border-indigo-500/30">
-                  1 Reducer / Variable
-                </Badge>
-              </span>
-              <span className="text-[10px] text-muted-foreground leading-relaxed">
-                Each state variable has <strong>1 dedicated reducer</strong> handling all its actions (<code className="font-mono text-indigo-400">set</code>, <code className="font-mono text-indigo-400">append</code>, <code className="font-mono text-indigo-400">pop</code>, <code className="font-mono text-indigo-400">increment</code>, etc.) via action payloads or direct values. Connect inputs to <code className="font-mono text-foreground font-semibold">store-field-in-[id]</code> to dispatch updates and outputs to <code className="font-mono text-foreground font-semibold">store-field-out-[id]</code> to read state.
-              </span>
-            </div>
-          </div>
         </TabsContent>
 
         {/* TAB 2: Live Test Area (State Manipulator Playground & Test Cases) */}

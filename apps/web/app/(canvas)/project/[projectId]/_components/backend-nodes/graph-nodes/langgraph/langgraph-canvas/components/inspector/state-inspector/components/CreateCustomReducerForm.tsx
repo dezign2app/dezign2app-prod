@@ -137,7 +137,7 @@ export function CreateCustomReducerForm({
           </div>
         </div>
         <LocalTextarea
-          className="min-h-[72px] text-xs font-mono bg-background leading-relaxed p-2 resize-y"
+          className="min-h-[180px] h-[220px] text-xs font-mono bg-background leading-relaxed p-2.5 resize-y"
           placeholder="(prev, next) => prev + next"
           value={newReducerCode}
           onChange={(e) => onReducerCodeChange(e.target.value)}
