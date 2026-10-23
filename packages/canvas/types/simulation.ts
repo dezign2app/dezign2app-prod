@@ -307,7 +307,8 @@ export type FrontendActionStepType =
   | "notification"
   | "reset_form"
   | "update_query_params"
-  | "transform";
+  | "transform"
+  | "browser_storage";
 
 export type QueryParamUpdateItem = {
   key: string;
@@ -435,6 +436,13 @@ export type FrontendActionStepDraft = {
     stepId: string;
     fieldPath?: string;
   };
+
+  // --- For type === "browser_storage" ---
+  browserStorageNodeId?: string;
+  storageEngine?: "localStorage" | "sessionStorage";
+  storageOperation?: "set" | "remove" | "clear" | "toggle" | "append";
+  storageKey?: string;
+  storageValueSource?: FrontendFieldSource;
 };
 
 export type UIEventItem = {

@@ -979,6 +979,14 @@ export function cleanupDeletedEdgesState(
               return false;
             }
 
+            // 5. Browser storage match
+            if (
+              s.type === "browser_storage" &&
+              s.browserStorageNodeId === otherNodeId
+            ) {
+              return false;
+            }
+
             return true;
           });
 

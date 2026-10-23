@@ -298,3 +298,26 @@ export interface CanvasStateStoreNodeData {
   disabledDefaultManipulators?: string[];
   deletedDefaultManipulators?: string[];
 }
+
+export type BrowserStorageEngine = "localStorage" | "sessionStorage";
+
+export interface BrowserStorageKey {
+  id: string;
+  name: string;
+  type: "string" | "number" | "boolean" | "object" | "array";
+  defaultValue?: string | number | boolean;
+  description?: string;
+}
+
+/** Browser Storage node fields for canvas graph view (localStorage / sessionStorage key-value store). */
+export interface CanvasBrowserStorageNodeData {
+  storageName?: string;
+  description?: string;
+  storageEngine?: BrowserStorageEngine;
+  namespace?: string;
+  keys?: BrowserStorageKey[];
+  targetWebAppId?: string;
+  targetPageId?: string;
+  targetPageIds?: string[];
+}
+

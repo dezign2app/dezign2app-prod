@@ -65,7 +65,9 @@ export function handleWebPageActionConnect({
   const isTransformerTarget =
     otherNode.type === "transformer" || otherNode.type === "transformer_ref";
 
-  if (!isServiceTarget && !isStorageTarget && !isTransformerTarget) return false;
+  const isBrowserStorageTarget = otherNode.type === "browser_storage";
+
+  if (!isServiceTarget && !isStorageTarget && !isTransformerTarget && !isBrowserStorageTarget) return false;
 
   // 1. Determine if this WebPage is on a protected route
   const currentNodes = get().nodes;
@@ -199,6 +201,26 @@ export function handleWebPageActionConnect({
           source: { kind: "literal", value: "" },
         }),
       ),
+    };
+  } else if (isBrowserStorageTarget) {
+    const sName =
+      otherNode.data?.storageName || otherNode.data?.label || "BrowserStorage";
+    const keys = otherNode.data?.keys || [];
+    const firstKey = keys[0]?.name || "auth_token";
+    const engine = otherNode.data?.storageEngine || "localStorage";
+
+    targetDesc = `browser storage ${sName}`;
+    configuredStep = {
+      id: `step-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      order: 1,
+      type: "browser_storage",
+      name: `${engine}.${firstKey}`,
+      edgeId: newEdge.id,
+      browserStorageNodeId: otherNode.id,
+      storageEngine: engine,
+      storageOperation: "set",
+      storageKey: firstKey,
+      storageValueSource: { kind: "literal", value: "" },
     };
   }
 

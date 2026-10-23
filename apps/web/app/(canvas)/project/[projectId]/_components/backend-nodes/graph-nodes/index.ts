@@ -52,4 +52,5 @@ export { LangGraphStepNode } from "./langgraph/LangGraphStepNode";
 export { HookNode } from "./nodes/frontend/HookNode";
 export { HookRefNode } from "./nodes/frontend/HookRefNode";
 export { StateStoreNode } from "./nodes/frontend/StateStoreNode";
+export { BrowserStorageNode } from "./nodes/frontend/BrowserStorageNode";
 

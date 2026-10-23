@@ -98,3 +98,15 @@ export interface QueryParamsStepProps {
   webPageNodeId?: string;
   onChange: (updated: FrontendActionStepDraft) => void;
 }
+
+export interface BrowserStorageStepProps {
+  draft: FrontendActionStepDraft;
+  allSteps: FrontendActionStepDraft[];
+  stepIndex: number;
+  allNodes: BackendNode[];
+  endpoints?: (Endpoint & { nodeId: string })[];
+  webPageNodeId?: string;
+  actionId?: string;
+  onChange: (updated: FrontendActionStepDraft) => void;
+}
+

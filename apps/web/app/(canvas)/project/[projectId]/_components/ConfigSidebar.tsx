@@ -40,6 +40,7 @@ import { WebPageRealtimeConnectionConfig } from "./config-sidebar/WebPageRealtim
 import { WebPageStateConfig } from "./config-sidebar/WebPageStateConfig";
 import { WebPageComponentConfig } from "./config-sidebar/WebPageComponentConfig";
 import { StateStoreConfig } from "./config-sidebar/StateStoreConfig";
+import { BrowserStorageConfig } from "./config-sidebar/BrowserStorageConfig";
 import { StorageNodeConfig } from "./config-sidebar/StorageNodeConfig";
 import { StorageOperationRefConfig } from "./config-sidebar/StorageOperationRefConfig";
 
@@ -315,6 +316,8 @@ export const ConfigSidebar = () => {
             <HookConfig id={id} nodeId={nodeId} />
           ) : type === "state_store" ? (
             <StateStoreConfig id={id} nodeId={nodeId} />
+          ) : type === "browser_storage" ? (
+            <BrowserStorageConfig id={id} nodeId={nodeId} />
           ) : type === "types" ? (
             <TypesConfig
               id={id}

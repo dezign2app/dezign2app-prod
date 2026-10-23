@@ -125,3 +125,29 @@ export const stateStoreNodeDataSchema = baseNodeDataSchema
   .passthrough();
 
 export type StateStoreNodeData = z.infer<typeof stateStoreNodeDataSchema>;
+
+export const browserStorageKeySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.enum(["string", "number", "boolean", "object", "array"]).default("string"),
+  defaultValue: z.union([z.string(), z.number(), z.boolean()]).optional(),
+  description: z.string().optional(),
+});
+
+export type BrowserStorageKeySchemaType = z.infer<typeof browserStorageKeySchema>;
+
+export const browserStorageNodeDataSchema = baseNodeDataSchema
+  .extend({
+    storageName: z.string().optional(),
+    description: z.string().optional(),
+    storageEngine: z.enum(["localStorage", "sessionStorage"]).default("localStorage").optional(),
+    namespace: z.string().optional(),
+    keys: z.array(browserStorageKeySchema).optional(),
+    targetWebAppId: z.string().optional(),
+    targetPageId: z.string().optional(),
+    targetPageIds: z.array(z.string()).optional(),
+  })
+  .passthrough();
+
+export type BrowserStorageNodeData = z.infer<typeof browserStorageNodeDataSchema>;
+
