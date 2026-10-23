@@ -9,6 +9,8 @@ import {
   backendGroupDataValidator,
   backendEdgeDataValidator,
   stateStoreConvexDataValidator,
+  browserStorageConvexDataValidator,
+  backendBrowserStorageDataValidator,
   pageSectionConvexValidator,
   webPageConvexDataValidator,
 } from "../../../../../packages/backend/convex/schema/canvasValidators";
@@ -16,6 +18,7 @@ import {
   webPageDataSchema,
   edgeDataSchema,
   stateStoreNodeDataSchema,
+  browserStorageNodeDataSchema,
   databaseDataSchema,
   entityDataSchema,
   simpleDataSchema,
@@ -1351,6 +1354,32 @@ describe("Convex canvasValidators exact schema", () => {
     };
 
     const parsed = webPageDataSchema.safeParse(compositePayload);
+    expect(parsed.success).toBe(true);
+  });
+
+  it("validates browser_storage node data in Convex and Zod schemas", () => {
+    expect(browserStorageConvexDataValidator).toBeDefined();
+    expect(backendBrowserStorageDataValidator).toBeDefined();
+    expect(backendNodeDataValidator).toBeDefined();
+
+    const userPayload = {
+      keys: [
+        {
+          defaultValue: "",
+          description: "Authentication / Session Token",
+          id: "0d62870d-42d0-4c4b-a31f-21679ead2222",
+          name: "auth_token",
+          type: "string",
+        },
+      ],
+      label: "BrowserStorage",
+      namespace: "",
+      position: { x: 1639.0570302133115, y: 586.3811664967001 },
+      storageEngine: "localStorage" as const,
+      storageName: "BrowserStorage",
+    };
+
+    const parsed = browserStorageNodeDataSchema.safeParse(userPayload);
     expect(parsed.success).toBe(true);
   });
 });
