@@ -10,12 +10,13 @@ import { ConnectionContext } from "../types";
 import { buildInitialBindingsFromEndpoint } from "@/app/(canvas)/project/[projectId]/_components/config-sidebar/web-page-event-config/action-flow/utils";
 import { isStorageRefNode } from "../utils";
 import { toast } from "sonner";
+import { toVarName } from "@/lib/compiler/utils";
 
 /**
  * Handles WebPage action/event connections:
  * When an edge is drawn from a WebPage action handle (events-*, event-in-*, pageload-in-*)
- * to a Service endpoint or Storage bucket, automatically configures the corresponding
- * request step (api_call or storage_put) in the action's `actionSteps`!
+ * to a Service endpoint, Storage bucket, or Transformer node, automatically configures the corresponding
+ * request or transform step in the action's `actionSteps`!
  */
 export function handleWebPageActionConnect({
   set,
@@ -61,7 +62,10 @@ export function handleWebPageActionConnect({
   const isStorageTarget =
     isStorageRefNode(otherNode.type) || otherNode.type === "storage";
 
-  if (!isServiceTarget && !isStorageTarget) return false;
+  const isTransformerTarget =
+    otherNode.type === "transformer" || otherNode.type === "transformer_ref";
+
+  if (!isServiceTarget && !isStorageTarget && !isTransformerTarget) return false;
 
   // 1. Determine if this WebPage is on a protected route
   const currentNodes = get().nodes;
@@ -156,6 +160,46 @@ export function handleWebPageActionConnect({
       fileSource: { kind: "user_input", key: "file" },
       contentType: "application/octet-stream",
     };
+  } else if (isTransformerTarget) {
+    const trName =
+      otherNode.data?.label || otherNode.data?.functionName || "transformer";
+    const cleanFn = toVarName(trName);
+    const defaultVar = `${cleanFn}Result`;
+    const isGlobal =
+      otherNode.data?.scope === "global" || otherNode.type === "transformer_ref";
+    const masterId =
+      otherNode.type === "transformer_ref"
+        ? otherNode.data?.transformerRef || otherNode.id
+        : otherNode.id;
+
+    targetDesc = `transformer ${trName}`;
+    configuredStep = {
+      id: `step-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      order: 1,
+      type: "transform",
+      name: defaultVar,
+      outputVariable: defaultVar,
+      transformerNodeId: masterId,
+      transformerRefNodeId:
+        otherNode.type === "transformer_ref" ? otherNode.id : undefined,
+      transformerName: trName,
+      edgeId: newEdge.id,
+      functionRef: {
+        name: cleanFn,
+        importPath: isGlobal
+          ? "@workspace/transformers"
+          : `../transformers/${cleanFn}`,
+        isGlobal,
+        inputSchema: otherNode.data?.inputSchema,
+        returnSchema: otherNode.data?.returnSchema,
+      },
+      transformBindings: (otherNode.data?.inputSchema || []).map(
+        (field: { name: string }) => ({
+          argName: field.name,
+          source: { kind: "literal", value: "" },
+        }),
+      ),
+    };
   }
 
   if (!configuredStep) return false;
@@ -183,7 +227,10 @@ export function handleWebPageActionConnect({
               s.endpointId === stepTemplate.endpointId) ||
             (stepTemplate.type === "storage_put" &&
               s.storageRefNodeId === stepTemplate.storageRefNodeId &&
-              s.bucketId === stepTemplate.bucketId),
+              s.bucketId === stepTemplate.bucketId) ||
+            (stepTemplate.type === "transform" &&
+              (s.transformerRefNodeId === stepTemplate.transformerRefNodeId ||
+                s.transformerNodeId === stepTemplate.transformerNodeId)),
         );
 
         calculatedStepNumber =
@@ -238,7 +285,10 @@ export function handleWebPageActionConnect({
             s.endpointId === stepTemplate.endpointId) ||
           (stepTemplate.type === "storage_put" &&
             s.storageRefNodeId === stepTemplate.storageRefNodeId &&
-            s.bucketId === stepTemplate.bucketId),
+            s.bucketId === stepTemplate.bucketId) ||
+          (stepTemplate.type === "transform" &&
+            (s.transformerRefNodeId === stepTemplate.transformerRefNodeId ||
+              s.transformerNodeId === stepTemplate.transformerNodeId)),
       );
 
       calculatedStepNumber =

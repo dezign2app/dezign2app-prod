@@ -146,7 +146,8 @@ describe("ActionFlowEditor component", () => {
     // Add Step Toolbar
     expect(screen.getByText("Mutate State")).toBeDefined();
     expect(screen.getByText("Navigate")).toBeDefined();
-    expect(screen.getByText("Custom Code")).toBeDefined();
+    expect(screen.getByText("Transformer")).toBeDefined();
+    expect(screen.queryByText("Custom Code")).toBeNull();
   });
 
   it("renders empty state message when canvasSteps is empty", () => {
@@ -188,5 +189,46 @@ describe("ActionFlowEditor component", () => {
     expect(savedDrafts).toBeDefined();
     expect(savedDrafts).toHaveLength(3);
     expect(savedDrafts?.[2]?.type).toBe("state_mutation");
+  });
+
+  it("allows adding a Transformer step via toolbar and links TransformerNode", () => {
+    const handleSave = vi.fn();
+    const transformerNode: BackendNode = {
+      id: "transformer-1",
+      type: "transformer",
+      position: { x: 400, y: 200 },
+      fractionalIndex: "a2",
+      data: {
+        label: "formatPayload",
+        functionName: "formatPayload",
+        scope: "global",
+        inputSchema: [{ id: "arg1", name: "raw", type: "string", required: true }],
+        returnSchema: [{ id: "ret1", name: "formatted", type: "string", required: true }],
+      },
+    };
+
+    render(
+      <ActionFlowEditor
+        item={item}
+        canvasSteps={canvasSteps}
+        serviceNodes={[serviceNode]}
+        allNodes={[serviceNode, storageRefNode, transformerNode]}
+        endpoints={[{ ...endpoint, nodeId: serviceNode.id }]}
+        webPageNodeId="webpage-1"
+        actionId="act-1"
+        onSave={handleSave}
+      />,
+    );
+
+    const addTransformerBtn = screen.getByText("Transformer");
+    fireEvent.click(addTransformerBtn);
+
+    expect(handleSave).toHaveBeenCalled();
+    const savedDrafts = handleSave.mock.calls[0]?.[0];
+    expect(savedDrafts).toBeDefined();
+    expect(savedDrafts).toHaveLength(3);
+    expect(savedDrafts?.[2]?.type).toBe("transform");
+    expect(savedDrafts?.[2]?.transformerNodeId).toBe("transformer-1");
+    expect(savedDrafts?.[2]?.transformerName).toBe("formatPayload");
   });
 });

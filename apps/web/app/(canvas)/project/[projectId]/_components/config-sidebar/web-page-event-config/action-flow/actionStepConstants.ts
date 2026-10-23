@@ -9,6 +9,7 @@ import {
   Bell,
   RotateCcw,
   SlidersHorizontal,
+  Shuffle,
 } from "lucide-react";
 import type { FrontendActionStepType } from "./types";
 
@@ -53,6 +54,12 @@ export const FRONTEND_STEP_TYPE_META: Record<
     color: "text-teal-500 bg-teal-500/10 border-teal-500/30",
     description: "Update, toggle, or clear URL query parameters in-place",
   },
+  transform: {
+    label: "Transformer",
+    icon: React.createElement(Shuffle, { size: 12 }),
+    color: "text-purple-500 bg-purple-500/10 border-purple-500/30",
+    description: "Transform data using a Transformer node function",
+  },
   custom_code: {
     label: "Custom Code",
     icon: React.createElement(Terminal, { size: 12 }),
@@ -85,7 +92,7 @@ export const FRONTEND_ADDABLE_STEP_TYPES: readonly FrontendActionStepType[] = [
   "state_mutation",
   "navigation",
   "update_query_params",
-  "custom_code",
+  "transform",
   "condition",
   "notification",
   "reset_form",

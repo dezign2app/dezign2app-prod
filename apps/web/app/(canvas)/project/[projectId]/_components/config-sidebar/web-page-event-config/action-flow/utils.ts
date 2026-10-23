@@ -418,6 +418,12 @@ function formatDraftStep(
       lines.push(`// Step ${stepNum}: [API CALL] /endpoint`);
       break;
     }
+    case "transform": {
+      const varName = draft.outputVariable || draft.name || "transformResult";
+      const fnName = draft.functionRef?.name || draft.transformerName || "transformer";
+      lines.push(`// Step ${stepNum}: [TRANSFORMER] const ${varName} = ${fnName}(...)`);
+      break;
+    }
     case "custom_code": {
       lines.push(`// Step ${stepNum}: [CUSTOM CODE]`);
       break;

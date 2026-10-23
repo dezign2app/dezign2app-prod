@@ -105,7 +105,7 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
   "auth-in": [],
   "injects-plugin-out": ["payments-plugin-in", "auth-in"],
   "payments-plugin-in": [],
-  "page-out": ["page-section-in", "endpoint-in", "page-in", "page-ref-in", "hook-in", "component-in", "store-in", "resource-def-in", "action-target"],
+  "page-out": ["page-section-in", "endpoint-in", "page-in", "page-ref-in", "hook-in", "component-in", "store-in", "resource-def-in", "action-target", "transformer-in"],
   "page-in": [],
   "page-section-in": ["page-in", "endpoint-in", "page-out", "hook-in", "component-in"],
   "transformer-in": [],
@@ -207,6 +207,8 @@ export const EDGE_TYPE_MAP: Record<string, string> = {
   "transformer-out→resource-def-in": "message",
   "transformer-out→langgraph-in": "connection",
   "transformer-out→transformer-in": "reference",
+  "transformer-out→action-target": "connection",
+  "page-out→transformer-in": "connection",
   // Frontend Hook & Component edges
   "endpoint-out→hook-in": "connection",
   "resource-def-out→hook-in": "message",

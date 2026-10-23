@@ -117,8 +117,17 @@ export const TransformerNode = ({
         position={Position.Left}
         id="types-in"
         className="w-2.5 h-2.5 !bg-indigo-400 rounded-full border-2 border-background -left-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
-        style={{ top: "18px" }}
+        style={{ top: "14px" }}
         title="Package Types / Custom Types Reference"
+      />
+
+      {/* Invocation / Action Target Handle (Left) */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="transformer-in"
+        className="w-2.5 h-2.5 !bg-purple-500 border-2 border-background"
+        title="Action / Invocation Target"
       />
 
       <div className="flex items-center justify-between gap-3 w-full">

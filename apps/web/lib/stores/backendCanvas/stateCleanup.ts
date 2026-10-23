@@ -970,6 +970,15 @@ export function cleanupDeletedEdgesState(
               return false;
             }
 
+            // 4. Transformer match
+            if (
+              s.type === "transform" &&
+              (s.transformerRefNodeId === otherNodeId ||
+                s.transformerNodeId === otherNodeId)
+            ) {
+              return false;
+            }
+
             return true;
           });
 

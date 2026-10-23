@@ -56,6 +56,12 @@ export function formatStepCodePreview(
       return `router.push("${route}")`;
     }
 
+    case "transform": {
+      const varName = step.outputVariable || step.name || "transformResult";
+      const fnName = step.functionRef?.name || step.transformerName || "transformer";
+      return `const ${varName} = ${fnName}(...)`;
+    }
+
     case "custom_code": {
       const firstLine = step.code?.trim().split("\n")[0] || "// custom code";
       return firstLine.slice(0, 40);

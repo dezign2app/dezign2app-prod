@@ -60,6 +60,17 @@ export function createDefaultFrontendStep(
         ...defaults,
       };
 
+    case "transform":
+      return {
+        id,
+        order,
+        type: "transform",
+        outputVariable: "transformResult",
+        transformerName: "transformData",
+        transformBindings: [],
+        ...defaults,
+      };
+
     case "custom_code":
       return {
         id,
