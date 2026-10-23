@@ -35,8 +35,6 @@ describe("compileNextjsV16StateStoreCustomAction", () => {
       data: {
         label: "CartStore",
         storeName: "Cart",
-        scope: "global",
-        storage: "memory",
         targetWebAppId: "node-webapp-main",
         fields: [
           { id: "f1", name: "items", type: "array", defaultValue: [] },
@@ -114,8 +112,6 @@ describe("compileNextjsV16StateStoreCustomAction", () => {
       data: {
         label: "UserStore",
         storeName: "User",
-        scope: "global",
-        storage: "memory",
         targetWebAppId: "node-webapp-main",
         fields: [
           { id: "f1", name: "userName", type: "string", defaultValue: "guest" },
@@ -221,8 +217,6 @@ describe("compileNextjsV16StateStoreCustomAction", () => {
       data: {
         label: "MinimalStore",
         storeName: "Minimal",
-        scope: "global",
-        storage: "memory",
         targetWebAppId: "node-webapp-main",
         disabledDefaultManipulators: ["populate", "reset", "setFlag"],
         fields: [

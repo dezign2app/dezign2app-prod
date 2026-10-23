@@ -1,10 +1,25 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Database, Settings, Trash, Layers, AlertTriangle, Edit3 } from "lucide-react";
+import {
+  Database,
+  Settings,
+  Trash,
+  AlertTriangle,
+  Edit3,
+  Plus,
+  Pencil,
+  Check,
+  Trash2,
+  Braces,
+  GitMerge,
+  Copy,
+  MoreVertical,
+  Settings2,
+} from "lucide-react";
 import { BackendNode } from "@/types/canvas";
-import { CustomTypeItem, GlobalStoreField, GlobalStoreAction } from "@workspace/canvas/types";
+import { CustomTypeItem, GlobalStoreField } from "@workspace/canvas/types";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { toast } from "sonner";
@@ -13,6 +28,44 @@ import {
   useSimulationNodeState,
   getSimulationNodeBorderClass,
 } from "../../common";
+import { Button } from "@workspace/ui/components/button";
+import { Badge } from "@workspace/ui/components/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@workspace/ui/components/dropdown-menu";
+
+/**
+ * Returns supported action types handled by the single reducer of a state variable.
+ * Matches the reducer patterns used in LangGraph and modern reactive state stores.
+ */
+export function getSupportedActionsForType(type?: string, isArray?: boolean): string[] {
+  const clean = (type || "string").toLowerCase().trim();
+  if (isArray || clean.endsWith("[]") || clean === "array") {
+    return ["set", "append", "pop", "remove", "reset"];
+  }
+  switch (clean) {
+    case "number":
+      return ["set", "increment", "decrement", "reset"];
+    case "boolean":
+      return ["set", "toggle", "reset"];
+    case "string":
+      return ["set", "append", "prepend", "reset"];
+    case "object":
+    default:
+      return ["set", "update", "reset"];
+  }
+}
 
 export const StateStoreNode = ({
   id,
@@ -37,7 +90,22 @@ export const StateStoreNode = ({
 
   const [isEditing, setIsEditing] = useState(!data.label && !data.storeName);
   const [name, setName] = useState(data.label || data.storeName || "");
-  const inputRef = React.useRef<HTMLInputElement>(null);
+  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const availableCustomTypes = useMemo(() => {
+    const types: CustomTypeItem[] = [];
+    allNodes.forEach((n) => {
+      if (n.type === "types" && n.data?.types) {
+        n.data.types.forEach((t: CustomTypeItem) => {
+          if (t && t.name && !types.some((existing) => existing.id === t.id)) {
+            types.push(t);
+          }
+        });
+      }
+    });
+    return types;
+  }, [allNodes]);
 
   const currentStoreName = (data.storeName || data.label || "").trim();
   const isDuplicateStoreName = useMemo(() => {
@@ -69,14 +137,14 @@ export const StateStoreNode = ({
 
   const hasErrors = isDuplicateStoreName || duplicateFieldIds.size > 0;
 
-  React.useEffect(() => {
+  useEffect(() => {
     setName(data.label || data.storeName || "");
     if (!data.label && !data.storeName) {
       setIsEditing(true);
     }
   }, [data.label, data.storeName]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isEditing) {
       const focus = () => {
         if (inputRef.current) {
@@ -124,8 +192,8 @@ export const StateStoreNode = ({
     setIsEditing(false);
   };
 
-  const handleOpenConfig = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleOpenConfig = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     setActiveConfigItem({
       id,
       nodeId: id,
@@ -138,25 +206,91 @@ export const StateStoreNode = ({
     requestDeleteNode(id);
   };
 
-  const scope = data.scope || "global";
-  const storage = data.storage || "memory";
+  const fieldCount = data.fields?.length || 0;
 
-  const handleToggleScope = (e: React.MouseEvent) => {
+  const handleAddField = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const nextScope = scope === "global" ? "local" : "global";
+    const existingNames = new Set((data.fields || []).map((f) => f.name.trim().toLowerCase()));
+    let nextNum = (data.fields || []).length + 1;
+    while (existingNames.has(`field${nextNum}`.toLowerCase())) {
+      nextNum++;
+    }
+    const newFieldId = `f-${Date.now()}`;
+    const newFieldName = `field${nextNum}`;
+    const defaultActions = getSupportedActionsForType("string");
+    const newField: GlobalStoreField = {
+      id: newFieldId,
+      name: newFieldName,
+      type: "string",
+      defaultValue: "",
+      reducer: `${newFieldName}_reducer`,
+      actions: defaultActions,
+    };
     updateNode(id, {
       data: {
         ...data,
-        scope: nextScope,
+        fields: [...(data.fields || []), newField],
+      },
+    });
+    setEditingFieldId(newFieldId);
+  };
+
+  const handleUpdateField = (
+    fieldId: string,
+    patch: Partial<GlobalStoreField>,
+  ) => {
+    const updatedFields = (data.fields || []).map((f) => {
+      if (f.id !== fieldId) return f;
+      const updated = { ...f, ...patch };
+      if (patch.type && !patch.actions) {
+        updated.actions = getSupportedActionsForType(patch.type, updated.isArray);
+      }
+      if (patch.name && (!f.reducer || f.reducer === `${f.name}_reducer` || f.reducer.endsWith("_reducer"))) {
+        updated.reducer = `${patch.name}_reducer`;
+      }
+      return updated;
+    });
+    updateNode(id, {
+      data: {
+        ...data,
+        fields: updatedFields,
       },
     });
   };
 
-  const fieldCount = data.fields?.length || 0;
-  const actionCount = data.actions?.length || 0;
+  const handleDeleteField = (fieldId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const updatedFields = (data.fields || []).filter((f) => f.id !== fieldId);
+    updateNode(id, {
+      data: {
+        ...data,
+        fields: updatedFields,
+      },
+    });
+    if (editingFieldId === fieldId) {
+      setEditingFieldId(null);
+    }
+  };
+
+  const handleDuplicateField = (field: GlobalStoreField) => {
+    const newId = `f-${Date.now()}`;
+    const newName = `${field.name}_copy`;
+    const newField: GlobalStoreField = {
+      ...field,
+      id: newId,
+      name: newName,
+      reducer: `${newName}_reducer`,
+    };
+    updateNode(id, {
+      data: {
+        ...data,
+        fields: [...(data.fields || []), newField],
+      },
+    });
+  };
 
   // Auto-sync type reference edges between TypesNode and store fields
-  React.useEffect(() => {
+  useEffect(() => {
     if (!data.fields || data.fields.length === 0) return;
     data.fields.forEach((f) => {
       if (!f.type) return;
@@ -203,17 +337,17 @@ export const StateStoreNode = ({
   return (
     <div
       className={cn(
-        "group relative flex flex-col rounded-xl bg-card/95 backdrop-blur border-2 min-w-[220px] max-w-[280px] shadow-md transition-all duration-150 cursor-pointer select-none",
+        "group relative flex flex-col rounded-xl bg-card/95 backdrop-blur-md border-2 w-[300px] shadow-lg transition-all duration-200 cursor-pointer select-none",
         selected
           ? hasErrors
-            ? "border-destructive shadow-destructive/20 ring-1 ring-destructive/40"
-            : "border-indigo-500 shadow-indigo-500/15 ring-1 ring-indigo-500/20"
+            ? "border-destructive shadow-destructive/20 ring-4 ring-destructive/20 scale-[1.02]"
+            : "border-indigo-500 shadow-indigo-500/20 ring-4 ring-indigo-500/20 scale-[1.02]"
           : hasErrors
             ? "border-destructive/80 hover:border-destructive shadow-md shadow-destructive/10"
-            : "border-border/80 hover:border-indigo-500/50 hover:shadow-lg",
+            : "border-border/80 hover:border-indigo-500/70 hover:shadow-xl",
         borderClass,
       )}
-      onDoubleClick={handleOpenConfig}
+      onDoubleClick={() => handleOpenConfig()}
     >
       {/* Node-level target handle for TypesNode / Action connections */}
       <Handle
@@ -226,57 +360,15 @@ export const StateStoreNode = ({
       />
 
       {/* Header Container */}
-      <div className="flex flex-col gap-1.5 px-3 pt-2.5 pb-2">
-        <div className="flex items-center justify-between gap-3 w-full">
+      <div className="flex flex-col gap-1.5 p-3 pb-2.5 border-b border-border/50">
+        <div className="flex items-center justify-between gap-2.5 w-full">
           {/* Icon + Label */}
-          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            <div className="p-1.5 rounded-lg bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 shrink-0">
-              <Database size={14} />
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="p-1.5 rounded-lg bg-indigo-500/15 text-indigo-500 border border-indigo-500/30 shrink-0">
+              <Database size={15} />
             </div>
 
             <div className="flex flex-col min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[8px] uppercase font-bold tracking-wider text-indigo-600 dark:text-indigo-400">
-                  State Store
-                </span>
-                {isDuplicateStoreName && (
-                  <span
-                    className="flex items-center gap-0.5 text-[7px] font-mono px-1 py-0.2 rounded font-bold bg-destructive/15 text-destructive border border-destructive/30 uppercase tracking-wide"
-                    title={`Duplicate App Store name "${currentStoreName}"! Each App Store must have a unique name.`}
-                  >
-                    <AlertTriangle size={8} />
-                    <span>DUP STORE</span>
-                  </span>
-                )}
-                {duplicateFieldIds.size > 0 && (
-                  <span
-                    className="flex items-center gap-0.5 text-[7px] font-mono px-1 py-0.2 rounded font-bold bg-destructive/15 text-destructive border border-destructive/30 uppercase tracking-wide"
-                    title="Duplicate field names detected in this store!"
-                  >
-                    <AlertTriangle size={8} />
-                    <span>DUP FIELDS</span>
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={handleToggleScope}
-                  className={cn(
-                    "text-[7px] font-mono px-1 py-0.2 rounded font-medium border transition-colors cursor-pointer",
-                    scope === "global"
-                      ? "bg-amber-500/15 text-amber-500 border-amber-500/30 hover:bg-amber-500/25"
-                      : "bg-sky-500/15 text-sky-400 border-sky-500/30 hover:bg-sky-500/25",
-                  )}
-                  title="Click to toggle Global / Local scope"
-                >
-                  {scope === "global" ? "GLOBAL" : "LOCAL"}
-                </button>
-                {storage !== "memory" && (
-                  <span className="text-[7px] font-mono px-1 py-0.2 rounded font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                    {storage === "localStorage" ? "LOCAL" : "SESSION"}
-                  </span>
-                )}
-              </div>
-
               {isEditing ? (
                 <div
                   className="nodrag nowheel nopan relative flex-1 min-w-0"
@@ -289,7 +381,7 @@ export const StateStoreNode = ({
                     value={name}
                     placeholder="Enter store name..."
                     onChange={(e) => setName(e.target.value)}
-                    className="h-5 text-xs font-semibold px-1 py-0 bg-background/80 border-border/80 w-full"
+                    className="h-6 text-xs font-bold px-1.5 py-0 bg-background/90 border-border/80 w-full"
                     autoFocus
                     onKeyDown={(e: React.KeyboardEvent) => {
                       if (e.key === "Enter") {
@@ -324,29 +416,41 @@ export const StateStoreNode = ({
                   }}
                   title="Click to rename"
                 >
-                  <span className="text-xs font-semibold text-foreground truncate hover:text-indigo-400 transition-colors">
-                    {currentStoreName}
+                  <span className="text-xs font-bold text-foreground tracking-wide truncate hover:text-indigo-400 transition-colors">
+                    {currentStoreName || "App Store"}
                   </span>
                   <Edit3
-                    size={9}
+                    size={10}
                     className="opacity-0 group-hover/name:opacity-70 text-muted-foreground transition-opacity shrink-0"
                   />
                 </div>
               )}
+              <span className="text-[9px] font-mono text-muted-foreground">
+                {fieldCount} {fieldCount === 1 ? "state variable" : "state variables"}
+              </span>
             </div>
           </div>
 
           {/* Action buttons */}
           <div className="flex items-center gap-1 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-5 px-1.5 text-[9px] uppercase font-mono font-extrabold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border-indigo-500/20 cursor-pointer"
+              onClick={handleOpenConfig}
+              title="Open State Store Configuration"
+            >
+              State Schema
+            </Button>
             <button
-              className="p-1 rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors"
+              className="p-1 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-muted/40 transition-colors"
               onClick={handleOpenConfig}
               title="Configure State Store"
             >
               <Settings size={13} />
             </button>
             <button
-              className="p-1 rounded-md text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
+              className="p-1 rounded-md text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
               onClick={handleDelete}
               title="Delete Node"
             >
@@ -355,531 +459,367 @@ export const StateStoreNode = ({
           </div>
         </div>
 
-        {/* Info footer: fields and actions count */}
-        <div className="flex items-center justify-between pt-0.5 text-[10px] text-muted-foreground font-mono">
-          <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1">
-              <Layers size={10} className="text-indigo-400/80" />
-              {fieldCount} {fieldCount === 1 ? "field" : "fields"}
-            </span>
-            <span>•</span>
-            <span>{actionCount} {actionCount === 1 ? "action" : "actions"}</span>
-          </div>
-          <span className="text-[8px] text-indigo-500/80 font-bold uppercase tracking-wide">Zustand</span>
-        </div>
-      </div>
-
-      {/* Dynamic State Objects (Fields) list */}
-      <div className="flex flex-col border-t border-border/40 text-[9px] font-mono">
-        <div className="flex items-center justify-between text-[8px] font-bold uppercase tracking-wider text-muted-foreground/80 px-3 py-1 bg-muted/10">
-          <div className="flex items-center gap-1">
-            <span className={cn("font-bold", duplicateFieldIds.size > 0 ? "text-destructive" : "text-cyan-500")}>•</span>
-            <span>State Objects</span>
-          </div>
-          {duplicateFieldIds.size > 0 ? (
-            <span className="text-[7px] text-destructive font-bold bg-destructive/15 px-1 rounded border border-destructive/30 flex items-center gap-0.5">
-              <AlertTriangle size={8} />
-              <span>Duplicate Fields</span>
-            </span>
-          ) : (
-            <span className="text-[7px] text-cyan-600 dark:text-cyan-400 font-semibold">{fieldCount} {fieldCount === 1 ? "field" : "fields"}</span>
-          )}
-        </div>
-        {data.fields && data.fields.length > 0 ? (
-          data.fields.map((f) => {
-            const isDupe = duplicateFieldIds.has(f.id);
-            const isOutputConnected = edges.some(
-              (e) => e.source === id && e.sourceHandle === `store-field-out-${f.id}`,
-            );
-            const isInputConnected = edges.some(
-              (e) => e.target === id && e.targetHandle === `store-field-in-${f.id}`,
-            );
-
-            return (
-              <div
-                key={f.id}
-                className={cn(
-                  "relative flex items-center justify-between px-3 py-1 border-b border-border/20 transition-colors group/field",
-                  isDupe
-                    ? "bg-destructive/15 text-destructive border-destructive/40"
-                    : "bg-muted/5 hover:bg-muted/20",
-                )}
+        {/* Badges row: Duplicate Warnings, Engine */}
+        <div className="flex items-center justify-between gap-1 pt-0.5 text-[8px] font-mono flex-wrap">
+          <div className="flex items-center gap-1 flex-wrap">
+            {isDuplicateStoreName && (
+              <span
+                className="flex items-center gap-0.5 text-[7px] font-mono px-1 py-0.2 rounded font-bold bg-destructive/15 text-destructive border border-destructive/30 uppercase tracking-wide"
+                title={`Duplicate App Store name "${currentStoreName}"! Store names must be unique.`}
               >
-                {/* Left target handle for custom type contract from TypesNode */}
-                <Handle
-                  type="target"
-                  position={Position.Left}
-                  id={`store-field-in-${f.id}`}
-                  className={cn(
-                    "w-2 h-2 border border-background -left-1 z-10 transition-all",
-                    isInputConnected
-                      ? "!bg-purple-400 ring-2 ring-purple-500/40 opacity-100"
-                      : "!bg-indigo-400 opacity-0 group-hover/field:opacity-100 hover:scale-125",
-                  )}
-                  style={{ top: "50%" }}
-                  title={`${f.name}: Connect custom type contract from TypesNode`}
-                />
-
-                <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                  {isDupe ? (
-                    <span title={`Duplicate field name "${f.name}". Field names must be unique.`}>
-                      <AlertTriangle size={8} className="text-destructive shrink-0" />
-                    </span>
-                  ) : (
-                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shrink-0" />
-                  )}
-                  <span className={cn("font-semibold truncate", isDupe ? "text-destructive font-bold" : "text-foreground/90")}>{f.name}</span>
-                  <span className={cn(
-                    "text-[7px] px-1 py-0.2 rounded border shrink-0",
-                    isDupe ? "bg-destructive/20 border-destructive/40 text-destructive" : "bg-secondary text-muted-foreground border-border/40"
-                  )}>
-                    {f.type}
-                  </span>
-                  {f.defaultValue !== undefined && f.defaultValue !== "" && (
-                    <span className="text-[7px] text-muted-foreground/60 truncate font-mono">
-                      = {typeof f.defaultValue === "object" ? JSON.stringify(f.defaultValue) : String(f.defaultValue)}
-                    </span>
-                  )}
-                </div>
-                <Handle
-                  type="source"
-                  position={Position.Right}
-                  id={`store-field-out-${f.id}`}
-                  className={cn(
-                    "w-2 h-2 border border-background cursor-pointer hover:scale-125 transition-all -right-1 z-10",
-                    isOutputConnected
-                      ? "!bg-cyan-400 ring-2 ring-cyan-500/40 scale-110"
-                      : "!bg-cyan-500 hover:!bg-cyan-400",
-                  )}
-                  style={{ top: "50%" }}
-                  title={`${f.name}: Drag to WebPage to render state${isOutputConnected ? " (connected)" : ""}`}
-                />
-              </div>
-            );
-          })
-        ) : (
-          <div className="px-3 py-1 text-[8px] text-muted-foreground/50 italic">
-            No fields defined yet
-          </div>
-        )}
-      </div>
-
-      {/* Actions list with handles aligned on the right edge */}
-      {(() => {
-        const disabledOrDeleted = new Set([
-          ...(data.disabledDefaultManipulators || []),
-          ...(data.deletedDefaultManipulators || []),
-        ]);
-        const populateOverride = (data.actions || []).find(
-          (a) =>
-            a.defaultManipulatorType === "populate" ||
-            a.actionType === "populate" ||
-            a.name.toLowerCase() === "populate" ||
-            a.name.toLowerCase() === "load",
-        );
-        const resetOverride = (data.actions || []).find(
-          (a) =>
-            a.defaultManipulatorType === "reset" ||
-            a.actionType === "reset" ||
-            a.name.toLowerCase() === "reset",
-        );
-        const customActions = (data.actions || []).filter((act) => {
-          if (act.defaultManipulatorType) return false;
-          if (act === populateOverride || act === resetOverride) return false;
-          const isSetter = (data.fields || []).some(
-            (f) =>
-              act.targetFieldId === f.id &&
-              act.name.toLowerCase() === `set${f.name.toLowerCase()}`,
-          );
-          const isAppend = (data.fields || []).some(
-            (f) =>
-              (f.isArray || f.type === "array" || f.type?.endsWith("[]")) &&
-              act.targetFieldId === f.id &&
-              (act.name.toLowerCase() === `append${f.name.toLowerCase()}` || act.actionType === "append"),
-          );
-          const isPop = (data.fields || []).some(
-            (f) =>
-              (f.isArray || f.type === "array" || f.type?.endsWith("[]")) &&
-              act.targetFieldId === f.id &&
-              act.name.toLowerCase() === `pop${f.name.toLowerCase()}`,
-          );
-          return !isSetter && !isAppend && !isPop;
-        });
-
-        const isPopulateDisabled = disabledOrDeleted.has("populate") || disabledOrDeleted.has("load");
-        const isResetDisabled = disabledOrDeleted.has("reset");
-
-        // Compute individual field manipulators (setters, plus append & pop for array fields)
-        const fieldManipulators: Array<{
-          key: string;
-          type: "setter" | "append" | "pop";
-          field: GlobalStoreField;
-          name: string;
-          defaultName: string;
-          isCustom: boolean;
-          isDisabled: boolean;
-          override?: GlobalStoreAction;
-          inHandleId: string;
-          outHandleId: string;
-          badgeLabel: string;
-          colorClass: string;
-          dotClass: string;
-          ringClass: string;
-          title: string;
-        }> = [];
-
-        (data.fields || []).forEach((f) => {
-          const cap = f.name.charAt(0).toUpperCase() + f.name.slice(1);
-          const isArr = Boolean(f.isArray || f.type === "array" || f.type?.endsWith("[]"));
-
-          // 1. Setter: set<Field>
-          const defaultSetterName = `set${cap}`;
-          const setterOverride = (data.actions || []).find((a) => {
-            if (a.defaultManipulatorType === "setter" && a.targetFieldId === f.id) return true;
-            return (
-              a.name.toLowerCase() === defaultSetterName.toLowerCase() &&
-              (!a.targetFieldId || a.targetFieldId === f.id)
-            );
-          });
-          const isSetterDisabled =
-            disabledOrDeleted.has("mutate") ||
-            disabledOrDeleted.has(`setter-${f.id}`) ||
-            disabledOrDeleted.has(defaultSetterName) ||
-            Boolean(setterOverride && disabledOrDeleted.has(setterOverride.name));
-
-          if (!isSetterDisabled) {
-            fieldManipulators.push({
-              key: `setter-${f.id}`,
-              type: "setter",
-              field: f,
-              name: setterOverride?.name || defaultSetterName,
-              defaultName: defaultSetterName,
-              isCustom: Boolean(setterOverride),
-              isDisabled: false,
-              override: setterOverride,
-              inHandleId: `setter-in-left-${f.id}`,
-              outHandleId: `setter-out-${f.id}`,
-              badgeLabel: setterOverride ? "(custom)" : "(setter)",
-              colorClass: "!bg-indigo-500",
-              dotClass: "bg-indigo-500",
-              ringClass: "ring-indigo-500/50",
-              title: `${setterOverride?.name || defaultSetterName}: Drag to WebPage action to update state on trigger`,
-            });
-          }
-
-          // 2. Array helpers: append<Field> & pop<Field>
-          if (isArr) {
-            const defaultAppendName = `append${cap}`;
-            const appendOverride = (data.actions || []).find((a) => {
-              if (a.defaultManipulatorType === "append" && a.targetFieldId === f.id) return true;
-              return (
-                (a.name.toLowerCase() === defaultAppendName.toLowerCase() ||
-                  (a.actionType === "append" && a.targetFieldId === f.id)) &&
-                (!a.targetFieldId || a.targetFieldId === f.id)
-              );
-            });
-            const isAppendDisabled =
-              disabledOrDeleted.has(`append-${f.id}`) ||
-              disabledOrDeleted.has(defaultAppendName) ||
-              Boolean(appendOverride && disabledOrDeleted.has(appendOverride.name));
-
-            if (!isAppendDisabled) {
-              fieldManipulators.push({
-                key: `append-${f.id}`,
-                type: "append",
-                field: f,
-                name: appendOverride?.name || defaultAppendName,
-                defaultName: defaultAppendName,
-                isCustom: Boolean(appendOverride),
-                isDisabled: false,
-                override: appendOverride,
-                inHandleId: `append-in-left-${f.id}`,
-                outHandleId: `append-out-${f.id}`,
-                badgeLabel: appendOverride ? "(custom)" : "(append)",
-                colorClass: "!bg-violet-500",
-                dotClass: "bg-violet-500",
-                ringClass: "ring-violet-500/50",
-                title: `${appendOverride?.name || defaultAppendName}: Drag to WebPage action to append item`,
-              });
-            }
-
-            const defaultPopName = `pop${cap}`;
-            const popOverride = (data.actions || []).find((a) => {
-              if (a.defaultManipulatorType === "pop" && a.targetFieldId === f.id) return true;
-              return (
-                a.name.toLowerCase() === defaultPopName.toLowerCase() &&
-                (!a.targetFieldId || a.targetFieldId === f.id)
-              );
-            });
-            const isPopDisabled =
-              disabledOrDeleted.has(`pop-${f.id}`) ||
-              disabledOrDeleted.has(defaultPopName) ||
-              Boolean(popOverride && disabledOrDeleted.has(popOverride.name));
-
-            if (!isPopDisabled) {
-              fieldManipulators.push({
-                key: `pop-${f.id}`,
-                type: "pop",
-                field: f,
-                name: popOverride?.name || defaultPopName,
-                defaultName: defaultPopName,
-                isCustom: Boolean(popOverride),
-                isDisabled: false,
-                override: popOverride,
-                inHandleId: `pop-in-left-${f.id}`,
-                outHandleId: `pop-out-${f.id}`,
-                badgeLabel: popOverride ? "(custom)" : "(pop)",
-                colorClass: "!bg-amber-500",
-                dotClass: "bg-amber-500",
-                ringClass: "ring-amber-500/50",
-                title: `${popOverride?.name || defaultPopName}: Drag to WebPage action to pop item`,
-              });
-            }
-          }
-        });
-
-        const visibleManipulatorCount =
-          (isPopulateDisabled ? 0 : 1) +
-          fieldManipulators.length +
-          (isResetDisabled ? 0 : 1) +
-          customActions.length;
-
-        const hasPopulate = !isPopulateDisabled;
-        const manipulatorsCount = fieldManipulators.length;
-        const hasReset = !isResetDisabled;
-        const customCount = customActions.length;
-
-        return (
-          <div className="flex flex-col border-t border-border/40 text-[9px] font-mono">
-            <div className="flex items-center justify-between text-[8px] font-bold uppercase tracking-wider text-muted-foreground/80 px-3 py-1 bg-muted/10">
-              <div className="flex items-center gap-1">
-                <span className="text-indigo-500 font-bold">•</span>
-                <span>Manipulators</span>
-              </div>
-              <span className="text-[7px] text-indigo-500 font-semibold">
-                {visibleManipulatorCount} {visibleManipulatorCount === 1 ? "manipulator" : "manipulators"}
+                <AlertTriangle size={8} />
+                <span>DUP STORE</span>
               </span>
-            </div>
-
-            {/* Empty state if all manipulators disabled */}
-            {visibleManipulatorCount === 0 && (
-              <div className="px-3 py-1.5 text-[8px] text-muted-foreground/50 italic rounded-b-[10px]">
-                No manipulators defined
-              </div>
             )}
-
-            {/* 1. Populate Action (only if not disabled) */}
-            {!isPopulateDisabled && (
-              <div
-                className={cn(
-                  "relative flex items-center justify-between px-3 py-1 bg-muted/5 hover:bg-muted/20 transition-colors group/row",
-                  (manipulatorsCount > 0 || hasReset || customCount > 0) && "border-b border-border/20",
-                  manipulatorsCount === 0 && !hasReset && customCount === 0 && "rounded-b-[10px]",
-                )}
+            {duplicateFieldIds.size > 0 && (
+              <span
+                className="flex items-center gap-0.5 text-[7px] font-mono px-1 py-0.2 rounded font-bold bg-destructive/15 text-destructive border border-destructive/30 uppercase tracking-wide"
+                title="Duplicate variable names detected in this store!"
               >
-                {/* Left-side inbound target handle for direct wiring from WebPage actions */}
-                <Handle
-                  type="target"
-                  position={Position.Left}
-                  id="populate-in-left"
-                  className="w-2.5 h-2.5 !bg-emerald-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -left-1.5 z-10"
-                  style={{ top: "50%" }}
-                  title={`${populateOverride?.name || "populate"}: Wire from WebPage action or realtime connection`}
-                />
-                <div className="flex items-center gap-1.5 truncate max-w-[170px]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                  <span className="font-semibold text-foreground/90 truncate">
-                    {populateOverride?.name || "populate"}
-                  </span>
-                  <span className="text-[8px] text-muted-foreground/60 shrink-0">
-                    {populateOverride ? "(custom)" : "(default)"}
-                  </span>
-                </div>
-                {/* Outbound source handle for wiring to WebPage actions */}
-                <Handle
-                  type="source"
-                  position={Position.Right}
-                  id="populate-out"
-                  className={cn(
-                    "w-2.5 h-2.5 !bg-emerald-500 border-2 border-background cursor-pointer hover:scale-125 transition-all -right-1.5 z-10",
-                    edges.some((e) => (e.source === id && (e.sourceHandle === "populate-out" || e.sourceHandle === "populate-in")) || (e.target === id && (e.targetHandle === "populate-in" || e.targetHandle === "populate-in-left"))) && "ring-2 ring-emerald-500/50 scale-110",
-                  )}
-                  style={{ top: "50%" }}
-                  title={`${populateOverride?.name || "populate"}: Drag to WebPage action (e.g. pageLoad)`}
-                />
-              </div>
+                <AlertTriangle size={8} />
+                <span>DUP FIELDS</span>
+              </span>
             )}
+          </div>
+          <span className="text-[8px] text-indigo-400/90 font-bold uppercase tracking-wider">Zustand</span>
+        </div>
+      </div>
 
-            {/* 2. Field Manipulators (setters, plus append & pop for array fields) */}
-            {fieldManipulators.map((m, mIdx) => {
-              const f = m.field;
-              const hasBelow = mIdx < manipulatorsCount - 1 || hasReset || customCount > 0;
-              const isManipulatorConnected = edges.some(
+      {/* State Variables List (1 Reducer per Variable with Multiple Actions) */}
+      <div className="flex flex-col gap-1.5 p-2.5 pt-2 nodrag">
+        <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1.5 py-0.5 bg-secondary/30 rounded border border-border/30 group">
+          <div className="flex items-center gap-1.5">
+            <span className={cn("w-1.5 h-1.5 rounded-full", duplicateFieldIds.size > 0 ? "bg-destructive animate-pulse" : "bg-indigo-500")} />
+            <span>State Variables</span>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 text-muted-foreground hover:text-foreground hover:bg-secondary transition-all"
+            onClick={handleAddField}
+            title="Add State Variable"
+          >
+            <Plus className="w-3.5 h-3.5 text-indigo-400" />
+          </Button>
+        </div>
+
+        <div className="max-h-[300px] overflow-y-auto pr-0.5 flex flex-col gap-1.5">
+          {(!data.fields || data.fields.length === 0) ? (
+            <div className="text-[10px] text-muted-foreground italic text-center py-3">
+              No state variables. Click + to add.
+            </div>
+          ) : (
+            data.fields.map((f) => {
+              const isDupe = duplicateFieldIds.has(f.id);
+              const isEditingField = editingFieldId === f.id;
+              const isCustomType = availableCustomTypes.some((t) => t.name === f.type);
+              const supportedActions = f.actions && f.actions.length > 0
+                ? f.actions
+                : getSupportedActionsForType(f.type, f.isArray);
+              const reducerName = f.reducer || `${f.name || "state"}_reducer`;
+
+              const isOutputConnected = edges.some(
                 (e) =>
-                  (e.source === id &&
-                    (e.sourceHandle === m.outHandleId ||
-                      (m.type === "setter" &&
-                        (e.sourceHandle === `mutate-out-${f.id}` ||
-                          (e.sourceHandle === "mutate-out" &&
-                            (e.data?.actionName === m.name ||
-                              (e.data as Record<string, unknown> | undefined)?.targetFieldId === f.id ||
-                              manipulatorsCount === 1)))) ||
-                      (m.override && e.sourceHandle === `store-action-out-${m.override.id}`))) ||
-                  (e.target === id &&
-                    (e.targetHandle === m.inHandleId ||
-                      e.targetHandle === `${m.type}-in-${f.id}` ||
-                      (m.type === "setter" &&
-                        (e.targetHandle === `mutate-in-left-${f.id}` ||
-                          e.targetHandle === `mutate-in-${f.id}` ||
-                          ((e.targetHandle === "mutate-in" || e.targetHandle === "mutate-in-left") &&
-                            (e.data?.actionName === m.name ||
-                              (e.data as Record<string, unknown> | undefined)?.targetFieldId === f.id ||
-                              manipulatorsCount === 1)))) ||
-                      (m.override &&
-                        (e.targetHandle === `store-action-in-${m.override.id}` ||
-                          e.targetHandle === `store-action-in-left-${m.override.id}`)))),
+                  e.source === id &&
+                  (e.sourceHandle === `store-field-out-${f.id}` ||
+                    e.sourceHandle === `setter-out-${f.id}` ||
+                    e.sourceHandle === `append-out-${f.id}` ||
+                    e.sourceHandle === `pop-out-${f.id}`),
               );
+              const isInputConnected = edges.some(
+                (e) =>
+                  e.target === id &&
+                  (e.targetHandle === `store-field-in-${f.id}` ||
+                    e.targetHandle === `setter-in-left-${f.id}` ||
+                    e.targetHandle === `setter-in-${f.id}` ||
+                    e.targetHandle === `append-in-left-${f.id}` ||
+                    e.targetHandle === `pop-in-left-${f.id}`),
+              );
+
+              if (isEditingField) {
+                return (
+                  <div
+                    key={f.id}
+                    className="flex flex-col gap-2 p-2.5 rounded-lg bg-secondary/80 border border-indigo-500/50 shadow-md nodrag"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <LocalInput
+                        className="h-7 text-xs font-mono font-semibold bg-background flex-1"
+                        value={f.name}
+                        placeholder="field_name"
+                        autoFocus
+                        onChange={(e) => handleUpdateField(f.id, { name: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            setEditingFieldId(null);
+                          }
+                        }}
+                      />
+                      <Button
+                        size="icon"
+                        variant="default"
+                        className="h-7 w-7 bg-indigo-600 hover:bg-indigo-500 text-white shrink-0 cursor-pointer"
+                        onClick={() => setEditingFieldId(null)}
+                        title="Done editing"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 cursor-pointer"
+                        onClick={(e) => handleDeleteField(f.id, e)}
+                        title="Delete state variable"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] text-muted-foreground font-medium">Type</span>
+                        <span className="text-[8px] font-mono text-indigo-400 font-semibold">
+                          1 Reducer • {supportedActions.length} actions
+                        </span>
+                      </div>
+                      <Select
+                        value={isCustomType ? `custom:${f.type}` : f.type}
+                        onValueChange={(val) => {
+                          if (val.startsWith("custom:")) {
+                            const customName = val.replace("custom:", "");
+                            handleUpdateField(f.id, {
+                              type: customName,
+                              actions: getSupportedActionsForType("object"),
+                            });
+                          } else {
+                            handleUpdateField(f.id, {
+                              type: val,
+                              actions: getSupportedActionsForType(val),
+                            });
+                          }
+                        }}
+                      >
+                        <SelectTrigger
+                          size="sm"
+                          className="h-6 text-[10px] bg-background font-mono w-full"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="font-mono text-xs">
+                          <SelectItem value="string">string</SelectItem>
+                          <SelectItem value="number">number</SelectItem>
+                          <SelectItem value="boolean">boolean</SelectItem>
+                          <SelectItem value="array">array</SelectItem>
+                          <SelectItem value="object">object (generic)</SelectItem>
+                          {availableCustomTypes.length > 0 && (
+                            <>
+                              <div className="px-2 py-1 text-[10px] uppercase font-bold text-cyan-400 bg-cyan-500/10 rounded-sm my-1 flex items-center gap-1 font-mono">
+                                <Braces className="w-3 h-3" /> Custom Types
+                              </div>
+                              {availableCustomTypes.map((t) => (
+                                <SelectItem
+                                  key={t.id}
+                                  value={`custom:${t.name}`}
+                                  className="text-xs font-mono text-cyan-300"
+                                >
+                                  {t.name} ({t.kind})
+                                </SelectItem>
+                              ))}
+                            </>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Reducer & Actions breakdown */}
+                    <div className="p-1.5 rounded bg-background/60 border border-border/30 text-[8px] font-mono text-muted-foreground flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1 text-foreground/80 font-semibold">
+                        <GitMerge size={9} className="text-indigo-400 shrink-0" />
+                        <span>Reducer: <code className="text-indigo-400">{reducerName}</code></span>
+                      </div>
+                      <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                        <span className="text-muted-foreground/60">Actions:</span>
+                        {supportedActions.map((act) => (
+                          <span key={act} className="px-1 py-0.2 rounded bg-indigo-500/15 text-indigo-300 font-semibold">
+                            {act}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
 
               return (
                 <div
-                  key={m.key}
+                  key={f.id}
                   className={cn(
-                    "relative flex items-center justify-between px-3 py-1 bg-muted/5 hover:bg-muted/20 transition-colors group/row",
-                    hasBelow && "border-b border-border/20",
-                    !hasBelow && "rounded-b-[10px]",
+                    "relative flex items-center justify-between bg-secondary/40 hover:bg-secondary/70 px-2 py-1.5 rounded-lg text-[10px] font-mono border border-border/40 group transition-all nodrag",
+                    isDupe && "border-destructive/40 bg-destructive/10 text-destructive",
                   )}
                 >
-                  {/* Left-side inbound target handle */}
+                  {/* Left target handle: connects Type from TypesNode, or action/trigger that mutates this state variable via its reducer */}
                   <Handle
                     type="target"
                     position={Position.Left}
-                    id={m.inHandleId}
+                    id={`store-field-in-${f.id}`}
                     className={cn(
-                      "w-2.5 h-2.5 border-2 border-background cursor-pointer hover:scale-125 transition-transform -left-1.5 z-10",
-                      m.colorClass,
+                      "w-2.5 h-2.5 border-2 border-background cursor-pointer hover:scale-125 transition-all -left-1.5 z-10",
+                      isInputConnected
+                        ? "!bg-indigo-400 ring-2 ring-indigo-500/50 scale-110"
+                        : "!bg-indigo-500 hover:!bg-indigo-400",
                     )}
                     style={{ top: "50%" }}
-                    title={`${m.name}: Wire from WebPage action or realtime connection`}
+                    title={`${f.name}: Wire from WebPage action to update state via reducer, or connect from TypesNode${isInputConnected ? " (connected)" : ""}`}
                   />
-                  <div className="flex items-center gap-1.5 truncate max-w-[170px]">
-                    <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", m.dotClass)} />
-                    <span className="font-semibold text-foreground/90 truncate">
-                      {m.name}
+
+                  <div
+                    className="flex items-center gap-1.5 min-w-0 flex-1 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingFieldId(f.id);
+                    }}
+                    title="Click to edit field name & reducer configuration"
+                  >
+                    {isDupe ? (
+                      <AlertTriangle size={10} className="text-destructive shrink-0" />
+                    ) : (
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                    )}
+                    <span
+                      className={cn(
+                        "font-bold truncate max-w-[95px]",
+                        isDupe
+                          ? "text-destructive font-bold"
+                          : !f.name
+                            ? "text-amber-500 italic"
+                            : "text-foreground",
+                      )}
+                    >
+                      {f.name || "(unnamed)"}
                     </span>
-                    <span className="text-[8px] text-muted-foreground/60 shrink-0">
-                      {m.badgeLabel}
-                    </span>
+
+                    {isCustomType ? (
+                      <Badge
+                        variant="outline"
+                        className="text-[8px] px-1 py-0 h-4 border-cyan-500/40 bg-cyan-500/10 text-cyan-400 font-mono font-normal shrink-0 flex items-center gap-1"
+                      >
+                        <Braces className="w-2.5 h-2.5" />
+                        {f.type}
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="text-[8px] px-1 py-0 h-4 border-border/60 text-muted-foreground font-mono font-normal shrink-0"
+                      >
+                        {f.type}
+                      </Badge>
+                    )}
+
+                    {/* Reducer indicator: 1 reducer with multiple actions */}
+                    <Badge
+                      variant="outline"
+                      className="text-[7.5px] px-1 py-0 h-3.5 border-indigo-500/30 bg-indigo-500/10 text-indigo-400 font-mono font-medium shrink-0 flex items-center gap-0.5"
+                      title={`Reducer: ${reducerName}\nHandles ${supportedActions.length} actions: ${supportedActions.join(", ")}`}
+                    >
+                      <GitMerge className="w-2.5 h-2.5" />
+                      <span>{supportedActions.length} actions</span>
+                    </Badge>
+
+                    {f.defaultValue !== undefined && f.defaultValue !== "" && (
+                      <span className="text-[7.5px] text-muted-foreground/60 truncate font-mono">
+                        = {typeof f.defaultValue === "object" ? JSON.stringify(f.defaultValue) : String(f.defaultValue)}
+                      </span>
+                    )}
                   </div>
-                  {/* Outbound source handle */}
+
+                  <div className="flex items-center gap-0.5 ml-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingFieldId(f.id);
+                      }}
+                      title="Edit state variable"
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer"
+                      onClick={(e) => handleDeleteField(f.id, e)}
+                      title="Delete state variable"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                          onClick={(e) => e.stopPropagation()}
+                          title="More options"
+                        >
+                          <MoreVertical className="w-3 h-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44 text-xs font-sans">
+                        <DropdownMenuItem
+                          onClick={() => setEditingFieldId(f.id)}
+                          className="gap-2 text-xs cursor-pointer"
+                        >
+                          <Pencil className="w-3.5 h-3.5" /> Edit inline
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleOpenConfig()}
+                          className="gap-2 text-xs cursor-pointer"
+                        >
+                          <Settings2 className="w-3.5 h-3.5" /> Open in Inspector
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleDuplicateField(f)}
+                          className="gap-2 text-xs cursor-pointer"
+                        >
+                          <Copy className="w-3.5 h-3.5" /> Duplicate variable
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={(e) => handleDeleteField(f.id, e)}
+                          className="gap-2 text-xs text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Delete variable
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  {/* Right source handle: connects to WebPage to read / render state variable */}
                   <Handle
                     type="source"
                     position={Position.Right}
-                    id={m.outHandleId}
+                    id={`store-field-out-${f.id}`}
                     className={cn(
                       "w-2.5 h-2.5 border-2 border-background cursor-pointer hover:scale-125 transition-all -right-1.5 z-10",
-                      m.colorClass,
-                      isManipulatorConnected && cn("ring-2 scale-110", m.ringClass),
+                      isOutputConnected
+                        ? "!bg-cyan-400 ring-2 ring-cyan-500/50 scale-110"
+                        : "!bg-cyan-500 hover:!bg-cyan-400",
                     )}
                     style={{ top: "50%" }}
-                    title={m.title}
+                    title={`${f.name}: Drag to WebPage to read / render state${isOutputConnected ? " (connected)" : ""}`}
                   />
                 </div>
               );
-            })}
+            })
+          )}
+        </div>
+      </div>
 
-            {/* 3. Reset Action (only if not disabled) */}
-            {!isResetDisabled && (
-              <div
-                className={cn(
-                  "relative flex items-center justify-between px-3 py-1 bg-muted/5 hover:bg-muted/20 transition-colors group/row",
-                  customCount > 0 && "border-b border-border/20",
-                  customCount === 0 && "rounded-b-[10px]",
-                )}
-              >
-                {/* Left-side inbound target handle for direct wiring from WebPage actions */}
-                <Handle
-                  type="target"
-                  position={Position.Left}
-                  id="reset-in-left"
-                  className="w-2.5 h-2.5 !bg-rose-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -left-1.5 z-10"
-                  style={{ top: "50%" }}
-                  title={`${resetOverride?.name || "reset"}: Wire from WebPage action or realtime connection`}
-                />
-                <div className="flex items-center gap-1.5 truncate max-w-[170px]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
-                  <span className="font-semibold text-foreground/90 truncate">
-                    {resetOverride?.name || "reset"}
-                  </span>
-                  <span className="text-[8px] text-muted-foreground/60 shrink-0">
-                    {resetOverride ? "(custom)" : "(unmount)"}
-                  </span>
-                </div>
-                {/* Outbound source handle for wiring to WebPage actions */}
-                <Handle
-                  type="source"
-                  position={Position.Right}
-                  id="reset-out"
-                  className={cn(
-                    "w-2.5 h-2.5 !bg-rose-500 border-2 border-background cursor-pointer hover:scale-125 transition-all -right-1.5 z-10",
-                    edges.some((e) => (e.source === id && (e.sourceHandle === "reset-out" || e.sourceHandle === "reset-in")) || (e.target === id && (e.targetHandle === "reset-in" || e.targetHandle === "reset-in-left"))) && "ring-2 ring-rose-500/50 scale-110",
-                  )}
-                  style={{ top: "50%" }}
-                  title={`${resetOverride?.name || "reset"}: Drag to WebPage action to reset state`}
-                />
-              </div>
-            )}
-
-            {/* Custom Actions if defined */}
-            {customActions.length > 0 && (
-              <div className="flex flex-col">
-                {customActions.map((act, idx) => {
-                  const isLast = idx === customActions.length - 1;
-                  return (
-                    <div
-                      key={act.id}
-                      className={cn(
-                        "relative flex items-center justify-between px-3 py-1 bg-muted/5 hover:bg-muted/20 transition-colors group/row text-[8px]",
-                        !isLast && "border-b border-border/20",
-                        isLast && "rounded-b-[10px]",
-                      )}
-                    >
-                      {/* Left-side inbound target handle */}
-                      <Handle
-                        type="target"
-                        position={Position.Left}
-                        id={`store-action-in-left-${act.id}`}
-                        className="w-2 h-2 !bg-indigo-400 border border-background cursor-pointer hover:scale-125 transition-transform -left-1 z-10"
-                        style={{ top: "50%" }}
-                        title={`${act.name}: Wire from WebPage action or realtime connection`}
-                      />
-                      <div className="flex items-center gap-1 truncate max-w-[170px]">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
-                        <span className="font-medium text-foreground truncate">{act.name}</span>
-                        <span className="text-[7px] text-muted-foreground/60 uppercase shrink-0">
-                          ({act.actionType})
-                        </span>
-                      </div>
-                      <Handle
-                        type="source"
-                        position={Position.Right}
-                        id={`store-action-out-${act.id}`}
-                        className={cn(
-                          "w-2 h-2 !bg-indigo-400 border border-background cursor-pointer hover:scale-125 transition-all -right-1 z-10",
-                          edges.some((e) => (e.source === id && (e.sourceHandle === `store-action-out-${act.id}` || e.sourceHandle === `store-action-in-${act.id}`)) || (e.target === id && (e.targetHandle === `store-action-in-${act.id}` || e.targetHandle === `store-action-in-left-${act.id}`))) && "ring-2 ring-indigo-400/50 scale-110",
-                        )}
-                        style={{ top: "50%" }}
-                        title={`${act.name}: Drag to WebPage action`}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })()}
-
-      {/* Fallback generic handle for legacy edges */}
+      {/* Hidden / Fallback handles for backward compatibility with existing saved edges */}
       <Handle
         type="source"
         position={Position.Right}
@@ -904,6 +844,122 @@ export const StateStoreNode = ({
         id="mutate-in"
         style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
       />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="populate-out"
+        style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+      />
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="populate-in-left"
+        style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+      />
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="populate-in"
+        style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="reset-out"
+        style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+      />
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="reset-in-left"
+        style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+      />
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="reset-in"
+        style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+      />
+      {data.fields?.map((f) => (
+        <React.Fragment key={`legacy-handles-${f.id}`}>
+          <Handle
+            type="target"
+            position={Position.Left}
+            id={`setter-in-left-${f.id}`}
+            style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+          />
+          <Handle
+            type="target"
+            position={Position.Left}
+            id={`setter-in-${f.id}`}
+            style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+          />
+          <Handle
+            type="source"
+            position={Position.Right}
+            id={`setter-out-${f.id}`}
+            style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+          />
+          <Handle
+            type="target"
+            position={Position.Left}
+            id={`append-in-left-${f.id}`}
+            style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+          />
+          <Handle
+            type="source"
+            position={Position.Right}
+            id={`append-out-${f.id}`}
+            style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+          />
+          <Handle
+            type="target"
+            position={Position.Left}
+            id={`pop-in-left-${f.id}`}
+            style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+          />
+          <Handle
+            type="source"
+            position={Position.Right}
+            id={`pop-out-${f.id}`}
+            style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+          />
+          <Handle
+            type="target"
+            position={Position.Left}
+            id={`mutate-in-left-${f.id}`}
+            style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+          />
+          <Handle
+            type="source"
+            position={Position.Right}
+            id={`mutate-out-${f.id}`}
+            style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+          />
+        </React.Fragment>
+      ))}
+      {data.actions?.map((act) => (
+        <React.Fragment key={`legacy-action-handles-${act.id}`}>
+          <Handle
+            type="target"
+            position={Position.Left}
+            id={`store-action-in-left-${act.id}`}
+            style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+          />
+          <Handle
+            type="target"
+            position={Position.Left}
+            id={`store-action-in-${act.id}`}
+            style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+          />
+          <Handle
+            type="source"
+            position={Position.Right}
+            id={`store-action-out-${act.id}`}
+            style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+          />
+        </React.Fragment>
+      ))}
     </div>
   );
 };

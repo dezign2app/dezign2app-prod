@@ -954,16 +954,8 @@ export const langgraphConvexDataValidator = v.object({
 export const stateStoreConvexDataValidator = v.object({
   label: v.optional(v.string()),
   storeName: v.optional(v.string()),
-  scope: v.optional(v.union(v.literal("global"), v.literal("local"))),
   targetWebAppId: v.optional(v.string()),
   targetPageId: v.optional(v.string()),
-  storage: v.optional(
-    v.union(
-      v.literal("memory"),
-      v.literal("localStorage"),
-      v.literal("sessionStorage"),
-    ),
-  ),
   fields: v.optional(
     v.array(
       v.object({
@@ -974,6 +966,9 @@ export const stateStoreConvexDataValidator = v.object({
         required: v.optional(v.boolean()),
         defaultValue: v.optional(v.any()),
         description: v.optional(v.string()),
+        reducer: v.optional(v.string()),
+        customReducerCode: v.optional(v.string()),
+        actions: v.optional(v.array(v.string())),
       }),
     ),
   ),

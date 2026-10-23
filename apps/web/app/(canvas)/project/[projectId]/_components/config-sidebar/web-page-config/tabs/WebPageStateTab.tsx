@@ -129,8 +129,6 @@ export function WebPageStateTab({
         label: storeName,
         storeName,
         description: `Zustand state store for ${data?.label || "Page"}`,
-        scope: "global",
-        storage: "memory",
         targetPageId: nodeId,
         fields: [
           { id: `f-${Date.now()}-1`, name: "isLoading", type: "boolean", defaultValue: false },

@@ -9,7 +9,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@workspace/ui/components/tabs";
-import { Database, Sliders, Zap, AlertCircle, AlertTriangle } from "lucide-react";
+import { Database, Sliders, Zap, AlertCircle, AlertTriangle, GitMerge } from "lucide-react";
 import { GlobalStoreField, GlobalStoreAction, StateStoreTestCase, StoreActionType } from "@workspace/canvas/types";
 import { cn } from "@workspace/ui/lib/utils";
 import { toast } from "sonner";
@@ -100,7 +100,6 @@ const StateStoreConfigContent: React.FC<
         label: `${preset.name}Store`,
         storeName: preset.name,
         description: preset.description,
-        storage: preset.storage,
         fields: newFields,
         actions: newActions,
       },
@@ -916,20 +915,8 @@ const StateStoreConfigContent: React.FC<
     updateNode(node.id, { data: { ...node.data, description: desc } });
   }, [node, updateNode]);
 
-  const handleUpdateScope = useCallback((val: "global" | "local") => {
-    if (!node) return;
-    updateNode(node.id, { data: { ...node.data, scope: val } });
-  }, [node, updateNode]);
-
-  const handleUpdateStorage = useCallback((val: "memory" | "localStorage" | "sessionStorage") => {
-    if (!node) return;
-    updateNode(node.id, { data: { ...node.data, storage: val } });
-  }, [node, updateNode]);
-
   const data = node.data;
   const storeName = data.storeName || data.label || "App";
-  const scope = data.scope || "global";
-  const storage = data.storage || "memory";
 
   const rawBase = storeName.trim().replace(/[^a-zA-Z0-9_$]/g, "");
   const baseName = rawBase.charAt(0).toUpperCase() + rawBase.slice(1);
@@ -994,17 +981,6 @@ const StateStoreConfigContent: React.FC<
           <div>
             <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
               State Store
-              <Badge
-                variant="outline"
-                className={cn(
-                  "text-[9px] px-1 py-0 uppercase font-mono",
-                  scope === "global"
-                    ? "text-amber-500 border-amber-500/30 bg-amber-500/10"
-                    : "text-sky-400 border-sky-500/30 bg-sky-500/10",
-                )}
-              >
-                {scope}
-              </Badge>
             </h3>
             <p className="text-[11px] text-muted-foreground font-mono">
               {hookName}()
@@ -1063,25 +1039,30 @@ const StateStoreConfigContent: React.FC<
             value="schema"
             className="text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
           >
-            <Sliders size={12} />
-            <span>Store & Logic</span>
+            <Database size={13} className="text-indigo-500 dark:text-indigo-400" />
+            <span>Variables &amp; Reducers</span>
+            <Badge
+              variant="secondary"
+              className="text-[10px] px-1.5 py-0 h-4 rounded-full font-mono ml-1 font-semibold"
+            >
+              {fields.length}
+            </Badge>
           </TabsTrigger>
           <TabsTrigger
             value="playground"
             className="text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
           >
-            <Zap size={12} />
+            <Zap size={13} className="text-amber-500 dark:text-amber-400" />
             <span>Live Test Area</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse ml-1" />
           </TabsTrigger>
         </TabsList>
 
-        {/* TAB 1: Store & Logic */}
+        {/* TAB 1: Variables & Reducers (1 Reducer Architecture) */}
         <TabsContent value="schema" className="mt-4 space-y-4">
           <StoreIdentitySection
             storeName={storeName}
             description={data.description || ""}
-            scope={scope}
-            storage={storage}
             connectedPages={connectedPages}
             isDuplicateStoreName={isDuplicateStoreName}
             duplicateStoreMessage={
@@ -1089,11 +1070,8 @@ const StateStoreConfigContent: React.FC<
                 ? `Another App Store is already named "${storeName}" (${duplicateStoreNodes[0]?.data?.label || duplicateStoreNodes[0]?.id}). Store names must be unique.`
                 : undefined
             }
-            onApplyPreset={handleApplyPreset}
             onUpdateStoreName={handleUpdateStoreName}
             onUpdateDescription={handleUpdateDescription}
-            onUpdateScope={handleUpdateScope}
-            onUpdateStorage={handleUpdateStorage}
           />
 
           <StoreFieldsSection
@@ -1103,26 +1081,24 @@ const StateStoreConfigContent: React.FC<
             onUpdateField={handleUpdateField}
             onRemoveField={handleRemoveField}
             onSelectFieldAction={handleSelectFieldAction}
+            onOpenTestForField={() => setActiveTab("playground")}
           />
 
-          <StoreDefaultManipulatorsSection
-            fields={fields}
-            actions={actions}
-            disabledDefaultManipulators={disabledDefaultManipulators}
-            deletedDefaultManipulators={deletedDefaultManipulators}
-            onModifyDefaultManipulator={handleModifyDefaultManipulator}
-            onRevertDefaultManipulator={handleRevertDefaultManipulator}
-            onToggleDefaultManipulator={handleToggleDefaultManipulator}
-            onDeleteDefaultManipulator={handleDeleteDefaultManipulator}
-          />
-
-          <StoreActionsSection
-            actions={actions}
-            fields={fields}
-            onAddAction={handleAddAction}
-            onUpdateAction={handleUpdateAction}
-            onRemoveAction={handleRemoveAction}
-          />
+          {/* Store Architecture & Hydration Utilities */}
+          <div className="flex items-start gap-2.5 p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/20 text-xs">
+            <GitMerge className="text-indigo-400 mt-0.5 shrink-0" size={15} />
+            <div className="flex flex-col gap-1">
+              <span className="font-semibold text-foreground text-[11px] flex items-center gap-1.5">
+                <span>State Store Architecture</span>
+                <Badge variant="outline" className="text-[8px] h-3.5 px-1 py-0 uppercase font-mono text-indigo-400 border-indigo-500/30">
+                  1 Reducer / Variable
+                </Badge>
+              </span>
+              <span className="text-[10px] text-muted-foreground leading-relaxed">
+                Each state variable has <strong>1 dedicated reducer</strong> handling all its actions (<code className="font-mono text-indigo-400">set</code>, <code className="font-mono text-indigo-400">append</code>, <code className="font-mono text-indigo-400">pop</code>, <code className="font-mono text-indigo-400">increment</code>, etc.) via action payloads or direct values. Connect inputs to <code className="font-mono text-foreground font-semibold">store-field-in-[id]</code> to dispatch updates and outputs to <code className="font-mono text-foreground font-semibold">store-field-out-[id]</code> to read state.
+              </span>
+            </div>
+          </div>
         </TabsContent>
 
         {/* TAB 2: Live Test Area (State Manipulator Playground & Test Cases) */}

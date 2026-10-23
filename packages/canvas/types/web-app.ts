@@ -118,6 +118,9 @@ export interface GlobalStoreField {
   suggestedComponent?: StateRenderComponent;
   actionId?: string;
   actionType?: StoreActionType | "none";
+  reducer?: string;
+  customReducerCode?: string;
+  actions?: string[];
 }
 
 export interface GlobalStoreAction {

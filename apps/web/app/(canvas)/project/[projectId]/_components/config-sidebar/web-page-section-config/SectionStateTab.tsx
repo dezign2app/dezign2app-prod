@@ -171,8 +171,6 @@ export const SectionStateTab: React.FC<SectionStateTabProps> = ({
         label: storeName,
         storeName,
         description: `Zustand state store for ${section?.name || "Section"}`,
-        scope: "global",
-        storage: "memory",
         targetPageId: nodeId,
         fields: [
           {
