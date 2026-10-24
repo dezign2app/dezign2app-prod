@@ -86,7 +86,6 @@ const CONNECTIONS = [
 ];
 
 export const HeroCanvasPreview: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"graph" | "schema" | "langgraph">("graph");
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const reduceMotion = useReducedMotion();
 
@@ -107,40 +106,6 @@ export const HeroCanvasPreview: React.FC = () => {
           <span className="text-xs font-mono text-zinc-200">
             distributed-topology.d2a
           </span>
-        </div>
-
-        {/* View Mode Tabs - Minimalist */}
-        <div className="flex items-center gap-1 bg-[#18181c] p-0.5 rounded-md border border-zinc-800 text-xs font-mono">
-          <button
-            onClick={() => setActiveTab("graph")}
-            className={`px-2.5 py-1 rounded text-xs transition-colors ${
-              activeTab === "graph"
-                ? "bg-zinc-800 text-white font-medium"
-                : "text-zinc-400 hover:text-white"
-            }`}
-          >
-            Graph
-          </button>
-          <button
-            onClick={() => setActiveTab("schema")}
-            className={`px-2.5 py-1 rounded text-xs transition-colors ${
-              activeTab === "schema"
-                ? "bg-zinc-800 text-white font-medium"
-                : "text-zinc-400 hover:text-white"
-            }`}
-          >
-            Schema ERD
-          </button>
-          <button
-            onClick={() => setActiveTab("langgraph")}
-            className={`px-2.5 py-1 rounded text-xs transition-colors ${
-              activeTab === "langgraph"
-                ? "bg-zinc-800 text-white font-medium"
-                : "text-zinc-400 hover:text-white"
-            }`}
-          >
-            LangGraph
-          </button>
         </div>
 
         {/* Compiler Status Badge - Minimalist */}

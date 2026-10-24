@@ -20,9 +20,9 @@ const FAQS: FaqItem[] = [
       "You own 100% of the code. There are zero runtime fees, no proprietary SDKs, and zero vendor lock-in. You can download the project as a ZIP, push it to GitHub, and deploy to AWS, GCP, Vercel, Railway, or your own self-hosted servers. Your code is yours forever.",
   },
   {
-    question: "How is this different from generic AI chat tools like ChatGPT or Cursor?",
+    question: "How is this different from pure AI code generators like Cursor or ChatGPT?",
     answer:
-      "Generic AI assistants write code line-by-line without understanding your complete distributed architecture, often breaking schema migrations and API contracts. Dezign2App operates at the architecture level: you visually design services, databases, and auth, and the compiler deterministically produces a fully wired monorepo with verified type safety.",
+      "Raw AI code assistants repeatedly regenerate entire files, burning hundreds of thousands of tokens on repetitive boilerplate while frequently hallucinating imports and schema mismatches. Dezign2App uses a deterministic algorithmic compiler: it translates your visual architecture into a complete Turborepo monorepo in milliseconds at $0 token cost. You save hours of debugging, eliminate compounding LLM bills, and can redeploy your capital toward safeguarding and hardening your product.",
   },
   {
     question: "Can I customize and extend the generated codebase?",

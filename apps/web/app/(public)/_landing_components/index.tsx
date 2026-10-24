@@ -4,9 +4,11 @@ import React from "react";
 import { Header } from "./header";
 import { HeroSection } from "./hero/HeroSection";
 import { ComparisonSection } from "./benefits/ComparisonSection";
+import { CompilerVsAiSection } from "./benefits/CompilerVsAiSection";
 import { StudioViewsSection } from "./studio-views/StudioViewsSection";
 import { CompilerShowcaseSection } from "./compiler/CompilerShowcaseSection";
 import { DesktopStudioSection } from "./desktop/DesktopStudioSection";
+import { FutureRoadmapSection } from "./future/FutureRoadmapSection";
 import { PricingSection } from "./pricing/PricingSection";
 import { FaqSection } from "./faq/FaqSection";
 import { FinalCtaSection } from "./cta/FinalCtaSection";
@@ -19,9 +21,11 @@ export const Landing: React.FC = () => {
       <main className="w-full flex flex-col">
         <HeroSection />
         <ComparisonSection />
+        <CompilerVsAiSection />
         <StudioViewsSection />
         <CompilerShowcaseSection />
         <DesktopStudioSection />
+        <FutureRoadmapSection />
         <PricingSection />
         <FaqSection />
         <FinalCtaSection />
