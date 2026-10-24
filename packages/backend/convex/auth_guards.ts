@@ -34,7 +34,7 @@ export async function isUserAuthorizedForOrg(
 /**
  * Checks whether an organization has an active subscription, either via
  * organization_billing (with dedicated creemSubscriptionId) or through
- * the organization owner's personal subscription / early believer status.
+ * the organization owner's personal subscription.
  */
 export async function isOrgSubscriptionActive(
   ctx: QueryCtx | MutationCtx,
@@ -50,7 +50,7 @@ export async function isOrgSubscriptionActive(
     return orgBilling.status === "active" || orgBilling.status === "trialing";
   }
 
-  // Fallback: check if the organization owner has an active subscription or early believer status
+  // Fallback: check if the organization owner has an active personal subscription
   try {
     const ownerMember = await ctx.runQuery(
       components.betterAuth.adapter.findOne,
@@ -81,13 +81,6 @@ export async function isOrgSubscriptionActive(
           (s) => s.status === "active" || s.status === "trialing",
         );
         if (hasActiveSub) return true;
-
-        const ownerEb = await ctx.db
-          .query("early_believers")
-          .withIndex("by_user", (q) => q.eq("userId", ownerUser._id))
-          .first();
-
-        if (ownerEb && ownerEb.status === "active") return true;
       }
     }
   } catch (e) {
@@ -98,7 +91,7 @@ export async function isOrgSubscriptionActive(
 }
 
 /**
- * Checks whether a user has an active personal subscription, early believer status, or system admin rights.
+ * Checks whether a user has an active personal subscription or system admin rights.
  */
 export async function isUserSubscriptionActive(
   ctx: QueryCtx | MutationCtx,
@@ -113,17 +106,9 @@ export async function isUserSubscriptionActive(
     .withIndex("by_user", (q) => q.eq("userId", user._id))
     .collect();
 
-  const hasActiveSub = subscriptions.some(
+  return subscriptions.some(
     (sub) => sub.status === "active" || sub.status === "trialing",
   );
-  if (hasActiveSub) return true;
-
-  const eb = await ctx.db
-    .query("early_believers")
-    .withIndex("by_user", (q) => q.eq("userId", user._id))
-    .first();
-
-  return !!(eb && eb.status === "active");
 }
 
 /**

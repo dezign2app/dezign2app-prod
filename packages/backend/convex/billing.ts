@@ -58,65 +58,6 @@ export const handleCheckoutCompleted = mutation({
       }
     }
 
-    // Handle Early Believer checkout metadata
-    if (data.metadata?.type === "early_believer" || data.metadata?.tier) {
-      const tier: 500 | 1000 = Number(data.metadata.tier) === 1000 ? 1000 : 500;
-      const seats = Math.max(
-        1,
-        Number(data.metadata.seats) || Number(data.units) || 1,
-      );
-      const discountPercent = tier === 1000 ? 10 : 5;
-      const totalPaid = tier * seats;
-
-      const subscriptionMonths = tier === 1000 ? 12 : 6;
-      const investmentPerSeat = tier === 1000 ? 900 : 450;
-      const investmentAmount = investmentPerSeat * seats;
-
-      const periodDays = tier === 1000 ? 365 : 182;
-      const now = Date.now();
-      const periodEnd = now + periodDays * 24 * 60 * 60 * 1000;
-
-      await ctx.db.insert("early_believers", {
-        userId,
-        tier,
-        seats,
-        discountPercent,
-        investmentAmount,
-        subscriptionMonths,
-        currentPeriodStart: now,
-        currentPeriodEnd: periodEnd,
-        totalPaid,
-        status: "active",
-        creemCheckoutId: data.id,
-        creemCustomerId: data.customer?.id,
-        purchasedAt: now,
-      });
-
-      // Grant/extend user's active subscription in Convex DB
-      const existingSub = await ctx.db
-        .query("subscriptions")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .first();
-
-      if (existingSub) {
-        const newEnd = Math.max(existingSub.currentPeriodEnd, periodEnd);
-        await ctx.db.patch(existingSub._id, {
-          status: "active",
-          planId: `early_believer_${tier}`,
-          currentPeriodStart: now,
-          currentPeriodEnd: newEnd,
-        });
-      } else {
-        await ctx.db.insert("subscriptions", {
-          userId,
-          planId: `early_believer_${tier}`,
-          status: "active",
-          currentPeriodStart: now,
-          currentPeriodEnd: periodEnd,
-          creemSubscriptionId: `eb_${data.id || now}`,
-        });
-      }
-    }
 
     if (data.subscription) {
       const productId =
@@ -148,58 +89,6 @@ export const handleCheckoutCompleted = mutation({
       }
     }
     return { success: true };
-  },
-});
-
-export const getUserEarlyBeliever = query({
-  args: { email: v.string() },
-  handler: async (ctx, { email }) => {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_email", (q) => q.eq("email", email))
-      .first();
-
-    if (!user) return null;
-
-    const ebPurchases = await ctx.db
-      .query("early_believers")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
-      .collect();
-
-    if (ebPurchases.length === 0) return null;
-
-    const totalSeats = ebPurchases.reduce((acc, item) => acc + item.seats, 0);
-    const maxDiscountPercent = Math.max(
-      ...ebPurchases.map((item) => item.discountPercent),
-    );
-    const totalPaid = ebPurchases.reduce(
-      (acc, item) => acc + item.totalPaid,
-      0,
-    );
-    const totalInvestment = ebPurchases.reduce(
-      (acc, item) =>
-        acc +
-        (item.investmentAmount ||
-          (item.tier === 1000 ? 900 : 450) * item.seats),
-      0,
-    );
-    const maxSubscriptionEnd = Math.max(
-      ...ebPurchases.map(
-        (item) =>
-          item.currentPeriodEnd ||
-          item.purchasedAt +
-            (item.tier === 1000 ? 365 : 182) * 24 * 60 * 60 * 1000,
-      ),
-    );
-
-    return {
-      purchases: ebPurchases,
-      totalSeats,
-      discountPercent: maxDiscountPercent,
-      totalPaid,
-      totalInvestment,
-      maxSubscriptionEnd,
-    };
   },
 });
 
@@ -361,20 +250,7 @@ export const ensureOrgBilling = mutation({
 
     if (!user) throw new Error("User not found");
 
-    // Check if user has Early Believer seats
-    const ebPurchases = await ctx.db
-      .query("early_believers")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
-      .collect();
-
-    const ebSeats = ebPurchases.reduce(
-      (acc, item) => acc + (item.seats || 1),
-      0,
-    );
-    const totalSeats = Math.max(1, ebSeats);
-    const extraSeats = Math.max(0, totalSeats - 1);
-
-    // Check if owner has active subscription or early believer status
+    // Check if owner has active subscription or admin status
     const userSubs = await ctx.db
       .query("subscriptions")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
@@ -382,15 +258,14 @@ export const ensureOrgBilling = mutation({
     const hasActiveSub = userSubs.some(
       (s) => s.status === "active" || s.status === "trialing",
     );
-    const hasActiveEb = ebPurchases.some((eb) => eb.status === "active");
-    const isOwnerActive = user.isSystemAdmin || hasActiveSub || hasActiveEb;
+    const isOwnerActive = user.isSystemAdmin || hasActiveSub;
 
     const billingId = await ctx.db.insert("organization_billing", {
       organizationId: args.organizationId,
       ownerUserId: user._id,
       baseSeats: 1,
-      extraSeats,
-      totalSeats,
+      extraSeats: 0,
+      totalSeats: 1,
       status: isOwnerActive ? "active" : "canceled",
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -498,27 +373,6 @@ export const getOrgSeatStatus = query({
         status = isSubActive ? "active" : "inactive";
       }
     } else {
-      // Fallback: Check if owner has early believer seats
-      const user = await ctx.db
-        .query("users")
-        .withIndex("by_email", (q) => q.eq("email", identity.email!))
-        .first();
-
-      if (user) {
-        const ebPurchases = await ctx.db
-          .query("early_believers")
-          .withIndex("by_user", (q) => q.eq("userId", user._id))
-          .collect();
-
-        const ebSeats = ebPurchases.reduce(
-          (acc, item) => acc + (item.seats || 1),
-          0,
-        );
-        if (ebSeats > 1) {
-          totalSeats = ebSeats;
-          extraSeats = ebSeats - 1;
-        }
-      }
       const isSubActive = await isOrgSubscriptionActive(ctx, args.organizationId);
       status = isSubActive ? "active" : "inactive";
     }

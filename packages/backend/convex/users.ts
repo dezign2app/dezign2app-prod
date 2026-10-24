@@ -82,7 +82,7 @@ export const getSubscriptionStatus = query({
           };
         }
 
-        // Fallback: check if the organization owner has an active subscription or early believer status
+        // Fallback: check if the organization owner has an active personal subscription
         try {
           const ownerMember = await ctx.runQuery(
             components.betterAuth.adapter.findOne,
@@ -123,12 +123,7 @@ export const getSubscriptionStatus = query({
                 (s) => s.status === "active" || s.status === "trialing",
               );
 
-              const ownerEb = await ctx.db
-                .query("early_believers")
-                .withIndex("by_user", (q) => q.eq("userId", ownerUser._id))
-                .first();
-
-              if (activeOwnerSub || (ownerEb && ownerEb.status === "active")) {
+              if (activeOwnerSub) {
                 return {
                   status: "active",
                   isOrgSeat: true,
@@ -185,16 +180,8 @@ export const getSubscriptionStatus = query({
       } catch (e) {}
     }
 
-    // Check early believer status
-    const eb = await ctx.db
-      .query("early_believers")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
-      .first();
-
-    const isEbActive = eb && eb.status === "active";
-
-    // If no subscriptions found at all and not early believer, user is "new" to payments
-    if (subscriptions.length === 0 && !isEbActive) {
+    // If no subscriptions found at all, user is "new" to payments
+    if (subscriptions.length === 0) {
       return {
         status: "no_subscription",
         isOrgSeat: false,
@@ -208,13 +195,13 @@ export const getSubscriptionStatus = query({
       (sub) => sub.status === "active" || sub.status === "trialing",
     );
 
-    if (activeSub || isEbActive) {
+    if (activeSub) {
       return {
         status: "active",
         isOrgSeat: false,
         hasPriorSubscription: true,
-        creemSubscriptionId: activeSub?.creemSubscriptionId,
-        planId: activeSub?.planId || (eb ? `early_believer_${eb.tier}` : undefined),
+        creemSubscriptionId: activeSub.creemSubscriptionId,
+        planId: activeSub.planId,
         hasOrganizations: userOrgCount > 0,
       };
     }
