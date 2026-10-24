@@ -14,6 +14,8 @@ import {
   CheckCircle2,
   AlertCircle,
   HelpCircle,
+  Wifi,
+  Video,
 } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
 import { Input } from "@workspace/ui/components/input";
@@ -410,16 +412,24 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
 
     const fullUrl = queryParts.length > 0 ? `${routeTemplate}?${queryParts.join("&")}` : routeTemplate;
 
-    if (conn.protocol === "WEBSOCKET") {
+    const activeProto = (conn.protocol || "SSE").toUpperCase();
+    if (activeProto === "WEBSOCKET") {
       const roomStr = conn.room ? ` (room: "${conn.room}")` : "";
       return `const ws = new WebSocket(\`ws://localhost:8086${fullUrl}\`);\nws.onopen = () => {\n  console.log("Subscribed to ${conn.eventName || "stream"}${roomStr}");\n};`;
     }
-    if (conn.protocol === "WEBRTC") {
+    if (activeProto === "WEBRTC") {
       return `const rtc = new RTCPeerConnection();\n// Subscribed to WebRTC stream: ${fullUrl}`;
     }
     // Default SSE
     return `const es = new EventSource(\`${fullUrl}\`, { withCredentials: true });\nes.addEventListener("${conn.eventName || "message"}", (event) => {\n  // message received\n});`;
   }, [linkedEndpoint, conn, effectiveBindings]);
+
+  const activeProtocol = (conn.protocol || "SSE").toUpperCase() as "SSE" | "WEBSOCKET" | "WEBRTC";
+
+  const handleProtocolChange = (newProto: "SSE" | "WEBSOCKET" | "WEBRTC") => {
+    if (newProto === activeProtocol) return;
+    onUpdate?.({ protocol: newProto });
+  };
 
   const pathBindings = effectiveBindings.filter((b) => b.slot === "path_param");
   const otherBindings = effectiveBindings.filter((b) => b.slot !== "path_param");
@@ -487,6 +497,82 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
         </div>
       )}
 
+      {/* Real-time Mode Toggle: SSE | WebSocket | WebRTC */}
+      <div className="flex flex-col gap-2 p-2.5 rounded-lg border border-border/80 bg-muted/20">
+        <div className="flex items-center justify-between">
+          <Label className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+            <Radio size={12} className="text-violet-500" />
+            <span>Connection Mode</span>
+          </Label>
+          <Badge
+            variant="outline"
+            className={cn(
+              "text-[9px] font-mono uppercase px-1.5 py-0 h-4",
+              activeProtocol === "WEBSOCKET"
+                ? "border-cyan-500/40 text-cyan-600 dark:text-cyan-400 bg-cyan-500/10"
+                : activeProtocol === "WEBRTC"
+                ? "border-purple-500/40 text-purple-600 dark:text-purple-400 bg-purple-500/10"
+                : "border-violet-500/40 text-violet-600 dark:text-violet-400 bg-violet-500/10",
+            )}
+          >
+            {activeProtocol}
+          </Badge>
+        </div>
+
+        <div className="grid grid-cols-3 gap-1.5 p-1 bg-background/80 rounded-md border border-border/60">
+          <button
+            type="button"
+            onClick={() => handleProtocolChange("SSE")}
+            className={cn(
+              "flex flex-col items-center justify-center py-2 px-1 rounded-sm text-xs transition-all cursor-pointer border",
+              activeProtocol === "SSE"
+                ? "bg-violet-500/15 text-violet-700 dark:text-violet-300 font-semibold border-violet-500/40 shadow-xs"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40",
+            )}
+          >
+            <div className="flex items-center gap-1 font-medium">
+              <Radio size={12} className={activeProtocol === "SSE" ? "text-violet-500" : "text-muted-foreground"} />
+              <span>SSE</span>
+            </div>
+            <span className="text-[9px] text-muted-foreground mt-0.5 leading-none">EventStream</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleProtocolChange("WEBSOCKET")}
+            className={cn(
+              "flex flex-col items-center justify-center py-2 px-1 rounded-sm text-xs transition-all cursor-pointer border",
+              activeProtocol === "WEBSOCKET"
+                ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 font-semibold border-cyan-500/40 shadow-xs"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40",
+            )}
+          >
+            <div className="flex items-center gap-1 font-medium">
+              <Wifi size={12} className={activeProtocol === "WEBSOCKET" ? "text-cyan-500" : "text-muted-foreground"} />
+              <span>Socket</span>
+            </div>
+            <span className="text-[9px] text-muted-foreground mt-0.5 leading-none">WebSocket</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleProtocolChange("WEBRTC")}
+            className={cn(
+              "flex flex-col items-center justify-center py-2 px-1 rounded-sm text-xs transition-all cursor-pointer border",
+              activeProtocol === "WEBRTC"
+                ? "bg-purple-500/15 text-purple-700 dark:text-purple-300 font-semibold border-purple-500/40 shadow-xs"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40",
+            )}
+          >
+            <div className="flex items-center gap-1 font-medium">
+              <Video size={12} className={activeProtocol === "WEBRTC" ? "text-purple-500" : "text-muted-foreground"} />
+              <span>WebRTC</span>
+            </div>
+            <span className="text-[9px] text-muted-foreground mt-0.5 leading-none">Peer Media</span>
+          </button>
+        </div>
+      </div>
+
       {/* Route & Stream Info Banner */}
       <div className="flex items-center justify-between p-2.5 rounded-lg border border-violet-500/30 bg-violet-500/5">
         <div className="flex items-center gap-2 min-w-0">
@@ -500,9 +586,16 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
               </span>
               <Badge
                 variant="outline"
-                className="text-[9px] px-1 py-0 font-mono text-violet-600 dark:text-violet-400 border-violet-500/30 bg-violet-500/10"
+                className={cn(
+                  "text-[9px] px-1 py-0 font-mono",
+                  activeProtocol === "WEBSOCKET"
+                    ? "text-cyan-600 dark:text-cyan-400 border-cyan-500/30 bg-cyan-500/10"
+                    : activeProtocol === "WEBRTC"
+                    ? "text-purple-600 dark:text-purple-400 border-purple-500/30 bg-purple-500/10"
+                    : "text-violet-600 dark:text-violet-400 border-violet-500/30 bg-violet-500/10",
+                )}
               >
-                {conn.protocol || "SSE"}
+                {activeProtocol}
               </Badge>
               {conn.sourceServiceLabel && (
                 <span className="text-[10px] text-muted-foreground font-mono">
@@ -541,13 +634,13 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
       </div>
 
       {/* Broadcast / Signaling Room (WebSocket / WebRTC) */}
-      {(conn.protocol === "WEBSOCKET" || conn.protocol === "WEBRTC") && (
+      {(activeProtocol === "WEBSOCKET" || activeProtocol === "WEBRTC") && (
         <div className="flex flex-col gap-1.5 p-2.5 rounded-lg border border-cyan-500/30 bg-cyan-500/5">
           <div className="flex items-center justify-between">
             <Label className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
               <Radio size={12} className="text-cyan-500" />
               <span>
-                {conn.protocol === "WEBRTC" ? "Signaling Room / Peer Channel" : "Broadcast Room / Channel"}
+                {activeProtocol === "WEBRTC" ? "Signaling Room / Peer Channel" : "Broadcast Room / Channel"}
               </span>
             </Label>
             {conn.room && (
@@ -562,7 +655,7 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
             value={conn.room || ""}
             onChange={(e) => onUpdate?.({ room: e.target.value })}
             placeholder={
-              conn.protocol === "WEBRTC"
+              activeProtocol === "WEBRTC"
                 ? "e.g. room:conference or lobby"
                 : "e.g. global or user:${userId}"
             }
@@ -576,7 +669,7 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
       )}
 
       {/* WebRTC Capabilities Section */}
-      {conn.protocol === "WEBRTC" && (
+      {activeProtocol === "WEBRTC" && (
         <div className="flex flex-col gap-2 p-2.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5">
           <Label className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
             <Radio size={12} className="text-emerald-500" />

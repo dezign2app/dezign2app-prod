@@ -7,6 +7,9 @@ import {
   Endpoint,
   UIEventItem,
   ClientDeliveryProtocol,
+  PipelineStep,
+  PipelineStepDraft,
+  ConsumedEventItem,
 } from "@workspace/canvas/types";
 import { extractPathsFromObject } from "./pipeline-step-editor/sourcePaths";
 import { AvailablePath } from "./pipeline-step-editor/types";
@@ -61,6 +64,8 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
   const events = useBackendCanvasStore((s) => s.events);
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
+  const updateEndpoint = useBackendCanvasStore((s) => s.updateEndpoint);
+  const updateEvent = useBackendCanvasStore((s) => s.updateEvent);
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
 
   const pageNode = nodes.find((n) => n.id === nodeId);
@@ -76,18 +81,21 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
       const ep = endpoints.find((e) => e.id === derivedInfo.sourceEndpointId);
       const sourceItemName = ep ? ep.name || "Endpoint" : ev ? ev.name : undefined;
       const isLangGraph = s.type === "langgraph_invoke";
-      const isRtc = !isLangGraph && s.clientDeliveryProtocol === "WEBRTC";
-      const protocol: RealtimeConnection["protocol"] = isLangGraph
+      const isRtc = manualConn?.protocol
+        ? manualConn.protocol === "WEBRTC"
+        : !isLangGraph && s.clientDeliveryProtocol === "WEBRTC";
+      const protocol: RealtimeConnection["protocol"] = manualConn?.protocol || (isLangGraph
         ? (s.langGraphStreamingProtocol === "websocket" || s.clientDeliveryProtocol === "WEBSOCKET"
           ? "WEBSOCKET"
           : "SSE")
-        : (s.clientDeliveryProtocol || "SSE");
+        : (s.clientDeliveryProtocol || "SSE"));
       const eventName =
+        manualConn?.eventName ||
         s.clientDeliveryEventName ||
         (isLangGraph
           ? (protocol === "WEBSOCKET" ? "agent_stream" : (sourceItemName || s.name || "message"))
           : (sourceItemName || "message"));
-      const room = s.clientDeliveryRoom || (isLangGraph ? s.langGraphStreamingRoom : undefined);
+      const room = manualConn?.room || s.clientDeliveryRoom || (isLangGraph ? s.langGraphStreamingRoom : undefined);
 
       return {
         id,
@@ -95,13 +103,13 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
         eventName,
         room,
         mediaMode: isRtc ? s.clientDeliveryMediaMode : undefined,
-        enableDataChannel: isRtc ? s.clientDeliveryEnableDataChannel : undefined,
-        enableMic: isRtc ? (s.clientDeliveryEnableMic ?? s.clientDeliveryEnableAudio) : undefined,
-        enableSpeaker: isRtc ? s.clientDeliveryEnableSpeaker : undefined,
-        enableCamera: isRtc ? (s.clientDeliveryEnableCamera ?? s.clientDeliveryEnableVideo) : undefined,
-        enableScreenShare: isRtc ? s.clientDeliveryEnableScreenShare : undefined,
-        enableRemoteVideo: isRtc ? s.clientDeliveryEnableRemoteVideo : undefined,
-        iceServerUrl: isRtc ? s.clientDeliveryIceServer : undefined,
+        enableDataChannel: isRtc ? (manualConn?.enableDataChannel ?? s.clientDeliveryEnableDataChannel) : undefined,
+        enableMic: isRtc ? (manualConn?.enableMic ?? s.clientDeliveryEnableMic ?? s.clientDeliveryEnableAudio) : undefined,
+        enableSpeaker: isRtc ? (manualConn?.enableSpeaker ?? s.clientDeliveryEnableSpeaker) : undefined,
+        enableCamera: isRtc ? (manualConn?.enableCamera ?? s.clientDeliveryEnableCamera ?? s.clientDeliveryEnableVideo) : undefined,
+        enableScreenShare: isRtc ? (manualConn?.enableScreenShare ?? s.clientDeliveryEnableScreenShare) : undefined,
+        enableRemoteVideo: isRtc ? (manualConn?.enableRemoteVideo ?? s.clientDeliveryEnableRemoteVideo) : undefined,
+        iceServerUrl: isRtc ? (manualConn?.iceServerUrl || s.clientDeliveryIceServer) : undefined,
         description: sourceItemName || s.name,
         sourceServiceNodeId: derivedInfo.sourceNode?.id,
         sourceServiceLabel: derivedInfo.sourceNode?.data?.label || derivedInfo.sourceNode?.type || "Service",
@@ -194,9 +202,10 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
 
   const handleUpdateManual = (changes: Partial<RealtimeConnection>) => {
     if (!pageNode) return;
-    // Protocol / capabilities cannot be edited manually for derived connections, but bindings, action steps, room, and capabilities CAN
+    // Protocol / capabilities / room / bindings can all be toggled or configured
     if (
       isDerived &&
+      !changes.protocol &&
       !changes.storeActionBinding &&
       changes.storeActionBinding !== null &&
       !changes.storeActionBindings &&
@@ -209,6 +218,122 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
     ) {
       return;
     }
+
+    if (changes.protocol) {
+      const stepId = derivedInfo?.step?.id || conn.id;
+      // 1. Check endpoints
+      endpoints.forEach((ep) => {
+        if (ep.pipelineSteps) {
+          let stepUpdated = false;
+          const updateSteps = (steps: PipelineStep[]): PipelineStep[] => {
+            return steps.map((s) => {
+              let nextStep = { ...s };
+              if (s.id === stepId) {
+                stepUpdated = true;
+                nextStep.clientDeliveryProtocol = changes.protocol as ClientDeliveryProtocol;
+              }
+              if (nextStep.thenSteps) nextStep.thenSteps = updateSteps(nextStep.thenSteps);
+              if (nextStep.elseSteps) nextStep.elseSteps = updateSteps(nextStep.elseSteps);
+              if (nextStep.trySteps) nextStep.trySteps = updateSteps(nextStep.trySteps);
+              if (nextStep.catchSteps) nextStep.catchSteps = updateSteps(nextStep.catchSteps);
+              if (nextStep.loopBody) nextStep.loopBody = updateSteps(nextStep.loopBody);
+              return nextStep;
+            });
+          };
+          const newSteps = updateSteps(ep.pipelineSteps);
+          if (stepUpdated) updateEndpoint(ep.id, { pipelineSteps: newSteps });
+        }
+      });
+      // 2. Check events
+      events.forEach((ev) => {
+        if (ev.pipelineSteps) {
+          let stepUpdated = false;
+          const updateSteps = (steps: PipelineStep[]): PipelineStep[] => {
+            return steps.map((s) => {
+              let nextStep = { ...s };
+              if (s.id === stepId) {
+                stepUpdated = true;
+                nextStep.clientDeliveryProtocol = changes.protocol as ClientDeliveryProtocol;
+              }
+              if (nextStep.thenSteps) nextStep.thenSteps = updateSteps(nextStep.thenSteps);
+              if (nextStep.elseSteps) nextStep.elseSteps = updateSteps(nextStep.elseSteps);
+              if (nextStep.trySteps) nextStep.trySteps = updateSteps(nextStep.trySteps);
+              if (nextStep.catchSteps) nextStep.catchSteps = updateSteps(nextStep.catchSteps);
+              if (nextStep.loopBody) nextStep.loopBody = updateSteps(nextStep.loopBody);
+              return nextStep;
+            });
+          };
+          const newSteps = updateSteps(ev.pipelineSteps);
+          if (stepUpdated) updateEvent(ev.id, { pipelineSteps: newSteps });
+        }
+      });
+      // 3. Check services
+      nodes.forEach((n) => {
+        if (n.type === "service") {
+          let svcChanged = false;
+          let nextEps = n.data?.endpoints;
+          let nextEvs = n.data?.consumedEvents;
+          if (Array.isArray(nextEps)) {
+            nextEps = nextEps.map((ep: Endpoint): Endpoint => {
+              if (!ep.pipelineSteps) return ep;
+              let epChanged = false;
+              const updateSteps = (steps: PipelineStep[]): PipelineStep[] => {
+                return steps.map((s) => {
+                  let nextStep = { ...s };
+                  if (s.id === stepId) {
+                    epChanged = true;
+                    svcChanged = true;
+                    nextStep.clientDeliveryProtocol = changes.protocol as ClientDeliveryProtocol;
+                  }
+                  if (nextStep.thenSteps) nextStep.thenSteps = updateSteps(nextStep.thenSteps);
+                  if (nextStep.elseSteps) nextStep.elseSteps = updateSteps(nextStep.elseSteps);
+                  if (nextStep.trySteps) nextStep.trySteps = updateSteps(nextStep.trySteps);
+                  if (nextStep.catchSteps) nextStep.catchSteps = updateSteps(nextStep.catchSteps);
+                  if (nextStep.loopBody) nextStep.loopBody = updateSteps(nextStep.loopBody);
+                  return nextStep;
+                });
+              };
+              const newSteps = updateSteps(ep.pipelineSteps);
+              return epChanged ? { ...ep, pipelineSteps: newSteps } : ep;
+            });
+          }
+          if (Array.isArray(nextEvs)) {
+            nextEvs = nextEvs.map((ev: ConsumedEventItem): ConsumedEventItem => {
+              if (!ev.pipelineSteps) return ev;
+              let evChanged = false;
+              const updateSteps = (steps: PipelineStepDraft[]): PipelineStepDraft[] => {
+                return steps.map((s) => {
+                  let nextStep = { ...s };
+                  if (s.id === stepId) {
+                    evChanged = true;
+                    svcChanged = true;
+                    nextStep.clientDeliveryProtocol = changes.protocol as ClientDeliveryProtocol;
+                  }
+                  if (nextStep.thenSteps) nextStep.thenSteps = updateSteps(nextStep.thenSteps as PipelineStepDraft[]);
+                  if (nextStep.elseSteps) nextStep.elseSteps = updateSteps(nextStep.elseSteps as PipelineStepDraft[]);
+                  if (nextStep.trySteps) nextStep.trySteps = updateSteps(nextStep.trySteps as PipelineStepDraft[]);
+                  if (nextStep.catchSteps) nextStep.catchSteps = updateSteps(nextStep.catchSteps as PipelineStepDraft[]);
+                  if (nextStep.loopBody) nextStep.loopBody = updateSteps(nextStep.loopBody as PipelineStepDraft[]);
+                  return nextStep;
+                });
+              };
+              const newSteps = updateSteps(ev.pipelineSteps);
+              return evChanged ? { ...ev, pipelineSteps: newSteps } : ev;
+            });
+          }
+          if (svcChanged) {
+            updateNode(n.id, {
+              data: {
+                ...n.data,
+                endpoints: nextEps,
+                consumedEvents: nextEvs,
+              },
+            });
+          }
+        }
+      });
+    }
+
     const isAlreadyInExisting = connections.some((c) => c.id === id);
     const updatedList = isAlreadyInExisting
       ? connections.map((c) => (c.id === id ? { ...c, ...changes } : c))
@@ -374,98 +499,7 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
         }}
       />
 
-      {/* Multi-Connection Switcher & Manager Bar */}
-      <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-card border border-border/60">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span className="text-xs font-semibold text-muted-foreground shrink-0 flex items-center gap-1.5">
-            <Radio size={12} className="text-violet-500" />
-            <span>Connection:</span>
-          </span>
-          <Select
-            value={conn.id}
-            onValueChange={(selectedId) => {
-              setActiveConfigItem({
-                type: "realtimeConnection",
-                id: selectedId,
-                nodeId,
-              });
-            }}
-          >
-            <SelectTrigger className="h-8 text-xs bg-background flex-1 min-w-0">
-              <SelectValue placeholder="Select connection" />
-            </SelectTrigger>
-            <SelectContent>
-              {allPageConnections.map((c) => (
-                <SelectItem key={c.id} value={c.id} className="text-xs">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={cn(
-                        "font-mono text-[9px] px-1 py-0.2 rounded font-bold uppercase",
-                        c.protocol === "WEBSOCKET"
-                          ? "bg-cyan-500/15 text-cyan-500"
-                          : c.protocol === "WEBRTC"
-                          ? "bg-emerald-500/15 text-emerald-500"
-                          : "bg-amber-500/15 text-amber-500",
-                      )}
-                    >
-                      {c.protocol}
-                    </span>
-                    <span className="truncate">{c.sourceItemName || c.eventName || c.id}</span>
-                    {c.isDerived && (
-                      <span className="text-[9px] text-violet-500 font-mono">(pipeline)</span>
-                    )}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 text-xs px-2 text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30 gap-1 shrink-0"
-            onClick={() => handleDelete(conn.id)}
-            title="Delete this connection"
-          >
-            <Trash2 size={12} />
-            <span>Delete</span>
-          </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs px-2.5 gap-1 shrink-0 border-dashed hover:bg-violet-500/10 hover:text-violet-500"
-              >
-                <Plus size={12} /> Add
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleAddConnection("SSE")} className="text-xs gap-2">
-                <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 font-bold">
-                  SSE
-                </span>
-                Server-Sent Events
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleAddConnection("WEBSOCKET")} className="text-xs gap-2">
-                <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-500 font-bold">
-                  WS
-                </span>
-                WebSocket
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleAddConnection("WEBRTC")} className="text-xs gap-2">
-                <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-500 font-bold">
-                  RTC
-                </span>
-                WebRTC
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
 
       <div className="flex flex-col gap-4">
         {/* Pipeline Action Steps Accordion (Frontend Action Steps & Connection Mapping) */}
