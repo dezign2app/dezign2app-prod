@@ -696,8 +696,8 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(code).toContain('streamMode: ["messages","updates"]');
       expect(code).toContain("configurable: { thread_id: body.threadId }");
       expect(code).toContain("subgraphs: true");
-      expect(code).toContain('mode = chunk[0]');
-      expect(code).toContain('payload = chunk[1]');
+      expect(code).toContain('mode = _c[1]');
+      expect(code).toContain('payload = _c[2]');
       expect(code).toContain('mode === "messages"');
       expect(code).toContain('mode === "updates"');
       expect(code).toContain('type: "reasoning"');

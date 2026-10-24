@@ -3,49 +3,89 @@ import { generateConfigFiles, generateLibFiles, generateServerFile } from "../ge
 import { BackendNode } from "@/types/canvas";
 
 describe("Realtime WebSocket Server Generation", () => {
-  it("generates src/lib/realtime.ts with initWebSocketServer, room protection, and wsBroadcast", () => {
-    const files = generateLibFiles(true, true);
+  it("generates src/lib/websocket.ts with initWebSocketServer, room protection, and wsBroadcast", () => {
+    const files = generateLibFiles(true, { ws: true });
+    const wsFile = files.find((f) => f.filename === "src/lib/websocket.ts");
+    const sseFile = files.find((f) => f.filename === "src/lib/sse.ts");
     const realtimeFile = files.find((f) => f.filename === "src/lib/realtime.ts");
     const indexFile = files.find((f) => f.filename === "src/lib/index.ts");
 
-    expect(realtimeFile).toBeDefined();
-    expect(realtimeFile?.content).toContain("export function initWebSocketServer(");
-    expect(realtimeFile?.content).toContain("export function getWebSocketServer(");
-    expect(realtimeFile?.content).toContain("export function wsBroadcast(");
-    expect(realtimeFile?.content).toContain("new WebSocketServer({ server, path: \"/ws\" })");
+    expect(wsFile).toBeDefined();
+    expect(wsFile?.content).toContain("export function initWebSocketServer(");
+    expect(wsFile?.content).toContain("export function getWebSocketServer(");
+    expect(wsFile?.content).toContain("export function wsBroadcast(");
+    expect(wsFile?.content).toContain("new WebSocketServer({ server, path: \"/ws\" })");
 
     // Room subscription and protection logic
-    expect(realtimeFile?.content).toContain('action === "join"');
-    expect(realtimeFile?.content).toContain('action === "leave"');
-    expect(realtimeFile?.content).toContain('action === "ping"');
-    expect(realtimeFile?.content).toContain('room.startsWith("private:")');
-    expect(realtimeFile?.content).toContain("Authentication required for private rooms");
+    expect(wsFile?.content).toContain('action === "join"');
+    expect(wsFile?.content).toContain('action === "leave"');
+    expect(wsFile?.content).toContain('action === "ping"');
+    expect(wsFile?.content).toContain('room.startsWith("private:")');
+    expect(wsFile?.content).toContain("Authentication required for private rooms");
 
     // Strict typing checks: no implicit or explicit any/unknown, typed callbacks
-    expect(realtimeFile?.content).toContain('import { Server as HttpServer, IncomingMessage } from "http";');
-    expect(realtimeFile?.content).toContain('import { WebSocketServer, WebSocket, RawData } from "ws";');
-    expect(realtimeFile?.content).toContain('(ws: WebSocket, req: IncomingMessage)');
-    expect(realtimeFile?.content).toContain('(raw: RawData)');
-    expect(realtimeFile?.content).toContain('(err: Error)');
-    expect(realtimeFile?.content).not.toMatch(/\(ws:\s*WebSocket,\s*req\)\s*=>/);
-    expect(realtimeFile?.content).not.toMatch(/\(raw\)\s*=>/);
-    expect(realtimeFile?.content).not.toMatch(/\(err\)\s*=>/);
-    expect(realtimeFile?.content).not.toMatch(/:\s*any\b/);
-    expect(realtimeFile?.content).not.toMatch(/:\s*unknown\b/);
-    expect(realtimeFile?.content).not.toMatch(/\bas\s+any\b/);
-    expect(realtimeFile?.content).not.toMatch(/\bas\s+unknown\b/);
+    expect(wsFile?.content).toContain('import { Server as HttpServer, IncomingMessage } from "http";');
+    expect(wsFile?.content).toContain('import { WebSocketServer, WebSocket, RawData } from "ws";');
+    expect(wsFile?.content).toContain('(ws: WebSocket, req: IncomingMessage)');
+    expect(wsFile?.content).toContain('(raw: RawData)');
+    expect(wsFile?.content).toContain('(err: Error)');
+    expect(wsFile?.content).not.toMatch(/\(ws:\s*WebSocket,\s*req\)\s*=>/);
+    expect(wsFile?.content).not.toMatch(/\(raw\)\s*=>/);
+    expect(wsFile?.content).not.toMatch(/\(err\)\s*=>/);
+    expect(wsFile?.content).not.toMatch(/:\s*any\b/);
+    expect(wsFile?.content).not.toMatch(/:\s*unknown\b/);
+    expect(wsFile?.content).not.toMatch(/\bas\s+any\b/);
+    expect(wsFile?.content).not.toMatch(/\bas\s+unknown\b/);
 
-    // Re-exported in index
+    // SSE file should be omitted when only WS is enabled
+    expect(sseFile).toBeUndefined();
+
+    // Re-exported in realtime and index
+    expect(realtimeFile).toBeDefined();
+    expect(realtimeFile?.content).toContain('export * from "./websocket";');
+    expect(realtimeFile?.content).not.toContain('export * from "./sse";');
+
     expect(indexFile).toBeDefined();
     expect(indexFile?.content).toContain('export * from "./realtime";');
   });
 
-  it("omits src/lib/realtime.ts and realtime exports when realtime is not enabled", () => {
-    const files = generateLibFiles(true, false);
+  it("generates src/lib/sse.ts and omits websocket code when only SSE is configured", () => {
+    const files = generateLibFiles(true, { sse: true });
+    const sseFile = files.find((f) => f.filename === "src/lib/sse.ts");
+    const wsFile = files.find((f) => f.filename === "src/lib/websocket.ts");
     const realtimeFile = files.find((f) => f.filename === "src/lib/realtime.ts");
     const indexFile = files.find((f) => f.filename === "src/lib/index.ts");
 
+    expect(sseFile).toBeDefined();
+    expect(sseFile?.content).toContain("export function handleSseConnection(");
+    expect(sseFile?.content).toContain("export function sseBroadcast(");
+    expect(sseFile?.content).not.toContain("WebSocketServer");
+    expect(sseFile?.content).not.toContain("initWebSocketServer");
+    expect(sseFile?.content).not.toContain('from "ws"');
+
+    // WebSocket file should be omitted when only SSE is enabled
+    expect(wsFile).toBeUndefined();
+
+    // Realtime barrel re-exports only SSE
+    expect(realtimeFile).toBeDefined();
+    expect(realtimeFile?.content).toContain('export * from "./sse";');
+    expect(realtimeFile?.content).not.toContain('export * from "./websocket";');
+    expect(realtimeFile?.content).not.toContain("initWebSocketServer");
+
+    expect(indexFile).toBeDefined();
+    expect(indexFile?.content).toContain('export * from "./realtime";');
+  });
+
+  it("omits src/lib/realtime.ts, sse.ts, websocket.ts and realtime exports when realtime is not enabled", () => {
+    const files = generateLibFiles(true, false);
+    const realtimeFile = files.find((f) => f.filename === "src/lib/realtime.ts");
+    const sseFile = files.find((f) => f.filename === "src/lib/sse.ts");
+    const wsFile = files.find((f) => f.filename === "src/lib/websocket.ts");
+    const indexFile = files.find((f) => f.filename === "src/lib/index.ts");
+
     expect(realtimeFile).toBeUndefined();
+    expect(sseFile).toBeUndefined();
+    expect(wsFile).toBeUndefined();
     expect(indexFile).toBeDefined();
     expect(indexFile?.content).not.toContain('export * from "./realtime";');
     expect(indexFile?.content).toContain("export function formatResponse<T>");
@@ -203,5 +243,37 @@ describe("Realtime WebSocket Server Generation", () => {
     expect(content).toContain('SSE realtime stream at http://localhost:${PORT}/events');
     expect(content).not.toContain("initWebSocketServer");
     expect(content).not.toContain("WebSocket realtime server");
+  });
+
+  it("does not include ws or @types/ws in package.json when only SSE is enabled", () => {
+    const serviceNode: BackendNode = {
+      id: "node-svc",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "EventsService",
+        port: "8080",
+        enableSse: true,
+      },
+    };
+
+    const configFiles = generateConfigFiles(
+      serviceNode,
+      "events-service",
+      "EventsService",
+      "8080",
+      true,
+      [],
+      [],
+      [serviceNode],
+      [],
+    );
+    const packageFile = configFiles.find((f) => f.filename === "package.json");
+    expect(packageFile).toBeDefined();
+
+    const pkg = JSON.parse(packageFile!.content);
+    expect(pkg.dependencies).not.toHaveProperty("ws");
+    expect(pkg.devDependencies).not.toHaveProperty("@types/ws");
   });
 });

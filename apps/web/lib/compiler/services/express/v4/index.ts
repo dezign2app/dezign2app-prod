@@ -144,7 +144,7 @@ export function compileExpressV4Service(
       allNodes,
       allEdges,
     ),
-    ...generateLibFiles(hasDb, hasRealtime),
+    ...generateLibFiles(hasDb, { sse: hasSse, ws: hasWs }),
     generateServerFile(
       serviceName,
       port,
