@@ -184,6 +184,7 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
         storeActionBinding: match?.storeActionBinding || d.storeActionBinding,
         storeActionBindings: match?.storeActionBindings || d.storeActionBindings,
         actionSteps: match?.actionSteps || d.actionSteps,
+        subscriptionBindings: match?.subscriptionBindings || d.subscriptionBindings,
       };
     });
 
@@ -401,6 +402,23 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
                       }}
                     >
                       ⚡{item.storeActionBinding.actionName || item.storeActionBinding.actionType || "store"}()
+                    </span>
+                  )}
+
+                  {item.subscriptionBindings && item.subscriptionBindings.length > 0 && (
+                    <span
+                      className="text-[7px] font-mono px-1 py-0.2 rounded bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 border border-purple-500/30 font-semibold cursor-pointer max-w-[100px] truncate shrink-0 transition-colors flex items-center gap-0.5"
+                      title={`${item.subscriptionBindings.length} subscription parameter binding(s)`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveConfigItem({
+                          type: "realtimeConnection",
+                          id: item.id,
+                          nodeId,
+                        });
+                      }}
+                    >
+                      🔗 {item.subscriptionBindings.length} sub
                     </span>
                   )}
 

@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Sparkles,
   HardDrive,
+  Radio,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
@@ -26,7 +27,7 @@ import { Card } from "@workspace/ui/components/card";
 import { toast } from "sonner";
 import { cn } from "@workspace/ui/lib/utils";
 import type { BackendNode, Endpoint, UIEventItem, JSONValue, JSONObject, FrontendFieldSource } from "@workspace/canvas";
-import type { FrontendActionStepDraft, FrontendRequestFieldBinding, QueryParamUpdateItem } from "./types";
+import type { FrontendActionStepDraft, FrontendRequestFieldBinding, QueryParamUpdateItem, AvailablePath } from "./types";
 import type { ActionStepItem } from "../TargetEndpointSection";
 import { isAuthHeaderName, deriveStepsFromEdges } from "./utils";
 
@@ -39,6 +40,8 @@ export interface ActionSimulatorProps {
   webPageNodeId?: string;
   actionId?: string;
   isProtected?: boolean;
+  isRealtime?: boolean;
+  incomingPaths?: AvailablePath[];
 }
 
 interface SimulatedStepLog {
@@ -96,6 +99,8 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
   endpoints = [],
   webPageNodeId = "",
   isProtected = false,
+  isRealtime = false,
+  incomingPaths = [],
 }) => {
   const currentPageNode = useMemo(
     () => allNodes.find((n) => n.id === webPageNodeId),
@@ -123,6 +128,7 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
       sessionStorage: Record<string, string>;
       localStorage: Record<string, string>;
       cookies: Record<string, string>;
+      incomingPayload: Record<string, JSONValue>;
     } = {
       stores: {},
       localState: {},
@@ -132,6 +138,7 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
       sessionStorage: {},
       localStorage: {},
       cookies: {},
+      incomingPayload: {},
     };
 
     // Initialize stores with their actual node field default values
@@ -161,6 +168,31 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
       ctx.queryParams[q.name] = q.defaultValue || "sample-query";
     });
 
+    // Initialize incoming stream payload if realtime connection
+    if (isRealtime) {
+      const samplePayload: Record<string, JSONValue> = {};
+      if (incomingPaths && incomingPaths.length > 0) {
+        incomingPaths.forEach((ip) => {
+          const parts = ip.path.split(".");
+          let target: Record<string, any> = samplePayload;
+          for (let i = 0; i < parts.length - 1; i++) {
+            const p = parts[i]!;
+            if (!target[p] || typeof target[p] !== "object") {
+              target[p] = {};
+            }
+            target = target[p];
+          }
+          const last = parts[parts.length - 1]!;
+          target[last] = ip.type === "number" ? 123 : ip.type === "boolean" ? true : `sample_${last}`;
+        });
+      } else {
+        samplePayload["message"] = "Simulated real-time message";
+        samplePayload["id"] = "evt_sim_101";
+        samplePayload["status"] = "delivered";
+      }
+      ctx.incomingPayload = samplePayload;
+    }
+
     // Scan steps for specific form inputs or values used
     const scanSource = (src?: FrontendFieldSource) => {
       if (!src) return;
@@ -187,6 +219,10 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
         if (!ctx.localStorage["auth_token"]) {
           ctx.localStorage["auth_token"] = "Bearer simulated-session-token";
         }
+      } else if (src.kind === "realtime_payload") {
+        if (!ctx.incomingPayload || Object.keys(ctx.incomingPayload).length === 0) {
+          ctx.incomingPayload = { message: "Sample live payload", id: "evt_101" };
+        }
       }
     };
 
@@ -207,7 +243,7 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
     }
 
     return ctx;
-  }, [stateStores, currentPageNode, effectiveSteps, isProtected]);
+  }, [stateStores, currentPageNode, effectiveSteps, isProtected, isRealtime, incomingPaths]);
 
   const [testContext, setTestContext] = useState(initialContext);
   const [isRunning, setIsRunning] = useState(false);
@@ -233,6 +269,7 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
       sessionStorage: Record<string, string>;
       localStorage: Record<string, string>;
       cookies: Record<string, string>;
+      incomingPayload: Record<string, JSONValue>;
     } = JSON.parse(JSON.stringify(testContext));
     const stepResponses: Record<string, JSONValue> = {};
 
@@ -264,6 +301,16 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
       }
       if (source.kind === "cookie") {
         return runtimeState.cookies?.[source.cookieName] ?? `<cookie:${source.cookieName}>`;
+      }
+      if (source.kind === "realtime_payload") {
+        if (!source.fieldPath) return runtimeState.incomingPayload;
+        const parts = source.fieldPath.split(".");
+        let cur: any = runtimeState.incomingPayload;
+        for (const p of parts) {
+          if (cur == null) return undefined;
+          cur = cur[p];
+        }
+        return cur !== undefined ? cur : `<stream:${source.fieldPath}>`;
       }
       if (source.kind === "auth_token") {
         if (source.tokenType === "cookie") {
@@ -691,6 +738,7 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
         </div>
 
         {boundStoreKeys.length === 0 &&
+        !isRealtime &&
         Object.keys(testContext.inputs).length === 0 &&
         Object.keys(testContext.sessionStorage || {}).length === 0 &&
         Object.keys(testContext.localStorage || {}).length === 0 &&
@@ -700,6 +748,42 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
           </div>
         ) : (
           <div className="flex flex-col gap-2 pt-1">
+            {/* Realtime Stream Payload */}
+            {isRealtime && (
+              <div className="p-2 rounded bg-purple-950/20 border border-purple-500/30 space-y-1.5 font-mono text-[11px]">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-purple-400 font-semibold">
+                    <Radio size={12} className="text-purple-400" />
+                    <span>stream.incomingData (Simulated Payload)</span>
+                  </div>
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 text-purple-400 border-purple-400/30 bg-purple-400/10 font-mono">
+                    JSON Object
+                  </Badge>
+                </div>
+                <textarea
+                  value={
+                    typeof testContext.incomingPayload === "object"
+                      ? JSON.stringify(testContext.incomingPayload, null, 2)
+                      : String(testContext.incomingPayload ?? "{}")
+                  }
+                  onChange={(e) => {
+                    try {
+                      const parsed = JSON.parse(e.target.value);
+                      setTestContext((prev) => ({
+                        ...prev,
+                        incomingPayload: parsed,
+                      }));
+                    } catch {
+                      // ignore parse error while user edits
+                    }
+                  }}
+                  rows={4}
+                  className="w-full p-1.5 text-[11px] font-mono rounded bg-background border border-border/50 text-foreground resize-y focus:outline-none focus:ring-1 focus:ring-purple-400"
+                  placeholder='{"message": "hello", "id": "123"}'
+                />
+              </div>
+            )}
+
             {/* Bound Stores */}
             {boundStoreKeys.map((item) => (
               <div

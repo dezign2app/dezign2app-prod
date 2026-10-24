@@ -13,6 +13,7 @@ import type { BackendNode } from "@workspace/canvas";
 import type {
   FrontendActionStepDraft,
   FrontendFieldSource,
+  AvailablePath,
 } from "./types";
 import { ResponseFieldPicker } from "./ResponseFieldPicker";
 import { ActionFlowCombobox } from "./ActionFlowCombobox";
@@ -23,6 +24,7 @@ export interface StateMutationStepProps {
   stepIndex: number;
   allNodes: BackendNode[];
   webPageNodeId?: string;
+  incomingPaths?: AvailablePath[];
   onChange: (updated: FrontendActionStepDraft) => void;
 }
 
@@ -32,6 +34,7 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
   stepIndex,
   allNodes,
   webPageNodeId,
+  incomingPaths,
   onChange,
 }) => {
   const stateStores = allNodes.filter((n) => n.type === "state_store");
@@ -245,11 +248,17 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
                   | "query_param"
                   | "session_storage"
                   | "local_storage"
-                  | "cookie",
+                  | "cookie"
+                  | "realtime_payload",
               ) => {
                 let nextSource: FrontendFieldSource;
                 if (val === "literal") {
                   nextSource = { kind: "literal", value: "" };
+                } else if (val === "realtime_payload") {
+                  nextSource = {
+                    kind: "realtime_payload",
+                    fieldPath: incomingPaths?.[0]?.path || "",
+                  };
                 } else if (val === "state_var") {
                   nextSource = { kind: "state_var", stateKey: "" };
                 } else if (val === "route_param") {
@@ -284,6 +293,11 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                {incomingPaths && incomingPaths.length > 0 && (
+                  <SelectItem value="realtime_payload" className="text-purple-400 font-medium">
+                    ⚡ Incoming Stream Data
+                  </SelectItem>
+                )}
                 <SelectItem value="literal">Static Literal</SelectItem>
                 <SelectItem value="user_input">User Form Input</SelectItem>
                 <SelectItem value="route_param">Page Route Param</SelectItem>
@@ -524,6 +538,41 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
                 }
                 placeholder="e.g. session_token, csrftoken"
                 className="h-7 text-xs bg-background"
+              />
+            </div>
+          )}
+
+          {valueSource.kind === "realtime_payload" && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label className="text-[10px] text-muted-foreground">
+                  Stream Payload Field / Property
+                </Label>
+                <span className="text-[9px] text-purple-400 font-mono">
+                  stream.{valueSource.fieldPath || "(entire payload)"}
+                </span>
+              </div>
+              <ActionFlowCombobox
+                value={valueSource.fieldPath || ""}
+                onChange={(path) =>
+                  onChange({
+                    ...draft,
+                    stateValueSource: {
+                      kind: "realtime_payload",
+                      fieldPath: path,
+                    },
+                  })
+                }
+                placeholder="e.g. data.message, id, status (or leave empty for full payload)"
+                headerLabel="Detected Incoming Stream Fields"
+                options={[
+                  { value: "", label: "(Full Payload: incomingData)", type: "object" },
+                  ...(incomingPaths || []).map((p) => ({
+                    value: p.path,
+                    label: p.path,
+                    type: p.type || "string",
+                  })),
+                ]}
               />
             </div>
           )}

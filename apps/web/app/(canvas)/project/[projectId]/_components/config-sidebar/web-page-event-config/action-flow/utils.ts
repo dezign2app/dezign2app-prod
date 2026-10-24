@@ -359,6 +359,7 @@ function formatDraftStep(
         if (src.kind === "session_storage") return `sessionStorage.${src.key}`;
         if (src.kind === "local_storage") return `localStorage.${src.key}`;
         if (src.kind === "cookie") return `cookie.${src.cookieName}`;
+        if (src.kind === "realtime_payload") return `stream.${src.fieldPath || "payload"}`;
         if (src.kind === "auth_token") {
           return src.tokenType === "cookie"
             ? "cookie.session_token"
@@ -518,7 +519,9 @@ export function getActionFlowRuntime(
                                   ? `localStorage.${b.source.key}`
                                   : b.source.kind === "cookie"
                                     ? `cookie.${b.source.cookieName}`
-                                    : b.source.kind === "auth_token"
+                                    : b.source.kind === "realtime_payload"
+                                        ? `stream.${b.source.fieldPath || "data"}`
+                                        : b.source.kind === "auth_token"
                                       ? "auth.sessionToken"
                                       : `Step.${b.source.fieldPath || ""}`;
                   return `${b.targetField}: ${src}`;

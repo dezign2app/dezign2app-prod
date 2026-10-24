@@ -800,6 +800,7 @@ export const realtimeConnectionConvexValidator = v.object({
   ),
   storeActionBinding: v.optional(storeActionBindingConvexValidator),
   storeActionBindings: v.optional(v.array(storeActionBindingConvexValidator)),
+  subscriptionBindings: v.optional(v.array(v.any())),
   actionSteps: v.optional(v.array(v.any())),
 });
 

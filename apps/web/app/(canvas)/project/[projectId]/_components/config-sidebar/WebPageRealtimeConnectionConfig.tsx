@@ -13,6 +13,7 @@ import {
   RealtimeProtocolSection,
   WebRtcCapabilitiesSection,
   RealtimeStateStoreSection,
+  RealtimeSubscriptionMappingSection,
 } from "./web-page-realtime-config";
 import { ensureWsPackageInService } from "@/lib/stores/backendCanvas/packageTypesSync";
 import { ActionFlowEditor, ActionSimulator } from "./web-page-event-config";
@@ -24,7 +25,7 @@ import {
   AccordionContent,
 } from "@workspace/ui/components/accordion";
 import { Badge } from "@workspace/ui/components/badge";
-import { Layers, Play } from "lucide-react";
+import { Layers, Play, Link2 } from "lucide-react";
 import { isStorageRefNode } from "@/lib/stores/backendCanvas/edge/utils";
 import type { ActionStepItem } from "./web-page-event-config/TargetEndpointSection";
 import type { FrontendActionStepDraft } from "./web-page-event-config/action-flow/types";
@@ -90,6 +91,7 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
         storeActionBinding: manualConn?.storeActionBinding,
         storeActionBindings: manualConn?.storeActionBindings,
         actionSteps: manualConn?.actionSteps ?? [],
+        subscriptionBindings: manualConn?.subscriptionBindings,
       };
     }
     if (manualConn) return { ...manualConn, actionSteps: manualConn.actionSteps ?? [] };
@@ -109,13 +111,14 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
 
   const handleUpdateManual = (changes: Partial<RealtimeConnection>) => {
     if (!pageNode) return;
-    // Protocol / capabilities cannot be edited manually for derived connections, but bindings and action steps CAN
+    // Protocol / capabilities cannot be edited manually for derived connections, but bindings, action steps, and subscription mappings CAN
     if (
       isDerived &&
       !changes.storeActionBinding &&
       changes.storeActionBinding !== null &&
       !changes.storeActionBindings &&
-      !changes.actionSteps
+      !changes.actionSteps &&
+      !changes.subscriptionBindings
     ) {
       return;
     }
@@ -340,12 +343,45 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
       />
 
       <div className="flex flex-col gap-4">
-        {/* Pipeline Action Steps Accordion (Frontend Action Steps) */}
+        {/* Pipeline Action Steps Accordion (Frontend Action Steps & Subscription Mapping) */}
         <Accordion
           type="multiple"
-          defaultValue={["steps", "simulator"]}
+          defaultValue={["subscription", "steps", "simulator"]}
           className="w-full flex flex-col gap-3 border-none"
         >
+          {/* 1. Subscription Parameters & Route Mapping */}
+          <AccordionItem
+            value="subscription"
+            className="border border-purple-500/30 rounded-xl overflow-hidden bg-card"
+          >
+            <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-secondary/20 transition-colors [&>svg]:shrink-0">
+              <div className="flex items-center gap-2">
+                <Link2 size={14} className="text-purple-400" />
+                <span className="text-xs font-semibold">
+                  Subscription Mapping
+                </span>
+                <Badge
+                  variant="outline"
+                  className="text-[9px] px-1.5 py-0 font-mono text-purple-400 border-purple-500/30 bg-purple-500/10"
+                >
+                  {(conn.subscriptionBindings?.length || 0)} mapped
+                </Badge>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="px-4 pb-5 pt-2">
+              <RealtimeSubscriptionMappingSection
+                conn={conn}
+                pageNode={pageNode}
+                allNodes={nodes}
+                endpoints={endpoints}
+                derivedInfo={derivedInfo}
+                isProtected={isProtected}
+                onUpdate={handleUpdateManual}
+              />
+            </AccordionContent>
+          </AccordionItem>
+
+          {/* 2. Pipeline Action Steps */}
           <AccordionItem
             value="steps"
             className="border rounded-xl overflow-hidden bg-card"
@@ -379,6 +415,12 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
                 webPageNodeId={nodeId}
                 actionId={id}
                 isProtected={isProtected}
+                isRealtime={true}
+                realtimeEventName={conn.eventName}
+                realtimeProtocol={conn.protocol}
+                realtimeSourceLabel={conn.sourceServiceLabel || derivedInfo?.sourceNode?.data?.label}
+                realtimeSourceItemName={conn.sourceItemName}
+                incomingPaths={suggestedPaths}
                 onSave={(drafts: FrontendActionStepDraft[]) =>
                   handleUpdateManual({ actionSteps: drafts })
                 }
@@ -387,6 +429,7 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
             </AccordionContent>
           </AccordionItem>
 
+          {/* 3. Action Simulator */}
           <AccordionItem
             value="simulator"
             className="border border-cyan-500/30 rounded-xl overflow-hidden bg-card"
@@ -420,6 +463,8 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
                 webPageNodeId={nodeId}
                 actionId={id}
                 isProtected={isProtected}
+                isRealtime={true}
+                incomingPaths={suggestedPaths}
               />
             </AccordionContent>
           </AccordionItem>

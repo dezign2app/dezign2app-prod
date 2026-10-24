@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Draggable } from "@hello-pangea/dnd";
 import type { BackendNode, Endpoint } from "@workspace/canvas";
 import type { ActionStepItem } from "../TargetEndpointSection";
-import type { FrontendActionStepDraft } from "./types";
+import type { FrontendActionStepDraft, AvailablePath } from "./types";
 import { FrontendStepRowHeader } from "./FrontendStepRowHeader";
 import { ApiCallStep } from "./ApiCallStep";
 import { StoragePutStep } from "./StoragePutStep";
@@ -28,6 +28,7 @@ export interface FrontendStepRowProps {
   webPageNodeId?: string;
   actionId?: string;
   isProtected?: boolean;
+  incomingPaths?: AvailablePath[];
   onChange: (updated: FrontendActionStepDraft) => void;
   onDelete: () => void;
 }
@@ -44,6 +45,7 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
   webPageNodeId,
   actionId,
   isProtected,
+  incomingPaths,
   onChange,
   onDelete,
 }) => {
@@ -89,6 +91,7 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   webPageNodeId={webPageNodeId}
                   actionId={actionId}
                   isProtected={isProtected}
+                  incomingPaths={incomingPaths}
                   onChange={onChange}
                 />
               )}
@@ -115,6 +118,7 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   stepIndex={index}
                   allNodes={allNodes}
                   webPageNodeId={webPageNodeId}
+                  incomingPaths={incomingPaths}
                   onChange={onChange}
                 />
               )}
@@ -159,6 +163,7 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   allNodes={allNodes}
                   webPageNodeId={webPageNodeId}
                   actionId={actionId}
+                  incomingPaths={incomingPaths}
                   onChange={onChange}
                 />
               )}

@@ -40,6 +40,9 @@ vi.mock("../web-page-realtime-config", () => ({
   RealtimeProtocolSection: () => <div data-testid="mock-protocol-section" />,
   WebRtcCapabilitiesSection: () => <div data-testid="mock-webrtc-section" />,
   RealtimeStateStoreSection: () => <div data-testid="mock-statestore-section" />,
+  RealtimeSubscriptionMappingSection: () => (
+    <div data-testid="mock-subscription-section">Subscription Mapping Content</div>
+  ),
   useDerivedRealtimeInfo: () => null,
 }));
 
@@ -87,6 +90,8 @@ describe("WebPageRealtimeConnectionConfig with action steps", () => {
 
     render(<WebPageRealtimeConnectionConfig id="rtc-1" nodeId="web-node-1" />);
 
+    expect(screen.getByText("Subscription Mapping")).toBeDefined();
+    expect(screen.getByTestId("mock-subscription-section")).toBeDefined();
     expect(screen.getByText("Pipeline Steps")).toBeDefined();
     expect(screen.getByText("1 step")).toBeDefined();
     expect(screen.getByTestId("mock-action-flow-editor")).toBeDefined();
@@ -94,5 +99,44 @@ describe("WebPageRealtimeConnectionConfig with action steps", () => {
       screen.getByText("ActionFlowEditor: order.created - 1 steps"),
     ).toBeDefined();
     expect(screen.getByTestId("mock-action-simulator")).toBeDefined();
+  });
+
+  it("renders Subscription Mapping badge when subscriptionBindings are present", () => {
+    const dummyWebPageNode: BackendNode = {
+      id: "web-node-2",
+      type: "webPage",
+      fractionalIndex: "a0",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Chat Room",
+        pathParams: [{ id: "param-1", name: "id", type: "string", required: true }],
+        realtimeConnections: [
+          {
+            id: "rtc-2",
+            protocol: "SSE",
+            eventName: "chat/:id",
+            subscriptionBindings: [
+              {
+                id: "sub-1",
+                slot: "path_param",
+                targetField: "id",
+                source: { kind: "route_param", paramName: "id" },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    useBackendCanvasStore.setState({
+      nodes: [dummyWebPageNode],
+      edges: [],
+    });
+
+    render(<WebPageRealtimeConnectionConfig id="rtc-2" nodeId="web-node-2" />);
+
+    expect(screen.getByText("Subscription Mapping")).toBeDefined();
+    expect(screen.getByText("1 mapped")).toBeDefined();
+    expect(screen.getByTestId("mock-subscription-section")).toBeDefined();
   });
 });

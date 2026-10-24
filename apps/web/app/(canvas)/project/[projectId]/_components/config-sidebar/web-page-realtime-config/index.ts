@@ -4,3 +4,4 @@ export * from "./RealtimeConnectionHeader";
 export * from "./RealtimeProtocolSection";
 export * from "./WebRtcCapabilitiesSection";
 export * from "./RealtimeStateStoreSection";
+export * from "./RealtimeSubscriptionMappingSection";

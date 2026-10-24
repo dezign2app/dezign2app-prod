@@ -25,9 +25,10 @@ import type {
   FrontendActionStepDraft,
   FrontendFieldSource,
   FrontendTransformBinding,
+  AvailablePath,
 } from "./types";
 import { ensureActionTransformerConnection } from "./actionStepCanvasSync";
-import { ActionFlowCombobox } from "./ActionFlowCombobox";
+import { ActionFlowCombobox, ComboboxOption } from "./ActionFlowCombobox";
 
 interface TransformerSchemaField {
   id?: string;
@@ -48,6 +49,7 @@ export interface TransformerStepProps {
   allNodes: BackendNode[];
   webPageNodeId?: string;
   actionId?: string;
+  incomingPaths?: AvailablePath[];
   onChange: (updated: FrontendActionStepDraft) => void;
 }
 
@@ -58,9 +60,18 @@ export const TransformerStep: React.FC<TransformerStepProps> = ({
   allNodes,
   webPageNodeId,
   actionId,
+  incomingPaths = [],
   onChange,
 }) => {
   const priorSteps = useMemo(() => allSteps.slice(0, stepIndex), [allSteps, stepIndex]);
+
+  const incomingFieldOptions = useMemo((): ComboboxOption[] => {
+    return (incomingPaths || []).map((ip) => ({
+      value: ip.path,
+      label: `${ip.path}${ip.type ? ` (${ip.type})` : ""}`,
+      type: ip.type || "string",
+    }));
+  }, [incomingPaths]);
 
   const currentPageNode = useMemo(
     () => allNodes.find((n) => n.id === webPageNodeId),
@@ -363,6 +374,31 @@ export const TransformerStep: React.FC<TransformerStepProps> = ({
       }
 
       const lower = arg.name.toLowerCase();
+
+      // 0. Check incoming realtime stream payload
+      if (incomingPaths && incomingPaths.length > 0) {
+        const matchedIncoming = incomingPaths.find(
+          (ip) => ip.path.toLowerCase() === lower,
+        );
+        if (matchedIncoming) {
+          return {
+            argName: arg.name,
+            source: {
+              kind: "realtime_payload",
+              fieldPath: matchedIncoming.path,
+            },
+          };
+        }
+        if (lower === "payload" || lower === "input" || lower === "data" || lower === "event") {
+          return {
+            argName: arg.name,
+            source: {
+              kind: "realtime_payload",
+              fieldPath: "",
+            },
+          };
+        }
+      }
 
       // 1. Check prior steps
       for (const pStep of [...priorSteps].reverse()) {
@@ -746,6 +782,11 @@ export const TransformerStep: React.FC<TransformerStepProps> = ({
                           nextSource = { kind: "local_storage", key: "" };
                         } else if (val === "cookie") {
                           nextSource = { kind: "cookie", cookieName: "" };
+                        } else if (val === "realtime_payload") {
+                          nextSource = {
+                            kind: "realtime_payload",
+                            fieldPath: incomingPaths && incomingPaths.length > 0 ? incomingPaths[0]?.path || "" : "",
+                          };
                         } else {
                           nextSource = { kind: "user_input", fieldName: "" };
                         }
@@ -756,6 +797,9 @@ export const TransformerStep: React.FC<TransformerStepProps> = ({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="realtime_payload" className="text-violet-600 dark:text-violet-400 font-semibold">
+                          Incoming Stream Data
+                        </SelectItem>
                         <SelectItem value="literal">Literal Value</SelectItem>
                         <SelectItem value="prev_response">Prior Step Result</SelectItem>
                         <SelectItem value="state_var">State Variable</SelectItem>
@@ -769,6 +813,24 @@ export const TransformerStep: React.FC<TransformerStepProps> = ({
                     </Select>
 
                     {/* Source specific value input */}
+                    {src.kind === "realtime_payload" && (
+                      <ActionFlowCombobox
+                        value={src.fieldPath || ""}
+                        onChange={(val) =>
+                          handleBindingChange(binding.argName, {
+                            kind: "realtime_payload",
+                            fieldPath: val,
+                          })
+                        }
+                        placeholder="Select or type payload field..."
+                        headerLabel="Incoming Stream Payload Fields"
+                        options={[
+                          { value: "", label: "(Full Payload: incomingData)", type: "object" },
+                          ...incomingFieldOptions,
+                        ]}
+                      />
+                    )}
+
                     {src.kind === "literal" && (
                       <Input
                         value={src.value || ""}

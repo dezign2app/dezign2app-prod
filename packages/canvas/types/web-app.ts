@@ -12,6 +12,7 @@ import type {
   ComponentElementBinding,
   ComponentBindingType,
   FrontendActionStepDraft,
+  FrontendRequestFieldBinding,
 } from "./simulation";
 import type { WebAppZone, ProtectionRule, PaymentsPlanConfig } from "./auth";
 import type { ClientDeliveryProtocol } from "./messaging";
@@ -106,6 +107,8 @@ export interface RealtimeConnection {
   /** State Store binding to update when realtime messages arrive */
   storeActionBinding?: StoreActionBinding;
   storeActionBindings?: StoreActionBinding[];
+  /** Parameter and auth mappings to establish subscription */
+  subscriptionBindings?: FrontendRequestFieldBinding[];
   /** Action flow steps to execute when realtime message arrives */
   actionSteps?: FrontendActionStepDraft[];
 }
