@@ -1,14 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@workspace/backend/_generated/api";
 import { Button } from "@workspace/ui/components/button";
-import { Badge } from "@workspace/ui/components/badge";
-import { CreditCard, Zap, Calendar, ChevronRight } from "lucide-react";
+import { CreditCard, ChevronRight } from "lucide-react";
 import type { OrgItem, OrgSeatStatus } from "@/components/auth/org/types";
 import { BuySeatsDialog } from "@/components/auth/org/buy-seats-dialog";
-import { useSession } from "@/lib/auth-client";
 
 interface BillingTabProps {
   activeOrg: OrgItem;
@@ -25,13 +21,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 
 export function BillingTab({ activeOrg, seatStatus }: BillingTabProps) {
   const [buySeatsOpen, setBuySeatsOpen] = useState(false);
-  const { data: session } = useSession();
-  const userEmail = session?.user?.email ?? "";
-
-  const earlyBeliever = useQuery(
-    api.billing.getUserEarlyBeliever,
-    userEmail ? { email: userEmail } : "skip",
-  );
 
   const statusCfg = STATUS_CONFIG[seatStatus?.status ?? ""] ?? null;
   const seatUsePct = seatStatus
@@ -108,42 +97,6 @@ export function BillingTab({ activeOrg, seatStatus }: BillingTabProps) {
         )}
       </div>
 
-      {/* Early Believer card */}
-      {earlyBeliever && (
-        <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 space-y-4">
-          <div className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold text-foreground">Early Believer</h3>
-            <Badge className="text-[10px] ml-auto">
-              {earlyBeliever.discountPercent}% discount
-            </Badge>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: "Seats Included", value: String(earlyBeliever.totalSeats) },
-              { label: "Total Invested", value: `$${earlyBeliever.totalPaid.toLocaleString()}` },
-            ].map(({ label, value }) => (
-              <div key={label} className="rounded-lg border border-primary/20 bg-background/50 p-3">
-                <div className="text-sm font-bold text-foreground">{value}</div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">{label}</div>
-              </div>
-            ))}
-          </div>
-
-          {earlyBeliever.maxSubscriptionEnd > 0 && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Calendar className="h-3.5 w-3.5" />
-              Access until{" "}
-              {new Date(earlyBeliever.maxSubscriptionEnd).toLocaleDateString("en-US", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </div>
-          )}
-        </div>
-      )}
 
       <BuySeatsDialog
         open={buySeatsOpen}

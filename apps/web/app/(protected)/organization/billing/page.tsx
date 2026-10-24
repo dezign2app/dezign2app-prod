@@ -9,8 +9,6 @@ import {
   CreditCard,
   Building2,
   Users,
-  Zap,
-  Calendar,
   ArrowLeft,
   ChevronRight,
   Shield,
@@ -64,12 +62,6 @@ export default function OrganizationBillingPage() {
   const seatStatus = useQuery(
     api.billing.getOrgSeatStatus,
     activeOrg?.id ? { organizationId: activeOrg.id } : "skip",
-  );
-
-  const userEmail = session?.user?.email ?? "";
-  const earlyBeliever = useQuery(
-    api.billing.getUserEarlyBeliever,
-    userEmail ? { email: userEmail } : "skip",
   );
 
   if (isOrgPending) {
@@ -276,45 +268,6 @@ export default function OrganizationBillingPage() {
         </Card>
       </div>
 
-      {/* Early Believer Card (if applicable) */}
-      {earlyBeliever && (
-        <Card className="border-primary/30 bg-primary/5 p-5 space-y-4">
-          <div className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold text-foreground">Early Believer Benefits</h3>
-            <Badge className="text-[10px] ml-auto">
-              {earlyBeliever.discountPercent}% Lifetime Discount
-            </Badge>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg border border-primary/20 bg-background/50 p-3">
-              <div className="text-sm font-bold text-foreground">{earlyBeliever.totalSeats}</div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">Seats Included</div>
-            </div>
-            <div className="rounded-lg border border-primary/20 bg-background/50 p-3">
-              <div className="text-sm font-bold text-foreground">
-                ${earlyBeliever.totalPaid.toLocaleString()}
-              </div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">Total Invested</div>
-            </div>
-          </div>
-
-          {earlyBeliever.maxSubscriptionEnd > 0 && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Calendar className="h-3.5 w-3.5" />
-              <span>
-                Access valid until{" "}
-                {new Date(earlyBeliever.maxSubscriptionEnd).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
-              </span>
-            </div>
-          )}
-        </Card>
-      )}
 
       {/* Buy Seats Dialog */}
       <BuySeatsDialog

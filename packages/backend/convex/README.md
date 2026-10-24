@@ -12,7 +12,7 @@ packages/backend/convex/
 ├── ai/                 # AI conversation & chat message handlers
 ├── lib/                # Internal utility modules
 ├── schema/             # Modularized table schema definitions
-│   ├── auth.ts         # User, subscription, API keys, early believer schemas
+│   ├── auth.ts         # User, subscription, API keys, and organization billing schemas
 │   ├── canvasValidators.ts # Node/edge validators for system canvas
 │   ├── features.ts     # Project features schema
 │   ├── langgraph.ts    # LangGraph agent state/run schemas

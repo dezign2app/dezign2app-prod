@@ -35,7 +35,6 @@ const isPublicRoute = createRouteMatcher([
   "/partners(.*)",
   "/changelog(.*)",
   "/integrations(.*)",
-  "/early-believer(.*)",
   "/auth/desktop(.*)",
   "/robots.txt",
   "/sitemap.xml",
@@ -62,7 +61,6 @@ const isExcludedDesktopRoute = createRouteMatcher([
   "/partners(.*)",
   "/changelog(.*)",
   "/integrations(.*)",
-  "/early-believer(.*)",
 ]);
 
 const isAuthRoute = createRouteMatcher([
