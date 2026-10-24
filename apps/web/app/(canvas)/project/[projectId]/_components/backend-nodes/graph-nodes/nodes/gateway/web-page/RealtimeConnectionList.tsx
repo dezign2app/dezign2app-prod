@@ -5,6 +5,7 @@ import { BackendNode, RealtimeConnection, ClientDeliveryProtocol, PipelineStep, 
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { generateId } from "../../../common";
+import { deleteRealtimeConnection } from "@/app/(canvas)/project/[projectId]/_components/config-sidebar/web-page-realtime-config";
 
 export interface RealtimeConnectionListProps {
   nodeId: string;
@@ -224,12 +225,10 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
   };
 
   const handleDelete = (connId: string) => {
-    const nextList = connections.filter((c) => c.id !== connId);
-    updateNode(nodeId, {
-      data: {
-        ...data,
-        realtimeConnections: nextList,
-      },
+    deleteRealtimeConnection({
+      connId,
+      nodeId,
+      store: useBackendCanvasStore.getState(),
     });
   };
 
@@ -483,19 +482,17 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
                 >
                   <Settings size={11} />
                 </button>
-                {!item.isDerived && (
-                  <button
-                    type="button"
-                    className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive cursor-pointer"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(item.id);
-                    }}
-                    title="Delete connection"
-                  >
-                    <Trash size={11} />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(item.id);
+                  }}
+                  title="Delete connection"
+                >
+                  <Trash size={11} />
+                </button>
               </div>
             </div>
           );

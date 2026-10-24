@@ -3,7 +3,7 @@
 import React from "react";
 import { RealtimeConnection } from "@workspace/canvas/types";
 import { DerivedRealtimeInfo } from "./types";
-import { Radio, AlertCircle, Sparkles, ExternalLink } from "lucide-react";
+import { Radio, AlertCircle, Sparkles, ExternalLink, Trash2 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
 
@@ -14,6 +14,7 @@ export interface RealtimeConnectionHeaderProps {
   isDerived: boolean;
   derivedInfo: DerivedRealtimeInfo | null;
   onEditInPipeline?: () => void;
+  onDelete?: () => void;
 }
 
 export const RealtimeConnectionHeader: React.FC<RealtimeConnectionHeaderProps> = ({
@@ -23,6 +24,7 @@ export const RealtimeConnectionHeader: React.FC<RealtimeConnectionHeaderProps> =
   isDerived,
   derivedInfo,
   onEditInPipeline,
+  onDelete,
 }) => {
   return (
     <div className="flex flex-col gap-4">
@@ -70,6 +72,19 @@ export const RealtimeConnectionHeader: React.FC<RealtimeConnectionHeaderProps> =
             </p>
           </div>
         </div>
+
+        {onDelete && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs px-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-1.5 font-medium shrink-0"
+            onClick={onDelete}
+            title="Delete this real-time connection"
+          >
+            <Trash2 size={13} />
+            <span>Delete</span>
+          </Button>
+        )}
       </div>
 
       {/* Disconnected / Unlinked Warning Banner */}

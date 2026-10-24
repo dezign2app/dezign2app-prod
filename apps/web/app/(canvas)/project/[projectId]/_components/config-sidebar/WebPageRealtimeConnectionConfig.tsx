@@ -2,7 +2,12 @@
 
 import React, { useMemo } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { RealtimeConnection, Endpoint, UIEventItem } from "@workspace/canvas/types";
+import {
+  RealtimeConnection,
+  Endpoint,
+  UIEventItem,
+  ClientDeliveryProtocol,
+} from "@workspace/canvas/types";
 import { extractPathsFromObject } from "./pipeline-step-editor/sourcePaths";
 import { AvailablePath } from "./pipeline-step-editor/types";
 import { parseSchemaJson } from "@/lib/compiler/utils";
@@ -10,11 +15,10 @@ import {
   WebPageRealtimeConnectionConfigProps,
   useDerivedRealtimeInfo,
   RealtimeConnectionHeader,
-  RealtimeProtocolSection,
-  WebRtcCapabilitiesSection,
-  RealtimeStateStoreSection,
   RealtimeSubscriptionMappingSection,
   resolveRealtimePayloadPaths,
+  useAllPageRealtimeConnections,
+  deleteRealtimeConnection,
 } from "./web-page-realtime-config";
 import { ensureWsPackageInService } from "@/lib/stores/backendCanvas/packageTypesSync";
 import { ActionFlowEditor, ActionSimulator } from "./web-page-event-config";
@@ -26,7 +30,22 @@ import {
   AccordionContent,
 } from "@workspace/ui/components/accordion";
 import { Badge } from "@workspace/ui/components/badge";
-import { Layers, Play, Link2 } from "lucide-react";
+import { Button } from "@workspace/ui/components/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@workspace/ui/components/dropdown-menu";
+import { Layers, Play, Link2, Plus, Radio, Trash2 } from "lucide-react";
+import { cn } from "@workspace/ui/lib/utils";
 import { isStorageRefNode } from "@/lib/stores/backendCanvas/edge/utils";
 import type { ActionStepItem } from "./web-page-event-config/TargetEndpointSection";
 import type { FrontendActionStepDraft } from "./web-page-event-config/action-flow/types";
@@ -110,16 +129,83 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
       (conn.sourceServiceNodeId && nodes.some((n) => n.id === conn.sourceServiceNodeId)),
   );
 
+  const allPageConnections = useAllPageRealtimeConnections({
+    nodeId,
+    pageNode,
+    nodes,
+    edges,
+    events,
+    endpoints,
+  });
+
+  const handleAddConnection = (protocol: ClientDeliveryProtocol) => {
+    if (!pageNode) return;
+    const newId = `rtc-${Math.random().toString(36).substring(2, 9)}`;
+    const defaultEventName =
+      protocol === "WEBSOCKET"
+        ? "chat.message"
+        : protocol === "WEBRTC"
+        ? "media-channel"
+        : "order.updated";
+    const newConn: RealtimeConnection = {
+      id: newId,
+      protocol,
+      eventName: defaultEventName,
+      description: `${protocol} stream connection`,
+      actionSteps: [],
+      subscriptionBindings: [],
+    };
+    const existing = pageNode.data?.realtimeConnections || [];
+    updateNode(nodeId, {
+      data: {
+        ...pageNode.data,
+        label: pageNode.data?.label || "",
+        realtimeConnections: [...existing, newConn],
+      },
+    });
+    setActiveConfigItem({
+      type: "realtimeConnection",
+      id: newId,
+      nodeId,
+    });
+  };
+
+  const handleDelete = (connId: string) => {
+    deleteRealtimeConnection({
+      connId,
+      nodeId,
+      store: useBackendCanvasStore.getState(),
+    });
+    const remaining = allPageConnections.filter((c) => c.id !== connId);
+    if (remaining.length > 0) {
+      setActiveConfigItem({
+        type: "realtimeConnection",
+        id: remaining[0]?.id || "",
+        nodeId,
+      });
+    } else {
+      setActiveConfigItem({
+        type: "webPage",
+        id: nodeId,
+        nodeId,
+      });
+    }
+  };
+
   const handleUpdateManual = (changes: Partial<RealtimeConnection>) => {
     if (!pageNode) return;
-    // Protocol / capabilities cannot be edited manually for derived connections, but bindings, action steps, and subscription mappings CAN
+    // Protocol / capabilities cannot be edited manually for derived connections, but bindings, action steps, room, and capabilities CAN
     if (
       isDerived &&
       !changes.storeActionBinding &&
       changes.storeActionBinding !== null &&
       !changes.storeActionBindings &&
       !changes.actionSteps &&
-      !changes.subscriptionBindings
+      !changes.subscriptionBindings &&
+      !changes.room &&
+      changes.enableMic === undefined &&
+      changes.enableCamera === undefined &&
+      changes.enableDataChannel === undefined
     ) {
       return;
     }
@@ -139,10 +225,6 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
       ensureWsPackageInService({ serviceNodeId: conn.sourceServiceNodeId });
     }
   };
-
-  const stateStoreNodes = useMemo(() => {
-    return nodes.filter((n) => n.type === "state_store");
-  }, [nodes]);
 
   const suggestedPaths = useMemo((): AvailablePath[] => {
     return resolveRealtimePayloadPaths({
@@ -267,13 +349,14 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <RealtimeConnectionHeader
         conn={conn}
         pageLabel={pageNode?.data?.label || "Page"}
         isConnected={isConnected}
         isDerived={isDerived}
         derivedInfo={derivedInfo}
+        onDelete={() => handleDelete(conn.id)}
         onEditInPipeline={() => {
           if (derivedInfo?.sourceEventId && derivedInfo.sourceNode) {
             setActiveConfigItem({
@@ -291,29 +374,128 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
         }}
       />
 
+      {/* Multi-Connection Switcher & Manager Bar */}
+      <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-card border border-border/60">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="text-xs font-semibold text-muted-foreground shrink-0 flex items-center gap-1.5">
+            <Radio size={12} className="text-violet-500" />
+            <span>Connection:</span>
+          </span>
+          <Select
+            value={conn.id}
+            onValueChange={(selectedId) => {
+              setActiveConfigItem({
+                type: "realtimeConnection",
+                id: selectedId,
+                nodeId,
+              });
+            }}
+          >
+            <SelectTrigger className="h-8 text-xs bg-background flex-1 min-w-0">
+              <SelectValue placeholder="Select connection" />
+            </SelectTrigger>
+            <SelectContent>
+              {allPageConnections.map((c) => (
+                <SelectItem key={c.id} value={c.id} className="text-xs">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        "font-mono text-[9px] px-1 py-0.2 rounded font-bold uppercase",
+                        c.protocol === "WEBSOCKET"
+                          ? "bg-cyan-500/15 text-cyan-500"
+                          : c.protocol === "WEBRTC"
+                          ? "bg-emerald-500/15 text-emerald-500"
+                          : "bg-amber-500/15 text-amber-500",
+                      )}
+                    >
+                      {c.protocol}
+                    </span>
+                    <span className="truncate">{c.sourceItemName || c.eventName || c.id}</span>
+                    {c.isDerived && (
+                      <span className="text-[9px] text-violet-500 font-mono">(pipeline)</span>
+                    )}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs px-2 text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30 gap-1 shrink-0"
+            onClick={() => handleDelete(conn.id)}
+            title="Delete this connection"
+          >
+            <Trash2 size={12} />
+            <span>Delete</span>
+          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs px-2.5 gap-1 shrink-0 border-dashed hover:bg-violet-500/10 hover:text-violet-500"
+              >
+                <Plus size={12} /> Add
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleAddConnection("SSE")} className="text-xs gap-2">
+                <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 font-bold">
+                  SSE
+                </span>
+                Server-Sent Events
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleAddConnection("WEBSOCKET")} className="text-xs gap-2">
+                <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-500 font-bold">
+                  WS
+                </span>
+                WebSocket
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleAddConnection("WEBRTC")} className="text-xs gap-2">
+                <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-500 font-bold">
+                  RTC
+                </span>
+                WebRTC
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
       <div className="flex flex-col gap-4">
-        {/* Pipeline Action Steps Accordion (Frontend Action Steps & Subscription Mapping) */}
+        {/* Pipeline Action Steps Accordion (Frontend Action Steps & Connection Mapping) */}
         <Accordion
           type="multiple"
-          defaultValue={["subscription", "steps", "simulator"]}
+          defaultValue={["connection", "steps", "simulator"]}
           className="w-full flex flex-col gap-3 border-none"
         >
-          {/* 1. Subscription Parameters & Route Mapping */}
+          {/* 1. Connection Mapping (Route, Room, Parameters, Capabilities) */}
           <AccordionItem
-            value="subscription"
+            value="connection"
             className="border border-purple-500/30 rounded-xl overflow-hidden bg-card"
           >
             <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-secondary/20 transition-colors [&>svg]:shrink-0">
               <div className="flex items-center gap-2">
                 <Link2 size={14} className="text-purple-400" />
                 <span className="text-xs font-semibold">
-                  Subscription Mapping
+                  Connection Mapping
                 </span>
                 <Badge
                   variant="outline"
                   className="text-[9px] px-1.5 py-0 font-mono text-purple-400 border-purple-500/30 bg-purple-500/10"
                 >
                   {(conn.subscriptionBindings?.length || 0)} mapped
+                </Badge>
+                <Badge
+                  variant="secondary"
+                  className="text-[9px] px-1.5 py-0 font-mono uppercase"
+                >
+                  {conn.protocol || "SSE"}
                 </Badge>
               </div>
             </AccordionTrigger>
@@ -325,6 +507,16 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
                 endpoints={endpoints}
                 derivedInfo={derivedInfo}
                 isProtected={isProtected}
+                allConnections={allPageConnections}
+                onSelectConnection={(selectedId) =>
+                  setActiveConfigItem({
+                    type: "realtimeConnection",
+                    id: selectedId,
+                    nodeId,
+                  })
+                }
+                onDeleteConnection={() => handleDelete(conn.id)}
+                onDeleteSpecificConnection={(cId) => handleDelete(cId)}
                 onUpdate={handleUpdateManual}
               />
             </AccordionContent>
@@ -418,33 +610,6 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
             </AccordionContent>
           </AccordionItem>
         </Accordion>
-
-        <RealtimeProtocolSection
-          conn={conn}
-          isDerived={isDerived}
-          onUpdate={handleUpdateManual}
-        />
-
-        {conn.protocol === "WEBRTC" && (
-          <WebRtcCapabilitiesSection
-            id={id}
-            conn={conn}
-            isDerived={isDerived}
-            onUpdate={handleUpdateManual}
-          />
-        )}
-
-        <RealtimeStateStoreSection
-          id={id}
-          nodeId={nodeId}
-          storeBinding={conn.storeActionBinding}
-          isDerived={isDerived}
-          stateStoreNodes={stateStoreNodes}
-          suggestedPaths={suggestedPaths}
-          onUpdateStoreBinding={(binding) =>
-            handleUpdateManual({ storeActionBinding: binding })
-          }
-        />
       </div>
     </div>
   );

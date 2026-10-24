@@ -37,6 +37,9 @@ import type {
 import { ActionFlowCombobox, ComboboxOption } from "../web-page-event-config/action-flow/ActionFlowCombobox";
 import { DerivedRealtimeInfo } from "./types";
 import { isAuthHeaderName } from "../web-page-event-config/action-flow/utils";
+import { WebRtcCapabilitiesSection } from "./WebRtcCapabilitiesSection";
+import type { MergedPageRealtimeConnection } from "./useAllPageRealtimeConnections";
+import { cn } from "@workspace/ui/lib/utils";
 
 export interface RealtimeSubscriptionMappingSectionProps {
   conn: RealtimeConnection;
@@ -45,6 +48,10 @@ export interface RealtimeSubscriptionMappingSectionProps {
   endpoints?: Endpoint[];
   derivedInfo?: DerivedRealtimeInfo | null;
   isProtected?: boolean;
+  allConnections?: MergedPageRealtimeConnection[];
+  onSelectConnection?: (connId: string) => void;
+  onDeleteConnection?: () => void;
+  onDeleteSpecificConnection?: (connId: string) => void;
   onUpdate?: (changes: Partial<RealtimeConnection>) => void;
   onUpdateBindings?: (bindings: FrontendRequestFieldBinding[]) => void;
 }
@@ -92,6 +99,10 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
   endpoints = [],
   derivedInfo = null,
   isProtected = false,
+  allConnections = [],
+  onSelectConnection,
+  onDeleteConnection,
+  onDeleteSpecificConnection,
   onUpdate,
   onUpdateBindings,
 }) => {
@@ -415,6 +426,67 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
 
   return (
     <div className="flex flex-col gap-3.5">
+      {/* Optional quick switcher if multiple connections exist */}
+      {allConnections && allConnections.length > 1 && (
+        <div className="flex flex-col gap-1.5 p-2 rounded-lg border border-border/60 bg-muted/20">
+          <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground px-0.5">
+            <span>Page Connections ({allConnections.length})</span>
+          </div>
+          <div className="grid grid-cols-1 gap-1 max-h-36 overflow-y-auto pr-0.5">
+            {allConnections.map((c) => {
+              const isSelected = c.id === conn.id;
+              return (
+                <div
+                  key={c.id}
+                  onClick={() => onSelectConnection?.(c.id)}
+                  className={cn(
+                    "group flex items-center justify-between p-1.5 rounded-md border text-xs cursor-pointer transition-all",
+                    isSelected
+                      ? "border-violet-500/50 bg-violet-500/10 shadow-xs"
+                      : "border-border/50 bg-background/50 hover:bg-muted/50 hover:border-border",
+                  )}
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span
+                      className={cn(
+                        "w-1.5 h-1.5 rounded-full shrink-0",
+                        c.isDerived ? "bg-amber-500" : "bg-violet-500",
+                      )}
+                    />
+                    <span className="font-mono text-[11px] truncate font-medium text-foreground">
+                      {c.eventName || c.id}
+                    </span>
+                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 uppercase font-mono">
+                      {c.protocol}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {(onDeleteSpecificConnection || (isSelected && onDeleteConnection)) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onDeleteSpecificConnection) {
+                            onDeleteSpecificConnection(c.id);
+                          } else if (onDeleteConnection) {
+                            onDeleteConnection();
+                          }
+                        }}
+                        className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        title="Delete connection"
+                      >
+                        <Trash2 size={11} />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Route & Stream Info Banner */}
       <div className="flex items-center justify-between p-2.5 rounded-lg border border-violet-500/30 bg-violet-500/5">
         <div className="flex items-center gap-2 min-w-0">
@@ -444,16 +516,82 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
           </div>
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleAutoMapAll}
-          className="h-6 text-[10px] px-2 border-violet-500/30 hover:bg-violet-500/10 text-violet-600 dark:text-violet-400 gap-1 shrink-0 font-semibold"
-          title="Auto-match parameter names to page route parameters and state variables"
-        >
-          <Sparkles size={11} /> Auto-map
-        </Button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleAutoMapAll}
+            className="h-6 text-[10px] px-2 border-violet-500/30 hover:bg-violet-500/10 text-violet-600 dark:text-violet-400 gap-1 shrink-0 font-semibold"
+            title="Auto-match parameter names to page route parameters and state variables"
+          >
+            <Sparkles size={11} /> Auto-map
+          </Button>
+          {onDeleteConnection && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onDeleteConnection}
+              className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+              title="Delete this connection"
+            >
+              <Trash2 size={12} />
+            </Button>
+          )}
+        </div>
       </div>
+
+      {/* Broadcast / Signaling Room (WebSocket / WebRTC) */}
+      {(conn.protocol === "WEBSOCKET" || conn.protocol === "WEBRTC") && (
+        <div className="flex flex-col gap-1.5 p-2.5 rounded-lg border border-cyan-500/30 bg-cyan-500/5">
+          <div className="flex items-center justify-between">
+            <Label className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+              <Radio size={12} className="text-cyan-500" />
+              <span>
+                {conn.protocol === "WEBRTC" ? "Signaling Room / Peer Channel" : "Broadcast Room / Channel"}
+              </span>
+            </Label>
+            {conn.room && (
+              <Badge variant="outline" className="text-[9px] font-mono border-cyan-500/30 text-cyan-600 dark:text-cyan-400">
+                {conn.room}
+              </Badge>
+            )}
+          </div>
+          <Input
+            className="text-xs bg-background h-8"
+            disabled={Boolean(derivedInfo?.step)}
+            value={conn.room || ""}
+            onChange={(e) => onUpdate?.({ room: e.target.value })}
+            placeholder={
+              conn.protocol === "WEBRTC"
+                ? "e.g. room:conference or lobby"
+                : "e.g. global or user:${userId}"
+            }
+          />
+          <span className="text-[10px] text-muted-foreground">
+            {Boolean(derivedInfo?.step)
+              ? "Configured in backend Push to Client pipeline step. Resolved automatically when connecting."
+              : "Room or channel identifier used when subscribing to this stream."}
+          </span>
+        </div>
+      )}
+
+      {/* WebRTC Capabilities Section */}
+      {conn.protocol === "WEBRTC" && (
+        <div className="flex flex-col gap-2 p-2.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5">
+          <Label className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+            <Radio size={12} className="text-emerald-500" />
+            <span>WebRTC Media &amp; Data Capabilities</span>
+          </Label>
+          <WebRtcCapabilitiesSection
+            id={conn.id}
+            conn={conn}
+            isDerived={Boolean(derivedInfo?.step)}
+            onUpdate={(changes) => {
+              if (onUpdate) onUpdate(changes);
+            }}
+          />
+        </div>
+      )}
 
       {/* Path Parameters Section */}
       <div className="flex flex-col gap-2">
