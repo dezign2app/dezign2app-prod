@@ -591,13 +591,7 @@ export const WebPageNode = ({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
-        zIndex: isStacked
-          ? selected
-            ? 1000
-            : 10 + cardIndex
-          : selected
-            ? 1000
-            : undefined,
+        zIndex: selected ? 1000 : 1,
       }}
       className={cn(
         "shadow-md rounded-xl bg-card border-2 min-w-[240px] max-w-[320px] flex flex-col transition-all duration-200 relative",
