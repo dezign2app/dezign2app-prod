@@ -22,10 +22,29 @@ import {
   GRPC_DEFAULT_PORT,
 } from "@workspace/canvas";
 
+export type RealtimeCapabilitiesParam =
+  | boolean
+  | {
+      sse?: boolean;
+      ws?: boolean;
+    };
+
 export function generateLibFiles(
   hasDb: boolean = true,
-  hasRealtime: boolean = true,
+  realtime: RealtimeCapabilitiesParam = true,
 ): CompiledFile[] {
+  let hasSse = false;
+  let hasWs = false;
+
+  if (typeof realtime === "boolean") {
+    hasSse = realtime;
+    hasWs = realtime;
+  } else if (realtime && typeof realtime === "object") {
+    hasSse = Boolean(realtime.sse);
+    hasWs = Boolean(realtime.ws);
+  }
+
+  const hasRealtime = hasSse || hasWs;
   const dbExport = hasDb ? `export * from "@workspace/db/helpers";\n\n` : "";
   const realtimeExport = hasRealtime ? `export * from "./realtime";\n\n` : "";
   const libIndexCode = `/**
@@ -41,12 +60,36 @@ ${dbExport}${realtimeExport}export function formatResponse<T>(data: T, message =
 }
 `;
 
-  const realtimeCode = `import { Request, Response } from "express";
-import { Server as HttpServer, IncomingMessage } from "http";
-import { WebSocketServer, WebSocket, RawData } from "ws";
+  if (!hasRealtime) {
+    return [
+      {
+        filename: "src/lib/index.ts",
+        language: "typescript",
+        content: libIndexCode,
+      },
+    ];
+  }
+
+  const files: CompiledFile[] = [
+    {
+      filename: "src/lib/index.ts",
+      language: "typescript",
+      content: libIndexCode,
+    },
+  ];
+
+  const realtimeReExports: string[] = [];
+
+  if (hasSse) {
+    const sseCode = `import { Request, Response } from "express";
 import { createLogger } from "@workspace/logger";
 
-const logger = createLogger("Realtime");
+const logger = createLogger("Realtime:SSE");
+
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonObject = { [key: string]: JsonValue };
+export type JsonArray = JsonValue[];
+export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
 
 type SseClient = {
   id: string;
@@ -95,11 +138,6 @@ export function handleSseConnection(req: Request, res: Response): void {
   });
 }
 
-export type JsonPrimitive = string | number | boolean | null;
-export type JsonObject = { [key: string]: JsonValue };
-export type JsonArray = JsonValue[];
-export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
-
 /**
  * Broadcasts an event and data payload to all connected SSE clients.
  */
@@ -115,6 +153,26 @@ export function sseBroadcast(eventName: string, data: Record<string, JsonValue |
     }
   }
 }
+`;
+    realtimeReExports.push('export * from "./sse";');
+    files.push({
+      filename: "src/lib/sse.ts",
+      language: "typescript",
+      content: sseCode,
+    });
+  }
+
+  if (hasWs) {
+    const websocketCode = `import { Server as HttpServer, IncomingMessage } from "http";
+import { WebSocketServer, WebSocket, RawData } from "ws";
+import { createLogger } from "@workspace/logger";
+
+const logger = createLogger("Realtime:WS");
+
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonObject = { [key: string]: JsonValue };
+export type JsonArray = JsonValue[];
+export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
 
 export interface WsClientInfo {
   id: string;
@@ -288,31 +346,28 @@ export function webrtcBroadcast(eventName: string, data: Record<string, JsonValu
     }
   }
 }
-
 `;
-
-  if (!hasRealtime) {
-    return [
-      {
-        filename: "src/lib/index.ts",
-        language: "typescript",
-        content: libIndexCode,
-      },
-    ];
+    realtimeReExports.push('export * from "./websocket";');
+    files.push({
+      filename: "src/lib/websocket.ts",
+      language: "typescript",
+      content: websocketCode,
+    });
   }
 
-  return [
-    {
-      filename: "src/lib/index.ts",
-      language: "typescript",
-      content: libIndexCode,
-    },
-    {
-      filename: "src/lib/realtime.ts",
-      language: "typescript",
-      content: realtimeCode,
-    },
-  ];
+  const realtimeBarrelCode = `/**
+ * Realtime communication exports.
+ */
+${realtimeReExports.join("\n")}
+`;
+
+  files.push({
+    filename: "src/lib/realtime.ts",
+    language: "typescript",
+    content: realtimeBarrelCode,
+  });
+
+  return files;
 }
 
 export function isGrpcEnabledForService(
@@ -701,12 +756,9 @@ export function generateConfigFiles(
   }
 
   const { hasSse, hasWs } = resolveServiceRealtimeCapabilities(node, endpoints, events, allNodes, allEdges);
-  const hasRealtime = hasSse || hasWs;
-  const hasWsOrRealtime = Boolean(
+  const requiresWs = Boolean(
     hasWs ||
-    hasRealtime ||
-    node.data?.enableWebSocket ||
-    node.data?.enableRealtime,
+    node.data?.enableWebSocket,
   );
 
   const dbDeps: Record<string, string> = {};
@@ -830,7 +882,7 @@ export function generateConfigFiles(
     dotenv: "^16.4.5",
     zod: "^3.24.2",
     jose: "^5.9.6",
-    ...(hasWsOrRealtime ? { ws: "^8.18.0" } : {}),
+    ...(requiresWs ? { ws: "^8.18.0" } : {}),
   };
 
   const parsedRateLimit = parseRateLimit(
@@ -852,7 +904,7 @@ export function generateConfigFiles(
     "@types/express": "^4.17.21",
     "@types/cors": "^2.8.17",
     "@types/node": "^20.11.0",
-    ...(hasWsOrRealtime ? { "@types/ws": "^8.5.12" } : {}),
+    ...(requiresWs ? { "@types/ws": "^8.5.12" } : {}),
     "ts-node-dev": "^2.0.0",
     typescript: "^5.3.3",
     vitest: "^1.6.0",

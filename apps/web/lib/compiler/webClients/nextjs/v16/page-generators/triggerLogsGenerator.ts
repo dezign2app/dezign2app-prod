@@ -96,7 +96,7 @@ export function generateTriggerHandler(hasApiActions: boolean): string {
           {
             id: logId,
             eventName,
-            eventType: result.data && typeof result.data === "object" && (result.data as any).streamed ? "SSE" : eventType,
+            eventType: result.data && typeof result.data === "object" && "streamed" in result.data && Boolean(result.data.streamed) ? "SSE" : eventType,
             timestamp,
             url: result.url || result.targetUrl || "N/A",
             method: method || "TRIGGER",
@@ -194,7 +194,7 @@ export function generateTriggerLogsSection(options: {
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30">
                             PAGE LOAD
                           </span>
-                        ) : log.eventType === "SSE" || (log.data && typeof log.data === "object" && (log.data as any).streamed) ? (
+                        ) : log.eventType === "SSE" || (log.data && typeof log.data === "object" && "streamed" in log.data && Boolean(log.data.streamed)) ? (
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
                             STREAM
                           </span>
@@ -220,34 +220,19 @@ export function generateTriggerLogsSection(options: {
                       <span>{log.timestamp}</span>
                     </div>
                     {log.error ? (
-                      <div className="text-destructive bg-destructive/10 p-2 rounded border border-destructive/20">
+                      <div className="text-destructive bg-destructive/10 p-2 rounded border border-destructive/20 font-mono">
                         Error: {log.error}
                       </div>
-                    ) : log.data && typeof log.data === "object" && (log.data as any).streamed ? (
-                      <div className="space-y-2">
-                        {Boolean((log.data as any).reasoning) && (
-                          <div className="p-2.5 rounded bg-muted/70 border border-border/60 text-muted-foreground text-xs italic">
-                            <div className="font-semibold text-[10px] uppercase tracking-wider text-muted-foreground/90 mb-1 flex items-center gap-1.5">
-                              <span>Thinking Process</span>
-                            </div>
-                            <div className="whitespace-pre-wrap">{(log.data as any).reasoning}</div>
-                          </div>
-                        )}
-                        <pre className="text-foreground/90 bg-background/80 p-3 rounded border border-border/50 overflow-x-auto whitespace-pre-wrap font-sans text-xs leading-relaxed">
-                          {(log.data as any).content || (log.isStreaming ? "" : JSON.stringify(log.data, null, 2))}
-                          {log.isStreaming && (
-                            <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-primary animate-pulse align-middle" />
-                          )}
-                        </pre>
-                        {Array.isArray((log.data as any).updates) && (log.data as any).updates.length > 0 && !(log.data as any).content && (
-                          <pre className="text-foreground/90 bg-background/80 p-3 rounded border border-border/50 overflow-x-auto whitespace-pre-wrap">
-                            {JSON.stringify((log.data as any).updates, null, 2)}
-                          </pre>
-                        )}
-                      </div>
                     ) : (
-                      <pre className="text-foreground/90 bg-background/80 p-3 rounded border border-border/50 overflow-x-auto whitespace-pre-wrap">
-                        {typeof log.data === "string" ? log.data : JSON.stringify(log.data, null, 2)}
+                      <pre className="text-foreground/90 bg-background/80 p-3 rounded border border-border/50 overflow-x-auto whitespace-pre-wrap font-mono text-xs">
+                        {log.data && typeof log.data === "object" && "raw" in log.data && typeof log.data.raw === "string" && log.data.raw
+                          ? log.data.raw
+                          : typeof log.data === "string"
+                          ? log.data
+                          : JSON.stringify(log.data, null, 2)}
+                        {log.isStreaming && (
+                          <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-primary animate-pulse align-middle" />
+                        )}
                       </pre>
                     )}
                   </div>

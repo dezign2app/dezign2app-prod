@@ -475,6 +475,52 @@ export function generateResponseInterface(
 ): ResponseInterfaceResult {
   const entityImports = new Set<string>();
 
+  // 0. Streaming LangGraph / Pipeline Step check
+  // When an endpoint has streaming enabled (e.g. LangGraph SSE), the Express route handler
+  // hijacks the response stream and streams data chunks over HTTP, bypassing standard JSON returns.
+  if (ep?.pipelineSteps && ep.pipelineSteps.length > 0) {
+    const streamingStep = ep.pipelineSteps.find(
+      (s) =>
+        s.enabled !== false &&
+        (s.langGraphStreamingEnabled ||
+          (s.type === "langgraph_invoke" && Boolean(s.langGraphStreamingEnabled))),
+    );
+    if (streamingStep) {
+      const code = `/**
+ * Real-time Streaming Stream Result for ${interfaceName}
+ * Emitted when the LangGraph agent invocation streams tokens/updates over SSE or raw stream.
+ */
+export interface ${interfaceName} {
+  content: string;
+  tokens: string[];
+  reasoning?: string;
+  reasoningTokens?: string[];
+  updates?: Array<{ node?: string; data: Record<string, unknown> }>;
+  custom?: unknown[];
+  values?: Record<string, unknown>;
+  threadId?: string;
+  streamed: true;
+  statusText?: string;
+  raw?: string;
+}
+
+/**
+ * Individual SSE event chunk received over the wire for ${interfaceName}
+ */
+export interface ${interfaceName}StreamChunk {
+  token?: string;
+  node?: string;
+  type?: "reasoning" | "update" | "custom" | "values" | "session";
+  mode?: string;
+  data?: unknown;
+  reasoning?: string;
+  thread_id?: string;
+}
+`;
+      return { code, entityImports };
+    }
+  }
+
   // 1. Explicit Pipeline Steps with return_response (from PipelineStepEditor)
   // When an endpoint has a return_response step, that step defines the actual code emitted by the route handler.
   if (ep?.pipelineSteps && ep.pipelineSteps.length > 0) {

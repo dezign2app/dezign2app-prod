@@ -188,16 +188,24 @@ describe("compilePushToClientStep", () => {
     expect(consumerFile?.content).toContain('sseBroadcast("message.sent.notification", payload);');
   });
 
-  it("generates src/lib/realtime.ts and re-exports it in src/lib/index.ts", () => {
+  it("generates separated realtime files (sse.ts, websocket.ts) and re-exports them in src/lib/realtime.ts and index.ts", () => {
     const files = generateLibFiles(true);
+    const sseFile = files.find((f) => f.filename === "src/lib/sse.ts");
+    const wsFile = files.find((f) => f.filename === "src/lib/websocket.ts");
     const realtimeFile = files.find((f) => f.filename === "src/lib/realtime.ts");
     const indexFile = files.find((f) => f.filename === "src/lib/index.ts");
 
+    expect(sseFile).toBeDefined();
+    expect(sseFile?.content).toContain("export function sseBroadcast(");
+    expect(sseFile?.content).toContain("export function handleSseConnection(");
+
+    expect(wsFile).toBeDefined();
+    expect(wsFile?.content).toContain("export function wsBroadcast(");
+    expect(wsFile?.content).toContain("export function webrtcBroadcast(");
+
     expect(realtimeFile).toBeDefined();
-    expect(realtimeFile?.content).toContain("export function sseBroadcast(");
-    expect(realtimeFile?.content).toContain("export function wsBroadcast(");
-    expect(realtimeFile?.content).toContain("export function webrtcBroadcast(");
-    expect(realtimeFile?.content).toContain("export function handleSseConnection(");
+    expect(realtimeFile?.content).toContain('export * from "./sse";');
+    expect(realtimeFile?.content).toContain('export * from "./websocket";');
 
     expect(indexFile).toBeDefined();
     expect(indexFile?.content).toContain('export * from "./realtime";');
