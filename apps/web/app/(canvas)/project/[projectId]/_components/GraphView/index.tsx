@@ -6,6 +6,7 @@ import {
   MiniMap,
   Connection,
   useReactFlow,
+  Node,
 } from "@xyflow/react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
@@ -246,6 +247,22 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
 
 
 
+  const [lastActiveNodeId, setLastActiveNodeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeConfigItem) {
+      const targetId = activeConfigItem.nodeId || activeConfigItem.id;
+      if (targetId) {
+        setLastActiveNodeId(targetId);
+        return;
+      }
+    }
+    const activeNode = graphNodes.find((n) => n.selected || n.dragging);
+    if (activeNode) {
+      setLastActiveNodeId(activeNode.id);
+    }
+  }, [graphNodes, activeConfigItem]);
+
   const sortedGraphNodes = React.useMemo(() => {
     // 1. Build map of stacked hand info for all WebPage nodes per WebApp zone
     const webAppNodes = graphNodes.filter((n) => n.type === "webApp");
@@ -290,21 +307,22 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
     });
 
     const nodesWithZ = graphNodes.map((node) => {
-      const handInfo = pageHandMap.get(node.id);
       const isSelected = Boolean(node.selected);
       const isDragging = Boolean(node.dragging);
       const isActiveConfig = Boolean(
         activeConfigItem &&
           (activeConfigItem.nodeId === node.id || activeConfigItem.id === node.id),
       );
-      const isActive = isSelected || isDragging || isActiveConfig;
+      const isLastActive = node.id === lastActiveNodeId;
+      const isActive = isSelected || isDragging || isLastActive;
 
       let z = node.type === "webAppGroup" ? -1 : 1;
-      if (handInfo && handInfo.isStacked) {
-        z = isActive ? 1000 : 10 + handInfo.cardIndex;
+      if (isActiveConfig) {
+        z = 1001;
       } else if (isActive) {
-        z = isActiveConfig ? 1001 : 1000;
+        z = 1000;
       }
+
       return {
         ...node,
         zIndex: z,
@@ -327,9 +345,17 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
       );
       if (aIsActiveConfig && !bIsActiveConfig) return 1;
       if (!aIsActiveConfig && bIsActiveConfig) return -1;
+
+      // Tie-breaker for stacked cards within the same zone hand:
+      const aHand = pageHandMap.get(a.id);
+      const bHand = pageHandMap.get(b.id);
+      if (aHand?.isStacked && bHand?.isStacked) {
+        return aHand.cardIndex - bHand.cardIndex;
+      }
+
       return 0;
     });
-  }, [graphNodes, graphEdges, activeConfigItem]);
+  }, [graphNodes, graphEdges, activeConfigItem, lastActiveNodeId]);
 
   const visualGraphNodes = React.useMemo(() => {
     const hasRun = simulation.status !== "idle";
@@ -446,11 +472,23 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
           [flowNodesToFit],
         )}
         elevateEdgesOnSelect={true}
-        elevateNodesOnSelect={true}
         onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
-        onNodeDragStart={handleNodeDragStart}
-        onSelectionDragStart={handleSelectionDragStart}
+        onNodeClick={(_event: React.MouseEvent, node: Node) => {
+          setLastActiveNodeId(node.id);
+        }}
+        onNodeDragStart={(_event: React.MouseEvent, node: Node) => {
+          handleNodeDragStart();
+          if (node?.id) {
+            setLastActiveNodeId(node.id);
+          }
+        }}
+        onSelectionDragStart={(_event: React.MouseEvent, selectionNodes: Node[]) => {
+          handleSelectionDragStart();
+          if (selectionNodes && selectionNodes[0]?.id) {
+            setLastActiveNodeId(selectionNodes[0].id);
+          }
+        }}
         deleteKeyCode={["Delete"]}
         onBeforeDelete={async () => {
           const activeEl = typeof document !== "undefined" ? document.activeElement : null;
