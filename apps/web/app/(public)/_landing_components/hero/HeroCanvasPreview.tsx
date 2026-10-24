@@ -18,11 +18,9 @@ interface CanvasNode {
   title: string;
   category: string;
   badge: string;
-  badgeColor: string;
   icon: React.ElementType;
   x: number;
   y: number;
-  ports: { in?: boolean; out?: boolean };
   details: string[];
 }
 
@@ -30,71 +28,61 @@ const NODES: CanvasNode[] = [
   {
     id: "gateway",
     title: "API Gateway",
-    category: "INGRESS & ROUTING",
+    category: "INGRESS",
     badge: ":46500",
-    badgeColor: "bg-blue-500/10 text-blue-600 border-blue-500/20",
     icon: Globe,
     x: 60,
-    y: 140,
-    ports: { out: true },
+    y: 130,
     details: ["/api/v1/users", "/api/v1/auth", "WebSocket Proxy"],
   },
   {
     id: "auth",
     title: "Better Auth Node",
-    category: "SECURITY & SESSIONS",
+    category: "AUTH & RBAC",
     badge: "OAuth / RBAC",
-    badgeColor: "bg-purple-500/10 text-purple-600 border-purple-500/20",
     icon: Lock,
     x: 350,
-    y: 50,
-    ports: { in: true, out: true },
+    y: 45,
     details: ["Email & Password", "GitHub & Google", "Session Guard"],
   },
   {
     id: "service",
-    title: "User Microservice",
-    category: "EXPRESS / FASTAPI",
-    badge: "Port 3001",
-    badgeColor: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+    title: "User Service",
+    category: "EXPRESS / API",
+    badge: ":3001",
     icon: Server,
     x: 350,
-    y: 240,
-    ports: { in: true, out: true },
-    details: ["Zod Route Validation", "Controller Handlers", "JWT Verification"],
+    y: 235,
+    details: ["Zod Validation", "Controllers", "JWT Verification"],
   },
   {
     id: "database",
-    title: "PostgreSQL Database",
-    category: "RELATIONAL SCHEMA",
-    badge: "5432",
-    badgeColor: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+    title: "PostgreSQL DB",
+    category: "RELATIONAL",
+    badge: ":5432",
     icon: Database,
     x: 670,
-    y: 70,
-    ports: { in: true },
-    details: ["users (id, email, role)", "sessions (token, exp)", "Migrations Auto-Gen"],
+    y: 65,
+    details: ["users table", "sessions table", "Auto-Migrations"],
   },
   {
     id: "langgraph",
     title: "LangGraph Agent",
-    category: "STATEFUL AI GRAPH",
-    badge: "MCP Ready",
-    badgeColor: "bg-rose-500/10 text-rose-600 border-rose-500/20",
+    category: "MULTI-AGENT",
+    badge: "MCP Tool",
     icon: Workflow,
     x: 670,
-    y: 260,
-    ports: { in: true },
-    details: ["Router Conditional Edge", "SSE Token Streaming", "Model Context Protocol"],
+    y: 255,
+    details: ["Conditional Router", "SSE Streaming", "MCP Bindings"],
   },
 ];
 
 const CONNECTIONS = [
-  { from: { x: 230, y: 175 }, to: { x: 350, y: 100 }, color: "#8B5CF6", delay: 0 },
-  { from: { x: 230, y: 195 }, to: { x: 350, y: 285 }, color: "#10B981", delay: 0.8 },
-  { from: { x: 520, y: 100 }, to: { x: 670, y: 115 }, color: "#F59E0B", delay: 1.6 },
-  { from: { x: 520, y: 285 }, to: { x: 670, y: 135 }, color: "#3B82F6", delay: 2.2 },
-  { from: { x: 520, y: 300 }, to: { x: 670, y: 305 }, color: "#EC4899", delay: 1.2 },
+  { from: { x: 230, y: 165 }, to: { x: 350, y: 95 }, delay: 0 },
+  { from: { x: 230, y: 185 }, to: { x: 350, y: 280 }, delay: 0.8 },
+  { from: { x: 520, y: 95 }, to: { x: 670, y: 110 }, delay: 1.6 },
+  { from: { x: 520, y: 280 }, to: { x: 670, y: 130 }, delay: 2.2 },
+  { from: { x: 520, y: 295 }, to: { x: 670, y: 300 }, delay: 1.2 },
 ];
 
 export const HeroCanvasPreview: React.FC = () => {
@@ -103,108 +91,79 @@ export const HeroCanvasPreview: React.FC = () => {
   const reduceMotion = useReducedMotion();
 
   return (
-    <div className="w-full max-w-5xl rounded-2xl border border-border/80 bg-background/95 shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col text-left">
+    <div className="w-full max-w-5xl rounded-xl border border-zinc-800 bg-[#0a0a0c] shadow-2xl overflow-hidden flex flex-col text-left">
       {/* Studio Header Toolbar */}
-      <div className="flex flex-wrap items-center justify-between border-b border-border/60 bg-muted/40 px-4 py-2.5 gap-2">
+      <div className="flex flex-wrap items-center justify-between border-b border-zinc-800/80 bg-[#101014] px-4 py-2.5 gap-2">
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 mr-3">
-            <span className="w-3 h-3 rounded-full bg-red-400/80 inline-block" />
-            <span className="w-3 h-3 rounded-full bg-amber-400/80 inline-block" />
-            <span className="w-3 h-3 rounded-full bg-emerald-400/80 inline-block" />
+          <div className="flex items-center gap-1.5 mr-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-zinc-700 inline-block" />
+            <span className="w-2.5 h-2.5 rounded-full bg-zinc-700 inline-block" />
+            <span className="w-2.5 h-2.5 rounded-full bg-zinc-700 inline-block" />
           </div>
-          <span className="text-xs font-mono font-medium text-muted-foreground mr-2">
+          <span className="text-xs font-mono text-zinc-400">
             dezign2app-studio
           </span>
-          <span className="text-muted-foreground/40 text-xs">/</span>
-          <span className="text-xs font-mono text-foreground font-semibold">
-            ecommerce-distributed.d2a
+          <span className="text-zinc-600 text-xs">/</span>
+          <span className="text-xs font-mono text-zinc-200">
+            distributed-topology.d2a
           </span>
         </div>
 
-        {/* View Mode Tabs */}
-        <div className="flex items-center gap-1 bg-background/80 p-0.5 rounded-lg border border-border/60 text-xs">
+        {/* View Mode Tabs - Minimalist */}
+        <div className="flex items-center gap-1 bg-[#18181c] p-0.5 rounded-md border border-zinc-800 text-xs font-mono">
           <button
             onClick={() => setActiveTab("graph")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${
+            className={`px-2.5 py-1 rounded text-xs transition-colors ${
               activeTab === "graph"
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-zinc-800 text-white font-medium"
+                : "text-zinc-400 hover:text-white"
             }`}
           >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Architecture Graph</span>
+            Graph
           </button>
           <button
             onClick={() => setActiveTab("schema")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${
+            className={`px-2.5 py-1 rounded text-xs transition-colors ${
               activeTab === "schema"
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-zinc-800 text-white font-medium"
+                : "text-zinc-400 hover:text-white"
             }`}
           >
-            <Database className="w-3.5 h-3.5" />
-            <span>Schema ERD</span>
+            Schema ERD
           </button>
           <button
             onClick={() => setActiveTab("langgraph")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${
+            className={`px-2.5 py-1 rounded text-xs transition-colors ${
               activeTab === "langgraph"
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-zinc-800 text-white font-medium"
+                : "text-zinc-400 hover:text-white"
             }`}
           >
-            <Workflow className="w-3.5 h-3.5" />
-            <span>LangGraph</span>
+            LangGraph
           </button>
         </div>
 
-        {/* Compiler Status Badge */}
-        <div className="flex items-center gap-2 text-xs font-mono">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </span>
-          <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-            Turborepo Compiler Synced
-          </span>
-          <span className="hidden sm:inline-block px-1.5 py-0.5 rounded bg-muted text-[10px] text-muted-foreground border border-border">
-            18 files generated
-          </span>
+        {/* Compiler Status Badge - Minimalist */}
+        <div className="flex items-center gap-2 text-xs font-mono text-zinc-400">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+          <span>Turborepo Synced</span>
+          <span className="text-[10px] text-zinc-500">18 files</span>
         </div>
       </div>
 
       {/* Main Canvas Stage */}
-      <div className="relative w-full h-[440px] sm:h-[460px] bg-[#FAFBFD] dark:bg-[#0C0F17] overflow-hidden select-none">
-        {/* Subtle dot grid pattern */}
+      <div className="relative w-full h-[410px] sm:h-[430px] bg-[#070709] overflow-hidden select-none">
+        {/* Subtle dot grid */}
         <div
-          className="absolute inset-0 pointer-events-none opacity-40 dark:opacity-20"
+          className="absolute inset-0 pointer-events-none opacity-25"
           style={{
-            backgroundImage: "radial-gradient(#64748B 1px, transparent 1px)",
-            backgroundSize: "20px 20px",
+            backgroundImage: "radial-gradient(#3f3f46 1px, transparent 1px)",
+            backgroundSize: "22px 22px",
           }}
         />
 
-        {/* Dynamic Canvas SVG Connection Lines */}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 950 420" preserveAspectRatio="none">
-          <defs>
-            <linearGradient id="violetGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#8B5CF6" stopOpacity="0.4" />
-              <stop offset="100%" stopColor="#8B5CF6" stopOpacity="0.8" />
-            </linearGradient>
-            <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#10B981" stopOpacity="0.4" />
-              <stop offset="100%" stopColor="#10B981" stopOpacity="0.8" />
-            </linearGradient>
-            <linearGradient id="amberGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#F59E0B" stopOpacity="0.4" />
-              <stop offset="100%" stopColor="#F59E0B" stopOpacity="0.8" />
-            </linearGradient>
-            <linearGradient id="pinkGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#EC4899" stopOpacity="0.4" />
-              <stop offset="100%" stopColor="#EC4899" stopOpacity="0.8" />
-            </linearGradient>
-          </defs>
-
+        {/* Canvas Single-Tone SVG Connection Lines */}
+        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 950 400" preserveAspectRatio="none">
           {CONNECTIONS.map((conn, idx) => {
             const dx = conn.to.x - conn.from.x;
             const cx1 = conn.from.x + dx * 0.45;
@@ -216,15 +175,14 @@ export const HeroCanvasPreview: React.FC = () => {
                 <path
                   d={d}
                   fill="none"
-                  stroke={conn.color}
-                  strokeWidth="2"
-                  strokeOpacity="0.4"
+                  stroke="#27272a"
+                  strokeWidth="1.5"
                   strokeDasharray="4 4"
                 />
                 {!reduceMotion && (
                   <motion.circle
-                    r="3.5"
-                    fill={conn.color}
+                    r="2.5"
+                    fill="#a1a1aa"
                     animate={{ offsetDistance: ["0%", "100%"] }}
                     transition={{
                       duration: 3,
@@ -240,7 +198,7 @@ export const HeroCanvasPreview: React.FC = () => {
           })}
         </svg>
 
-        {/* Nodes Layer */}
+        {/* Nodes Layer - Monochrome Minimalist Cards */}
         {NODES.map((node) => {
           const Icon = node.icon;
           const isHovered = hoveredNode === node.id;
@@ -250,67 +208,63 @@ export const HeroCanvasPreview: React.FC = () => {
               key={node.id}
               onMouseEnter={() => setHoveredNode(node.id)}
               onMouseLeave={() => setHoveredNode(null)}
-              className="absolute z-20 transition-all duration-200 cursor-pointer"
+              className="absolute z-20 cursor-pointer transition-transform duration-150"
               style={{
                 left: `${(node.x / 950) * 100}%`,
-                top: `${(node.y / 420) * 100}%`,
-                transform: `translate(-5%, -5%) scale(${isHovered ? 1.03 : 1})`,
+                top: `${(node.y / 400) * 100}%`,
+                transform: `translate(-5%, -5%) scale(${isHovered ? 1.02 : 1})`,
               }}
             >
               <div
-                className={`w-[170px] sm:w-[190px] rounded-xl border bg-card/95 backdrop-blur-md shadow-md hover:shadow-xl transition-all ${
-                  isHovered ? "border-primary ring-2 ring-primary/20" : "border-border/80"
+                className={`w-[170px] sm:w-[185px] rounded-lg border bg-[#111114] transition-colors ${
+                  isHovered ? "border-zinc-500 shadow-md" : "border-zinc-800"
                 }`}
               >
                 {/* Node Header */}
-                <div className="flex items-center justify-between p-2.5 border-b border-border/50 bg-muted/20 rounded-t-xl">
+                <div className="flex items-center justify-between p-2.5 border-b border-zinc-800/80 bg-[#16161a] rounded-t-lg">
                   <div className="flex items-center gap-2 overflow-hidden">
-                    <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                      <Icon className="w-3.5 h-3.5" />
-                    </div>
-                    <span className="text-[11px] font-semibold text-foreground truncate">
+                    <Icon className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                    <span className="text-[11px] font-medium text-white truncate">
                       {node.title}
                     </span>
                   </div>
-                  <span
-                    className={`text-[9px] font-mono px-1.5 py-0.5 rounded border shrink-0 ${node.badgeColor}`}
-                  >
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700/60 shrink-0">
                     {node.badge}
                   </span>
                 </div>
 
                 {/* Node Body */}
-                <div className="p-2.5 flex flex-col gap-1 text-[10px] font-mono text-muted-foreground">
-                  <span className="text-[8px] uppercase tracking-wider text-muted-foreground/70 font-semibold mb-0.5">
+                <div className="p-2.5 flex flex-col gap-1 text-[10px] font-mono text-zinc-400">
+                  <span className="text-[8px] uppercase tracking-wider text-zinc-600 font-semibold mb-0.5">
                     {node.category}
                   </span>
                   {node.details.map((detail, dIdx) => (
-                    <div key={dIdx} className="flex items-center gap-1.5 text-foreground/80 truncate">
-                      <div className="w-1 h-1 rounded-full bg-primary/40 shrink-0" />
+                    <div key={dIdx} className="flex items-center gap-1.5 text-zinc-300 truncate">
+                      <span className="text-zinc-600">•</span>
                       <span className="truncate">{detail}</span>
                     </div>
                   ))}
                 </div>
 
                 {/* Status Footer */}
-                <div className="px-2.5 py-1 bg-muted/30 border-t border-border/40 rounded-b-xl flex items-center justify-between text-[9px] text-muted-foreground">
+                <div className="px-2.5 py-1 bg-[#0c0c0e] border-t border-zinc-800/80 rounded-b-lg flex items-center justify-between text-[9px] font-mono text-zinc-500">
                   <span className="flex items-center gap-1">
-                    <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
+                    <span className="w-1 h-1 rounded-full bg-emerald-400 inline-block" />
                     <span>Compiled</span>
                   </span>
-                  <span className="font-mono">zod.ok</span>
+                  <span>zod.ok</span>
                 </div>
               </div>
             </div>
           );
         })}
 
-        {/* Floating Mini Overlay - Live Terminal Simulation */}
-        <div className="hidden md:flex absolute bottom-3 right-4 z-30 items-center gap-3 px-3 py-1.5 rounded-lg bg-black/85 text-white border border-white/10 shadow-lg text-[11px] font-mono backdrop-blur-md">
-          <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="text-zinc-400">$</span>
-          <span className="text-zinc-200">dezign2app compile --monorepo</span>
-          <span className="text-emerald-400 font-semibold ml-2">✓ Ready in 1.4s</span>
+        {/* Minimalist Floating Terminal Tag */}
+        <div className="hidden sm:flex absolute bottom-3 right-4 z-30 items-center gap-2.5 px-3 py-1.5 rounded-md bg-[#101013] text-zinc-300 border border-zinc-800 text-[11px] font-mono shadow-md">
+          <Terminal className="w-3.5 h-3.5 text-zinc-400" />
+          <span className="text-zinc-500">$</span>
+          <span>dezign2app compile</span>
+          <span className="text-emerald-400 font-medium ml-2">✓ Ready</span>
         </div>
       </div>
     </div>

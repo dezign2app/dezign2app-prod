@@ -83,8 +83,8 @@ export const SubscribeButton = ({ productId }: SubscribeButtonProps) => {
   }, [isSignedIn, searchParams, loading, hasAutoTriggered]);
 
   const buttonStyle = `
-    w-full mt-5 py-[13px] rounded-xl text-sm font-semibold transition-all duration-200
-    bg-black text-white disabled:opacity-50 disabled:cursor-not-allowed
+    w-full mt-4 py-3 rounded-lg text-sm font-semibold transition-colors
+    bg-white text-black hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed
   `;
 
   if (!isLoaded) {

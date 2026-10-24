@@ -3,24 +3,28 @@
 import React from "react";
 import { Header } from "./header";
 import { HeroSection } from "./hero/HeroSection";
+import { ComparisonSection } from "./benefits/ComparisonSection";
 import { StudioViewsSection } from "./studio-views/StudioViewsSection";
 import { CompilerShowcaseSection } from "./compiler/CompilerShowcaseSection";
 import { DesktopStudioSection } from "./desktop/DesktopStudioSection";
 import { PricingSection } from "./pricing/PricingSection";
 import { FaqSection } from "./faq/FaqSection";
+import { FinalCtaSection } from "./cta/FinalCtaSection";
 import { Footer } from "./footer";
 
 export const Landing: React.FC = () => {
   return (
-    <div className="max-w-screen min-h-screen w-full bg-background text-foreground flex flex-col items-center overflow-x-hidden transition-colors selection:bg-primary/20 selection:text-primary">
+    <div className="min-h-screen w-full bg-[#050505] text-white flex flex-col items-center overflow-x-hidden selection:bg-white/20 selection:text-white font-sans">
       <Header />
       <main className="w-full flex flex-col">
         <HeroSection />
+        <ComparisonSection />
         <StudioViewsSection />
         <CompilerShowcaseSection />
         <DesktopStudioSection />
         <PricingSection />
         <FaqSection />
+        <FinalCtaSection />
       </main>
       <Footer />
     </div>
