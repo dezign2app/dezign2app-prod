@@ -9,53 +9,51 @@ export const Footer = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="w-full bg-[#f4f5f7] flex flex-col items-center pb-20 overflow-hidden">
+    <div className="w-full bg-[#f4f5f7] dark:bg-card/30 flex flex-col items-center pb-16 overflow-hidden border-t border-border/60">
       {/* Footer Section */}
-      <footer className="w-full relative flex flex-col items-center pt-16 px-4 md:px-8 mt-4 md:-mt-12 z-10">
-        {/* Background Watermark Text - positioned relative to the container */}
-        <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-[22vw] md:text-[18vw] font-black text-[#e5e7eb] leading-none select-none pointer-events-none whitespace-nowrap z-0 tracking-tighter mix-blend-multiply opacity-60">
+      <footer className="w-full relative flex flex-col items-center pt-14 px-4 md:px-8 z-10">
+        {/* Background Watermark Text */}
+        <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[20vw] font-black text-foreground/5 leading-none select-none pointer-events-none whitespace-nowrap z-0 tracking-tighter">
           dezign2app
         </div>
 
         {/* Footer Card */}
-        <div className="relative z-10 w-full max-w-[1000px] bg-white/95 backdrop-blur-xl rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 p-8 md:p-12">
+        <div className="relative z-10 w-full max-w-[1050px] bg-card/95 backdrop-blur-xl rounded-[2rem] shadow-sm border border-border p-8 md:p-12">
           {/* Top row */}
           <div className="flex flex-col lg:flex-row justify-between items-start gap-12">
             {/* Brand and Info */}
             <div className="flex flex-col gap-4 max-w-sm">
-              <Link href="/" className="flex gap-2 items-center group">
-                <div className="w-7 h-7 bg-black rounded flex items-center justify-center text-white">
-                  <HugeiconsIcon icon={Blockchain04Icon} className="size-4" />
+              <Link href="/" className="flex gap-2.5 items-center group">
+                <div className="w-8 h-8 bg-foreground rounded-lg flex items-center justify-center text-background">
+                  <HugeiconsIcon icon={Blockchain04Icon} className="size-4.5" />
                 </div>
-                <span className="text-lg font-bold tracking-tight text-black">
+                <span className="text-lg font-bold tracking-tight text-foreground font-mono">
                   dezign2app
                 </span>
               </Link>
-              <p className="text-[11px] text-gray-500 leading-relaxed mt-2 md:pr-4">
-                dezign2app treats system design as a programming language —
-                transforming PRDs, architecture topologies, and data schemas into
-                production-ready full-stack code, microservices, and cloud infrastructure.
+              <p className="text-xs text-muted-foreground leading-relaxed mt-1">
+                Visual system architecture modeling and full-stack monorepo code automation. Model topologies, database ERDs, real-time protocols, and LangGraph agents on an interactive canvas and compile directly into production code.
               </p>
-              <div className="flex items-center gap-1.5 text-[11px] text-gray-600 font-medium">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
                 <span>Support:</span>
                 <a
                   href="mailto:founder@dezign2app.com"
-                  className="text-black hover:underline font-semibold"
+                  className="text-foreground hover:underline font-semibold"
                 >
                   founder@dezign2app.com
                 </a>
               </div>
               {/* Social Links */}
-              <div className="flex gap-3.5 mt-2 text-black">
+              <div className="flex gap-4 mt-2 text-foreground">
                 <a
-                  href="http://x.com/hash_aidev"
+                  href="https://x.com/hash_aidev"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:text-gray-600 transition-colors"
+                  className="hover:text-primary transition-colors"
                 >
                   <span className="sr-only">X (Twitter)</span>
                   <svg
-                    className="w-[14px] h-[14px]"
+                    className="w-4 h-4"
                     fill="currentColor"
                     viewBox="0 0 24 24"
                   >
@@ -66,7 +64,7 @@ export const Footer = () => {
                   href="https://github.com/dezign2app/dezign2app"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:text-gray-600 transition-colors"
+                  className="hover:text-primary transition-colors"
                 >
                   <span className="sr-only">GitHub</span>
                   <svg
@@ -86,118 +84,115 @@ export const Footer = () => {
             </div>
 
             {/* Links Columns */}
-            <div className="flex flex-wrap gap-12 md:gap-16">
-              <div className="flex flex-col gap-5">
-                <h4 className="text-[12px] font-bold text-black">Product</h4>
-                <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap gap-10 md:gap-14">
+              <div className="flex flex-col gap-4">
+                <h4 className="text-xs font-bold text-foreground uppercase tracking-wider font-mono">
+                  Product
+                </h4>
+                <div className="flex flex-col gap-2.5">
                   <Link
-                    href="/#features"
-                    className="text-[11px] text-gray-500 hover:text-black transition-colors"
+                    href="/#studio-views"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    Features
+                    Studio Perspectives
+                  </Link>
+                  <Link
+                    href="/#compiler"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Compiler Engine
+                  </Link>
+                  <Link
+                    href="/#desktop"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Desktop Studio
                   </Link>
                   <Link
                     href="/#pricing"
-                    className="text-[11px] text-gray-500 hover:text-black transition-colors"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
                     Pricing
                   </Link>
+                  <a
+                    href="https://github.com/dezign2app/dezign2app/releases"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Desktop Downloads
+                  </a>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-4">
+                <h4 className="text-xs font-bold text-foreground uppercase tracking-wider font-mono">
+                  Resources
+                </h4>
+                <div className="flex flex-col gap-2.5">
+                  <a
+                    href="https://docs.dezign2app.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Documentation
+                  </a>
                   <Link
                     href="/changelog"
-                    className="text-[11px] text-gray-500 hover:text-black transition-colors"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
                     Changelog
                   </Link>
-                </div>
-              </div>
-              {/* <div className="flex flex-col gap-5">
-                  <h4 className="text-[12px] font-bold text-black">Resources</h4>
-                  <div className="flex flex-col gap-3">
-                     <Link href="/docs" className="text-[11px] text-gray-500 hover:text-black transition-colors">Documentation</Link>
-                     <Link href="/tutorials" className="text-[11px] text-gray-500 hover:text-black transition-colors">Tutorials</Link>
-                     <Link href="/blog" className="text-[11px] text-gray-500 hover:text-black transition-colors">Blog</Link>
-                     <Link href="/support" className="text-[11px] text-gray-500 hover:text-black transition-colors">Support</Link>
-                  </div>
-                </div> */}
-              <div className="flex flex-col gap-5">
-                <h4 className="text-[12px] font-bold text-black">Company</h4>
-                <div className="flex flex-col gap-3">
                   <Link
-                    href="/about"
-                    className="text-[11px] text-gray-500 hover:text-black transition-colors"
+                    href="/tutorials"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    About
+                    Tutorials
                   </Link>
                   <Link
-                    href="/careers"
-                    className="text-[11px] text-gray-500 hover:text-black transition-colors"
+                    href="/support"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    Careers
-                  </Link>
-                  <Link
-                    href="/contact"
-                    className="text-[11px] text-gray-500 hover:text-black transition-colors"
-                  >
-                    Contact
-                  </Link>
-                  <Link
-                    href="/partners"
-                    className="text-[11px] text-gray-500 hover:text-black transition-colors"
-                  >
-                    Partners
+                    Support Center
                   </Link>
                 </div>
               </div>
-              <div className="flex flex-col gap-5">
-                <h4 className="text-[12px] font-bold text-black">Legal</h4>
-                <div className="flex flex-col gap-3">
+
+              <div className="flex flex-col gap-4">
+                <h4 className="text-xs font-bold text-foreground uppercase tracking-wider font-mono">
+                  Legal
+                </h4>
+                <div className="flex flex-col gap-2.5">
                   <Link
                     href="/privacy"
-                    className="text-[11px] text-gray-500 hover:text-black transition-colors"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
                     Privacy Policy
                   </Link>
                   <Link
                     href="/terms"
-                    className="text-[11px] text-gray-500 hover:text-black transition-colors"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    Terms & Conditions
+                    Terms of Service
                   </Link>
                   <Link
-                    href="/acceptable-use"
-                    className="text-[11px] text-gray-500 hover:text-black transition-colors"
+                    href="/aup"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    Acceptable Use Policy
+                    Acceptable Use
                   </Link>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Bottom Bar */}
-          <div className="border-t border-gray-100 mt-12 pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-[10px] text-gray-500">
-              © {currentYear} dezign2app. All rights reserved.
-            </p>
-            <div className="flex flex-wrap justify-center items-center gap-4 md:gap-6">
-              <Link
-                href="/privacy"
-                className="text-[10px] text-gray-500 hover:text-black underline decoration-gray-300 underline-offset-2 transition-colors"
-              >
-                Privacy Policy
-              </Link>
-              <Link
-                href="/terms"
-                className="text-[10px] text-gray-500 hover:text-black underline decoration-gray-300 underline-offset-2 transition-colors"
-              >
-                Terms & Conditions
-              </Link>
-              <Link
-                href="/acceptable-use"
-                className="text-[10px] text-gray-500 hover:text-black underline decoration-gray-300 underline-offset-2 transition-colors"
-              >
-                Acceptable Use Policy
-              </Link>
+          {/* Bottom row */}
+          <div className="mt-12 pt-6 border-t border-border flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-muted-foreground">
+            <div>&copy; {currentYear} Dezign2App Inc. All rights reserved.</div>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+              <span>All Systems Operational</span>
             </div>
           </div>
         </div>
