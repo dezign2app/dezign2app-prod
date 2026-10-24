@@ -2,18 +2,18 @@
 
 Welcome to **Dezign2App**—an enterprise-grade visual system design and architecture modeling platform that **compiles visual architecture diagrams directly into production-ready, full-stack monorepos**.
 
-Dezign2App bridges the gap between high-level system architecture design and executable code. It unifies visual drag-and-drop canvas editors, relational database modeling, real-time protocol bindings (WebSockets, WebRTC, SSE), stateful AI graph execution (LangGraph & MCP), an in-memory architecture simulation engine, and an automated code generation compiler—all packaged in a Turborepo + pnpm workspace with both web and native desktop runtimes.
+Dezign2App bridges the gap between high-level system architecture design and executable code. It unifies visual drag-and-drop canvas editors, relational database modeling, real-time protocol bindings (WebSockets, WebRTC, SSE), stateful AI graph execution (LangGraph & MCP), an in-memory architecture simulation engine, project snapshot version control, and an automated code generation compiler—all packaged in a high-performance Turborepo + pnpm workspace with both web and native desktop runtimes.
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.0.10-black?style=flat-square&logo=next.js)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.2.4-blue?style=flat-square&logo=react)](https://react.dev/)
 [![Convex](https://img.shields.io/badge/Convex-1.31.6-EE742F?style=flat-square)](https://convex.dev/)
-[![Better Auth](https://img.shields.io/badge/Auth-Better_Auth-black?style=flat-square)](https://better-auth.com/)
+[![Better Auth](https://img.shields.io/badge/Auth-Better_Auth_1.6-black?style=flat-square)](https://better-auth.com/)
 [![Tailwind CSS v4](https://img.shields.io/badge/Tailwind_CSS-v4.1-38B2AC?style=flat-square&logo=tailwind-css)](https://tailwindcss.com/)
 [![Electron](https://img.shields.io/badge/Electron-34.5-47848F?style=flat-square&logo=electron)](https://electronjs.org/)
 [![LangGraph](https://img.shields.io/badge/AI-LangGraph_%26_MCP-orange?style=flat-square)](https://langchain.dev/)
-[![pnpm Workspace](https://img.shields.io/badge/pnpm-Workspace-F69220?style=flat-square&logo=pnpm)](https://pnpm.io/)
+[![pnpm Workspace](https://img.shields.io/badge/pnpm-10.4.1-F69220?style=flat-square&logo=pnpm)](https://pnpm.io/)
 [![Turborepo](https://img.shields.io/badge/Turborepo-2.6-EF4444?style=flat-square&logo=turborepo)](https://turbo.build/repo)
-[![Fumadocs](https://img.shields.io/badge/Docs-Fumadocs-blueviolet?style=flat-square)](https://fumadocs.vercel.app)
+[![Fumadocs](https://img.shields.io/badge/Docs-Fumadocs_16.7-blueviolet?style=flat-square)](https://fumadocs.vercel.app)
 
 ---
 
@@ -24,14 +24,15 @@ The workspace is organized as a high-performance **pnpm Workspace** orchestrated
 ```
 dezign2app/
 ├── apps/
-│   ├── web/                    # Next.js 16 web app, interactive canvas & compiler studio
-│   ├── desktop/                # Electron 34 native app, PTY terminal & local Docker runner
+│   ├── web/                    # Next.js 16 web app: multi-canvas studio, compiler & live page editor
+│   ├── desktop/                # Electron 34 native app: PTY terminal, local DB runners & Docker runner
 │   ├── system-design-engine/   # AI engine with LangGraph, Google Gemini, Groq & MCP tools
 │   └── docs/                   # Developer documentation site built with Fumadocs
 ├── packages/
-│   ├── backend/                # Convex database schema, Better Auth & Creem billing
-│   ├── canvas/                 # Pure domain models, Zod validation schemas & graph rules
-│   ├── ui/                     # Shared React 19 UI component library (Tailwind CSS v4)
+│   ├── backend/                # Reactive Convex database schema, Better Auth & Creem billing
+│   ├── canvas/                 # Pure domain models, Zod validation schemas & graph connection rules
+│   ├── logger/                 # Shared isomorphic logging utility with runtime level controls
+│   ├── ui/                     # Shared React 19 UI component library (Tailwind CSS v4 & Radix)
 │   ├── eslint-config/          # Shared ESLint 9 configurations
 │   └── typescript-config/      # Shared strict TypeScript compiler configurations
 ```
@@ -40,62 +41,101 @@ dezign2app/
 
 ## 📱 Applications (`/apps`)
 
-| App Directory                                                  | Core Technologies                                                                                           | Port    | Description                                                                                                                                                                                                                                                                                    |
-| :------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [**`apps/web`**](./apps/web)                                   | Next.js 16 (Turbopack), React 19, Tailwind v4, `@xyflow/react`, Tldraw, Better Auth, Monaco Editor, Zustand | `46500` | **Visual Studio & Web Portal**: Interactive multi-tenant architecture canvas, visual database entity modeling, page-level UI hierarchies, full-stack compiler studio with multi-file diffing, in-memory simulation engine, and billing management.                                             |
-| [**`apps/desktop`**](./apps/desktop)                           | Electron 34, `node-pty`, `electron-builder`, Docker CLI bridge                                              | —       | **Native Desktop Application**: Self-contained Electron application featuring an embedded native PTY terminal (PowerShell / bash), local Docker Compose orchestrator, local filesystem project writer, deep-linking auth (`dezign2app://`), and separated Dev/Prod side-by-side installations. |
-| [**`apps/system-design-engine`**](./apps/system-design-engine) | Express.js, `@langchain/langgraph`, LangChain Core, Model Context Protocol (MCP) SDK, Gemini, Groq          | `3002`  | **AI System Design & MCP Engine**: Microservice computing architecture recommendations, node and pipeline generation, LangGraph state-machine workflows, and Model Context Protocol (MCP) tool integrations.                                                                                   |
-| [**`apps/docs`**](./apps/docs)                                 | Next.js 16, React 19, Fumadocs UI / Core / MDX, Tailwind v4                                                 | `3500`  | **Technical Documentation Portal**: Developer guides, system design patterns, runtime specifications, desktop building, and monorepo command references.                                                                                                                                       |
+| App Directory                                                  | Core Technologies                                                                                           | Port    | Description                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| :------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------- | :------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [**`apps/web`**](./apps/web)                                   | Next.js 16 (Turbopack), React 19, Tailwind v4, `@xyflow/react`, Tldraw, Better Auth, Monaco Editor, Zustand | `46500` | **Visual Studio & Web Portal**: Interactive architecture canvas with 4 view modes (Architecture Graph, Schema ERD, Sequence Flow, and LangGraph Studio), visual page editor (`/pages/[nodeId]`) with live preview viewport, full-stack compiler studio with multi-file diffing, in-memory simulation engine, project snapshot commit history, and billing management.                                                         |
+| [**`apps/desktop`**](./apps/desktop)                           | Electron 34, `node-pty`, `electron-builder`, embedded DB runners, Docker CLI bridge                         | —       | **Native Desktop Application**: Self-contained Electron application featuring an embedded native PTY terminal (PowerShell / bash / zsh), responsive 50% split-screen canvas and terminal workspace, embedded local PostgreSQL/SQLite/Redis runners, local Docker Compose orchestrator, local filesystem project writer, deep-linking auth (`dezign2app://`), and 3-tier side-by-side installations (D2A Local, D2A Dev, D2A). |
+| [**`apps/system-design-engine`**](./apps/system-design-engine) | Express.js, `@langchain/langgraph`, LangChain Core, Model Context Protocol (MCP) SDK, Gemini, Groq          | `3002`  | **AI System Design & MCP Engine**: Microservice computing architecture recommendations, node and pipeline generation, LangGraph state-machine workflows, and Model Context Protocol (MCP) tool integrations.                                                                                                                                                                                                                  |
+| [**`apps/docs`**](./apps/docs)                                 | Next.js 16, React 19, Fumadocs UI / Core / MDX, Tailwind v4                                                 | `3500`  | **Technical Documentation Portal**: Developer guides, system design patterns, runtime specifications, desktop building, and monorepo command references.                                                                                                                                                                                                                                                                      |
 
 ---
 
 ## 📦 Packages (`/packages`)
 
-| Package Directory                                                | Core Technologies                                                                     | Description                                                                                                                                                                                                                      |
-| :--------------------------------------------------------------- | :------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [**`packages/backend`**](./packages/backend)                     | Convex 1.31, `@convex-dev/better-auth`, Better Auth, Zod, Cron Parser, Creem Payments | **Core Database & Backend Layer**: Reactive Convex database schemas, atomic mutations, Better Auth authentication with OAuth handlers, API key management, and Creem subscription billing.                                       |
-| [**`packages/canvas`**](./packages/canvas)                       | Zod 3.25, TypeScript 5, `@xyflow/react` contracts                                     | **Shared Pure Domain Models**: Canonical Zod schemas and validation rules for nodes (Services, Gateways, Databases, Event Brokers, State Stores, WebSockets, WebRTC, LangGraph), edges, step pipelines, and simulation fixtures. |
-| [**`packages/ui`**](./packages/ui)                               | React 19, Tailwind CSS v4, Radix Primitives, Lucide Icons, Hugeicons                  | **Shared Design System**: Reusable React component package built on Tailwind CSS v4 and accessible Radix primitives.                                                                                                             |
-| [**`packages/eslint-config`**](./packages/eslint-config)         | ESLint 9                                                                              | Monorepo-wide code style and linting rules.                                                                                                                                                                                      |
-| [**`packages/typescript-config`**](./packages/typescript-config) | TypeScript 5                                                                          | Strict compiler configurations shared across apps and packages.                                                                                                                                                                  |
+| Package Directory                                                | Core Technologies                                                                     | Description                                                                                                                                                                                                                                             |
+| :--------------------------------------------------------------- | :------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [**`packages/backend`**](./packages/backend)                     | Convex 1.31, `@convex-dev/better-auth`, Better Auth, Zod, Cron Parser, Creem Payments | **Core Database & Backend Layer**: Reactive Convex database schemas, atomic mutations, Better Auth authentication with OAuth handlers, API key management, project snapshot commit history, and Creem subscription billing.                             |
+| [**`packages/canvas`**](./packages/canvas)                       | Zod 3.25, TypeScript 5, `@xyflow/react` contracts                                     | **Shared Pure Domain Models**: Canonical Zod schemas and validation rules for nodes (Services, Gateways, Databases, Event Brokers, State Stores, Browser Storage, Auth, WebSockets, WebRTC, LangGraph), edges, step pipelines, and simulation fixtures. |
+| [**`packages/logger`**](./packages/logger)                       | TypeScript 5                                                                          | **Shared Isomorphic Logger**: Universal browser and Node.js logging utility with dynamic level toggling (`debug`, `info`, `warn`, `error`, `silent`) without requiring rebuilds.                                                                        |
+| [**`packages/ui`**](./packages/ui)                               | React 19, Tailwind CSS v4, Radix Primitives, Lucide Icons, Hugeicons                  | **Shared Design System**: Reusable React component package built on Tailwind CSS v4 and accessible Radix primitives.                                                                                                                                    |
+| [**`packages/eslint-config`**](./packages/eslint-config)         | ESLint 9                                                                              | Monorepo-wide code style and linting rules.                                                                                                                                                                                                             |
+| [**`packages/typescript-config`**](./packages/typescript-config) | TypeScript 5                                                                          | Strict compiler configurations shared across apps and packages.                                                                                                                                                                                         |
 
 ---
 
 ## 🌟 Key Capabilities
 
-### 1. Visual Drag-and-Drop Architecture Canvas
+### 1. Visual Drag-and-Drop Multi-Canvas Studio
 
-- **Fluid Visual Workspace**: Built on `@xyflow/react` and Tldraw with custom connectors, interactive ports, and automatic edge routing (`@dagrejs/dagre`, `elkjs`).
-- **Rich Node Ecosystem**:
-  - **Microservices & API Gateways**: REST, GraphQL, route endpoints, middleware, and request/response schema specifications.
-  - **Database Entities & Relational Modeling**: PostgreSQL, MySQL, SQLite, MongoDB, and DynamoDB with visual schema definitions (primary keys, foreign keys, relationships, column types, and indexes).
-  - **Real-Time & Streaming**: Full-stack WebSocket connections, WebRTC peer-to-peer media controls, Server-Sent Events (SSE), Kafka topics, RabbitMQ queues, and Redis Pub/Sub.
-  - **State Store Nodes**: Unified client-side state models powered by **Zustand** (with persistent storage, custom action bindings, selectors, and Convex synchronization).
-  - **Step Pipelines & Transformers**: Step-by-step pipeline validation, data mapping, and payload transformations.
-  - **LangGraph AI Workflows**: Stateful multi-step agent graphs, LLM prompts, and tool attachments.
-- **Frontend Page Hierarchy**: Visual tree and component layout mapping for generated Next.js pages and forms bound directly to backend endpoints.
+Dezign2App provides four specialized visual canvas perspectives for modeling every layer of distributed systems:
 
-### 2. Full-Stack Monorepo Code Compiler (`lib/compiler`)
+- **1. Architecture Graph View (`?view=graph`)**: High-level distributed system topology, microservices, databases, gateways, message queues, and streaming connections with automatic edge routing (`@dagrejs/dagre`, `elkjs`) and unified node z-index elevation.
+- **2. Schema & Entity Relational View (`?view=schema`)**: Visual ERD modeling for SQL and NoSQL databases (PostgreSQL, MySQL, SQLite, MongoDB, DynamoDB) and dedicated Redis schema modeling (keys, TTLs, hashes, sorted sets, streams, Pub/Sub channels).
+- **3. Sequence & Flow View (`?view=sequence`)**: Dynamic sequence diagram visualizing inter-service communication, endpoint request/response lifecycles, and event broker message dispatching.
+- **4. LangGraph Studio View (`/langgraph/[nodeId]`)**: Embedded sub-canvas dedicated to crafting complex multi-agent state machines, router branches, conditional edges, tools, subgraphs, and channel reducers.
 
-- **Visual Design → Executable Code**: Compiles the entire visual architecture diagram into a production-ready, clean TypeScript monorepo structured with Turborepo and pnpm.
+### 2. Comprehensive Node Ecosystem (25+ Node Types)
+
+- **Microservices & API Gateways**: REST and route endpoints, request/response schemas, path parameters, query parameters, headers, and middleware chains.
+- **Database Entities & Relational Modeling**: Tables, columns, primary keys, foreign keys, relationships, indexes, migrations, and seeds.
+- **Real-Time & Streaming**: Full-stack WebSocket connections, WebRTC peer-to-peer media/data controls, Server-Sent Events (SSE), Kafka topics, RabbitMQ queues, and Redis Pub/Sub.
+- **Authentication & Security (`auth` & `identity_provider`)**: First-class Better Auth nodes supporting Email & Password (with toggleable email verification, disabled by default for rapid development), Google & GitHub OAuth, session strategies, role-based access control (RBAC), permission guards, and automatic `requireAuth` route middleware generation.
+- **State Store Nodes (`state_store`)**: Client-side state models powered by **Zustand** using a LangGraph-style single-reducer per variable architecture with custom action bindings, selectors, and persistent storage.
+- **Browser Storage Nodes (`browser_storage`)**: Typed LocalStorage, SessionStorage, and IndexedDB storage modeling with dedicated action steps, getter/setter lifecycles, and automatic client sync.
+- **Storage & Bucket References (`storage`, `storage_operation_ref`, `bucket_ref`)**: S3, Cloudflare R2, and MinIO object storage buckets with upload, download, and delete operations.
+- **Workers, Serverless & Webhooks (`worker`, `serverless`, `webhook`, `load_balancer`)**: Background job workers, scheduled crons, serverless functions, external webhooks with signature verification, and load balancers.
+- **Transformers & Custom Hooks (`transformer`, `transformer_ref`, `hook`, `hook_ref`)**: Dedicated data transformation nodes and reusable hooks integrated into pipeline steps and action flows.
+- **Payments & Billing (`payments`)**: Visual Creem billing nodes for subscription plans, products, checkout flows, webhooks, and paywall access rules.
+- **Shared Types & Contracts (`types`)**: Centralized custom TypeScript type definitions and shared schemas across frontend and backend.
+
+### 3. WebPage Real-Time Connection Mapping & Front-End Actions
+
+- **Multi-Protocol Real-Time Bindings**: Seamlessly connect frontend `WebPageNode` elements to SSE, WebSocket, or WebRTC backend streams.
+- **Type-Inferred Real-Time Payloads**: Automatically infer concrete entity and payload types for real-time messages.
+- **Front-End Action Steps**: Incoming real-time events can trigger TransformerNode steps, Zustand store reducers, or BrowserStorage operations.
+- **Automated LangGraph Real-Time Connections**: Auto-determines and populates WebPage real-time connections for LangGraph streaming agents.
+
+### 4. Visual Page Editor & Live Code Studio (`/pages/[nodeId]`)
+
+Dezign2App features a dedicated visual and code studio for frontend pages:
+
+- **Virtual File Explorer & Monaco Code Editor**: Browse and edit generated page components, layouts, and styles with full TypeScript syntax highlighting.
+- **Live Preview Viewport (`PagePreviewViewport`)**: View real-time rendering of generated Next.js pages and forms directly beside the code.
+- **In-Context AI Page Assistant (`PageAiPanel`)**: Chat with an AI assistant to iteratively update page designs, tweak components, and generate UI logic.
+- **Dev Server Status & Bidirectional Code Sync**: Monitor local dev server health and automatically detect code mismatches with `PageCodeMismatchDialog`.
+
+### 5. LangGraph Studio & Multi-Agent AI Workflows
+
+- **Visual State Graphs**: Connect start nodes, agent nodes, router conditional branches, LLM configurations, tools, and subgraphs.
+- **Multi-Mode Streaming**: Real-time streaming output logs supporting Server-Sent Events (SSE) and WebSockets, token-by-token streaming, reasoning tokens, and chunk destructuring.
+- **Channel Reducer Architecture**: Native support for `MessagesAnnotation`, `addMessages`, single-reducer per variable architecture, and overwrite envelopes.
+- **Session Thread ID Isolation**: Per-session thread ID management, testing tab execution, and step variable argument mapping.
+- **Model Context Protocol (MCP)**: Native MCP tool interfaces to inspect architectures, query context, and execute automated analysis.
+
+### 6. Full-Stack Monorepo Code Compiler (`lib/compiler`)
+
+- **Visual Design → Executable Monorepo**: Compiles the entire visual architecture diagram into a production-ready, clean TypeScript monorepo structured with Turborepo and pnpm.
 - **Next.js 16 Web Applications**:
   - Config-driven pages with App Router, Tailwind CSS v4, and React 19.
   - Pre-wired forms, inputs, and UI components bound to backend endpoints.
-  - Client state stores (Zustand) with selectors and persistence.
+  - Client state stores (Zustand) with single-reducer architecture, selectors, and persistence.
   - Integrated real-time client hooks (WebSocket clients, WebRTC audio/video handlers, SSE listeners).
-- **Node.js / Express Microservices**:
+  - Browser storage hooks (LocalStorage, SessionStorage, IndexedDB).
+- **Node.js / Express & FastAPI Microservices**:
   - Typed routers and controller handlers with Zod schema validation.
-  - Database client connections and entity models.
+  - Database client connections (PostgreSQL, MySQL, SQLite, MongoDB) with migrations and entity models.
   - Message broker consumers and producers (Kafka, RabbitMQ, Redis).
   - WebRTC signaling servers and WebSocket broadcast hubs.
-- **Shared Contracts & Schemas**: Auto-generated shared packages holding TypeScript interfaces and validation schemas shared between client and server.
+- **Intelligent Architecture Impact & Smart Deletion Engine**: Analyzes cascading dependencies, affected routes, endpoints, subscribers, and imports before deleting or mutating nodes.
 - **Docker Compose Orchestration**: Auto-generates `docker-compose.yml` pre-configured with all necessary databases, Redis instances, Kafka brokers, and service containers for 1-click startup.
 - **In-Browser Monaco Code Studio**: Virtual file explorer, multi-file diff view, syntax highlighting, instant ZIP download, StackBlitz export, or 1-click disk export.
 
-### 3. Native Desktop Studio (`apps/desktop`)
+### 7. Native Desktop Studio (`apps/desktop`)
 
 - **Electron 34 Shell**: Wraps the visual studio into a native desktop application with full hardware and filesystem access.
-- **Integrated PTY Terminal**: Real native pseudo-terminal emulation powered by `node-pty` (PowerShell on Windows; bash/zsh on macOS and Linux) with multi-session terminal tabs.
+- **Integrated PTY Terminal**: Real native pseudo-terminal emulation powered by `node-pty` (PowerShell on Windows; bash/zsh on macOS and Linux) with multi-session terminal tabs and persistence across canvas routes.
+- **Split-Screen Workspace**: Responsive 50% split-screen layout pairing the visual architecture canvas and terminal side-by-side.
+- **Embedded Local Database Runners**: Run local PostgreSQL, SQLite, and Redis instances directly on your machine without external cloud dependencies.
 - **1-Click Local Docker Runner**: Writes the generated monorepo to your chosen folder and triggers `docker compose up` to run the entire distributed architecture locally.
 - **Seamless Deep-Link Authentication**: Native `dezign2app://` protocol handling for secure OAuth handoffs via Better Auth.
 - **3-Tier Isolated Environments**:
@@ -103,18 +143,20 @@ dezign2app/
   - **`D2A Dev`**: Packaged development build connecting to the development Convex/Auth environment (`%APPDATA%\D2A Dev`).
   - **`D2A`**: Production build connecting to production cloud deployments (`%APPDATA%\D2A`). All three can run concurrently without conflicts.
 
-### 4. In-Memory Architecture Simulation Engine (`lib/simulation`)
+### 8. Project Snapshot Versioning & Commit History
+
+- **Commit Snapshots**: Create manual or auto-saved snapshot commits of complete canvas states (`CreateCommitDialog`).
+- **Version History Drawer**: Browse chronological commit history, change summaries, authors, and timestamps (`VersionHistoryDrawer`).
+- **Read-Only Preview Banners**: Inspect historical project versions in read-only preview mode (`VersionPreviewBanner`).
+- **1-Click Restore & Rollback**: Instantly restore canvas state from any past commit snapshot.
+
+### 9. In-Memory Architecture Simulation Engine (`lib/simulation`)
 
 - **Interactive Verification**: Validate system design connectivity and message propagation before compiling code.
 - **Step Tracing & Test Cases**: Simulate endpoint calls, execute test assertions, trace messages across brokers and transformers, and inspect state transitions in real time.
+- **Test User Credentials**: Manage mock test users with roles and credentials to test role-based access rules.
 
-### 5. Durable AI System Design Engine (`apps/system-design-engine`)
-
-- **LangGraph State Machine**: Orchestrates multi-agent system design generation, architecture auditing, and node creation.
-- **Multi-Model Provider Support**: Dual-provider setup supporting **Google Gemini** (`gemini-3.6-flash`) and **Groq** (`openai/gpt-oss-20b`).
-- **Model Context Protocol (MCP)**: Native MCP tool interfaces to inspect architectures, query context, and run automated analysis.
-
-### 6. Reactive Backend & Better Auth
+### 10. Reactive Backend, Better Auth & Creem Billing
 
 - **Convex Real-Time Database**: Reactive queries and ACID-compliant atomic mutations with zero boilerplate.
 - **Better Auth Integration**: Multi-provider authentication supporting Google and GitHub OAuth, email/password, session tokens, and desktop deep-linking.
@@ -244,6 +286,7 @@ Dezign2App delivers a first-class native desktop experience powered by **Electro
 │  ├─ Lifecycle Management & Deep-Linking (dezign2app://)     │
 │  ├─ Self-Contained Next.js Web Server (Port 46500)          │
 │  ├─ PTY Terminal Subsystem (node-pty)                       │
+│  ├─ Embedded Local DB Runners (Postgres, SQLite, Redis)     │
 │  ├─ Docker Compose Local Engine                             │
 │  └─ Native File System Project Writer                       │
 └──────────────────────────────┬──────────────────────────────┘
@@ -251,9 +294,10 @@ Dezign2App delivers a first-class native desktop experience powered by **Electro
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                 Chromium Renderer Window                    │
-│  ├─ Interactive Architecture Canvas                         │
+│  ├─ Multi-Canvas Views (Graph, Schema, Sequence, LangGraph) │
+│  ├─ Visual Page Editor with Live Preview Viewport           │
 │  ├─ Integrated Monaco Code Studio & File Tree               │
-│  ├─ Real-Time Terminal Viewport (@wterm/react)              │
+│  ├─ Persistent Real-Time Terminal Viewport (@xterm/xterm)   │
 │  └─ window.electronAPI Bridge                               │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -273,11 +317,11 @@ pnpm --filter desktop dev      # Terminal 2 (Electron window)
 
 Dezign2App supports three isolated desktop execution tiers so developers can test bleeding-edge local features, packaged dev builds, and stable production releases without conflict:
 
-| Tier / Build Type | Command                   | Product Name  | Application ID                 | Target Environment / Storage                                |
-| :---------------- | :------------------------ | :------------ | :----------------------------- | :---------------------------------------------------------- |
-| **Local Run**     | `pnpm dev`                | **D2A Local** | `com.dezign2app.desktop.local` | Live Next/Turbopack dev server (`%APPDATA%\D2A Local`)      |
-| **Development**   | `pnpm build:desktop:dev`  | **D2A Dev**   | `com.dezign2app.desktop.dev`   | Development Convex & local auth (`%APPDATA%\D2A Dev`)       |
-| **Production**    | `pnpm build:desktop:prod` | **D2A**       | `com.dezign2app.desktop`       | Production Convex & auth (`%APPDATA%\D2A`)                  |
+| Tier / Build Type | Command                   | Product Name  | Application ID                 | Target Environment / Storage                           |
+| :---------------- | :------------------------ | :------------ | :----------------------------- | :----------------------------------------------------- |
+| **Local Run**     | `pnpm dev`                | **D2A Local** | `com.dezign2app.desktop.local` | Live Next/Turbopack dev server (`%APPDATA%\D2A Local`) |
+| **Development**   | `pnpm build:desktop:dev`  | **D2A Dev**   | `com.dezign2app.desktop.dev`   | Development Convex & local auth (`%APPDATA%\D2A Dev`)  |
+| **Production**    | `pnpm build:desktop:prod` | **D2A**       | `com.dezign2app.desktop`       | Production Convex & auth (`%APPDATA%\D2A`)             |
 
 All three tiers can run side-by-side on the same machine with completely independent shortcuts, user data folders, cache paths, and single-instance process locks.
 
