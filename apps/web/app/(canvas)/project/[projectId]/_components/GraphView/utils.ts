@@ -340,5 +340,42 @@ function getRawGraphNodeData(
     };
   }
 
+  if (type === "auth") {
+    return {
+      ...baseData,
+      label: label || "Auth Server",
+      framework: "better_auth",
+      version: "v1.4",
+      providers: {
+        emailPassword: {
+          enabled: true,
+          requireVerification: false,
+          minLength: 8,
+          requireUppercase: true,
+          requireNumbers: true,
+          requireSpecialChars: false,
+          rateLimit: {
+            maxAttempts: 5,
+            windowSeconds: 60,
+            lockoutDurationSeconds: 900,
+          },
+        },
+        socialEnabled: false,
+        oauth: [],
+        accountLinking: {
+          policy: "merge",
+          trustedProviders: [],
+          allowDifferentEmails: false,
+        },
+        magicLink: false,
+        passkey: false,
+      },
+      plugins: ["bearer", "admin", "organization"],
+      organization: {
+        enabled: true,
+      },
+    };
+  }
+
   return baseData;
 }

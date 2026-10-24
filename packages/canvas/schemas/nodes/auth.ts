@@ -79,7 +79,7 @@ export type AccountLinkingPolicy = z.infer<typeof accountLinkingPolicySchema>;
 
 export const emailPasswordConfigSchema = z.object({
   enabled: z.boolean(),
-  requireVerification: z.boolean(),
+  requireVerification: z.boolean().optional().default(false),
   minLength: z.number(),
   requireUppercase: z.boolean().optional(),
   requireNumbers: z.boolean().optional(),
