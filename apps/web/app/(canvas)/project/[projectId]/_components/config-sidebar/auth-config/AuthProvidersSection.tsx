@@ -26,9 +26,8 @@ export const AuthProvidersSection: React.FC<AuthConfigSectionProps> = ({
   const selectedFramework = data.framework || DEFAULT_AUTH_FRAMEWORK;
   const selectedVersion = data.version || DEFAULT_BETTER_AUTH_VERSION;
 
-  const emailPassword: EmailPasswordConfig = data.providers?.emailPassword || {
+  const emailPassword: EmailPasswordConfig = {
     enabled: true,
-    requireVerification: true,
     minLength: 8,
     requireUppercase: true,
     requireNumbers: true,
@@ -38,6 +37,8 @@ export const AuthProvidersSection: React.FC<AuthConfigSectionProps> = ({
       windowSeconds: 60,
       lockoutDurationSeconds: 900,
     },
+    ...data.providers?.emailPassword,
+    requireVerification: data.providers?.emailPassword?.requireVerification ?? false,
   };
 
   const accountLinking: AccountLinkingPolicy = data.providers?.accountLinking || {

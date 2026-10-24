@@ -49,7 +49,7 @@ export const EmailPasswordConfigCard: React.FC<EmailPasswordConfigCardProps> = (
           <div className="flex items-center gap-2">
             <Checkbox
               id="require-verify"
-              checked={emailPassword?.requireVerification}
+              checked={Boolean(emailPassword?.requireVerification)}
               onCheckedChange={(c) =>
                 updateData({
                   providers: {
