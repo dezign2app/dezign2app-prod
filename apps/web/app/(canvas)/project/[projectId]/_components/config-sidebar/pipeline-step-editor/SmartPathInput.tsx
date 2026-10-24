@@ -32,8 +32,10 @@ export const SmartPathInput: React.FC<SmartPathInputProps> = ({
   const [inputValue, setInputValue] = useState<string>(value || "");
 
   useEffect(() => {
-    setInputValue(value || "");
-  }, [value]);
+    if (value !== inputValue) {
+      setInputValue(value || "");
+    }
+  }, [value, inputValue]);
 
   const displayPlaceholder =
     placeholder ||
@@ -68,11 +70,11 @@ export const SmartPathInput: React.FC<SmartPathInputProps> = ({
 
   const handleCommit = (raw: string) => {
     if (rootVariableName && raw === `(whole ${rootVariableName})`) {
-      onChange("");
+      if (value !== "") onChange("");
       setInputValue("");
       return;
     }
-    onChange(raw);
+    if (value !== raw) onChange(raw);
     setInputValue(raw);
   };
 
@@ -82,14 +84,16 @@ export const SmartPathInput: React.FC<SmartPathInputProps> = ({
         items={items}
         value={value || null}
         onValueChange={(selected) => {
-          if (typeof selected === "string") {
+          if (typeof selected === "string" && selected !== value) {
             handleCommit(selected);
           }
         }}
         inputValue={inputValue}
         onInputValueChange={(text) => {
           setInputValue(text);
-          onChange(text);
+          if (text !== value) {
+            onChange(text);
+          }
         }}
       >
         <ComboboxInput

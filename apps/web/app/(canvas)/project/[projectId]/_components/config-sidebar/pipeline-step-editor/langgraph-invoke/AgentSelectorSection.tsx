@@ -59,7 +59,7 @@ export const AgentSelectorSection: React.FC<AgentSelectorSectionProps> = ({
         </div>
       </div>
       <Select
-        value={selectedAgentNode?.id || ""}
+        value={selectedAgentNode?.id || undefined}
         onValueChange={onSelectAgent}
       >
         <SelectTrigger className="h-9 text-xs bg-background/80 border-border/60">

@@ -73,6 +73,13 @@ export const LangGraphInvokeStepSection: React.FC<
     source: { kind: "req_body", field: "" },
   });
 
+  const stepRef = React.useRef(step);
+  stepRef.current = step;
+  const onChangeRef = React.useRef(onChange);
+  onChangeRef.current = onChange;
+  const lastStreamingSyncKeyRef = React.useRef<string>("");
+  const hasSyncedAgentInputChannelsRef = React.useRef<Set<string>>(new Set());
+
   // 1. Identify all LangGraph nodes on canvas
   const availableAgents = useMemo(() => {
     return allNodes.filter((n) => n.type === "langgraph");
@@ -259,6 +266,12 @@ export const LangGraphInvokeStepSection: React.FC<
     if (proto === "sse" || proto === "websocket") {
       const targetPageId = step.clientDeliveryTargetPageId || defaultTargetPage?.id;
       if (targetPageId) {
+        const syncKey = `${step.id}:${step.langGraphStreamingEnabled}:${proto}:${targetPageId}:${step.clientDeliveryPageRefNodeId || ""}:${endpoint?.id || ""}`;
+        if (lastStreamingSyncKeyRef.current === syncKey) {
+          return;
+        }
+        lastStreamingSyncKeyRef.current = syncKey;
+
         const store = useBackendCanvasStore.getState();
         const conn = ensurePageRefConnection({
           targetPageId,
@@ -275,8 +288,8 @@ export const LangGraphInvokeStepSection: React.FC<
           (conn.pageRefNodeId !== step.clientDeliveryPageRefNodeId ||
             conn.targetPageId !== step.clientDeliveryTargetPageId)
         ) {
-          onChange({
-            ...step,
+          onChangeRef.current({
+            ...stepRef.current,
             clientDeliveryTargetPageId: resolvedTargetPageId,
             clientDeliveryPageRefNodeId: resolvedPageRefNodeId,
           });
@@ -288,7 +301,7 @@ export const LangGraphInvokeStepSection: React.FC<
           store,
           resolvedTargetPageId,
           {
-            ...step,
+            ...stepRef.current,
             clientDeliveryTargetPageId: resolvedTargetPageId,
             clientDeliveryPageRefNodeId: resolvedPageRefNodeId,
           },
@@ -300,16 +313,15 @@ export const LangGraphInvokeStepSection: React.FC<
       }
     }
   }, [
+    step.id,
     step.langGraphStreamingEnabled,
     step.langGraphStreamingProtocol,
     step.clientDeliveryTargetPageId,
     step.clientDeliveryPageRefNodeId,
-    connectedPageRefNode,
-    defaultTargetPage,
+    defaultTargetPage?.id,
     serviceNodeId,
-    endpoint,
-    step,
-    onChange,
+    endpoint?.id,
+    endpoint?.name,
   ]);
 
   const selectedKafkaBrokerNode = useMemo(() => {
@@ -370,13 +382,13 @@ export const LangGraphInvokeStepSection: React.FC<
 
   // Auto-set targetNodeId if not set yet
   useEffect(() => {
-    if (!step.langGraphTargetNodeId && selectedAgentNode) {
-      onChange({
-        ...step,
+    if (!step.langGraphTargetNodeId && selectedAgentNode?.id) {
+      onChangeRef.current({
+        ...stepRef.current,
         langGraphTargetNodeId: selectedAgentNode.id,
       });
     }
-  }, [selectedAgentNode, step.langGraphTargetNodeId, step, onChange]);
+  }, [step.langGraphTargetNodeId, selectedAgentNode?.id]);
 
   // Input channels defined on selected agent node (the explicit public API contract)
   const inputChannels: LangGraphInputChannel[] = useMemo(() => {
@@ -873,6 +885,28 @@ export const LangGraphInvokeStepSection: React.FC<
 
       const updatedChannels = [...newRequestChannels, ...customChannels];
 
+      const areChannelsEqual = (
+        a: LangGraphInputChannel[],
+        b: LangGraphInputChannel[],
+      ): boolean => {
+        if (a.length !== b.length) return false;
+        return a.every((chA, idx) => {
+          const chB = b[idx];
+          if (!chB) return false;
+          return (
+            chA.key === chB.key &&
+            chA.type === chB.type &&
+            chA.source === chB.source &&
+            chA.required === chB.required &&
+            chA.stateChannelKey === chB.stateChannelKey
+          );
+        });
+      };
+
+      if (areChannelsEqual(currentChannels, updatedChannels)) {
+        return;
+      }
+
       store.updateNode(selectedAgentNode.id, {
         data: {
           ...selectedAgentNode.data,
@@ -885,14 +919,16 @@ export const LangGraphInvokeStepSection: React.FC<
 
   useEffect(() => {
     if (
-      selectedAgentNode &&
+      selectedAgentNode?.id &&
+      !hasSyncedAgentInputChannelsRef.current.has(selectedAgentNode.id) &&
       (!selectedAgentNode.data?.inputChannels || selectedAgentNode.data.inputChannels.length === 0) &&
       ((step.inputBindings && step.inputBindings.length > 0) ||
         (step.langGraphStateMapping && Object.keys(step.langGraphStateMapping).length > 0))
     ) {
+      hasSyncedAgentInputChannelsRef.current.add(selectedAgentNode.id);
       syncAgentInputChannels(step.inputBindings || [], mapping, step.langGraphThreadIdSource);
     }
-  }, [selectedAgentNode?.id]);
+  }, [selectedAgentNode?.id, step.inputBindings, mapping, step.langGraphThreadIdSource, syncAgentInputChannels]);
 
   // Self-healing sanitizer: thread_id is configurable.thread_id (checkpointer config)
   // belonging strictly to the dedicated Session Thread ID section (langGraphThreadIdSource).
@@ -927,15 +963,15 @@ export const LangGraphInvokeStepSection: React.FC<
         }
       }
 
-      onChange({
-        ...step,
+      onChangeRef.current({
+        ...stepRef.current,
         inputBindings: nextBindings,
         langGraphStateMapping: nextMapping,
         ...(nextThreadIdSource ? { langGraphThreadIdSource: nextThreadIdSource } : {}),
       });
       syncAgentInputChannels(nextBindings, nextMapping, nextThreadIdSource);
     }
-  }, [step.id, step.langGraphStateMapping, step.inputBindings, step.langGraphThreadIdSource]);
+  }, [step.id, step.langGraphStateMapping, step.inputBindings, step.langGraphThreadIdSource, availableSources, syncAgentInputChannels]);
 
   const handleBindingChange = (channelKey: string, updatedBinding: StepBinding) => {
     const currentBindings = step.inputBindings || [];
