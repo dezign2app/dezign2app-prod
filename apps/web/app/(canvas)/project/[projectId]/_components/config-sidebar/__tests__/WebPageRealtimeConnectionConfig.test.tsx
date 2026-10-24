@@ -44,6 +44,7 @@ vi.mock("../web-page-realtime-config", () => ({
     <div data-testid="mock-subscription-section">Subscription Mapping Content</div>
   ),
   useDerivedRealtimeInfo: () => null,
+  resolveRealtimePayloadPaths: () => [],
 }));
 
 describe("WebPageRealtimeConnectionConfig with action steps", () => {

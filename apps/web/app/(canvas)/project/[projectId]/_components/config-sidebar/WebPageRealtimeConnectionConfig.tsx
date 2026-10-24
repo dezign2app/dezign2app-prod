@@ -14,6 +14,7 @@ import {
   WebRtcCapabilitiesSection,
   RealtimeStateStoreSection,
   RealtimeSubscriptionMappingSection,
+  resolveRealtimePayloadPaths,
 } from "./web-page-realtime-config";
 import { ensureWsPackageInService } from "@/lib/stores/backendCanvas/packageTypesSync";
 import { ActionFlowEditor, ActionSimulator } from "./web-page-event-config";
@@ -144,67 +145,15 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
   }, [nodes]);
 
   const suggestedPaths = useMemo((): AvailablePath[] => {
-    const paths: AvailablePath[] = [];
-
-    if (derivedInfo?.sourceEndpointId) {
-      const ep = endpoints.find((e) => e.id === derivedInfo.sourceEndpointId);
-      if (ep?.responseBody) {
-        if (Array.isArray(ep.responseBody.fields)) {
-          ep.responseBody.fields.forEach((f) => {
-            if (f.name) {
-              paths.push({ path: f.name, type: f.type, description: f.description });
-            }
-          });
-        }
-        if (ep.responseBody.rawJson) {
-          const parsed = parseSchemaJson(ep.responseBody.rawJson);
-          if (parsed && typeof parsed === "object") {
-            const jsonPaths = extractPathsFromObject(parsed);
-            jsonPaths.forEach((jp) => {
-              if (!paths.some((p) => p.path === jp.path)) {
-                paths.push(jp);
-              }
-            });
-          }
-        }
-      }
-    }
-
-    if (derivedInfo?.sourceEventId) {
-      const ev = events.find((e) => e.id === derivedInfo.sourceEventId);
-      if (ev?.payloadSchema) {
-        if (Array.isArray(ev.payloadSchema.fields)) {
-          ev.payloadSchema.fields.forEach((f) => {
-            if (f.name) {
-              paths.push({ path: f.name, type: f.type, description: f.description });
-            }
-          });
-        }
-        if (ev.payloadSchema.rawJson) {
-          const parsed = parseSchemaJson(ev.payloadSchema.rawJson);
-          if (parsed && typeof parsed === "object") {
-            const jsonPaths = extractPathsFromObject(parsed);
-            jsonPaths.forEach((jp) => {
-              if (!paths.some((p) => p.path === jp.path)) {
-                paths.push(jp);
-              }
-            });
-          }
-        }
-      }
-    }
-
-    if (paths.length === 0) {
-      paths.push(
-        { path: "data", type: "object", description: "Parsed event data payload" },
-        { path: "message", type: "string", description: "Message body or text" },
-        { path: "type", type: "string", description: "Event type or name" },
-        { path: "payload", type: "object", description: "Nested message payload" },
-      );
-    }
-
-    return paths;
-  }, [derivedInfo?.sourceEndpointId, derivedInfo?.sourceEventId, endpoints, events]);
+    return resolveRealtimePayloadPaths({
+      conn,
+      derivedInfo,
+      endpoints,
+      events,
+      nodes,
+      edges,
+    });
+  }, [conn, derivedInfo, endpoints, events, nodes, edges]);
 
   const { isProtected } = useWebPageConnectedContext({
     nodeId,

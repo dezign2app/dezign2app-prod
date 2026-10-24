@@ -18,6 +18,7 @@ import { Badge } from "@workspace/ui/components/badge";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
 import { AvailablePath } from "@workspace/canvas";
+import { toPascalCase } from "@/lib/compiler/utils";
 
 export interface IncomingRealtimePayloadCardProps {
   eventName?: string;
@@ -177,8 +178,10 @@ export const IncomingRealtimePayloadCard: React.FC<IncomingRealtimePayloadCardPr
               >
                 <span className="font-semibold">{ip.path}</span>
                 {ip.type && (
-                  <span className="text-[8px] text-muted-foreground/80 bg-background/50 px-0.5 rounded">
-                    {ip.type}
+                  <span className="text-[8px] text-muted-foreground/80 bg-background/50 px-0.5 rounded font-mono">
+                    {ip.type === "object"
+                      ? `${toPascalCase(ip.path.split(".").pop() || "item")}Payload`
+                      : ip.type}
                   </span>
                 )}
                 {copiedPath === ip.path ? (

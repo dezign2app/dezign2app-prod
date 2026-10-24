@@ -53,8 +53,11 @@ vi.mock("../web-page-event-config/action-flow/ActionFlowCombobox", () => ({
 }));
 
 import { IncomingRealtimePayloadCard } from "../web-page-event-config/action-flow/IncomingRealtimePayloadCard";
-import { RealtimeSubscriptionMappingSection } from "../web-page-realtime-config/RealtimeSubscriptionMappingSection";
-import type { BackendNode, RealtimeConnection } from "@workspace/canvas";
+import {
+  RealtimeSubscriptionMappingSection,
+  resolveRealtimePayloadPaths,
+} from "../web-page-realtime-config";
+import type { BackendNode, BackendEdge, RealtimeConnection } from "@workspace/canvas";
 
 describe("IncomingRealtimePayloadCard", () => {
   it("renders live payload card with detected fields and toggles sample JSON preview", () => {
@@ -145,3 +148,72 @@ describe("RealtimeSubscriptionMappingSection", () => {
     expect(screen.getByText(/EventSource/i)).toBeDefined();
   });
 });
+
+describe("resolveRealtimePayloadPaths", () => {
+  it("resolves concrete Entity and interface types instead of generic object", () => {
+    const messageEntityNode: BackendNode = {
+      id: "ent-message",
+      type: "entity",
+      fractionalIndex: "a0",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Message",
+        columns: [
+          { name: "id", type: "string" },
+          { name: "content", type: "string" },
+          { name: "senderId", type: "string" },
+          { name: "createdAt", type: "string" },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "srv-conversations",
+      type: "service",
+      fractionalIndex: "a1",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Conversations",
+      },
+    };
+
+    const edge: BackendEdge = {
+      id: "edge-1",
+      source: "srv-conversations",
+      target: "ent-message",
+      type: "connection",
+      fractionalIndex: "a0",
+    };
+
+    const conn: RealtimeConnection = {
+      id: "conn-1",
+      protocol: "SSE",
+      eventName: "send-message/:id",
+      sourceServiceLabel: "Conversations",
+      sourceItemName: "send-message/:id",
+    };
+
+    const paths = resolveRealtimePayloadPaths({
+      conn,
+      derivedInfo: null,
+      endpoints: [],
+      events: [],
+      nodes: [serviceNode, messageEntityNode],
+      edges: [edge],
+    });
+
+    // Verify concrete types are derived — ZERO "object" types
+    expect(paths.some((p) => p.type === "object")).toBe(false);
+
+    // Verify data is typed as Message entity
+    const dataField = paths.find((p) => p.path === "data");
+    expect(dataField).toBeDefined();
+    expect(dataField?.type).toBe("Message");
+
+    // Verify nested entity columns
+    expect(paths.some((p) => p.path === "data.content" && p.type === "string")).toBe(true);
+    expect(paths.some((p) => p.path === "data.senderId" && p.type === "string")).toBe(true);
+    expect(paths.some((p) => p.path === "data.createdAt" && p.type === "string")).toBe(true);
+  });
+});
+
