@@ -11,6 +11,7 @@ import type {
   UIEventItem,
 } from "@workspace/canvas";
 import type { ActionStepItem } from "../TargetEndpointSection";
+import type { AvailablePath } from "../../pipeline-step-editor/types";
 
 export type {
   BindingSlot,
@@ -23,6 +24,7 @@ export type {
   BackendNode,
   Endpoint,
   UIEventItem,
+  AvailablePath,
 };
 
 export interface ActionFlowEditorProps {
@@ -34,6 +36,12 @@ export interface ActionFlowEditorProps {
   webPageNodeId?: string;
   actionId?: string;
   isProtected?: boolean;
+  isRealtime?: boolean;
+  realtimeEventName?: string;
+  realtimeProtocol?: string;
+  realtimeSourceLabel?: string;
+  realtimeSourceItemName?: string;
+  incomingPaths?: AvailablePath[];
   onSave: (drafts: FrontendActionStepDraft[]) => void;
   onDeleteStep?: (edgeId: string) => void;
 }
@@ -50,6 +58,8 @@ export interface ActionFlowStepProps {
   webPageNodeId?: string;
   actionId?: string;
   isProtected?: boolean;
+  isRealtime?: boolean;
+  incomingPaths?: AvailablePath[];
   onChange: (updated: FrontendActionStepDraft) => void;
   onDelete: () => void;
 }
@@ -66,6 +76,7 @@ export interface ApiCallStepProps {
   webPageNodeId?: string;
   actionId?: string;
   isProtected?: boolean;
+  incomingPaths?: AvailablePath[];
   onChange: (updated: FrontendActionStepDraft) => void;
 }
 

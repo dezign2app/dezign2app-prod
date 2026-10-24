@@ -13,6 +13,8 @@ import {
   RealtimeProtocolSection,
   WebRtcCapabilitiesSection,
   RealtimeStateStoreSection,
+  RealtimeSubscriptionMappingSection,
+  resolveRealtimePayloadPaths,
 } from "./web-page-realtime-config";
 import { ensureWsPackageInService } from "@/lib/stores/backendCanvas/packageTypesSync";
 import { ActionFlowEditor, ActionSimulator } from "./web-page-event-config";
@@ -24,7 +26,7 @@ import {
   AccordionContent,
 } from "@workspace/ui/components/accordion";
 import { Badge } from "@workspace/ui/components/badge";
-import { Layers, Play } from "lucide-react";
+import { Layers, Play, Link2 } from "lucide-react";
 import { isStorageRefNode } from "@/lib/stores/backendCanvas/edge/utils";
 import type { ActionStepItem } from "./web-page-event-config/TargetEndpointSection";
 import type { FrontendActionStepDraft } from "./web-page-event-config/action-flow/types";
@@ -90,6 +92,7 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
         storeActionBinding: manualConn?.storeActionBinding,
         storeActionBindings: manualConn?.storeActionBindings,
         actionSteps: manualConn?.actionSteps ?? [],
+        subscriptionBindings: manualConn?.subscriptionBindings,
       };
     }
     if (manualConn) return { ...manualConn, actionSteps: manualConn.actionSteps ?? [] };
@@ -109,13 +112,14 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
 
   const handleUpdateManual = (changes: Partial<RealtimeConnection>) => {
     if (!pageNode) return;
-    // Protocol / capabilities cannot be edited manually for derived connections, but bindings and action steps CAN
+    // Protocol / capabilities cannot be edited manually for derived connections, but bindings, action steps, and subscription mappings CAN
     if (
       isDerived &&
       !changes.storeActionBinding &&
       changes.storeActionBinding !== null &&
       !changes.storeActionBindings &&
-      !changes.actionSteps
+      !changes.actionSteps &&
+      !changes.subscriptionBindings
     ) {
       return;
     }
@@ -141,67 +145,15 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
   }, [nodes]);
 
   const suggestedPaths = useMemo((): AvailablePath[] => {
-    const paths: AvailablePath[] = [];
-
-    if (derivedInfo?.sourceEndpointId) {
-      const ep = endpoints.find((e) => e.id === derivedInfo.sourceEndpointId);
-      if (ep?.responseBody) {
-        if (Array.isArray(ep.responseBody.fields)) {
-          ep.responseBody.fields.forEach((f) => {
-            if (f.name) {
-              paths.push({ path: f.name, type: f.type, description: f.description });
-            }
-          });
-        }
-        if (ep.responseBody.rawJson) {
-          const parsed = parseSchemaJson(ep.responseBody.rawJson);
-          if (parsed && typeof parsed === "object") {
-            const jsonPaths = extractPathsFromObject(parsed);
-            jsonPaths.forEach((jp) => {
-              if (!paths.some((p) => p.path === jp.path)) {
-                paths.push(jp);
-              }
-            });
-          }
-        }
-      }
-    }
-
-    if (derivedInfo?.sourceEventId) {
-      const ev = events.find((e) => e.id === derivedInfo.sourceEventId);
-      if (ev?.payloadSchema) {
-        if (Array.isArray(ev.payloadSchema.fields)) {
-          ev.payloadSchema.fields.forEach((f) => {
-            if (f.name) {
-              paths.push({ path: f.name, type: f.type, description: f.description });
-            }
-          });
-        }
-        if (ev.payloadSchema.rawJson) {
-          const parsed = parseSchemaJson(ev.payloadSchema.rawJson);
-          if (parsed && typeof parsed === "object") {
-            const jsonPaths = extractPathsFromObject(parsed);
-            jsonPaths.forEach((jp) => {
-              if (!paths.some((p) => p.path === jp.path)) {
-                paths.push(jp);
-              }
-            });
-          }
-        }
-      }
-    }
-
-    if (paths.length === 0) {
-      paths.push(
-        { path: "data", type: "object", description: "Parsed event data payload" },
-        { path: "message", type: "string", description: "Message body or text" },
-        { path: "type", type: "string", description: "Event type or name" },
-        { path: "payload", type: "object", description: "Nested message payload" },
-      );
-    }
-
-    return paths;
-  }, [derivedInfo?.sourceEndpointId, derivedInfo?.sourceEventId, endpoints, events]);
+    return resolveRealtimePayloadPaths({
+      conn,
+      derivedInfo,
+      endpoints,
+      events,
+      nodes,
+      edges,
+    });
+  }, [conn, derivedInfo, endpoints, events, nodes, edges]);
 
   const { isProtected } = useWebPageConnectedContext({
     nodeId,
@@ -340,12 +292,45 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
       />
 
       <div className="flex flex-col gap-4">
-        {/* Pipeline Action Steps Accordion (Frontend Action Steps) */}
+        {/* Pipeline Action Steps Accordion (Frontend Action Steps & Subscription Mapping) */}
         <Accordion
           type="multiple"
-          defaultValue={["steps", "simulator"]}
+          defaultValue={["subscription", "steps", "simulator"]}
           className="w-full flex flex-col gap-3 border-none"
         >
+          {/* 1. Subscription Parameters & Route Mapping */}
+          <AccordionItem
+            value="subscription"
+            className="border border-purple-500/30 rounded-xl overflow-hidden bg-card"
+          >
+            <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-secondary/20 transition-colors [&>svg]:shrink-0">
+              <div className="flex items-center gap-2">
+                <Link2 size={14} className="text-purple-400" />
+                <span className="text-xs font-semibold">
+                  Subscription Mapping
+                </span>
+                <Badge
+                  variant="outline"
+                  className="text-[9px] px-1.5 py-0 font-mono text-purple-400 border-purple-500/30 bg-purple-500/10"
+                >
+                  {(conn.subscriptionBindings?.length || 0)} mapped
+                </Badge>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="px-4 pb-5 pt-2">
+              <RealtimeSubscriptionMappingSection
+                conn={conn}
+                pageNode={pageNode}
+                allNodes={nodes}
+                endpoints={endpoints}
+                derivedInfo={derivedInfo}
+                isProtected={isProtected}
+                onUpdate={handleUpdateManual}
+              />
+            </AccordionContent>
+          </AccordionItem>
+
+          {/* 2. Pipeline Action Steps */}
           <AccordionItem
             value="steps"
             className="border rounded-xl overflow-hidden bg-card"
@@ -379,6 +364,12 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
                 webPageNodeId={nodeId}
                 actionId={id}
                 isProtected={isProtected}
+                isRealtime={true}
+                realtimeEventName={conn.eventName}
+                realtimeProtocol={conn.protocol}
+                realtimeSourceLabel={conn.sourceServiceLabel || derivedInfo?.sourceNode?.data?.label}
+                realtimeSourceItemName={conn.sourceItemName}
+                incomingPaths={suggestedPaths}
                 onSave={(drafts: FrontendActionStepDraft[]) =>
                   handleUpdateManual({ actionSteps: drafts })
                 }
@@ -387,6 +378,7 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
             </AccordionContent>
           </AccordionItem>
 
+          {/* 3. Action Simulator */}
           <AccordionItem
             value="simulator"
             className="border border-cyan-500/30 rounded-xl overflow-hidden bg-card"
@@ -420,6 +412,8 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
                 webPageNodeId={nodeId}
                 actionId={id}
                 isProtected={isProtected}
+                isRealtime={true}
+                incomingPaths={suggestedPaths}
               />
             </AccordionContent>
           </AccordionItem>

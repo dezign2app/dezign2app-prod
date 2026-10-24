@@ -338,6 +338,10 @@ export type FrontendFieldSource =
   | {
       kind: "auth_token";
       tokenType?: "session" | "cookie" | "local_storage";
+    }
+  | {
+      kind: "realtime_payload";
+      fieldPath?: string;
     };
 
 export type FrontendRequestFieldBinding = {

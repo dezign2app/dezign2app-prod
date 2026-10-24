@@ -402,6 +402,7 @@ export const realtimeConnectionSchema = z.object({
   sourceItemType: z.enum(["endpoint", "event"]).optional().describe("Type of pipeline owner"),
   storeActionBinding: storeActionBindingSchema.optional(),
   storeActionBindings: z.array(storeActionBindingSchema).optional(),
+  subscriptionBindings: z.array(z.any()).optional().describe("Parameter and auth mappings to establish subscription"),
   actionSteps: z.array(z.any()).optional().describe("Sequential action steps to execute on realtime message"),
 });
 

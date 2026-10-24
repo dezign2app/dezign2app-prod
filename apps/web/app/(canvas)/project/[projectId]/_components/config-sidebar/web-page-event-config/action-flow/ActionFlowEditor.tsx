@@ -16,6 +16,7 @@ import {
 } from "./utils";
 import { FrontendAddStepToolbar } from "./FrontendAddStepToolbar";
 import { FrontendStepRow } from "./FrontendStepRow";
+import { IncomingRealtimePayloadCard } from "./IncomingRealtimePayloadCard";
 import { createDefaultFrontendStep } from "./frontendStepFactory";
 import {
   ensureActionServiceConnection,
@@ -35,6 +36,12 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
   webPageNodeId = "",
   actionId = "",
   isProtected = false,
+  isRealtime = false,
+  realtimeEventName,
+  realtimeProtocol,
+  realtimeSourceLabel,
+  realtimeSourceItemName,
+  incomingPaths,
   onSave,
   onDeleteStep,
 }) => {
@@ -270,6 +277,17 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
         </p>
       </div>
 
+      {/* Real-time Incoming Data Payload Card at top of pipeline steps */}
+      {isRealtime && (
+        <IncomingRealtimePayloadCard
+          eventName={realtimeEventName || item?.name}
+          protocol={realtimeProtocol}
+          sourceServiceLabel={realtimeSourceLabel}
+          sourceItemName={realtimeSourceItemName}
+          incomingPaths={incomingPaths}
+        />
+      )}
+
       {/* Steps List with Drag & Drop */}
       <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable droppableId="frontend-action-steps-droppable">
@@ -308,6 +326,7 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
                       webPageNodeId={webPageNodeId}
                       actionId={actionId}
                       isProtected={isProtected}
+                      incomingPaths={incomingPaths}
                       onChange={handleStepChange}
                       onDelete={() => handleDeleteStep(step.id)}
                     />

@@ -32,6 +32,7 @@ import type {
   FrontendFieldSource,
   BackendNode,
   FrontendActionStepDraft,
+  AvailablePath,
 } from "./types";
 import { ResponseFieldPicker } from "./ResponseFieldPicker";
 import { ActionFlowCombobox, ComboboxOption } from "./ActionFlowCombobox";
@@ -48,7 +49,8 @@ type SourceKindOption =
   | "cookie"
   | "state_var"
   | "literal"
-  | "prev_response";
+  | "prev_response"
+  | "realtime_payload";
 
 interface BindingSlotRowProps {
   binding: FrontendRequestFieldBinding;
@@ -62,6 +64,7 @@ interface BindingSlotRowProps {
   queryParamSuggestions: ComboboxOption[];
   stateStores: BackendNode[];
   sectionStateVars: Array<{ name: string; type?: string; storeName?: string; storeId?: string }>;
+  incomingPaths?: AvailablePath[];
 }
 
 const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
@@ -76,6 +79,7 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
   queryParamSuggestions,
   stateStores,
   sectionStateVars,
+  incomingPaths,
 }) => {
   const isAuth = binding.slot === "header" && isAuthHeaderName(binding.targetField);
 
@@ -152,6 +156,13 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              {incomingPaths && incomingPaths.length > 0 && (
+                <SelectItem value="realtime_payload">
+                  <span className="flex items-center gap-1.5 text-purple-400 font-medium">
+                    ⚡ Incoming Stream Data
+                  </span>
+                </SelectItem>
+              )}
               <SelectItem value="auth_token">
                 <span className="flex items-center gap-1.5 text-amber-500 font-medium">
                   <Key size={11} />
@@ -579,6 +590,38 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
             </div>
           </div>
         )}
+
+        {binding.source.kind === "realtime_payload" && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] text-muted-foreground">
+                Stream Payload Property
+              </Label>
+              <span className="text-[9px] text-purple-400 font-mono">
+                stream.{binding.source.fieldPath || "(entire payload)"}
+              </span>
+            </div>
+            <ActionFlowCombobox
+              value={binding.source.fieldPath || ""}
+              onChange={(path) =>
+                onUpdate((prev) => ({
+                  ...prev,
+                  source: { kind: "realtime_payload", fieldPath: path },
+                }))
+              }
+              placeholder="e.g. data.id, message, userId (or leave empty for full payload)"
+              headerLabel="Detected Incoming Stream Fields"
+              options={[
+                { value: "", label: "(Full Payload: incomingData)", type: "object" },
+                ...(incomingPaths || []).map((p) => ({
+                  value: p.path,
+                  label: p.path,
+                  type: p.type || "any",
+                })),
+              ]}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -595,6 +638,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
   webPageNodeId,
   actionId,
   isProtected = false,
+  incomingPaths,
   onChange,
 }) => {
   const bindings = draft.requestBindings || [];
@@ -981,6 +1025,11 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
           stepId: firstPrior?.id || "",
           fieldPath: "",
         };
+      } else if (newKind === "realtime_payload") {
+        nextSource = {
+          kind: "realtime_payload",
+          fieldPath: incomingPaths?.[0]?.path || "",
+        };
       } else {
         nextSource = { kind: "user_input", fieldName: b.targetField || "" };
       }
@@ -1157,6 +1206,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       queryParamSuggestions={queryParamSuggestions}
                       stateStores={stateStores}
                       sectionStateVars={sectionStateVars}
+                      incomingPaths={incomingPaths}
                     />
                   ))
                 )}
@@ -1213,6 +1263,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       queryParamSuggestions={queryParamSuggestions}
                       stateStores={stateStores}
                       sectionStateVars={sectionStateVars}
+                      incomingPaths={incomingPaths}
                     />
                   ))
                 )}
@@ -1268,6 +1319,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       queryParamSuggestions={queryParamSuggestions}
                       stateStores={stateStores}
                       sectionStateVars={sectionStateVars}
+                      incomingPaths={incomingPaths}
                     />
                   ))
                 )}
@@ -1325,6 +1377,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       queryParamSuggestions={queryParamSuggestions}
                       stateStores={stateStores}
                       sectionStateVars={sectionStateVars}
+                      incomingPaths={incomingPaths}
                     />
                   ))
                 )}
