@@ -98,6 +98,16 @@ export function upsertDerivedConnection(
   const without = existing.filter(
     (c) => c.id !== step.id && (!sourceItemId || c.sourceEventId !== sourceItemId),
   );
+
+  // If connection already exists with identical properties and no other connections were affected, skip store mutation to prevent render loops
+  if (
+    existingConn &&
+    without.length === existing.length - 1 &&
+    isRealtimeConnectionEqual(existingConn, derived)
+  ) {
+    return;
+  }
+
   store.updateNode(targetPageId, {
     data: {
       ...page.data,
@@ -105,6 +115,31 @@ export function upsertDerivedConnection(
       realtimeConnections: [...without, derived],
     },
   });
+}
+
+function isRealtimeConnectionEqual(a?: RealtimeConnection, b?: RealtimeConnection): boolean {
+  if (!a || !b) return a === b;
+  return (
+    a.id === b.id &&
+    a.protocol === b.protocol &&
+    a.eventName === b.eventName &&
+    a.room === b.room &&
+    a.mediaMode === b.mediaMode &&
+    a.enableDataChannel === b.enableDataChannel &&
+    a.enableMic === b.enableMic &&
+    a.enableSpeaker === b.enableSpeaker &&
+    a.enableCamera === b.enableCamera &&
+    a.enableScreenShare === b.enableScreenShare &&
+    a.enableRemoteVideo === b.enableRemoteVideo &&
+    a.iceServerUrl === b.iceServerUrl &&
+    a.description === b.description &&
+    a.sourceServiceNodeId === b.sourceServiceNodeId &&
+    a.sourceServiceLabel === b.sourceServiceLabel &&
+    a.sourceEventId === b.sourceEventId &&
+    a.sourceItemName === b.sourceItemName &&
+    a.sourceItemType === b.sourceItemType &&
+    a.storeActionBinding === b.storeActionBinding
+  );
 }
 
 /**
@@ -118,11 +153,15 @@ export function removeDerivedConnection(
   const page = store.nodes.find((n) => n.id === oldTargetPageId);
   if (!page) return;
   const existing = page.data?.realtimeConnections ?? [];
+  const nextConnections = existing.filter((c) => c.id !== stepId);
+  if (nextConnections.length === existing.length) {
+    return;
+  }
   store.updateNode(oldTargetPageId, {
     data: {
       ...page.data,
       label: page.data?.label || "",
-      realtimeConnections: existing.filter((c) => c.id !== stepId),
+      realtimeConnections: nextConnections,
     },
   });
 }

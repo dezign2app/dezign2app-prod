@@ -40,7 +40,8 @@ export const BindingSourceEditor = ({
   const { source } = binding;
   const [isExpanded, setIsExpanded] = useState(false);
   const [variablePopoverOpen, setVariablePopoverOpen] = useState(false);
-  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const uniqueSources = useMemo(() => {
     const seen = new Set<string>();
@@ -167,7 +168,7 @@ export const BindingSourceEditor = ({
 
   const handleInsertToken = (token: string) => {
     const currentVal = String(source.kind === "inline" ? source.value ?? "" : "");
-    const target = inputRef.current;
+    const target = showTextarea ? textareaRef.current : inputRef.current;
 
     if (target && typeof target.selectionStart === "number" && typeof target.selectionEnd === "number") {
       const start = target.selectionStart;
@@ -256,7 +257,7 @@ export const BindingSourceEditor = ({
           <div className="relative flex-1 min-w-0 flex items-center gap-1">
             {!showTextarea ? (
               <BufferedInput
-                ref={(el) => { inputRef.current = el; }}
+                ref={inputRef}
                 className="h-7 text-xs font-mono bg-background/60 border-border/60 flex-1 pr-14"
                 placeholder={placeholder || "e.g. chat:${body.thread_id}"}
                 value={stringVal}
@@ -338,7 +339,7 @@ export const BindingSourceEditor = ({
       {source.kind === "inline" && showTextarea && (
         <div className="w-full flex flex-col gap-1 pl-0 sm:pl-[186px]">
           <BufferedTextarea
-            ref={(el) => { inputRef.current = el; }}
+            ref={textareaRef}
             rows={4}
             className="text-xs font-mono bg-background/80 border-border/60 w-full resize-y min-h-[80px]"
             placeholder={textareaPlaceholder || 'Instructions: You are an AI assistant.\nQuery: ${body.query}\n\nOr JSON:\n{\n  name: `demo ${body.query}`\n}'}
