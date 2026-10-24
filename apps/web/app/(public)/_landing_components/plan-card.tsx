@@ -1,5 +1,9 @@
+"use client";
+
+import React from "react";
 import ReactMarkdown from "react-markdown";
 import { SubscribeButton } from "./subscribe-button";
+import { Check } from "lucide-react";
 
 export type BillingCycle = "monthly" | "annually";
 
@@ -12,40 +16,6 @@ export interface Plan {
   freeLabel?: string;
   featured: boolean;
   features: string[];
-}
-
-function CheckCircle() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="black"
-      className="shrink-0"
-      aria-hidden="true"
-    >
-      <circle cx="8" cy="8" r="7" stroke="white" strokeWidth="1.2" />
-      <path
-        d="M5 8l2 2 4-4"
-        stroke="white"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function PlanIconBadge({ featured }: { featured: boolean }) {
-  return (
-    <div
-      className={`w-11 h-11 rounded-full flex items-center justify-center mb-5 bg-black`}
-    >
-      <div className="w-[14px] h-[14px] rounded-full border-2 border-white flex items-center justify-center">
-        <div className="w-1 h-1 rounded-full bg-white" />
-      </div>
-    </div>
-  );
 }
 
 interface PlanCardProps {
@@ -61,7 +31,6 @@ export function PlanCard({ plan }: PlanCardProps) {
     price,
     billingPeriod,
     freeLabel,
-    featured,
     features,
   } = plan;
 
@@ -74,71 +43,76 @@ export function PlanCard({ plan }: PlanCardProps) {
       : "";
 
   return (
-    <div
-      className="relative border border-gray-200/90 flex flex-col w-full max-w-[360px] translate-y-0 rounded-2xl p-7 transition-all duration-300 hover:-translate-y-1 shadow-lg hover:shadow-xl bg-white/70 backdrop-blur-sm text-start"
-    >
-      <div className="flex items-center justify-between mb-5">
-        <PlanIconBadge featured={featured} />
-        <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-black text-white uppercase tracking-wider">
-          Beta Access
+    <div className="relative border border-zinc-800 flex flex-col w-full max-w-[400px] rounded-2xl p-8 bg-[#0c0c0e] text-start shadow-2xl transition-all hover:border-zinc-700">
+      {/* Top Tag & Badge */}
+      <div className="flex items-center justify-between mb-6">
+        <span className="text-xs font-mono uppercase tracking-wider text-zinc-400 font-medium">
+          Beta Early Access
+        </span>
+        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
+          Limited Spots
         </span>
       </div>
 
-      {/* Plan name + desc */}
-      <p
-        className="text-2xl font-bold mb-1 text-black"
-        style={{ fontFamily: "'Syne', sans-serif" }}
-      >
+      {/* Plan Name */}
+      <h3 className="text-2xl font-bold text-white tracking-tight">
         {name}
-      </p>
-      <div className="text-xs mb-6 prose prose-neutral prose-sm max-w-none prose-p:leading-normal prose-p:mb-0 text-gray-600">
-        <ReactMarkdown>
-          {!desc || desc.toLowerCase().includes("basic")
-            ? "Everything you need to compile system architecture into production code."
-            : desc}
-        </ReactMarkdown>
-      </div>
+      </h3>
 
-      {/* Price */}
-      <div className="mb-1">
+      {/* Description */}
+      <p className="text-xs text-zinc-400 mt-2 mb-6 leading-relaxed">
+        {!desc || desc.toLowerCase().includes("basic")
+          ? "Everything you need to turn visual system architecture into full-stack production software."
+          : desc}
+      </p>
+
+      {/* Price Display */}
+      <div className="mb-2">
         {freeLabel ? (
-          <span
-            className="text-sm font-extrabold tracking-tight"
-            style={{ fontFamily: "'Syne', sans-serif" }}
-          >
+          <span className="text-3xl font-bold tracking-tight text-white">
             {freeLabel}
           </span>
         ) : (
-          <div className="flex flex-col">
-            <span className="flex items-end gap-1.5">
-              <span
-                className="text-4xl font-extrabold tracking-tight leading-none text-black"
-                style={{ fontFamily: "'Syne', sans-serif" }}
-              >
-                ${displayPrice}
-              </span>
-              {periodLabel && (
-                <span className="text-xs mb-1 text-gray-500 font-medium">
-                  {periodLabel}
-                </span>
-              )}
+          <div className="flex items-baseline gap-2">
+            <span className="text-5xl font-extrabold tracking-tight text-white font-mono">
+              ${displayPrice}
             </span>
+            {periodLabel && (
+              <span className="text-xs text-zinc-400 font-medium font-mono">
+                {periodLabel}
+              </span>
+            )}
           </div>
         )}
+        <p className="text-[11px] text-zinc-500 mt-1.5 font-mono">
+          Billed annually. Cancel anytime. Full source ownership.
+        </p>
       </div>
 
-      {/* CTA */}
-      <SubscribeButton productId={id} />
-      <ul className="flex flex-col gap-3 mt-6 border-t border-gray-100 pt-5">
-        {features.map((f) => (
-          <li key={f} className="flex items-start text-start gap-2.5 text-xs text-gray-700 font-medium leading-snug">
-            <div className="mt-0.5 shrink-0">
-              <CheckCircle />
-            </div>
-            <span>{f}</span>
-          </li>
-        ))}
-      </ul>
+      {/* CTA Button */}
+      <div className="mt-4">
+        <SubscribeButton productId={id} />
+      </div>
+
+      {/* Value Guarantee */}
+      <div className="mt-8 pt-6 border-t border-zinc-800/80 flex flex-col gap-3">
+        <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-medium">
+          Included with your access:
+        </span>
+        <ul className="flex flex-col gap-2.5">
+          {features.map((feature) => (
+            <li
+              key={feature}
+              className="flex items-start gap-2.5 text-xs text-zinc-300 font-normal leading-snug"
+            >
+              <div className="w-4 h-4 rounded-full bg-zinc-800 flex items-center justify-center shrink-0 mt-0.5 text-zinc-200">
+                <Check className="w-2.5 h-2.5" />
+              </div>
+              <span>{feature}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { isElectron, getElectronAPI } from "@/lib/electron";
-import { EffortlessSection } from "../_landing_components/features";
+import { PricingSection } from "../_landing_components/pricing/PricingSection";
 import {
   Card,
   CardHeader,
@@ -77,6 +77,6 @@ export default function PricingPage() {
     );
   }
 
-  return <EffortlessSection />;
+  return <PricingSection />;
 }
 

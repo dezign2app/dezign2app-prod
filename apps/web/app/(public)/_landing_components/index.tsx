@@ -1,20 +1,38 @@
+"use client";
+
 import React from "react";
 import { Header } from "./header";
-import Intro from "./intro";
-import dynamic from "next/dynamic";
-const Features = dynamic(() => import("./features"));
-import Pricing from "./pricing";
+import { HeroSection } from "./hero/HeroSection";
+import { ComparisonSection } from "./benefits/ComparisonSection";
+import { CompilerVsAiSection } from "./benefits/CompilerVsAiSection";
+import { StudioViewsSection } from "./studio-views/StudioViewsSection";
+import { CompilerShowcaseSection } from "./compiler/CompilerShowcaseSection";
+import { DesktopStudioSection } from "./desktop/DesktopStudioSection";
+import { FutureRoadmapSection } from "./future/FutureRoadmapSection";
+import { PricingSection } from "./pricing/PricingSection";
+import { FaqSection } from "./faq/FaqSection";
+import { FinalCtaSection } from "./cta/FinalCtaSection";
 import { Footer } from "./footer";
 
-export const Landing = () => {
+export const Landing: React.FC = () => {
   return (
-    <div className="max-w-screen min-h-screen w-full bg-white text-black flex flex-col items-center overflow-x-hidden">
+    <div className="min-h-screen w-full bg-[#050505] text-white flex flex-col items-center overflow-x-hidden selection:bg-white/20 selection:text-white font-sans">
       <Header />
       <main className="w-full flex flex-col">
-        <Intro />
-        <Features />
+        <HeroSection />
+        <ComparisonSection />
+        <CompilerVsAiSection />
+        <StudioViewsSection />
+        <CompilerShowcaseSection />
+        <DesktopStudioSection />
+        <FutureRoadmapSection />
+        <PricingSection />
+        <FaqSection />
+        <FinalCtaSection />
       </main>
       <Footer />
     </div>
   );
 };
+
+export default Landing;
