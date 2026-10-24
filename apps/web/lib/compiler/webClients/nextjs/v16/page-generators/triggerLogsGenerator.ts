@@ -96,7 +96,7 @@ export function generateTriggerHandler(hasApiActions: boolean): string {
           {
             id: logId,
             eventName,
-            eventType: result.data && typeof result.data === "object" && (result.data as any).streamed ? "SSE" : eventType,
+            eventType: result.data && typeof result.data === "object" && "streamed" in result.data && Boolean(result.data.streamed) ? "SSE" : eventType,
             timestamp,
             url: result.url || result.targetUrl || "N/A",
             method: method || "TRIGGER",
@@ -194,7 +194,7 @@ export function generateTriggerLogsSection(options: {
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30">
                             PAGE LOAD
                           </span>
-                        ) : log.eventType === "SSE" || (log.data && typeof log.data === "object" && (log.data as any).streamed) ? (
+                        ) : log.eventType === "SSE" || (log.data && typeof log.data === "object" && "streamed" in log.data && Boolean(log.data.streamed)) ? (
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
                             STREAM
                           </span>
@@ -225,8 +225,8 @@ export function generateTriggerLogsSection(options: {
                       </div>
                     ) : (
                       <pre className="text-foreground/90 bg-background/80 p-3 rounded border border-border/50 overflow-x-auto whitespace-pre-wrap font-mono text-xs">
-                        {typeof (log.data as any)?.raw === "string" && (log.data as any).raw
-                          ? (log.data as any).raw
+                        {log.data && typeof log.data === "object" && "raw" in log.data && typeof log.data.raw === "string" && log.data.raw
+                          ? log.data.raw
                           : typeof log.data === "string"
                           ? log.data
                           : JSON.stringify(log.data, null, 2)}

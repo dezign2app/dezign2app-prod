@@ -1,6 +1,7 @@
-  import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest";
 import { renderPipelineStep, renderPipeline } from "../generators/routeGenerator/pipelineRenderer";
 import { generateEndpointRouteHandler } from "../generators/routeGenerator/endpointHandlerGenerator";
+import { generateResponseInterface } from "../generators/typesGenerator/responseInference";
 import { PipelineStep, Endpoint } from "@workspace/canvas/types";
 
 describe("LangGraph Invoke Pipeline Step Compiler", () => {
@@ -745,8 +746,55 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(code).toContain('streamMode: "custom"');
       expect(code).toContain('mode === "custom"');
     });
+
+    it("generates streaming response type interface when langGraphStreamingEnabled is true", () => {
+      const ep: Endpoint = {
+        id: "ep-chat",
+        name: "/simple-chat",
+        type: "POST",
+        pipelineSteps: [
+          {
+            id: "step-1",
+            name: "ChatAgent",
+            type: "langgraph_invoke",
+            langGraphTargetNodeId: "chatAgent",
+            langGraphStreamingEnabled: true,
+            langGraphStreamingProtocol: "sse",
+          },
+        ],
+      };
+
+      const res = generateResponseInterface("ConversationsPostSimpleChatResponse", [], undefined, [], ep);
+      expect(res.code).toContain("export interface ConversationsPostSimpleChatResponse {");
+      expect(res.code).toContain("content: string;");
+      expect(res.code).toContain("tokens: string[];");
+      expect(res.code).toContain("streamed: true;");
+      expect(res.code).toContain("raw?: string;");
+      expect(res.code).toContain("export interface ConversationsPostSimpleChatResponseStreamChunk {");
+      expect(res.code).toContain("token?: string;");
+      expect(res.code).toContain("node?: string;");
+    });
+
+    it("generates standard buffered response type interface when langGraphStreamingEnabled is false", () => {
+      const ep: Endpoint = {
+        id: "ep-chat-buffered",
+        name: "/simple-chat",
+        type: "POST",
+        pipelineSteps: [
+          {
+            id: "step-1",
+            name: "ChatAgent",
+            type: "langgraph_invoke",
+            langGraphTargetNodeId: "chatAgent",
+            langGraphStreamingEnabled: false,
+          },
+        ],
+      };
+
+      const res = generateResponseInterface("ConversationsPostSimpleChatResponse", [], undefined, [], ep);
+      expect(res.code).toContain("export interface ConversationsPostSimpleChatResponse {");
+      expect(res.code).not.toContain("streamed: true;");
+      expect(res.code).toContain("response: string;");
+    });
   });
 });
-
-
-  
