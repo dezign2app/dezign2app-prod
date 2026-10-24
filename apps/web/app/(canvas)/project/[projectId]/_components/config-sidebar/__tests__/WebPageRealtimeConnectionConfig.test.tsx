@@ -33,6 +33,40 @@ vi.mock("../web-page-event-config", () => ({
   ),
 }));
 
+vi.mock("@workspace/ui/components/select", () => ({
+  Select: ({
+    children,
+    value,
+  }: {
+    children?: React.ReactNode;
+    value?: string;
+    onValueChange?: (val: string) => void;
+  }) => (
+    <div data-testid="select" data-value={value}>
+      {children}
+    </div>
+  ),
+  SelectTrigger: ({ children }: { children?: React.ReactNode }) => <button type="button">{children}</button>,
+  SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  SelectItem: ({
+    children,
+    value,
+  }: {
+    children?: React.ReactNode;
+    value?: string;
+  }) => <div data-value={value}>{children}</div>,
+}));
+
+vi.mock("@workspace/ui/components/dropdown-menu", () => ({
+  DropdownMenu: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+  DropdownMenuContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuItem: ({ children, onClick }: { children?: React.ReactNode; onClick?: () => void }) => (
+    <button type="button" onClick={onClick}>{children}</button>
+  ),
+}));
+
 vi.mock("../web-page-realtime-config", () => ({
   RealtimeConnectionHeader: (props: RealtimeConnectionHeaderProps) => (
     <div data-testid="mock-realtime-header">{props.conn?.eventName}</div>
@@ -45,6 +79,7 @@ vi.mock("../web-page-realtime-config", () => ({
   ),
   useDerivedRealtimeInfo: () => null,
   resolveRealtimePayloadPaths: () => [],
+  useAllPageRealtimeConnections: () => [],
 }));
 
 describe("WebPageRealtimeConnectionConfig with action steps", () => {
@@ -91,7 +126,7 @@ describe("WebPageRealtimeConnectionConfig with action steps", () => {
 
     render(<WebPageRealtimeConnectionConfig id="rtc-1" nodeId="web-node-1" />);
 
-    expect(screen.getByText("Subscription Mapping")).toBeDefined();
+    expect(screen.getByText("Connection Mapping")).toBeDefined();
     expect(screen.getByTestId("mock-subscription-section")).toBeDefined();
     expect(screen.getByText("Pipeline Steps")).toBeDefined();
     expect(screen.getByText("1 step")).toBeDefined();
@@ -102,7 +137,7 @@ describe("WebPageRealtimeConnectionConfig with action steps", () => {
     expect(screen.getByTestId("mock-action-simulator")).toBeDefined();
   });
 
-  it("renders Subscription Mapping badge when subscriptionBindings are present", () => {
+  it("renders Connection Mapping badge when subscriptionBindings are present", () => {
     const dummyWebPageNode: BackendNode = {
       id: "web-node-2",
       type: "webPage",
@@ -136,7 +171,7 @@ describe("WebPageRealtimeConnectionConfig with action steps", () => {
 
     render(<WebPageRealtimeConnectionConfig id="rtc-2" nodeId="web-node-2" />);
 
-    expect(screen.getByText("Subscription Mapping")).toBeDefined();
+    expect(screen.getByText("Connection Mapping")).toBeDefined();
     expect(screen.getByText("1 mapped")).toBeDefined();
     expect(screen.getByTestId("mock-subscription-section")).toBeDefined();
   });

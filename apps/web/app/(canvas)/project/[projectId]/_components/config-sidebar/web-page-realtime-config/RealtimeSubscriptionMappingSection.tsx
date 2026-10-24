@@ -14,6 +14,8 @@ import {
   CheckCircle2,
   AlertCircle,
   HelpCircle,
+  Wifi,
+  Video,
 } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
 import { Input } from "@workspace/ui/components/input";
@@ -37,6 +39,9 @@ import type {
 import { ActionFlowCombobox, ComboboxOption } from "../web-page-event-config/action-flow/ActionFlowCombobox";
 import { DerivedRealtimeInfo } from "./types";
 import { isAuthHeaderName } from "../web-page-event-config/action-flow/utils";
+import { WebRtcCapabilitiesSection } from "./WebRtcCapabilitiesSection";
+import type { MergedPageRealtimeConnection } from "./useAllPageRealtimeConnections";
+import { cn } from "@workspace/ui/lib/utils";
 
 export interface RealtimeSubscriptionMappingSectionProps {
   conn: RealtimeConnection;
@@ -45,6 +50,10 @@ export interface RealtimeSubscriptionMappingSectionProps {
   endpoints?: Endpoint[];
   derivedInfo?: DerivedRealtimeInfo | null;
   isProtected?: boolean;
+  allConnections?: MergedPageRealtimeConnection[];
+  onSelectConnection?: (connId: string) => void;
+  onDeleteConnection?: () => void;
+  onDeleteSpecificConnection?: (connId: string) => void;
   onUpdate?: (changes: Partial<RealtimeConnection>) => void;
   onUpdateBindings?: (bindings: FrontendRequestFieldBinding[]) => void;
 }
@@ -92,6 +101,10 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
   endpoints = [],
   derivedInfo = null,
   isProtected = false,
+  allConnections = [],
+  onSelectConnection,
+  onDeleteConnection,
+  onDeleteSpecificConnection,
   onUpdate,
   onUpdateBindings,
 }) => {
@@ -399,22 +412,167 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
 
     const fullUrl = queryParts.length > 0 ? `${routeTemplate}?${queryParts.join("&")}` : routeTemplate;
 
-    if (conn.protocol === "WEBSOCKET") {
+    const activeProto = (conn.protocol || "SSE").toUpperCase();
+    if (activeProto === "WEBSOCKET") {
       const roomStr = conn.room ? ` (room: "${conn.room}")` : "";
       return `const ws = new WebSocket(\`ws://localhost:8086${fullUrl}\`);\nws.onopen = () => {\n  console.log("Subscribed to ${conn.eventName || "stream"}${roomStr}");\n};`;
     }
-    if (conn.protocol === "WEBRTC") {
+    if (activeProto === "WEBRTC") {
       return `const rtc = new RTCPeerConnection();\n// Subscribed to WebRTC stream: ${fullUrl}`;
     }
     // Default SSE
     return `const es = new EventSource(\`${fullUrl}\`, { withCredentials: true });\nes.addEventListener("${conn.eventName || "message"}", (event) => {\n  // message received\n});`;
   }, [linkedEndpoint, conn, effectiveBindings]);
 
+  const activeProtocol = (conn.protocol || "SSE").toUpperCase() as "SSE" | "WEBSOCKET" | "WEBRTC";
+
+  const handleProtocolChange = (newProto: "SSE" | "WEBSOCKET" | "WEBRTC") => {
+    if (newProto === activeProtocol) return;
+    onUpdate?.({ protocol: newProto });
+  };
+
   const pathBindings = effectiveBindings.filter((b) => b.slot === "path_param");
   const otherBindings = effectiveBindings.filter((b) => b.slot !== "path_param");
 
   return (
     <div className="flex flex-col gap-3.5">
+      {/* Optional quick switcher if multiple connections exist */}
+      {allConnections && allConnections.length > 1 && (
+        <div className="flex flex-col gap-1.5 p-2 rounded-lg border border-border/60 bg-muted/20">
+          <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground px-0.5">
+            <span>Page Connections ({allConnections.length})</span>
+          </div>
+          <div className="grid grid-cols-1 gap-1 max-h-36 overflow-y-auto pr-0.5">
+            {allConnections.map((c) => {
+              const isSelected = c.id === conn.id;
+              return (
+                <div
+                  key={c.id}
+                  onClick={() => onSelectConnection?.(c.id)}
+                  className={cn(
+                    "group flex items-center justify-between p-1.5 rounded-md border text-xs cursor-pointer transition-all",
+                    isSelected
+                      ? "border-violet-500/50 bg-violet-500/10 shadow-xs"
+                      : "border-border/50 bg-background/50 hover:bg-muted/50 hover:border-border",
+                  )}
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span
+                      className={cn(
+                        "w-1.5 h-1.5 rounded-full shrink-0",
+                        c.isDerived ? "bg-amber-500" : "bg-violet-500",
+                      )}
+                    />
+                    <span className="font-mono text-[11px] truncate font-medium text-foreground">
+                      {c.eventName || c.id}
+                    </span>
+                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 uppercase font-mono">
+                      {c.protocol}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {(onDeleteSpecificConnection || (isSelected && onDeleteConnection)) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onDeleteSpecificConnection) {
+                            onDeleteSpecificConnection(c.id);
+                          } else if (onDeleteConnection) {
+                            onDeleteConnection();
+                          }
+                        }}
+                        className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        title="Delete connection"
+                      >
+                        <Trash2 size={11} />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Real-time Mode Toggle: SSE | WebSocket | WebRTC */}
+      <div className="flex flex-col gap-2 p-2.5 rounded-lg border border-border/80 bg-muted/20">
+        <div className="flex items-center justify-between">
+          <Label className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+            <Radio size={12} className="text-violet-500" />
+            <span>Connection Mode</span>
+          </Label>
+          <Badge
+            variant="outline"
+            className={cn(
+              "text-[9px] font-mono uppercase px-1.5 py-0 h-4",
+              activeProtocol === "WEBSOCKET"
+                ? "border-cyan-500/40 text-cyan-600 dark:text-cyan-400 bg-cyan-500/10"
+                : activeProtocol === "WEBRTC"
+                ? "border-purple-500/40 text-purple-600 dark:text-purple-400 bg-purple-500/10"
+                : "border-violet-500/40 text-violet-600 dark:text-violet-400 bg-violet-500/10",
+            )}
+          >
+            {activeProtocol}
+          </Badge>
+        </div>
+
+        <div className="grid grid-cols-3 gap-1.5 p-1 bg-background/80 rounded-md border border-border/60">
+          <button
+            type="button"
+            onClick={() => handleProtocolChange("SSE")}
+            className={cn(
+              "flex flex-col items-center justify-center py-2 px-1 rounded-sm text-xs transition-all cursor-pointer border",
+              activeProtocol === "SSE"
+                ? "bg-violet-500/15 text-violet-700 dark:text-violet-300 font-semibold border-violet-500/40 shadow-xs"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40",
+            )}
+          >
+            <div className="flex items-center gap-1 font-medium">
+              <Radio size={12} className={activeProtocol === "SSE" ? "text-violet-500" : "text-muted-foreground"} />
+              <span>SSE</span>
+            </div>
+            <span className="text-[9px] text-muted-foreground mt-0.5 leading-none">EventStream</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleProtocolChange("WEBSOCKET")}
+            className={cn(
+              "flex flex-col items-center justify-center py-2 px-1 rounded-sm text-xs transition-all cursor-pointer border",
+              activeProtocol === "WEBSOCKET"
+                ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 font-semibold border-cyan-500/40 shadow-xs"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40",
+            )}
+          >
+            <div className="flex items-center gap-1 font-medium">
+              <Wifi size={12} className={activeProtocol === "WEBSOCKET" ? "text-cyan-500" : "text-muted-foreground"} />
+              <span>Socket</span>
+            </div>
+            <span className="text-[9px] text-muted-foreground mt-0.5 leading-none">WebSocket</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleProtocolChange("WEBRTC")}
+            className={cn(
+              "flex flex-col items-center justify-center py-2 px-1 rounded-sm text-xs transition-all cursor-pointer border",
+              activeProtocol === "WEBRTC"
+                ? "bg-purple-500/15 text-purple-700 dark:text-purple-300 font-semibold border-purple-500/40 shadow-xs"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40",
+            )}
+          >
+            <div className="flex items-center gap-1 font-medium">
+              <Video size={12} className={activeProtocol === "WEBRTC" ? "text-purple-500" : "text-muted-foreground"} />
+              <span>WebRTC</span>
+            </div>
+            <span className="text-[9px] text-muted-foreground mt-0.5 leading-none">Peer Media</span>
+          </button>
+        </div>
+      </div>
+
       {/* Route & Stream Info Banner */}
       <div className="flex items-center justify-between p-2.5 rounded-lg border border-violet-500/30 bg-violet-500/5">
         <div className="flex items-center gap-2 min-w-0">
@@ -428,9 +586,16 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
               </span>
               <Badge
                 variant="outline"
-                className="text-[9px] px-1 py-0 font-mono text-violet-600 dark:text-violet-400 border-violet-500/30 bg-violet-500/10"
+                className={cn(
+                  "text-[9px] px-1 py-0 font-mono",
+                  activeProtocol === "WEBSOCKET"
+                    ? "text-cyan-600 dark:text-cyan-400 border-cyan-500/30 bg-cyan-500/10"
+                    : activeProtocol === "WEBRTC"
+                    ? "text-purple-600 dark:text-purple-400 border-purple-500/30 bg-purple-500/10"
+                    : "text-violet-600 dark:text-violet-400 border-violet-500/30 bg-violet-500/10",
+                )}
               >
-                {conn.protocol || "SSE"}
+                {activeProtocol}
               </Badge>
               {conn.sourceServiceLabel && (
                 <span className="text-[10px] text-muted-foreground font-mono">
@@ -444,16 +609,82 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
           </div>
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleAutoMapAll}
-          className="h-6 text-[10px] px-2 border-violet-500/30 hover:bg-violet-500/10 text-violet-600 dark:text-violet-400 gap-1 shrink-0 font-semibold"
-          title="Auto-match parameter names to page route parameters and state variables"
-        >
-          <Sparkles size={11} /> Auto-map
-        </Button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleAutoMapAll}
+            className="h-6 text-[10px] px-2 border-violet-500/30 hover:bg-violet-500/10 text-violet-600 dark:text-violet-400 gap-1 shrink-0 font-semibold"
+            title="Auto-match parameter names to page route parameters and state variables"
+          >
+            <Sparkles size={11} /> Auto-map
+          </Button>
+          {onDeleteConnection && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onDeleteConnection}
+              className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+              title="Delete this connection"
+            >
+              <Trash2 size={12} />
+            </Button>
+          )}
+        </div>
       </div>
+
+      {/* Broadcast / Signaling Room (WebSocket / WebRTC) */}
+      {(activeProtocol === "WEBSOCKET" || activeProtocol === "WEBRTC") && (
+        <div className="flex flex-col gap-1.5 p-2.5 rounded-lg border border-cyan-500/30 bg-cyan-500/5">
+          <div className="flex items-center justify-between">
+            <Label className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+              <Radio size={12} className="text-cyan-500" />
+              <span>
+                {activeProtocol === "WEBRTC" ? "Signaling Room / Peer Channel" : "Broadcast Room / Channel"}
+              </span>
+            </Label>
+            {conn.room && (
+              <Badge variant="outline" className="text-[9px] font-mono border-cyan-500/30 text-cyan-600 dark:text-cyan-400">
+                {conn.room}
+              </Badge>
+            )}
+          </div>
+          <Input
+            className="text-xs bg-background h-8"
+            disabled={Boolean(derivedInfo?.step)}
+            value={conn.room || ""}
+            onChange={(e) => onUpdate?.({ room: e.target.value })}
+            placeholder={
+              activeProtocol === "WEBRTC"
+                ? "e.g. room:conference or lobby"
+                : "e.g. global or user:${userId}"
+            }
+          />
+          <span className="text-[10px] text-muted-foreground">
+            {Boolean(derivedInfo?.step)
+              ? "Configured in backend Push to Client pipeline step. Resolved automatically when connecting."
+              : "Room or channel identifier used when subscribing to this stream."}
+          </span>
+        </div>
+      )}
+
+      {/* WebRTC Capabilities Section */}
+      {activeProtocol === "WEBRTC" && (
+        <div className="flex flex-col gap-2 p-2.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5">
+          <Label className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+            <Radio size={12} className="text-emerald-500" />
+            <span>WebRTC Media &amp; Data Capabilities</span>
+          </Label>
+          <WebRtcCapabilitiesSection
+            id={conn.id}
+            conn={conn}
+            isDerived={Boolean(derivedInfo?.step)}
+            onUpdate={(changes) => {
+              if (onUpdate) onUpdate(changes);
+            }}
+          />
+        </div>
+      )}
 
       {/* Path Parameters Section */}
       <div className="flex flex-col gap-2">

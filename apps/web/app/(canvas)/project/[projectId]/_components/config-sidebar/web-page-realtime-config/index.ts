@@ -6,3 +6,5 @@ export * from "./WebRtcCapabilitiesSection";
 export * from "./RealtimeStateStoreSection";
 export * from "./RealtimeSubscriptionMappingSection";
 export * from "./resolveRealtimePayloadPaths";
+export * from "./useAllPageRealtimeConnections";
+export * from "./deleteRealtimeConnection";
