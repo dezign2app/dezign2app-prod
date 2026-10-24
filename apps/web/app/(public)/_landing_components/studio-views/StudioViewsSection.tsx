@@ -77,7 +77,7 @@ const VIEW_TABS: ViewTab[] = [
       "Virtual File Explorer & Monaco Editor: Edit generated Next.js 16 App Router code with full TypeScript syntax highlighting",
       "Live Preview Viewport: Real-time rendering of generated pages, pre-wired forms, and interactive components",
       "In-Context AI Page Assistant: Chat with an AI assistant to iteratively update page designs and generate UI logic",
-      "Bidirectional Code Sync: Automatically detect and reconcile code differences with your local dev server",
+      "Non-Destructive Code Sync: Safely reconcile architecture updates with your local codebase without overwriting custom business logic",
     ],
   },
 ];

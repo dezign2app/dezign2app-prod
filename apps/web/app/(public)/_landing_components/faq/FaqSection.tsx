@@ -25,9 +25,9 @@ const FAQS: FaqItem[] = [
       "Raw AI code assistants repeatedly regenerate entire files, burning hundreds of thousands of tokens on repetitive boilerplate while frequently hallucinating imports and schema mismatches. Dezign2App uses a deterministic algorithmic compiler: it translates your visual architecture into a complete Turborepo monorepo in milliseconds at $0 token cost. You save hours of debugging, eliminate compounding LLM bills, and can redeploy your capital toward safeguarding and hardening your product.",
   },
   {
-    question: "Can I customize and extend the generated codebase?",
+    question: "Can I customize the code? What happens to my custom edits on the next canvas sync?",
     answer:
-      "Yes. The output is a standard TypeScript codebase. You can modify code in our built-in Monaco editor, or open it locally in your favorite editor (VS Code, Cursor, WebStorm). You can add custom packages, tweak UI components, and install any npm package.",
+      "Your custom code is never deleted. Dezign2App separates generated infrastructure contracts (shared schemas, types, and wire protocols) from user business logic (controllers, custom routes, and UI components). When you update your visual canvas, the compiler performs non-destructive incremental updates or emits clean Git PR diffs—ensuring your custom business logic, third-party packages, and manual edits remain 100% intact.",
   },
   {
     question: "Can I run Dezign2App offline on my local machine?",

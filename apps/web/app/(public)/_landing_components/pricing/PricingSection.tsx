@@ -1,9 +1,8 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
 import Pricing from "../pricing";
-import { Check, ArrowRight, ShieldCheck, Zap, Lock } from "lucide-react";
+import { Check, ShieldCheck, Zap, Lock } from "lucide-react";
 
 export const PricingSection: React.FC = () => {
   return (
@@ -28,26 +27,6 @@ export const PricingSection: React.FC = () => {
         {/* Pricing Card Stage */}
         <div className="w-full flex justify-center mb-12">
           <Pricing hideHeader={true} hideToggle={true} />
-        </div>
-
-        {/* Early Believer / Team Support Card */}
-        <div className="w-full max-w-xl rounded-xl border border-zinc-800 bg-[#0e0e11] p-5 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
-          <div>
-            <h4 className="text-sm font-semibold text-white">
-              Need Custom Stack Support or Team Seats?
-            </h4>
-            <p className="text-xs text-zinc-400 mt-1">
-              Join our Early Believer program for dedicated onboarding, custom node types, and direct architecture reviews.
-            </p>
-          </div>
-
-          <Link
-            href="/early-believer"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-medium transition-colors shrink-0 border border-zinc-700"
-          >
-            <span>Early Believer Tiers</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
         </div>
 
         {/* High-Trust Buyer Guarantees */}

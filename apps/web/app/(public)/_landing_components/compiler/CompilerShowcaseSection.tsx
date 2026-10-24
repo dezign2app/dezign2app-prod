@@ -262,10 +262,10 @@ export const CompilerShowcaseSection: React.FC = () => {
             </p>
           </div>
           <div className="p-5 rounded-lg border border-zinc-800/80 bg-[#0c0c0e] flex flex-col gap-1.5">
-            <span className="text-zinc-500 font-mono text-xs">02 — Smart Deletion</span>
-            <h4 className="text-sm font-semibold text-white">Cascading Dependency Safety</h4>
+            <span className="text-zinc-500 font-mono text-xs">02 — Non-Destructive Sync</span>
+            <h4 className="text-sm font-semibold text-white">Your Custom Code Is Protected</h4>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              When a node is deleted, Dezign2App analyzes affected endpoints, routes, subscribers, and imports to prevent broken references.
+              Architecture updates compile into isolated contract and schema layers. Your custom business logic, routes, and manual edits are never overwritten on sync.
             </p>
           </div>
           <div className="p-5 rounded-lg border border-zinc-800/80 bg-[#0c0c0e] flex flex-col gap-1.5">
