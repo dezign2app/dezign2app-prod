@@ -64,12 +64,21 @@ export async function createMainWindow(): Promise<BrowserWindow> {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
 
+  // Initial window: large, spacious desktop presentation
+  const initialWidth = Math.min(1440, Math.round(screenWidth * 0.85));
+  const initialHeight = Math.min(900, Math.round(screenHeight * 0.85));
+
+  // Minimum dimensions: allows 50% split-screen snapping, bounded at 50% of work area
+  const minSplitWidth = Math.floor(screenWidth * 0.5);
+  const minSplitHeight = Math.min(500, Math.floor(screenHeight * 0.5));
+
   mainWindow = new BrowserWindow({
     title: APP_NAME,
-    width: Math.round(screenWidth * 0.5),
-    height: screenHeight,
-    minWidth: 480,
-    minHeight: 400,
+    width: initialWidth,
+    height: initialHeight,
+    minWidth: minSplitWidth,
+    minHeight: minSplitHeight,
+    center: true,
     autoHideMenuBar: true,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     backgroundColor: "#0d1117",
