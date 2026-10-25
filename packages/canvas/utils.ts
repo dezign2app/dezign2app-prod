@@ -193,6 +193,9 @@ export function classifyHandle(
     if (id.startsWith("func-out-")) {
       return "endpoint-out";
     }
+    if (!id) {
+      return handleDirection === "source" ? "endpoint-out" : "endpoint-in";
+    }
   }
   if (id.startsWith("events-")) return "event-source";
   if (id.startsWith("event-in-") || id.startsWith("action-in-"))

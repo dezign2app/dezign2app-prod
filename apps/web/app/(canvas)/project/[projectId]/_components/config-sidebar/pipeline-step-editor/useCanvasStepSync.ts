@@ -4,12 +4,17 @@ import {
   BackendNode,
   BackendEdge,
   AnyMessagingResource,
+  CanvasEntityColumn,
+  StepSchemaField,
+  AvailableSource,
+  Parameter,
 } from "@workspace/canvas/types";
 import {
   ConnectedTransformer,
   ConnectedKafka,
   ConnectedLangGraph,
   ConnectedRedis,
+  ConnectedDbRef,
   ConnectedServiceCall,
 } from "@/types/canvas";
 import { PipelineStepDraft, StepBinding } from "./types";
@@ -30,10 +35,16 @@ import {
   getConnectedKafkaForEndpoint,
   getConnectedLangGraphForEndpoint,
   getConnectedRedisForEndpoint,
+  getConnectedDbRefsForEndpoint,
   getConnectedServiceCallsForEndpoint,
 } from "@/lib/utils/pipelineValidation";
-import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
-import { toFolderName, toPascalCase, toVarName } from "@/lib/compiler/utils";
+import {
+  getEntityDbOperations,
+  deriveDbFunctionSignature,
+  inferDbOperationReturnType,
+  computeDbOpBindings,
+} from "@/lib/utils/entityOperationsHelper";
+import { toFolderName, toPascalCase, toVarName, toTableName } from "@/lib/compiler/utils";
 
 export interface UseCanvasStepSyncProps {
   steps: PipelineStepDraft[];
@@ -54,6 +65,7 @@ export interface UseCanvasStepSyncReturn {
   connectedKafka: ConnectedKafka[];
   connectedLangGraph: ConnectedLangGraph[];
   connectedRedis: ConnectedRedis[];
+  connectedDbRefs: ConnectedDbRef[];
   connectedServiceCalls: ConnectedServiceCall[];
 }
 
@@ -565,6 +577,172 @@ export function useCanvasStepSync({
     allNodes,
   ]);
 
+  const connectedDbRefs = useMemo(() => {
+    if (!targetId || !serviceNodeId) return [];
+    return getConnectedDbRefsForEndpoint(
+      targetId,
+      serviceNodeId,
+      allNodes,
+      allEdges,
+    );
+  }, [targetId, serviceNodeId, allNodes, allEdges]);
+
+  // Auto-synchronize connected Database table ref into the pipeline steps
+  useEffect(() => {
+    if (isNested || connectedDbRefs.length === 0) return;
+
+    const missingDbRefs = connectedDbRefs.filter(
+      (cdb) =>
+        !allFlatSteps.some(
+          (s) =>
+            s.type === "db_operation" &&
+            (s.dbRefNodeId === cdb.dbRefNodeId || (cdb.tableNodeId && s.tableNodeId === cdb.tableNodeId)) &&
+            (!cdb.operationName || s.operationId === cdb.operationName || s.functionRef?.name === cdb.operationName),
+        ),
+    );
+
+    if (missingDbRefs.length > 0) {
+      const newDbSteps: PipelineStepDraft[] = missingDbRefs.map((cdb, idx) => {
+        const stepNum = executableSteps.length + idx + 1;
+        const targetTable = cdb.tableNode;
+        const ops = targetTable ? getEntityDbOperations(targetTable, allNodes) : [];
+        const matchedOp = cdb.operationName
+          ? ops.find((o) => o.name === cdb.operationName || o.id === cdb.operationName)
+          : ops[0];
+        const defaultOp = matchedOp || ops[0];
+        const tableLabel = targetTable?.data?.label || targetTable?.data?.tableRef || cdb.label || "table";
+        const importPath = `@workspace/db/helpers/${toTableName(tableLabel)}`;
+        const baseVar = defaultOp ? `${toVarName(defaultOp.name)}Result` : `dbResult${stepNum > 1 ? stepNum : ""}`;
+
+        let varName = baseVar;
+        let counter = 1;
+        while (executableSteps.some((s) => s.outputVariable === varName)) {
+          counter++;
+          varName = `${baseVar}${counter}`;
+        }
+
+        const liveSig = defaultOp
+          ? deriveDbFunctionSignature(defaultOp.name, defaultOp.params, defaultOp.returnType) || defaultOp.signature
+          : undefined;
+
+        const returnTypeStr = defaultOp
+          ? (defaultOp.code && defaultOp.code.trim() ? inferDbOperationReturnType(defaultOp.code) : null) ||
+            defaultOp.returnType ||
+            "any"
+          : undefined;
+
+        const isArrayOp = Boolean(
+          defaultOp &&
+            (defaultOp.kind === "findAll" ||
+              (defaultOp.name || "").toLowerCase().includes("findall") ||
+              (returnTypeStr && (returnTypeStr.includes("[]") || returnTypeStr.includes("Array<")))),
+        );
+
+        const schemaFields: StepSchemaField[] = isArrayOp
+          ? []
+          : defaultOp?.kind === "delete"
+          ? [
+              { name: "success", type: "boolean", required: true },
+              { name: "message", type: "string", required: true },
+            ]
+          : (targetTable?.data?.columns || []).map((c: CanvasEntityColumn) => ({
+              name: c.name,
+              type: c.type || "string",
+              required: Boolean(c.isPrimaryKey || c.isNotNull),
+            }));
+
+        const availableSources: AvailableSource[] = [];
+        if (endpoint?.pathParams && endpoint.pathParams.length > 0) {
+          availableSources.push({
+            id: "req_params",
+            label: "Route Parameters",
+            kind: "req_params",
+            paths: endpoint.pathParams.map((p: Parameter) => ({ path: p.name, type: p.type || "string" })),
+          });
+        }
+        if (endpoint?.queryParams && endpoint.queryParams.length > 0) {
+          availableSources.push({
+            id: "req_query",
+            label: "Query Parameters",
+            kind: "req_query",
+            paths: endpoint.queryParams.map((q: Parameter) => ({ path: q.name, type: q.type || "string" })),
+          });
+        }
+        if (endpoint?.requestBody?.fields && endpoint.requestBody.fields.length > 0) {
+          availableSources.push({
+            id: "req_body",
+            label: "Request Body",
+            kind: "req_body",
+            paths: endpoint.requestBody.fields.map((f: Parameter) => ({ path: f.name, type: f.type || "string" })),
+          });
+        }
+
+        const nextBindings = computeDbOpBindings(
+          defaultOp,
+          targetTable,
+          [],
+          availableSources,
+          defaultOp ? { name: defaultOp.name, signature: liveSig } : undefined,
+        );
+
+        return {
+          id: generateId(),
+          name: varName,
+          type: "db_operation",
+          enabled: true,
+          outputVariable: varName,
+          databaseId: cdb.databaseId,
+          tableNodeId: targetTable?.id || cdb.dbRefNodeId,
+          dbRefNodeId: cdb.dbRefNodeId,
+          operationId: defaultOp?.id,
+          functionRef: defaultOp
+            ? {
+                name: defaultOp.name,
+                importPath,
+                signature: liveSig,
+                returnIsArray: isArrayOp,
+              }
+            : undefined,
+          outputSchema: schemaFields,
+          inputBindings: nextBindings,
+        };
+      });
+
+      if (isConsumer) {
+        onChange([...executableSteps, ...newDbSteps]);
+      } else {
+        const foundReturn = steps.find((s) => s.type === "return_response");
+        onChange([
+          ...executableSteps,
+          ...newDbSteps,
+          foundReturn || {
+            id: "return-response-step",
+            name: "Return Response",
+            type: "return_response",
+            enabled: true,
+            statusCode: endpoint?.type === "POST" ? 201 : 200,
+            inputBindings: [],
+            outputVariable: "",
+          },
+        ]);
+      }
+    }
+  }, [
+    isNested,
+    connectedDbRefs,
+    executableSteps,
+    isConsumer,
+    onChange,
+    serviceNodeId,
+    endpoint?.type,
+    endpoint?.pathParams,
+    endpoint?.queryParams,
+    endpoint?.requestBody,
+    steps,
+    allNodes,
+    allFlatSteps,
+  ]);
+
   const connectedServiceCalls = useMemo(() => {
     if (!targetId || !serviceNodeId) return [];
     return getConnectedServiceCallsForEndpoint(
@@ -906,6 +1084,7 @@ export function useCanvasStepSync({
     connectedKafka,
     connectedLangGraph,
     connectedRedis,
+    connectedDbRefs,
     connectedServiceCalls,
   };
 }

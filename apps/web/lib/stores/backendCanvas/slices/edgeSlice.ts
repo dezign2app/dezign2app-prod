@@ -15,6 +15,7 @@ import {
   validateDatabaseEngine,
   autoDeriveForeignKeyHandles,
   handleDatabaseConnect,
+  handleDatabaseRefConnect,
   handleEventBrokerConnect,
   handleTransformerConnect,
   handleFrontendConnect,
@@ -253,6 +254,9 @@ export const createEdgeSlice = (
     // 1. Synchronize Database, Redis, and Auth nodes
     handleDatabaseConnect(context);
 
+    // 1.5. Handle DatabaseTableRefNode (db_ref) -> ServiceNode connections
+    handleDatabaseRefConnect(context);
+
     // 2. Synchronize Event Broker IDs
     handleEventBrokerConnect(context);
 
@@ -358,6 +362,7 @@ export const createEdgeSlice = (
       handleLangGraphConnect(connContext);
       handleRedisCacheConnect(connContext);
       handleWebPageActionConnect(connContext);
+      handleDatabaseRefConnect(connContext);
     }
   },
 

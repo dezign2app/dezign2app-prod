@@ -60,6 +60,12 @@ export type BackendEdge = {
     bucketId?: string;
     storageNodeId?: string;
     refNodeId?: string;
+    // --- Database Ref Connection Fields ---
+    isDbOperation?: boolean;
+    dbRefNodeId?: string;
+    tableRef?: string;
+    stepId?: string;
+    endpointId?: string;
     // --- Service Call Connection Fields ---
     isServiceCall?: boolean;
     targetServiceId?: string;

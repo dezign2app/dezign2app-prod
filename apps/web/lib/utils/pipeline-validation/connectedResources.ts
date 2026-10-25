@@ -12,6 +12,7 @@ import {
   ConnectedKafka,
   ConnectedLangGraph,
   ConnectedRedis,
+  ConnectedDbRef,
   ConnectedServiceCall,
 } from "@/types/canvas";
 
@@ -477,6 +478,105 @@ export function getConnectedServiceCallsForEndpoint(
       functionName,
       importPath,
       operationId,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Returns all Database Table Ref nodes (db_ref) connected via canvas edges to an endpoint or consumer.
+ */
+export function getConnectedDbRefsForEndpoint(
+  endpointOrConsumerId: string,
+  serviceNodeId: string,
+  allNodes: BackendNode[] = [],
+  allEdges: BackendEdge[] = [],
+): ConnectedDbRef[] {
+  const dbRefNodes = allNodes.filter((n) => n.type === "db_ref");
+  if (dbRefNodes.length === 0) return [];
+  const dbRefNodeIds = new Set(dbRefNodes.map((n) => n.id));
+
+  const epOutHandle = `endpoint-out-${endpointOrConsumerId}`;
+  const epInHandle = `endpoint-in-${endpointOrConsumerId}`;
+  const evOutHandle = `consumedEvents-out-${endpointOrConsumerId}`;
+  const evInHandle = `consumedEvents-in-${endpointOrConsumerId}`;
+  const routeInHandle = `routeEndpoints-in-${endpointOrConsumerId}`;
+  const routeOutHandle = `routeEndpoints-out-${endpointOrConsumerId}`;
+  const epsInHandle = `endpoints-in-${endpointOrConsumerId}`;
+  const epsOutHandle = `endpoints-out-${endpointOrConsumerId}`;
+
+  const connectedDbRefMap = new Map<string, { dbRefId: string; operationName?: string }>();
+
+  for (const edge of allEdges) {
+    if (!edge) continue;
+
+    // Service -> DbRef
+    if (edge.source === serviceNodeId && dbRefNodeIds.has(edge.target)) {
+      const isForThisHandle =
+        edge.sourceHandle === epOutHandle ||
+        edge.sourceHandle === epInHandle ||
+        edge.sourceHandle === evOutHandle ||
+        edge.sourceHandle === evInHandle ||
+        edge.sourceHandle === routeInHandle ||
+        edge.sourceHandle === routeOutHandle ||
+        edge.sourceHandle === epsInHandle ||
+        edge.sourceHandle === epsOutHandle ||
+        edge.sourceHandle === endpointOrConsumerId;
+
+      const isGeneral = !edge.sourceHandle;
+
+      if (isForThisHandle || isGeneral) {
+        const rawOp = edge.targetHandle || edge.data?.operationName || "";
+        const opName = rawOp.replace(/^func-out-/, "").replace(/^func-in-/, "").replace(/^func-/, "");
+        connectedDbRefMap.set(edge.target, { dbRefId: edge.target, operationName: opName || undefined });
+      }
+    }
+
+    // DbRef -> Service
+    if (edge.target === serviceNodeId && dbRefNodeIds.has(edge.source)) {
+      const isForThisHandle =
+        edge.targetHandle === epInHandle ||
+        edge.targetHandle === epOutHandle ||
+        edge.targetHandle === evInHandle ||
+        edge.targetHandle === evOutHandle ||
+        edge.targetHandle === routeInHandle ||
+        edge.targetHandle === routeOutHandle ||
+        edge.targetHandle === epsInHandle ||
+        edge.targetHandle === epsOutHandle ||
+        edge.targetHandle === endpointOrConsumerId;
+
+      const isGeneral = !edge.targetHandle;
+
+      if (isForThisHandle || isGeneral) {
+        const rawOp = edge.sourceHandle || edge.data?.operationName || "";
+        const opName = rawOp.replace(/^func-out-/, "").replace(/^func-in-/, "").replace(/^func-/, "");
+        connectedDbRefMap.set(edge.source, { dbRefId: edge.source, operationName: opName || undefined });
+      }
+    }
+  }
+
+  const results: ConnectedDbRef[] = [];
+  for (const [id, info] of connectedDbRefMap.entries()) {
+    const dbRefNode = dbRefNodes.find((n) => n.id === id);
+    if (!dbRefNode) continue;
+
+    const tableId = dbRefNode.data?.tableRef;
+    const tableNode = allNodes.find((n) => (n.id === tableId || n.id === id) && n.type === "entity");
+    const databaseId = dbRefNode.data?.databaseId || tableNode?.data?.databaseId;
+    const databaseNode = allNodes.find((n) => n.id === databaseId);
+    const label = tableNode?.data?.label || dbRefNode.data?.label || "Table Ref";
+
+    results.push({
+      id: dbRefNode.id,
+      dbRefNodeId: dbRefNode.id,
+      dbRefNode,
+      tableNodeId: tableNode?.id || tableId,
+      tableNode,
+      databaseId,
+      databaseNode,
+      label,
+      operationName: info.operationName,
     });
   }
 
