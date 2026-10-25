@@ -318,6 +318,9 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`    // subgraphs:true + multi-mode: [namespace[], mode, data]`);
       rawLines.push(`    mode = _c[1];`);
       rawLines.push(`    payload = _c[2];`);
+      rawLines.push(`  } else if (Array.isArray(_c) && _c.length === 2 && Array.isArray(_c[0])) {`);
+      rawLines.push(`    // subgraphs:true + single-mode: [namespace[], data]`);
+      rawLines.push(`    payload = _c[1];`);
       rawLines.push(`  } else if (Array.isArray(_c) && _c.length === 2 && typeof _c[0] === "string" && ["messages", "updates", "custom", "values", "debug"].includes(_c[0])) {`);
       rawLines.push(`    // multi-mode without subgraphs: [mode, data]`);
       rawLines.push(`    mode = _c[0];`);
@@ -464,6 +467,9 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`    // subgraphs:true + multi-mode: [namespace[], mode, data]`);
       rawLines.push(`    mode = _c[1];`);
       rawLines.push(`    payload = _c[2];`);
+      rawLines.push(`  } else if (Array.isArray(_c) && _c.length === 2 && Array.isArray(_c[0])) {`);
+      rawLines.push(`    // subgraphs:true + single-mode: [namespace[], data]`);
+      rawLines.push(`    payload = _c[1];`);
       rawLines.push(`  } else if (Array.isArray(_c) && _c.length === 2 && typeof _c[0] === "string" && ["messages", "updates", "custom", "values", "debug"].includes(_c[0])) {`);
       rawLines.push(`    // multi-mode without subgraphs: [mode, data]`);
       rawLines.push(`    mode = _c[0];`);

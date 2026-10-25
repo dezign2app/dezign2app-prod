@@ -705,6 +705,32 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(code).toContain('type: "update"');
     });
 
+    it("renders single-mode messages streaming with subgraphs unpacking", () => {
+      const step: PipelineStep = {
+        id: "step-subgraphs-messages",
+        name: "AgentSubgraphsMessages",
+        type: "langgraph_invoke",
+        langGraphTargetNodeId: "subgraphAgent",
+        langGraphStreamingEnabled: true,
+        langGraphStreamingProtocol: "sse",
+        langGraphStreamModes: ["messages"],
+        langGraphStreamSubgraphs: true,
+        langGraphThreadIdSource: "params.id",
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain('streamMode: "messages"');
+      expect(code).toContain("subgraphs: true");
+      expect(code).toContain("Array.isArray(_c) && _c.length === 2 && Array.isArray(_c[0])");
+      expect(code).toContain("payload = _c[1]");
+      expect(code).toContain('type: "reasoning"');
+    });
+
     it("renders single-mode updates streaming for agent progress", () => {
       const step: PipelineStep = {
         id: "step-progress-stream",
