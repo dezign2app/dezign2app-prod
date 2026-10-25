@@ -129,6 +129,9 @@ ${storeStatements}        setTriggerLogs((prev) => [
       };
 ${customListeners ? `${customListeners}\n` : ""}      es.onmessage = (event) => {
         if (!isMounted) return;
+        if (event.data === "[DONE]") {
+          return;
+        }
         let parsed: unknown = event.data;
         try {
           parsed = JSON.parse(event.data);

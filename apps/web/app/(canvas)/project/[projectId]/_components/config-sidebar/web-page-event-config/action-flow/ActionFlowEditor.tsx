@@ -42,6 +42,8 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
   realtimeSourceLabel,
   realtimeSourceItemName,
   incomingPaths,
+  isLangGraph,
+  langGraphStreamModes,
   onSave,
   onDeleteStep,
 }) => {
@@ -285,6 +287,8 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
           sourceServiceLabel={realtimeSourceLabel}
           sourceItemName={realtimeSourceItemName}
           incomingPaths={incomingPaths}
+          isLangGraph={isLangGraph}
+          langGraphStreamModes={langGraphStreamModes}
         />
       )}
 

@@ -192,6 +192,11 @@ export interface LinkedRealtimeConnectionInfo {
   storeActionBinding?: StoreActionBinding;
   storeActionBindings?: StoreActionBinding[];
   actionSteps?: FrontendActionStepDraft[];
+  isLangGraph?: boolean;
+  langGraphStreamModes?: string[];
+  langGraphStreamingFields?: string[];
+  langGraphStreamIncludeReasoning?: boolean;
+  langGraphTargetNodeId?: string;
 }
 
 export interface PageInfo {

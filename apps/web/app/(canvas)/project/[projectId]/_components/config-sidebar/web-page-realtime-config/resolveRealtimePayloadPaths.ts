@@ -152,6 +152,81 @@ export function resolveRealtimePayloadPaths({
     ? toPascalCase(toSingular(primaryEntity.data?.label || primaryEntity.data?.name || "Entity"))
     : toPascalCase(cleanRouteName(targetItemName)) || "EventPayload";
 
+  // 4b. Check for LangGraph Invoke streaming step
+  const langGraphStep =
+    (derivedInfo?.step?.type === "langgraph_invoke" ? derivedInfo.step : undefined) ||
+    ep?.pipelineSteps?.find((s) => s.type === "langgraph_invoke") ||
+    (conn.isLangGraph ? derivedInfo?.step : undefined);
+
+  if (langGraphStep && (langGraphStep.langGraphStreamingEnabled || conn.isLangGraph)) {
+    const rawModes =
+      langGraphStep.langGraphStreamModes ||
+      conn.langGraphStreamModes ||
+      ["messages"];
+    const activeModes = rawModes.length > 0 ? rawModes : ["messages"];
+    const includeReasoning =
+      langGraphStep.langGraphStreamIncludeReasoning ??
+      conn.langGraphStreamIncludeReasoning ??
+      true;
+
+    // 1. LLM Tokens mode ('messages')
+    if (activeModes.includes("messages")) {
+      addPath("token", "string", "Streamed LLM token chunk");
+      addPath("node", "string", "Graph node emitting the token");
+      if (includeReasoning) {
+        addPath("reasoning", "string", "Model reasoning / thinking tokens");
+      }
+    }
+
+    // 2. Agent Progress mode ('updates')
+    if (activeModes.includes("updates")) {
+      addPath("data", "Record<string, any>", "State delta emitted after node completes");
+      addPath("node", "string", "Completed node name");
+      addPath("mode", "string", "Stream mode ('updates')");
+    }
+
+    // 3. Full State mode ('values')
+    if (activeModes.includes("values")) {
+      addPath("data", "Record<string, any>", "Full graph state snapshot after step");
+      addPath("mode", "string", "Stream mode ('values')");
+
+      // Extract channels from linked LangGraph node
+      const lgTargetId = langGraphStep.langGraphTargetNodeId || conn.langGraphTargetNodeId;
+      const lgNode =
+        (lgTargetId ? nodes.find((n) => n.id === lgTargetId && n.type === "langgraph") : undefined) ||
+        nodes.find((n) => n.type === "langgraph");
+
+      const rawChannels = lgNode?.data?.stateChannels;
+      if (Array.isArray(rawChannels)) {
+        rawChannels.forEach((ch: { key?: string; type?: string }) => {
+          if (ch?.key) {
+            addPath(`data.${ch.key}`, ch.type || "any", `State channel: ${ch.key}`);
+            addPath(ch.key, ch.type || "any", `State channel: ${ch.key}`);
+          }
+        });
+      }
+    }
+
+    // 4. Custom Events mode ('custom')
+    if (activeModes.includes("custom")) {
+      addPath("data", "any", "Arbitrary event payload via config.writer");
+      addPath("mode", "string", "Stream mode ('custom')");
+    }
+
+    // Multi-mode metadata
+    if (activeModes.length > 1) {
+      addPath("type", "string", "Chunk type ('token' | 'reasoning' | 'update' | 'values' | 'custom')");
+      addPath("mode", "string", "Active stream mode");
+    }
+
+    // Stream status & convenience helpers
+    addPath("done", "boolean", "Stream completion indicator (true when done)");
+    addPath("content", "string", "Accumulated text content from streamed tokens");
+    addPath("raw", "string", "Raw incoming stream event chunk");
+
+    return paths;
+  }
+
   // 5. Inspect push_to_client step in endpoint pipeline
   const pushStep: PipelineStep | undefined =
     derivedInfo?.step ||

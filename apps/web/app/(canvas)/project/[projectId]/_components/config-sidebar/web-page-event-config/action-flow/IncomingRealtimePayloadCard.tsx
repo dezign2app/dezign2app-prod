@@ -26,6 +26,8 @@ export interface IncomingRealtimePayloadCardProps {
   sourceServiceLabel?: string;
   sourceItemName?: string;
   incomingPaths?: AvailablePath[];
+  isLangGraph?: boolean;
+  langGraphStreamModes?: string[];
 }
 
 interface JsonPayloadMap {
@@ -44,12 +46,37 @@ export const IncomingRealtimePayloadCard: React.FC<IncomingRealtimePayloadCardPr
   sourceServiceLabel,
   sourceItemName,
   incomingPaths = [],
+  isLangGraph = false,
+  langGraphStreamModes,
 }) => {
   const [showJsonPreview, setShowJsonPreview] = useState(false);
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
 
+  const isLangGraphStream =
+    isLangGraph ||
+    incomingPaths.some((p) => p.path === "token" || p.path === "reasoning");
+
   // Synthesize realistic sample JSON from incomingPaths
   const sampleJson = useMemo(() => {
+    if (isLangGraphStream) {
+      const hasReasoning = incomingPaths.some((p) => p.path === "reasoning");
+      const hasToken = incomingPaths.some((p) => p.path === "token");
+      const hasUpdates = incomingPaths.some(
+        (p) => p.path === "mode" || (p.path === "data" && p.type?.includes("Record")),
+      );
+      return {
+        ...(hasToken
+          ? { token: "Hello! How can I assist you with your project today?" }
+          : {}),
+        node: "chatbot",
+        ...(hasReasoning
+          ? { reasoning: "Analyzing query and active workspace context...", type: "reasoning" }
+          : {}),
+        ...(hasUpdates ? { mode: "messages" } : {}),
+        done: false,
+      };
+    }
+
     const obj: JsonPayloadMap = {};
     if (incomingPaths.length === 0) {
       return {
@@ -89,7 +116,7 @@ export const IncomingRealtimePayloadCard: React.FC<IncomingRealtimePayloadCardPr
     });
 
     return obj;
-  }, [incomingPaths]);
+  }, [incomingPaths, isLangGraphStream]);
 
   const handleCopy = (path: string) => {
     navigator.clipboard.writeText(path);
@@ -103,7 +130,11 @@ export const IncomingRealtimePayloadCard: React.FC<IncomingRealtimePayloadCardPr
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <div className="relative flex items-center justify-center p-1.5 rounded-lg bg-violet-500/20 text-violet-500 border border-violet-500/30">
-            <Radio size={14} className="animate-pulse" />
+            {isLangGraphStream ? (
+              <Sparkles size={14} className="animate-pulse text-purple-400" />
+            ) : (
+              <Radio size={14} className="animate-pulse" />
+            )}
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -116,6 +147,14 @@ export const IncomingRealtimePayloadCard: React.FC<IncomingRealtimePayloadCardPr
               >
                 {protocol}
               </Badge>
+              {isLangGraphStream && (
+                <Badge
+                  variant="outline"
+                  className="text-[9px] px-1 py-0 font-mono text-purple-600 dark:text-purple-400 border-purple-500/30 bg-purple-500/10 flex items-center gap-1"
+                >
+                  <Sparkles size={8} /> LangGraph Stream
+                </Badge>
+              )}
               <Badge
                 variant="secondary"
                 className="text-[9px] px-1 py-0 font-mono text-muted-foreground"
@@ -127,6 +166,11 @@ export const IncomingRealtimePayloadCard: React.FC<IncomingRealtimePayloadCardPr
               Event: <code className="text-foreground font-semibold">{eventName}</code>
               {sourceServiceLabel && ` • Pushed by ${sourceServiceLabel}`}
               {sourceItemName && ` (${sourceItemName})`}
+              {langGraphStreamModes && langGraphStreamModes.length > 0 && (
+                <span className="text-purple-400/80 font-mono ml-1">
+                  • Modes: {langGraphStreamModes.join(", ")}
+                </span>
+              )}
             </p>
           </div>
         </div>

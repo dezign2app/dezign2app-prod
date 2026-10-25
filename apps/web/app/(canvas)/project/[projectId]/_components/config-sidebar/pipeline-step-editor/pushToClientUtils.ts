@@ -65,7 +65,7 @@ export function upsertDerivedConnection(
   const eventName =
     step.clientDeliveryEventName ||
     (isLangGraph
-      ? (protocol === "WEBSOCKET" ? "agent_stream" : (sourceItemName || step.name || "message"))
+      ? (protocol === "WEBSOCKET" ? "agent_stream" : "message")
       : (sourceItemName || "message"));
 
   const room = step.clientDeliveryRoom || (isLangGraph ? step.langGraphStreamingRoom : undefined);
@@ -93,6 +93,11 @@ export function upsertDerivedConnection(
     sourceItemName,
     sourceItemType,
     storeActionBinding: existingConn?.storeActionBinding,
+    isLangGraph,
+    langGraphStreamModes: isLangGraph ? step.langGraphStreamModes : undefined,
+    langGraphStreamingFields: isLangGraph ? step.langGraphStreamingFields : undefined,
+    langGraphStreamIncludeReasoning: isLangGraph ? step.langGraphStreamIncludeReasoning : undefined,
+    langGraphTargetNodeId: isLangGraph ? step.langGraphTargetNodeId : undefined,
   };
 
   const without = existing.filter(
@@ -138,7 +143,12 @@ function isRealtimeConnectionEqual(a?: RealtimeConnection, b?: RealtimeConnectio
     a.sourceEventId === b.sourceEventId &&
     a.sourceItemName === b.sourceItemName &&
     a.sourceItemType === b.sourceItemType &&
-    a.storeActionBinding === b.storeActionBinding
+    a.storeActionBinding === b.storeActionBinding &&
+    a.isLangGraph === b.isLangGraph &&
+    JSON.stringify(a.langGraphStreamModes) === JSON.stringify(b.langGraphStreamModes) &&
+    JSON.stringify(a.langGraphStreamingFields) === JSON.stringify(b.langGraphStreamingFields) &&
+    a.langGraphStreamIncludeReasoning === b.langGraphStreamIncludeReasoning &&
+    a.langGraphTargetNodeId === b.langGraphTargetNodeId
   );
 }
 

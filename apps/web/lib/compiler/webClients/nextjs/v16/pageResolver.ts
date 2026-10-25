@@ -298,7 +298,13 @@ export function resolvePagesInfo(
           derivedConnections.push({
             id: step.id,
             protocol: deliveryProto,
-            eventName: step.clientDeliveryEventName || sourceItemName || "agent_stream",
+            eventName:
+              step.clientDeliveryEventName ||
+              (isLangGraphStreaming
+                ? deliveryProto === "WEBSOCKET"
+                  ? "agent_stream"
+                  : "message"
+                : sourceItemName || "message"),
             room: step.clientDeliveryRoom || step.langGraphStreamingRoom,
             mediaMode: isStepRtc
               ? (stepCaps ? computeMediaMode(stepCaps) : (step.clientDeliveryMediaMode || "data"))
@@ -316,6 +322,11 @@ export function resolvePagesInfo(
             sourceEventId: sourceItemId,
             sourceItemName,
             sourceItemType,
+            isLangGraph: isLangGraphStreaming,
+            langGraphStreamModes: isLangGraphStreaming ? step.langGraphStreamModes : undefined,
+            langGraphStreamingFields: isLangGraphStreaming ? step.langGraphStreamingFields : undefined,
+            langGraphStreamIncludeReasoning: isLangGraphStreaming ? step.langGraphStreamIncludeReasoning : undefined,
+            langGraphTargetNodeId: isLangGraphStreaming ? step.langGraphTargetNodeId : undefined,
           });
         }
         if (step.thenSteps) checkPipelineSteps(step.thenSteps, srcNodeId, sourceItemName, sourceItemId, sourceItemType);
@@ -555,6 +566,11 @@ export function resolvePagesInfo(
         storeActionBinding: conn.storeActionBinding,
         storeActionBindings: conn.storeActionBindings,
         actionSteps: conn.actionSteps,
+        isLangGraph: conn.isLangGraph,
+        langGraphStreamModes: conn.langGraphStreamModes,
+        langGraphStreamingFields: conn.langGraphStreamingFields,
+        langGraphStreamIncludeReasoning: conn.langGraphStreamIncludeReasoning,
+        langGraphTargetNodeId: conn.langGraphTargetNodeId,
       };
     });
 

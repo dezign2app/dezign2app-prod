@@ -42,6 +42,8 @@ export interface ActionFlowEditorProps {
   realtimeSourceLabel?: string;
   realtimeSourceItemName?: string;
   incomingPaths?: AvailablePath[];
+  isLangGraph?: boolean;
+  langGraphStreamModes?: string[];
   onSave: (drafts: FrontendActionStepDraft[]) => void;
   onDeleteStep?: (edgeId: string) => void;
 }

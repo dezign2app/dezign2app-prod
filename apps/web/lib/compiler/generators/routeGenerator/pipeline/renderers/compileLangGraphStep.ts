@@ -277,6 +277,9 @@ export function renderLangGraphInvokeStep(
 
     if (streamProtocol === "sse" || streamProtocol === "raw") {
       const isRaw = streamProtocol === "raw";
+      const sseEvt = !isRaw && step.clientDeliveryEventName && step.clientDeliveryEventName !== "message"
+        ? `event: ${step.clientDeliveryEventName}\\n`
+        : "";
       rawLines.push(
         `// --- LangGraph Streaming Invocation (${step.name}) via ${isRaw ? "Raw Stream" : "SSE"} ---`,
       );
@@ -381,12 +384,12 @@ export function renderLangGraphInvokeStep(
           if (isRaw) {
             rawLines.push(`        res.write(reasoningToken);`);
           } else {
-            rawLines.push(`        res.write(\`data: \${JSON.stringify({ type: "reasoning", reasoning: reasoningToken, node: nodeName })}\\n\\n\`);`);
+            rawLines.push(`        res.write(\`${sseEvt}data: \${JSON.stringify({ type: "reasoning", reasoning: reasoningToken, node: nodeName })}\\n\\n\`);`);
           }
           rawLines.push(`      }`);
         }
         rawLines.push(`      if (token !== undefined && token !== "") {`);
-        rawLines.push(`        ${isRaw ? 'res.write(typeof token === "string" ? token : JSON.stringify(token));' : 'res.write(`data: ${JSON.stringify({ token, node: nodeName })}\\n\\n`);'}`);
+        rawLines.push(`        ${isRaw ? 'res.write(typeof token === "string" ? token : JSON.stringify(token));' : `res.write(\`${sseEvt}data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);`}`);
         rawLines.push(`      }`);
         rawLines.push(`    }`);
       } else {
@@ -395,12 +398,12 @@ export function renderLangGraphInvokeStep(
           if (isRaw) {
             rawLines.push(`      res.write(reasoningToken);`);
           } else {
-            rawLines.push(`      res.write(\`data: \${JSON.stringify({ type: "reasoning", reasoning: reasoningToken, node: nodeName })}\\n\\n\`);`);
+            rawLines.push(`      res.write(\`${sseEvt}data: \${JSON.stringify({ type: "reasoning", reasoning: reasoningToken, node: nodeName })}\\n\\n\`);`);
           }
           rawLines.push(`    }`);
         }
         rawLines.push(`    if (token !== undefined && token !== "") {`);
-        rawLines.push(`      ${isRaw ? 'res.write(typeof token === "string" ? token : JSON.stringify(token));' : 'res.write(`data: ${JSON.stringify({ token, node: nodeName })}\\n\\n`);'}`);
+        rawLines.push(`      ${isRaw ? 'res.write(typeof token === "string" ? token : JSON.stringify(token));' : `res.write(\`${sseEvt}data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);`}`);
         rawLines.push(`    }`);
       }
       rawLines.push(`  } else if (mode === "updates") {`);
@@ -411,27 +414,27 @@ export function renderLangGraphInvokeStep(
         if (isRaw) {
           rawLines.push(`      res.write(JSON.stringify(payload));`);
         } else {
-          rawLines.push(`      res.write(\`data: \${JSON.stringify({ type: "update", mode: "updates", node: nodeName, data: payload })}\\n\\n\`);`);
+          rawLines.push(`      res.write(\`${sseEvt}data: \${JSON.stringify({ type: "update", mode: "updates", node: nodeName, data: payload })}\\n\\n\`);`);
         }
         rawLines.push(`    }`);
       } else {
         if (isRaw) {
           rawLines.push(`    res.write(JSON.stringify(payload));`);
         } else {
-          rawLines.push(`    res.write(\`data: \${JSON.stringify({ type: "update", mode: "updates", node: nodeName, data: payload })}\\n\\n\`);`);
+          rawLines.push(`    res.write(\`${sseEvt}data: \${JSON.stringify({ type: "update", mode: "updates", node: nodeName, data: payload })}\\n\\n\`);`);
         }
       }
       rawLines.push(`  } else if (mode === "custom") {`);
       if (isRaw) {
         rawLines.push(`    res.write(typeof payload === "string" ? payload : JSON.stringify(payload));`);
       } else {
-        rawLines.push(`    res.write(\`data: \${JSON.stringify({ type: "custom", mode: "custom", data: payload })}\\n\\n\`);`);
+        rawLines.push(`    res.write(\`${sseEvt}data: \${JSON.stringify({ type: "custom", mode: "custom", data: payload })}\\n\\n\`);`);
       }
       rawLines.push(`  } else if (mode === "values") {`);
       if (isRaw) {
         rawLines.push(`    res.write(JSON.stringify(payload));`);
       } else {
-        rawLines.push(`    res.write(\`data: \${JSON.stringify({ type: "values", mode: "values", data: payload })}\\n\\n\`);`);
+        rawLines.push(`    res.write(\`${sseEvt}data: \${JSON.stringify({ type: "values", mode: "values", data: payload })}\\n\\n\`);`);
       }
       rawLines.push(`  }`);
       rawLines.push(`  if (typeof (res as any).flush === "function") {`);
@@ -440,7 +443,7 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`}`);
       rawLines.push(`if (!res.writableEnded && !res.destroyed) {`);
       if (!isRaw) {
-        rawLines.push(`  res.write("data: [DONE]\\n\\n");`);
+        rawLines.push(`  res.write("${sseEvt}data: [DONE]\\n\\n");`);
       }
       rawLines.push(`  res.end();`);
       rawLines.push(`}`);

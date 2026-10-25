@@ -413,16 +413,27 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
     const fullUrl = queryParts.length > 0 ? `${routeTemplate}?${queryParts.join("&")}` : routeTemplate;
 
     const activeProto = (conn.protocol || "SSE").toUpperCase();
+    const isLangGraphStream =
+      conn.isLangGraph ||
+      derivedInfo?.step?.type === "langgraph_invoke" ||
+      linkedEndpoint?.pipelineSteps?.some((s) => s.type === "langgraph_invoke");
+
     if (activeProto === "WEBSOCKET") {
       const roomStr = conn.room ? ` (room: "${conn.room}")` : "";
+      if (isLangGraphStream) {
+        return `const ws = new WebSocket(\`ws://localhost:8086${fullUrl}\`);\nws.onopen = () => {\n  console.log("Subscribed to agent stream${roomStr}");\n};\nws.onmessage = (event) => {\n  const msg = JSON.parse(event.data);\n  if (msg.event === "agent_stream") {\n    // msg.payload.token, msg.payload.node, msg.payload.done\n  }\n};`;
+      }
       return `const ws = new WebSocket(\`ws://localhost:8086${fullUrl}\`);\nws.onopen = () => {\n  console.log("Subscribed to ${conn.eventName || "stream"}${roomStr}");\n};`;
     }
     if (activeProto === "WEBRTC") {
       return `const rtc = new RTCPeerConnection();\n// Subscribed to WebRTC stream: ${fullUrl}`;
     }
     // Default SSE
+    if (isLangGraphStream) {
+      return `const es = new EventSource(\`${fullUrl}\`, { withCredentials: true });\nes.onmessage = (event) => {\n  if (event.data === "[DONE]") {\n    // Stream finished\n    return;\n  }\n  const chunk = JSON.parse(event.data);\n  // chunk.token - live token chunk\n  // chunk.node - active graph node\n};`;
+    }
     return `const es = new EventSource(\`${fullUrl}\`, { withCredentials: true });\nes.addEventListener("${conn.eventName || "message"}", (event) => {\n  // message received\n});`;
-  }, [linkedEndpoint, conn, effectiveBindings]);
+  }, [linkedEndpoint, conn, effectiveBindings, derivedInfo]);
 
   const activeProtocol = (conn.protocol || "SSE").toUpperCase() as "SSE" | "WEBSOCKET" | "WEBRTC";
 
@@ -597,6 +608,14 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
               >
                 {activeProtocol}
               </Badge>
+              {(conn.isLangGraph || derivedInfo?.step?.type === "langgraph_invoke" || linkedEndpoint?.pipelineSteps?.some((s) => s.type === "langgraph_invoke")) && (
+                <Badge
+                  variant="outline"
+                  className="text-[9px] px-1 py-0 font-mono text-purple-600 dark:text-purple-400 border-purple-500/30 bg-purple-500/10 flex items-center gap-1"
+                >
+                  <Sparkles size={8} /> LangGraph Stream
+                </Badge>
+              )}
               {conn.sourceServiceLabel && (
                 <span className="text-[10px] text-muted-foreground font-mono">
                   on {conn.sourceServiceLabel}
