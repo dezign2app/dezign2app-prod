@@ -33,7 +33,7 @@ export interface GeneratedNodeDef {
   title: string;
   category: string;
   badge: string;
-  badgeVariant: "purple" | "blue" | "amber" | "teal" | "zinc";
+  badgeVariant: "purple" | "blue" | "amber" | "teal" | "zinc" | "cyan";
   icon: React.ElementType;
   x: number;
   y: number;
@@ -54,6 +54,7 @@ export interface AiConnectionDef {
   label: string;
   labelPos: { x: number; y: number };
   color: string;
+  isReturn?: boolean;
 }
 
 export interface TicketDef {
@@ -94,13 +95,13 @@ export const TICKETS: TicketDef[] = [
       title: "upstash redis",
       category: "AI-GENERATED RATE LIMITER",
       badge: ":6379 / Cloud",
-      badgeVariant: "purple",
+      badgeVariant: "cyan",
       icon: Zap,
       x: 915,
       y: 70,
       width: 215,
       height: 215,
-      themeColor: "border-violet-600/90 bg-[#120a22]/95",
+      themeColor: "border-cyan-500/70 bg-[#0d0e12]",
       details: [
         "Token Bucket: 50 req/min",
         "Sliding Window Algorithm",
@@ -118,7 +119,7 @@ export const TICKETS: TicketDef[] = [
         delay: 0.3,
         label: "POST /send-message",
         labelPos: { x: 887, y: 155 },
-        color: "#c084fc",
+        color: "#38bdf8",
       },
       {
         id: "redis-service",
@@ -374,13 +375,13 @@ export const TICKETS: TicketDef[] = [
       title: "rbac policy guard",
       category: "AI-GENERATED SECURITY NODE",
       badge: "Role: Admin/Member",
-      badgeVariant: "purple",
+      badgeVariant: "cyan",
       icon: Lock,
       x: 180,
       y: 70,
       width: 215,
       height: 200,
-      themeColor: "border-purple-600/90 bg-[#160c26]/95",
+      themeColor: "border-cyan-500/70 bg-[#0d0e12]",
       details: [
         "Role Hierarchy Guard",
         "JWT Claims Validator",
@@ -398,7 +399,7 @@ export const TICKETS: TicketDef[] = [
         delay: 0.2,
         label: "auth credentials",
         labelPos: { x: 220, y: 260 },
-        color: "#c084fc",
+        color: "#38bdf8",
       },
       {
         id: "rbac-web",
@@ -578,7 +579,7 @@ export const TICKETS: TicketDef[] = [
       y: 440,
       width: 215,
       height: 205,
-      themeColor: "border-amber-600/90 bg-[#191106]/95",
+      themeColor: "border-amber-500/70 bg-[#0d0e12]",
       details: [
         "Max Retries: 3 Attempts",
         "Exponential Backoff (5s, 15s)",
