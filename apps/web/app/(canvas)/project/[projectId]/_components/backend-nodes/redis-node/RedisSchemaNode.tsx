@@ -2,6 +2,9 @@ import React, { useCallback, useRef } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_HANDLE_CLASS,
+} from "@workspace/canvas/constants";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { ColumnList } from "../entity-node/ColumnList";
 import { RedisConfig } from "../entity-node/RedisConfig";
@@ -74,7 +77,7 @@ export const RedisSchemaNode = React.memo(({ id, data, selected }: NodeProps<Bac
         type="target"
         position={Position.Top}
         id="database-entity-target"
-        className="w-3 h-3 border-2 border-background !-top-1.5"
+        className={cn(CANVAS_HANDLE_CLASS, "!border-2 !border-background hover:scale-125 transition-all !-top-[7px]")}
         style={{ backgroundColor: dbThemeColor }}
       />
 

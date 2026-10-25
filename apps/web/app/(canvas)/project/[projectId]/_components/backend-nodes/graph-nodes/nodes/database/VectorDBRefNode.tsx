@@ -6,6 +6,10 @@ import { Database, Layers, Settings, Trash } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -168,7 +172,11 @@ export const VectorDBRefNode = ({
         type="target"
         position={Position.Left}
         id="database-target"
-        className="w-2.5 h-2.5 !bg-violet-500 border-2 border-background"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+          "!bg-violet-500 !border-2 !border-background hover:scale-125 transition-all",
+        )}
       />
     </div>
   );

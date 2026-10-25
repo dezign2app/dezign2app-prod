@@ -11,6 +11,10 @@ import {
 } from "lucide-react";
 import { BackendNode, SearchSource } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { Label } from "@workspace/ui/components/label";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader, generateId } from "../../common";
@@ -365,7 +369,7 @@ const SearchSourceList = ({
                     type="source"
                     position={Position.Right}
                     id={`index-out-${item.id}`}
-                    className="w-2 h-2 -right-1"
+                    className={cn(CANVAS_HANDLE_CLASS, CANVAS_HANDLE_RIGHT_OFFSET_CLASS, "!border-2 !border-background hover:scale-125 transition-all")}
                   />
                   {editing === item.id ? (
                     <div className="flex items-center gap-1 w-full">

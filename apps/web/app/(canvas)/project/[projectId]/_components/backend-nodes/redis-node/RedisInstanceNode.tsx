@@ -12,6 +12,9 @@ import {
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_HANDLE_CLASS,
+} from "@workspace/canvas/constants";
 import { Badge } from "@workspace/ui/components/badge";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader } from "../graph-nodes/common";
@@ -85,7 +88,7 @@ export const RedisInstanceNode = React.memo(({ id, data, selected }: NodeProps<B
         type="target"
         position={Position.Top}
         id="database-target"
-        className="w-3 h-3 border-2 border-background !-top-1.5"
+        className={cn(CANVAS_HANDLE_CLASS, "!border-2 !border-background hover:scale-125 transition-all !-top-[7px]")}
         style={{ backgroundColor: color }}
       />
 
@@ -260,7 +263,7 @@ export const RedisInstanceNode = React.memo(({ id, data, selected }: NodeProps<B
         type="source"
         position={Position.Bottom}
         id="database-source"
-        className="w-3 h-3 border-2 border-background !-bottom-1.5"
+        className={cn(CANVAS_HANDLE_CLASS, "!border-2 !border-background hover:scale-125 transition-all !-bottom-[7px]")}
         style={{ backgroundColor: color }}
       />
     </div>

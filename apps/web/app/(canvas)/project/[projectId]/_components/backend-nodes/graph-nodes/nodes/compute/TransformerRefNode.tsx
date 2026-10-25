@@ -15,6 +15,11 @@ import {
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -344,7 +349,11 @@ export const TransformerRefNode = ({
         type="target"
         position={Position.Left}
         id="transformer-in"
-        className="w-2.5 h-2.5 !bg-purple-500 border-2 border-background"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+          "!bg-purple-500 border-2 border-background hover:scale-125 transition-all",
+        )}
       />
 
       {/* Right source handle to connect to endpoints */}
@@ -352,7 +361,11 @@ export const TransformerRefNode = ({
         type="source"
         position={Position.Right}
         id="transformer-out"
-        className="w-2.5 h-2.5 !bg-purple-500 border-2 border-background"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+          "!bg-purple-500 border-2 border-background hover:scale-125 transition-all",
+        )}
       />
     </div>
   );

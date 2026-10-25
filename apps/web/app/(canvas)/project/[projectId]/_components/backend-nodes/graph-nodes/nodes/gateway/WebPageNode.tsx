@@ -17,6 +17,10 @@ import {
 import { toast } from "sonner";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useRouter } from "next/navigation";
 import {
@@ -623,7 +627,9 @@ export const WebPageNode = ({
         position={Position.Left}
         id="page-in"
         className={cn(
-          "w-2.5 h-2.5 rounded-full border-2 border-background -left-1.5",
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+          "rounded-full !border-2 !border-background hover:scale-125 transition-all",
           isDisconnected ? "!bg-destructive animate-pulse" : "!bg-indigo-500",
         )}
         style={{ top: "18px" }}

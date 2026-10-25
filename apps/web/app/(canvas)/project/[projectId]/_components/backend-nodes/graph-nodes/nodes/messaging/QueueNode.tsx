@@ -3,6 +3,11 @@ import { NodeProps, Handle, Position } from "@xyflow/react";
 import { GitBranch, ChevronDown, ChevronUp } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
   NodeHeader,
@@ -112,13 +117,13 @@ export const QueueNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
       <Handle
         type="target"
         position={Position.Left}
-        className="w-2 h-2"
+        className={cn(CANVAS_HANDLE_CLASS, CANVAS_HANDLE_LEFT_OFFSET_CLASS, "!border-2 !border-background hover:scale-125 transition-all")}
         style={{ top: "20px" }}
       />
       <Handle
         type="source"
         position={Position.Right}
-        className="w-2 h-2"
+        className={cn(CANVAS_HANDLE_CLASS, CANVAS_HANDLE_RIGHT_OFFSET_CLASS, "!border-2 !border-background hover:scale-125 transition-all")}
         style={{ top: "20px" }}
       />
 

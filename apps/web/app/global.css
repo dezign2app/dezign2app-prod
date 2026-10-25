@@ -31,6 +31,20 @@
   z-index: -1 !important;
 }
 
+/* Custom styling for React Flow Handles to ensure prominent, accessible sizes */
+:root {
+  --canvas-handle-size: 14px;
+}
+
+.react-flow__handle:not(.opacity-0) {
+  width: var(--canvas-handle-size);
+  height: var(--canvas-handle-size);
+  min-width: var(--canvas-handle-size);
+  min-height: var(--canvas-handle-size);
+  border-radius: 9999px;
+  transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
 /* Custom styling for React Flow Controls to match the theme */
 .react-flow__controls {
   background-color: var(--card) !important;

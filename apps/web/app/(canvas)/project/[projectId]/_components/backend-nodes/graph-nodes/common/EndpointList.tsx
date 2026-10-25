@@ -22,6 +22,11 @@ import {
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { Endpoint } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_ROW_HANDLE_CLASS,
+  CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { isEndpointPipelineUnconfigured } from "@/lib/utils/pipelineValidation";
 import {
   formatEndpointRoute,
@@ -128,14 +133,14 @@ export const EndpointRow = ({
         type="target"
         position={Position.Left}
         id={`endpoint-in-${item.id}`}
-        className="w-2 h-2 -left-1"
+        className={cn(CANVAS_ROW_HANDLE_CLASS, CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS, "border-2 border-background transition-all hover:scale-125")}
         style={{ top: "15px" }}
       />
       <Handle
         type="source"
         position={Position.Right}
         id={`endpoint-out-${item.id}`}
-        className="w-2 h-2 -right-1"
+        className={cn(CANVAS_ROW_HANDLE_CLASS, CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS, "border-2 border-background transition-all hover:scale-125")}
         style={{ top: "15px" }}
       />
       <div className="flex flex-col px-3 py-1.5 nodrag">
@@ -368,7 +373,8 @@ export const EndpointRow = ({
                       type="source"
                       position={Position.Right}
                       id={`publishedEvents-out-${ev.id}`}
-                      style={{ top: "50%", right: "-12px" }}
+                      className={cn(CANVAS_ROW_HANDLE_CLASS, CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS, "border-2 border-background transition-all hover:scale-125")}
+                      style={{ top: "50%" }}
                     />
                   </div>
                 ))}

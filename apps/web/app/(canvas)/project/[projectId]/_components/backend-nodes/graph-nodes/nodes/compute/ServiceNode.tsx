@@ -3,6 +3,10 @@ import { NodeProps, Handle, Position } from "@xyflow/react";
 import { Server, ChevronDown, Settings, AlertTriangle, AlertCircle, KeyRound } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { Badge } from "@workspace/ui/components/badge";
 import { Input } from "@workspace/ui/components/input";
 import { Switch } from "@workspace/ui/components/switch";
@@ -162,7 +166,11 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         type="target"
         position={Position.Left}
         id="types-in"
-        className="w-2.5 h-2.5 !bg-indigo-400 rounded-full border-2 border-background -left-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+          "!bg-indigo-400 rounded-full border-2 border-background opacity-0 group-hover:opacity-100 transition-all hover:scale-125",
+        )}
         style={{ top: "24px" }}
         title="Package Types / Custom Types Reference"
       />

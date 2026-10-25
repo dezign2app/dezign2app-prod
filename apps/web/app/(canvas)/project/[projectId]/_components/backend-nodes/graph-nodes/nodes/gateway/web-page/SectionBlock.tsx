@@ -3,6 +3,11 @@ import { Position, Handle, useUpdateNodeInternals } from "@xyflow/react";
 import { ChevronDown, ChevronRight, Settings, Trash, Plus, Zap } from "lucide-react";
 import { BackendNode, Endpoint, UIEventItem, PageSection } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_ROW_HANDLE_CLASS,
+  CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { generateId } from "../../../common";
 import { Input } from "@workspace/ui/components/input";
@@ -273,7 +278,7 @@ export const SectionBlock = ({
                     type="source"
                     position={Position.Right}
                     id={`events-${act.id}`}
-                    className="w-2 h-2 -right-1"
+                    className={cn(CANVAS_ROW_HANDLE_CLASS, CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS)}
                     style={{ top: "50%" }}
                   />
 
@@ -283,7 +288,7 @@ export const SectionBlock = ({
                       type="target"
                       position={Position.Left}
                       id={`pageload-in-${act.id}`}
-                      className="w-2 h-2 -left-1 !bg-emerald-500"
+                      className={cn(CANVAS_ROW_HANDLE_CLASS, CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS, "!bg-emerald-500")}
                       style={{ top: "50%" }}
                     />
                   )}
@@ -292,7 +297,7 @@ export const SectionBlock = ({
                       type="target"
                       position={Position.Left}
                       id={`sse-in-${act.id}`}
-                      className="w-2 h-2 -left-1 !bg-amber-500"
+                      className={cn(CANVAS_ROW_HANDLE_CLASS, CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS, "!bg-amber-500")}
                       style={{ top: "50%" }}
                     />
                   )}
@@ -301,7 +306,7 @@ export const SectionBlock = ({
                       type="target"
                       position={Position.Left}
                       id={`websocket-in-${act.id}`}
-                      className="w-2 h-2 -left-1 !bg-cyan-500"
+                      className={cn(CANVAS_ROW_HANDLE_CLASS, CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS, "!bg-cyan-500")}
                       style={{ top: "50%" }}
                     />
                   )}
@@ -310,7 +315,7 @@ export const SectionBlock = ({
                       type="target"
                       position={Position.Left}
                       id={`webrtc-in-${act.id}`}
-                      className="w-2 h-2 -left-1 !bg-purple-500"
+                      className={cn(CANVAS_ROW_HANDLE_CLASS, CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS, "!bg-purple-500")}
                       style={{ top: "50%" }}
                     />
                   )}
@@ -319,7 +324,7 @@ export const SectionBlock = ({
                       type="target"
                       position={Position.Left}
                       id={`event-in-${act.id}`}
-                      className="w-2 h-2 -left-1 !bg-indigo-500"
+                      className={cn(CANVAS_ROW_HANDLE_CLASS, CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS, "!bg-indigo-500")}
                       style={{ top: "50%" }}
                     />
                   )}
@@ -334,7 +339,7 @@ export const SectionBlock = ({
                 type="target"
                 position={Position.Left}
                 id={`section-state-in-${section.id}-${st.id}`}
-                className="w-2 h-2 -left-1 !bg-purple-500"
+                className={cn(CANVAS_ROW_HANDLE_CLASS, CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS, "!bg-purple-500")}
                 style={{ top: "50%" }}
                 title={`State subscription: ${st.name} from store ${st.storeName || ""}`}
               />

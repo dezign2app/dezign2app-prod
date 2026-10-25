@@ -22,6 +22,9 @@ import {
   AuthFramework,
   DatabaseEngine,
   BACKEND_NODE_ENTITY,
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
 } from "@workspace/canvas";
 import { useBetterAuthTableSync } from "../../../../config-sidebar/auth-config/core-entities";
 import { useTestUsersStore } from "../../../../test-users/useTestUsersStore";
@@ -134,7 +137,11 @@ export const AuthNode = ({
         type="target"
         position={Position.Left}
         id="payments-plugin-in"
-        className="w-3 h-3 !bg-emerald-500 rounded-full border-2 border-background -left-1.5"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+          "!bg-emerald-500 rounded-full border-2 border-background",
+        )}
         style={{ top: "18px" }}
         title="Connect Creem Payments node to inject plugin"
       />
@@ -144,7 +151,11 @@ export const AuthNode = ({
         type="target"
         position={Position.Left}
         id="auth-in"
-        className="w-2.5 h-2.5 !bg-indigo-500 rounded-full border-2 border-background -left-1.5"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+          "!bg-indigo-500 rounded-full border-2 border-background",
+        )}
         style={{ top: "54px" }}
         title="Auth Request Input"
       />
@@ -154,7 +165,11 @@ export const AuthNode = ({
         type="source"
         position={Position.Right}
         id="auth-out"
-        className="w-3 h-3 !bg-indigo-500 rounded-full border-2 border-background -right-1.5"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+          "!bg-indigo-500 rounded-full border-2 border-background",
+        )}
         style={{ top: "50%" }}
         title="Auth Server Handle -> Connect to WebApp"
       />

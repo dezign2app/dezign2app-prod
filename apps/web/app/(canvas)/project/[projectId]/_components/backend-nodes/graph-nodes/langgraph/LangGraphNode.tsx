@@ -26,6 +26,10 @@ import type {
   OutputChannelConfig,
 } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { Button } from "@workspace/ui/components/button";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader, useServiceStepHandLayout } from "../common";
@@ -396,7 +400,11 @@ export const LangGraphNode = ({
         type="source"
         position={Position.Right}
         id="langgraph-out"
-        className="!bg-primary !w-3 !h-3 !border-2 !border-background hover:!scale-125 transition-transform !-right-[7px]"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+          "!bg-primary !border-2 !border-background hover:!scale-125 transition-transform",
+        )}
         style={{ top: "35px" }}
         title="Drag to server endpoint to invoke this agent"
       />
@@ -443,7 +451,11 @@ export const LangGraphNode = ({
                     type="source"
                     position={Position.Right}
                     id={`channel-out-${ch.id}`}
-                    className="!bg-primary !w-3 !h-3 !border-2 !border-background hover:!scale-125 transition-transform !-right-[7px]"
+                    className={cn(
+                      CANVAS_HANDLE_CLASS,
+                      CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+                      "!bg-primary !border-2 !border-background hover:!scale-125 transition-transform",
+                    )}
                     title={`Outgoing channel: ${ch.name}`}
                   />
                 </div>

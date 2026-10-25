@@ -2,6 +2,10 @@ import React, { useState, useRef, useEffect } from "react";
 import { NodeProps, NodeResizer, Handle, Position } from "@xyflow/react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { Globe, ShieldCheck, Trash, Layers } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -125,7 +129,11 @@ export const WebAppGroupNode = ({
           type="target"
           position={Position.Left}
           id="auth-in"
-          className="w-3 h-3 !bg-indigo-500 border-2 border-background rounded-full -left-1.5"
+          className={cn(
+            CANVAS_HANDLE_CLASS,
+            CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+            "!bg-indigo-500 border-2 border-background rounded-full",
+          )}
           style={{ top: "32px" }}
           title="Connect AuthNode to bind authentication to this App"
         />

@@ -14,6 +14,10 @@ import {
 } from "lucide-react";
 import { BackendNode, PageStateObject, GlobalStoreField } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
   Dialog,
@@ -337,7 +341,11 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
         type="target"
         position={Position.Left}
         id="store-in"
-        className="w-2.5 h-2.5 !bg-cyan-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -left-1.5 z-10"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+          "!bg-cyan-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform z-10",
+        )}
         style={{ top: "18px" }}
         title="Connect a State Store to render dynamic state on this page"
       />

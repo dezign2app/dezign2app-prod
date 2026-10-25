@@ -2,6 +2,11 @@ import React, { useState } from "react";
 import { Handle, Position } from "@xyflow/react";
 import { Plus, Trash } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { BackendNode } from "@/types/canvas";
 import { generateId } from "./utils";
 import { LocalInput } from "./LocalInput";
@@ -79,8 +84,9 @@ export const EditableNodeList = <T extends BaseItem>({
                   position={handlePosition}
                   id={`${field}-${item.id}`}
                   className={cn(
-                    "w-2 h-2",
-                    handlePosition === Position.Left ? "-left-1" : "-right-1",
+                    CANVAS_HANDLE_CLASS,
+                    "border-2 border-background transition-all hover:scale-125",
+                    handlePosition === Position.Left ? CANVAS_HANDLE_LEFT_OFFSET_CLASS : CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
                   )}
                   style={{ top: "50%" }}
                 />

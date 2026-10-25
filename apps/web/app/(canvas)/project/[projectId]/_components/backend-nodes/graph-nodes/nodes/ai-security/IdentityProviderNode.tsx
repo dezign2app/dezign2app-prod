@@ -22,7 +22,11 @@ import {
   ProviderPresetCombobox,
   LABEL_TO_KEY,
 } from "../../../../ProviderPresetCombobox";
-import { IDENTITY_PROVIDER_PRESETS } from "@workspace/canvas";
+import {
+  IDENTITY_PROVIDER_PRESETS,
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas";
 
 const ProviderRow = ({
   nodeId,
@@ -92,12 +96,12 @@ const ProviderRow = ({
         }
       }}
     >
-      <div className="absolute -right-1 top-0 bottom-0 flex flex-col justify-center gap-1.5 py-1 z-10">
+      <div className={cn("absolute top-0 bottom-0 flex flex-col justify-center gap-1.5 py-1 z-10", CANVAS_HANDLE_RIGHT_OFFSET_CLASS)}>
         <Handle
           type="source"
           position={Position.Right}
           id={`out-${item.id}`}
-          className="w-1.5 h-1.5 !relative !transform-none !right-0 !top-0 bg-blue-500 rounded-sm"
+          className={cn(CANVAS_HANDLE_CLASS, "!relative !transform-none !right-0 !top-0 bg-blue-500 rounded-sm")}
           title="Identity Provider"
         />
       </div>

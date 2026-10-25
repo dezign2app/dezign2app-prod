@@ -7,6 +7,11 @@ import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { AnyMessagingResource, Schema } from "@/types/canvas";
 import { isEndpointPipelineUnconfigured } from "@/lib/utils/pipelineValidation";
 import { formatTopicName, sanitizeTopicName } from "@workspace/canvas";
+import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { generateId } from "./utils";
 import { LocalInput } from "./LocalInput";
 
@@ -194,7 +199,7 @@ export const MessagingResourceRow = ({
           type="source"
           position={Position.Right}
           id={`publishedEvents-out-${item.id}`}
-          className="w-2 h-2 -right-1"
+          className={cn(CANVAS_HANDLE_CLASS, CANVAS_HANDLE_RIGHT_OFFSET_CLASS, "border-2 border-background transition-all hover:scale-125")}
           style={{ top: "15px" }}
         />
       )}
@@ -204,14 +209,14 @@ export const MessagingResourceRow = ({
             type="target"
             position={Position.Left}
             id={`consumedEvents-in-${item.id}`}
-            className="w-2 h-2 -left-1"
+            className={cn(CANVAS_HANDLE_CLASS, CANVAS_HANDLE_LEFT_OFFSET_CLASS, "border-2 border-background transition-all hover:scale-125")}
             style={{ top: "15px" }}
           />
           <Handle
             type="source"
             position={Position.Right}
             id={`consumedEvents-out-${item.id}`}
-            className="w-2 h-2 -right-1"
+            className={cn(CANVAS_HANDLE_CLASS, CANVAS_HANDLE_RIGHT_OFFSET_CLASS, "border-2 border-background transition-all hover:scale-125")}
             style={{ top: "15px" }}
           />
         </>
@@ -223,7 +228,7 @@ export const MessagingResourceRow = ({
               type="target"
               position={Position.Left}
               id={`${resourceType}:in:${item.id}`}
-              className="w-2 h-2 -left-1"
+              className={cn(CANVAS_HANDLE_CLASS, CANVAS_HANDLE_LEFT_OFFSET_CLASS, "border-2 border-background transition-all hover:scale-125")}
               style={{ top: "15px" }}
             />
           )}
@@ -231,7 +236,7 @@ export const MessagingResourceRow = ({
             type="source"
             position={Position.Right}
             id={`${resourceType}:out:${item.id}`}
-            className="w-2 h-2 -right-1"
+            className={cn(CANVAS_HANDLE_CLASS, CANVAS_HANDLE_RIGHT_OFFSET_CLASS, "border-2 border-background transition-all hover:scale-125")}
             style={{ top: "15px" }}
           />
         </>
