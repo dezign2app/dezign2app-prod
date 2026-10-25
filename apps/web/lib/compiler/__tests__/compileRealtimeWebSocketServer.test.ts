@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateConfigFiles, generateLibFiles, generateServerFile } from "../generators/configGenerator";
+import { generateConfigFiles, generateLibFiles, generateServerFile, resolveServiceRealtimeCapabilities } from "../generators/configGenerator";
 import { BackendNode } from "@/types/canvas";
 
 describe("Realtime WebSocket Server Generation", () => {
@@ -276,4 +276,134 @@ describe("Realtime WebSocket Server Generation", () => {
     expect(pkg.dependencies).not.toHaveProperty("ws");
     expect(pkg.devDependencies).not.toHaveProperty("@types/ws");
   });
+
+  it("generates src/lib/realtimeTypes.ts and avoids TS2308 ambiguity when both SSE and WebSocket are enabled", () => {
+    const files = generateLibFiles(true, { sse: true, ws: true });
+    const realtimeTypesFile = files.find((f) => f.filename === "src/lib/realtimeTypes.ts");
+    const sseFile = files.find((f) => f.filename === "src/lib/sse.ts");
+    const wsFile = files.find((f) => f.filename === "src/lib/websocket.ts");
+    const realtimeFile = files.find((f) => f.filename === "src/lib/realtime.ts");
+    const indexFile = files.find((f) => f.filename === "src/lib/index.ts");
+
+    expect(realtimeTypesFile).toBeDefined();
+    expect(realtimeTypesFile?.content).toContain("export type JsonPrimitive =");
+    expect(realtimeTypesFile?.content).toContain("export type JsonObject =");
+    expect(realtimeTypesFile?.content).toContain("export type JsonArray =");
+    expect(realtimeTypesFile?.content).toContain("export type JsonValue =");
+
+    expect(sseFile).toBeDefined();
+    expect(sseFile?.content).toContain('import type { JsonValue } from "./realtimeTypes";');
+    expect(sseFile?.content).not.toContain("export type JsonValue");
+    expect(sseFile?.content).not.toContain("export type JsonPrimitive");
+
+    expect(wsFile).toBeDefined();
+    expect(wsFile?.content).toContain('import type { JsonValue } from "./realtimeTypes";');
+    expect(wsFile?.content).not.toContain("export type JsonValue");
+    expect(wsFile?.content).not.toContain("export type JsonPrimitive");
+
+    expect(realtimeFile).toBeDefined();
+    expect(realtimeFile?.content).toContain('export * from "./realtimeTypes";');
+    expect(realtimeFile?.content).toContain('export * from "./sse";');
+    expect(realtimeFile?.content).toContain('export * from "./websocket";');
+
+    expect(indexFile).toBeDefined();
+    expect(indexFile?.content).toContain('export * from "./realtime";');
+
+    // Verify there are zero overlapping exported names between sse.ts and websocket.ts (preventing TS2308)
+    const exportRegex = /export\s+(?:type|interface|function|const|let|var)\s+([A-Za-z0-9_]+)/g;
+    const extractExports = (content: string) => {
+      const names = new Set<string>();
+      let match: RegExpExecArray | null;
+      while ((match = exportRegex.exec(content)) !== null) {
+        names.add(match[1]);
+      }
+      return names;
+    };
+
+    const sseExports = extractExports(sseFile!.content);
+    const wsExports = extractExports(wsFile!.content);
+    const typesExports = extractExports(realtimeTypesFile!.content);
+
+    const sseAndWsIntersection = [...sseExports].filter((x) => wsExports.has(x));
+    const sseAndTypesIntersection = [...sseExports].filter((x) => typesExports.has(x));
+    const wsAndTypesIntersection = [...wsExports].filter((x) => typesExports.has(x));
+
+    expect(sseAndWsIntersection).toEqual([]);
+    expect(sseAndTypesIntersection).toEqual([]);
+    expect(wsAndTypesIntersection).toEqual([]);
+  });
+
+  it("does not install ws or generate websocket code when endpoint uses LangGraph invoke with SSE streaming", () => {
+    const serviceNode: BackendNode = {
+      id: "srv-chat",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "conversations",
+        port: "8080",
+        enableRealtime: true, // Generic realtime flag should not force WebSocket when step specifically uses SSE
+      },
+    };
+
+    const endpoint: Endpoint = {
+      id: "ep-stream",
+      nodeId: "srv-chat",
+      name: "stream-chat",
+      path: "/chat/stream",
+      method: "POST",
+      pipelineSteps: [
+        {
+          id: "step-lg",
+          name: "invoke-agent",
+          type: "langgraph_invoke",
+          enabled: true,
+          langGraphStreamingEnabled: true,
+          langGraphStreamingProtocol: "sse",
+        },
+      ],
+    };
+
+    const caps = resolveServiceRealtimeCapabilities(serviceNode, [endpoint], [], [serviceNode], []);
+    expect(caps.hasSse).toBe(true);
+    expect(caps.hasWs).toBe(false);
+
+    const configFiles = generateConfigFiles(
+      serviceNode,
+      "conversations",
+      "conversations",
+      "8080",
+      true,
+      [endpoint],
+      [],
+      [serviceNode],
+      [],
+    );
+
+    const packageJsonFile = configFiles.find((f) => f.filename === "package.json");
+    expect(packageJsonFile).toBeDefined();
+    const pkg = JSON.parse(packageJsonFile!.content);
+    expect(pkg.dependencies).not.toHaveProperty("ws");
+    expect(pkg.devDependencies).not.toHaveProperty("@types/ws");
+
+    const serverFile = generateServerFile(
+      "conversations",
+      "8080",
+      true,
+      "*",
+      serviceNode,
+      [serviceNode],
+      [],
+      [endpoint],
+      [],
+    );
+    expect(serverFile.content).not.toContain("initWebSocketServer");
+    expect(serverFile.content).not.toContain('from "ws"');
+    expect(serverFile.content).toContain("handleSseConnection");
+
+    const libFiles = generateLibFiles(true, { sse: caps.hasSse, ws: caps.hasWs });
+    expect(libFiles.find((f) => f.filename === "src/lib/websocket.ts")).toBeUndefined();
+    expect(libFiles.find((f) => f.filename === "src/lib/sse.ts")).toBeDefined();
+  });
 });
+

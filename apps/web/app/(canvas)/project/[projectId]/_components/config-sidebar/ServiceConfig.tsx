@@ -141,18 +141,16 @@ export const ServiceConfig: React.FC<ServiceConfigProps> = ({ id, nodeId }) => {
     allNodes,
     allEdges,
   );
-  const hasWsOrRealtime = Boolean(
+  const requiresWs = Boolean(
     hasWs ||
-    hasSse ||
-    thisServiceNode?.data?.enableWebSocket ||
-    thisServiceNode?.data?.enableRealtime,
+    thisServiceNode?.data?.enableWebSocket,
   );
 
-  if (!isNextjs && hasWsOrRealtime) {
+  if (!isNextjs && requiresWs) {
     inferredDeps.push({
       name: "ws",
       version: "^8.18.0",
-      reason: hasWs ? "WebSocket realtime delivery enabled" : "Realtime SSE / WS delivery infrastructure",
+      reason: "WebSocket realtime delivery enabled",
     });
   }
 
@@ -169,7 +167,7 @@ export const ServiceConfig: React.FC<ServiceConfigProps> = ({ id, nodeId }) => {
         { name: "@types/express", version: "^4.17.21", reason: "Express TypeScript types" },
         { name: "@types/cors", version: "^2.8.17", reason: "CORS types" },
         { name: "@types/node", version: "^20.11.0", reason: "Node.js types" },
-        ...(hasWsOrRealtime ? [{ name: "@types/ws", version: "^8.5.12", reason: "WebSocket TypeScript types" }] : []),
+        ...(requiresWs ? [{ name: "@types/ws", version: "^8.5.12", reason: "WebSocket TypeScript types" }] : []),
         { name: "ts-node-dev", version: "^2.0.0", reason: "Development hot reloader" },
       ];
 
