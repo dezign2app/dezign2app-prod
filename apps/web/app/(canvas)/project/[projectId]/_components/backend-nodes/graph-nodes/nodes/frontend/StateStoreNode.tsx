@@ -21,8 +21,6 @@ import {
 import { BackendNode } from "@/types/canvas";
 import { CustomTypeItem, GlobalStoreField } from "@workspace/canvas/types";
 import {
-  CANVAS_NODE_HANDLE_CLASS,
-  CANVAS_NODE_HANDLE_LEFT_OFFSET_CLASS,
   CANVAS_ROW_HANDLE_CLASS,
   CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
   CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS,
@@ -357,7 +355,7 @@ export const StateStoreNode = ({
       onDoubleClick={() => handleOpenConfig()}
     >
       {/* Node-level target handle for TypesNode / Action connections */}
-      <Handle
+      {/* <Handle
         type="target"
         position={Position.Left}
         id="store-in"
@@ -368,7 +366,7 @@ export const StateStoreNode = ({
         )}
         style={{ top: "28px" }}
         title="Connect from TypesNode, Page, or Action"
-      />
+      /> */}
 
       {/* Header Container */}
       <div className="flex flex-col gap-1.5 p-3 pb-2.5 border-b border-border/50">
@@ -513,7 +511,7 @@ export const StateStoreNode = ({
           </Button>
         </div>
 
-        <div className="max-h-[300px] overflow-y-auto pr-0.5 flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5">
           {(!data.fields || data.fields.length === 0) ? (
             <div className="text-[10px] text-muted-foreground italic text-center py-3">
               No state variables. Click + to add.

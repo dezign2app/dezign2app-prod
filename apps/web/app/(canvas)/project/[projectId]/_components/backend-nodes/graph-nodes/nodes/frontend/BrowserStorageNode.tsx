@@ -285,7 +285,7 @@ export const BrowserStorageNode = ({
       </div>
 
       {/* Keys List */}
-      <div className="p-2 space-y-1 max-h-[220px] overflow-y-auto">
+      <div className="p-2 space-y-1">
         {keys.length === 0 ? (
           <div className="text-center py-3 text-[11px] text-muted-foreground/80 italic">
             No keys defined. Click + to add a key.
