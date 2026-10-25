@@ -9,10 +9,11 @@ import {
   getWorkflowNodeSummary,
   WORKFLOW_NODE_REGISTRY,
 } from "./workflow-node-registry";
+import { CANVAS_HANDLE_CLASS } from "@workspace/canvas/constants";
 import type { WorkflowEditorNode } from "./workflow-editor-types";
 
 const handleClassName =
-  "!size-3 !border-2 !border-background !bg-primary shadow-sm transition-colors";
+  cn(CANVAS_HANDLE_CLASS, "!border-2 !border-background !bg-primary shadow-sm transition-colors");
 
 export const WorkflowBuilderNode = memo(
   ({ id, data, selected }: NodeProps<WorkflowEditorNode>) => {

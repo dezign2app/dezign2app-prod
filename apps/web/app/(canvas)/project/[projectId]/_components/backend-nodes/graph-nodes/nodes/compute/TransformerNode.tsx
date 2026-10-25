@@ -5,6 +5,11 @@ import { NodeProps, Handle, Position } from "@xyflow/react";
 import { Shuffle, Settings, Trash, AlertTriangle, Package } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { LocalInput } from "../../common/LocalInput";
 import {
@@ -116,7 +121,11 @@ export const TransformerNode = ({
         type="target"
         position={Position.Left}
         id="types-in"
-        className="w-2.5 h-2.5 !bg-indigo-400 rounded-full border-2 border-background -left-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+          "!bg-indigo-400 rounded-full border-2 border-background opacity-0 group-hover:opacity-100 transition-all hover:scale-125",
+        )}
         style={{ top: "14px" }}
         title="Package Types / Custom Types Reference"
       />
@@ -126,7 +135,11 @@ export const TransformerNode = ({
         type="target"
         position={Position.Left}
         id="transformer-in"
-        className="w-2.5 h-2.5 !bg-purple-500 border-2 border-background"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+          "!bg-purple-500 border-2 border-background hover:scale-125 transition-all",
+        )}
         title="Action / Invocation Target"
       />
 
@@ -247,7 +260,11 @@ export const TransformerNode = ({
         type="source"
         position={Position.Right}
         id="transformer-out"
-        className="w-2.5 h-2.5 !bg-purple-500 border-2 border-background"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+          "!bg-purple-500 border-2 border-background hover:scale-125 transition-all",
+        )}
       />
     </div>
   );

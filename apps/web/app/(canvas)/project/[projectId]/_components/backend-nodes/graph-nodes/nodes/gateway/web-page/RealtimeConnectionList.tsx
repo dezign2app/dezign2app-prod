@@ -2,6 +2,11 @@ import React, { useMemo } from "react";
 import { Handle, Position } from "@xyflow/react";
 import { Plus, Settings, Trash, Radio, AlertCircle, Play } from "lucide-react";
 import { BackendNode, RealtimeConnection, ClientDeliveryProtocol, PipelineStep, PipelineStepDraft } from "@workspace/canvas/types";
+import {
+  CANVAS_ROW_HANDLE_CLASS,
+  CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { generateId } from "../../../common";
@@ -330,7 +335,9 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
                   position={Position.Left}
                   id={`rtc-in-${item.id}`}
                   className={cn(
-                    "w-2 h-2 -left-1 transition-colors",
+                    CANVAS_ROW_HANDLE_CLASS,
+                    CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+                    "!border-2 !border-background transition-colors",
                     isConnected
                       ? "!bg-violet-500"
                       : "!bg-destructive ring-2 ring-destructive/50 shadow-xs",
@@ -444,7 +451,11 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
                   type="source"
                   position={Position.Right}
                   id={`rtc-out-${item.id}`}
-                  className="w-2 h-2 -right-1 !bg-violet-500"
+                  className={cn(
+                    CANVAS_ROW_HANDLE_CLASS,
+                    CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS,
+                    "!border-2 !border-background !bg-violet-500",
+                  )}
                   style={{ top: "50%" }}
                   title="Wire to State Store manipulator"
                 />

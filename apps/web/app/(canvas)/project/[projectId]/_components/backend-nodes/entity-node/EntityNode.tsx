@@ -6,6 +6,7 @@ import { createTypesNodeFromEntity } from "@/lib/stores/backendCanvas/packageTyp
 import { getOutOfSyncDerivedTypesNodes } from "@/lib/stores/backendCanvas/node";
 import { useDbSyncStore } from "@/lib/stores/dbSyncStore";
 import { cn } from "@workspace/ui/lib/utils";
+import { CANVAS_HANDLE_CLASS } from "@workspace/canvas/constants";
 import { Badge } from "@workspace/ui/components/badge";
 import {
   Select,
@@ -262,7 +263,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         type="target"
         position={Position.Top}
         id="database-entity-target"
-        className="w-3 h-3 border-2 border-background !-top-1.5"
+        className={cn(CANVAS_HANDLE_CLASS, "!border-2 !border-background hover:scale-125 transition-all !-top-[7px]")}
         style={{ backgroundColor: dbThemeColor || "#f59e0b" }}
       />
 

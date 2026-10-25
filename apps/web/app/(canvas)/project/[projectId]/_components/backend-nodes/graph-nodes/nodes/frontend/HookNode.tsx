@@ -5,6 +5,11 @@ import { NodeProps, Handle, Position } from "@xyflow/react";
 import { Anchor, Settings, Trash } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { LocalInput } from "../../common/LocalInput";
 import {
@@ -113,7 +118,11 @@ export const HookNode = ({
         type="target"
         position={Position.Left}
         id="hook-in"
-        className="w-2.5 h-2.5 !bg-cyan-500 border-2 border-background"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+          "!bg-cyan-500 !border-2 !border-background hover:scale-125 transition-all",
+        )}
       />
 
       {/* Icon + Label */}
@@ -212,7 +221,11 @@ export const HookNode = ({
         type="source"
         position={Position.Right}
         id="hook-out"
-        className="w-2.5 h-2.5 !bg-cyan-500 border-2 border-background"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+          "!bg-cyan-500 !border-2 !border-background hover:scale-125 transition-all",
+        )}
       />
     </div>
   );

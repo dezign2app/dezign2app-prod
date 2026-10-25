@@ -15,6 +15,11 @@ import {
 import { BackendNode } from "@/types/canvas";
 import { BrowserStorageKey, BrowserStorageEngine } from "@workspace/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { toast } from "sonner";
 import { LocalInput } from "../../common/LocalInput";
@@ -153,7 +158,11 @@ export const BrowserStorageNode = ({
         type="target"
         position={Position.Left}
         id="storage-in"
-        className="w-2.5 h-2.5 !bg-emerald-500 border-2 border-background -left-1.5"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+          "!bg-emerald-500 !border-2 !border-background hover:scale-125 transition-all",
+        )}
         style={{ top: "28px" }}
         title="Connect from WebPage or Action to access this storage"
       />
@@ -318,7 +327,7 @@ export const BrowserStorageNode = ({
                 type="target"
                 position={Position.Left}
                 id={`storage-key-in-${k.id}`}
-                className="w-2 h-2 !bg-emerald-500 border border-background -left-1"
+                className={cn(CANVAS_HANDLE_CLASS, CANVAS_HANDLE_LEFT_OFFSET_CLASS, "!bg-emerald-500 !border-2 !border-background hover:scale-125 transition-all")}
                 style={{ top: "50%" }}
                 title={`Setter target for ${k.name}`}
               />
@@ -326,7 +335,7 @@ export const BrowserStorageNode = ({
                 type="source"
                 position={Position.Right}
                 id={`storage-key-out-${k.id}`}
-                className="w-2 h-2 !bg-emerald-500 border border-background -right-1"
+                className={cn(CANVAS_HANDLE_CLASS, CANVAS_HANDLE_RIGHT_OFFSET_CLASS, "!bg-emerald-500 !border-2 !border-background hover:scale-125 transition-all")}
                 style={{ top: "50%" }}
                 title={`Getter source for ${k.name}`}
               />
@@ -399,7 +408,11 @@ export const BrowserStorageNode = ({
         type="source"
         position={Position.Right}
         id="storage-out"
-        className="w-2.5 h-2.5 !bg-emerald-500 border-2 border-background -right-1.5"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+          "!bg-emerald-500 !border-2 !border-background hover:scale-125 transition-all",
+        )}
         style={{ top: "28px" }}
         title="Connect to WebPage to expose storage keys"
       />

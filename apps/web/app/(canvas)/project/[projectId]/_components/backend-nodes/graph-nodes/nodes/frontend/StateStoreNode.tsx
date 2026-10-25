@@ -20,6 +20,13 @@ import {
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { CustomTypeItem, GlobalStoreField } from "@workspace/canvas/types";
+import {
+  CANVAS_NODE_HANDLE_CLASS,
+  CANVAS_NODE_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_ROW_HANDLE_CLASS,
+  CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { toast } from "sonner";
@@ -354,7 +361,11 @@ export const StateStoreNode = ({
         type="target"
         position={Position.Left}
         id="store-in"
-        className="w-2.5 h-2.5 !bg-indigo-500 border-2 border-background -left-1.5"
+        className={cn(
+          CANVAS_NODE_HANDLE_CLASS,
+          CANVAS_NODE_HANDLE_LEFT_OFFSET_CLASS,
+          "!bg-indigo-500 !border-2 !border-background hover:scale-125 transition-all",
+        )}
         style={{ top: "28px" }}
         title="Connect from TypesNode, Page, or Action"
       />
@@ -489,7 +500,6 @@ export const StateStoreNode = ({
       <div className="flex flex-col gap-1.5 p-2.5 pt-2 nodrag">
         <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1.5 py-0.5 bg-secondary/30 rounded border border-border/30 group">
           <div className="flex items-center gap-1.5">
-            <span className={cn("w-1.5 h-1.5 rounded-full", duplicateFieldIds.size > 0 ? "bg-destructive animate-pulse" : "bg-indigo-500")} />
             <span>State Variables</span>
           </div>
           <Button
@@ -579,9 +589,6 @@ export const StateStoreNode = ({
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center justify-between">
                         <span className="text-[9px] text-muted-foreground font-medium">Type</span>
-                        <span className="text-[8px] font-mono text-indigo-400 font-semibold">
-                          1 Reducer • {supportedActions.length} actions
-                        </span>
                       </div>
                       <Select
                         value={isCustomType ? `custom:${f.type}` : f.type}
@@ -655,7 +662,7 @@ export const StateStoreNode = ({
                 <div
                   key={f.id}
                   className={cn(
-                    "relative flex items-center justify-between bg-secondary/40 hover:bg-secondary/70 px-2 py-1.5 rounded-lg text-[10px] font-mono border border-border/40 group transition-all nodrag",
+                    "relative flex items-center justify-between bg-secondary/40 hover:bg-secondary/70 pr-2 pl-3  py-1.5 rounded-lg text-[10px] font-mono border border-border/40 group transition-all nodrag",
                     isDupe && "border-destructive/40 bg-destructive/10 text-destructive",
                   )}
                 >
@@ -665,7 +672,9 @@ export const StateStoreNode = ({
                     position={Position.Left}
                     id={`store-field-in-${f.id}`}
                     className={cn(
-                      "w-2.5 h-2.5 border-2 border-background cursor-pointer hover:scale-125 transition-all -left-1.5 z-10",
+                      CANVAS_ROW_HANDLE_CLASS,
+                      CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+                      "!border-2 !border-background cursor-pointer hover:scale-125 transition-all z-10",
                       isInputConnected
                         ? "!bg-indigo-400 ring-2 ring-indigo-500/50 scale-110"
                         : "!bg-indigo-500 hover:!bg-indigo-400",
@@ -682,11 +691,6 @@ export const StateStoreNode = ({
                     }}
                     title="Click to edit field name & reducer configuration"
                   >
-                    {isDupe ? (
-                      <AlertTriangle size={10} className="text-destructive shrink-0" />
-                    ) : (
-                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
-                    )}
                     <span
                       className={cn(
                         "font-bold truncate max-w-[95px]",
@@ -804,7 +808,9 @@ export const StateStoreNode = ({
                     position={Position.Right}
                     id={`store-field-out-${f.id}`}
                     className={cn(
-                      "w-2.5 h-2.5 border-2 border-background cursor-pointer hover:scale-125 transition-all -right-1.5 z-10",
+                      CANVAS_ROW_HANDLE_CLASS,
+                      CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS,
+                      "!border-2 !border-background cursor-pointer hover:scale-125 transition-all z-10",
                       isOutputConnected
                         ? "!bg-cyan-400 ring-2 ring-cyan-500/50 scale-110"
                         : "!bg-cyan-500 hover:!bg-cyan-400",

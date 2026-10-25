@@ -4,6 +4,11 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { NodeProps, Handle, Position, useUpdateNodeInternals } from "@xyflow/react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
   useSimulationNodeState,
@@ -296,7 +301,9 @@ export const TypesNode = ({
         position={Position.Left}
         id="types-in"
         className={cn(
-          "!w-2.5 !h-2.5 !border-2 !border-background -left-1.5",
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+          "!border-2 !border-background hover:scale-125 transition-all",
           hasInstallError ? "!bg-red-500" : isPackageNode ? "!bg-emerald-400" : "!bg-indigo-400",
         )}
         style={{ top: "24px" }}
@@ -307,7 +314,9 @@ export const TypesNode = ({
         position={Position.Right}
         id="types-out"
         className={cn(
-          "!w-2.5 !h-2.5 !border-2 !border-background -right-1.5",
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+          "!border-2 !border-background hover:scale-125 transition-all",
           hasInstallError ? "!bg-red-500" : isPackageNode ? "!bg-emerald-400" : "!bg-indigo-400",
         )}
         style={{ top: "24px" }}

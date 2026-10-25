@@ -14,6 +14,11 @@ import {
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
   NodeHeader,
@@ -89,7 +94,11 @@ export const ExternalNode = ({
         type="target"
         position={Position.Left}
         id="input-vars-in"
-        className="w-3 h-3 !bg-primary border-2 border-background -left-1.5"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+          "!bg-primary border-2 border-background",
+        )}
         style={{ top: "42px" }}
         title="Input variables source -> Connect pipeline or service to invoke this tool"
       />
@@ -99,7 +108,11 @@ export const ExternalNode = ({
         type="target"
         position={Position.Left}
         id="external-in"
-        className="w-2 h-2 !bg-primary/50 border-2 border-background -left-1 opacity-0 pointer-events-none"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+          "!bg-primary/50 border-2 border-background opacity-0 pointer-events-none",
+        )}
         style={{ top: "42px" }}
       />
 
@@ -108,7 +121,11 @@ export const ExternalNode = ({
         type="source"
         position={Position.Right}
         id="external-out"
-        className="w-3 h-3 !bg-primary border-2 border-background -right-1.5"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+          "!bg-primary border-2 border-background",
+        )}
         style={{ top: "42px" }}
         title="External API response output"
       />

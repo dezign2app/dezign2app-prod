@@ -3,6 +3,10 @@ import { NodeProps, Handle, Position } from "@xyflow/react";
 import { CreditCard, Settings, PlugZap } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader } from "../../common";
 import { Textarea } from "@workspace/ui/components/textarea";
@@ -58,7 +62,11 @@ export const PaymentsNode = ({
         type="source"
         position={Position.Right}
         id="injects-plugin-out"
-        className="w-3 h-3 !bg-emerald-500 rounded-full border-2 border-background -right-1.5"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+          "!bg-emerald-500 rounded-full border-2 border-background",
+        )}
         style={{ top: "18px" }}
         title="injects-plugin edge -> Connect to Auth Server to register Creem Better Auth plugin"
       />

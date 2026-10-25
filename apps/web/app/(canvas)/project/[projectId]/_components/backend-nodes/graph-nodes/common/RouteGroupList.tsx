@@ -10,6 +10,12 @@ import {
   parseEndpointRouteWithParams,
   reconcileEndpointPathParams,
 } from "@workspace/canvas";
+import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
+import { cn } from "@workspace/ui/lib/utils";
 
 export interface RouteGroupEditorProps {
   group: NonNullable<BackendNode["data"]["routeGroups"]>[0];
@@ -166,7 +172,7 @@ export const RouteGroupEditor = ({
         type="source"
         position={Position.Right}
         id={`routeGroup-${group.id}`}
-        className="w-2 h-2 -right-1"
+        className={cn(CANVAS_HANDLE_CLASS, CANVAS_HANDLE_RIGHT_OFFSET_CLASS, "border-2 border-background transition-all hover:scale-125")}
         style={{ top: "auto" }}
       />
 
@@ -183,14 +189,14 @@ export const RouteGroupEditor = ({
                   type="target"
                   position={Position.Left}
                   id={`endpoint-in-${ep.id}`}
-                  className="w-2 h-2 -left-1"
+                  className={cn(CANVAS_HANDLE_CLASS, CANVAS_HANDLE_LEFT_OFFSET_CLASS, "border-2 border-background transition-all hover:scale-125")}
                   style={{ top: "50%" }}
                 />
                 <Handle
                   type="source"
                   position={Position.Right}
                   id={`endpoint-out-${ep.id}`}
-                  className="w-2 h-2 -right-1"
+                  className={cn(CANVAS_HANDLE_CLASS, CANVAS_HANDLE_RIGHT_OFFSET_CLASS, "border-2 border-background transition-all hover:scale-125")}
                   style={{ top: "50%" }}
                 />
                 {ep.publishedEvents?.map((ev) => (
@@ -199,7 +205,7 @@ export const RouteGroupEditor = ({
                     type="source"
                     position={Position.Right}
                     id={`publishedEvents-out-${ev.id}`}
-                    className="w-2 h-2 -right-1"
+                    className={cn(CANVAS_HANDLE_CLASS, CANVAS_HANDLE_RIGHT_OFFSET_CLASS, "border-2 border-background transition-all hover:scale-125")}
                     style={{ top: "50%" }}
                   />
                 ))}

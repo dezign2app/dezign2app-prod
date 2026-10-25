@@ -140,7 +140,7 @@ export const HeroCanvasHeader: React.FC<HeroCanvasHeaderProps> = ({
                   activeMode === "ai-worker" ? "text-cyan-400" : "text-zinc-400"
                 }`}
               />
-              <span>3. Bug Fixer</span>
+              <span>3. Ticket Collector</span>
             </button>         
           </div>
         </div>

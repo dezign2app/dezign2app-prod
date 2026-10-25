@@ -16,6 +16,11 @@ import {
 import { BackendNode } from "@/types/canvas";
 import { WebAppZone } from "@workspace/canvas/types";
 import { normalizePageRoute } from "@workspace/canvas";
+import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { cn } from "@workspace/ui/lib/utils";
 import { Badge } from "@workspace/ui/components/badge";
 import {
@@ -309,7 +314,11 @@ export const WebAppNode = ({
         type="target"
         position={Position.Left}
         id="auth-in"
-        className="w-3 h-3 !bg-indigo-500 rounded-full border-2 border-background -left-1.5"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+          "!bg-indigo-500 rounded-full !border-2 !border-background hover:scale-125 transition-all",
+        )}
         style={{ top: "18px" }}
         title="Connect AuthNode to bind backend authentication service"
       />
@@ -319,7 +328,11 @@ export const WebAppNode = ({
         type="target"
         position={Position.Left}
         id="types-in"
-        className="w-2.5 h-2.5 !bg-indigo-400 rounded-full border-2 border-background -left-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+          "!bg-indigo-400 rounded-full !border-2 !border-background opacity-0 group-hover:opacity-100 transition-all hover:scale-125",
+        )}
         style={{ top: "36px" }}
         title="Package Types / Custom Types Reference"
       />
@@ -457,7 +470,9 @@ export const WebAppNode = ({
                 position={Position.Right}
                 id={zone.handleId}
                 className={cn(
-                  "w-2.5 h-2.5 rounded-full border-2 border-background -right-4 opacity-100 cursor-pointer",
+                  CANVAS_HANDLE_CLASS,
+                  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+                  "rounded-full !border-2 !border-background opacity-100 cursor-pointer hover:scale-125 transition-all",
                   isPublic ? "!bg-muted-foreground" : "!bg-indigo-500",
                 )}
                 style={{ top: "50%" }}

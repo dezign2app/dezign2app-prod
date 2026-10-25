@@ -26,6 +26,11 @@ import {
 } from "@/lib/utils/entityOperationsHelper";
 import { toTableName, toVarName } from "@/lib/compiler/utils";
 import { DbOperationFunction } from "@workspace/canvas/types";
+import {
+  CANVAS_ROW_HANDLE_CLASS,
+  CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { useSectionCollapseStore } from "@/lib/stores/sectionCollapseStore";
 import { useNodePipelineError } from "@/lib/utils/pipelineValidation";
 
@@ -774,10 +779,12 @@ export const DatabaseTableRefNode = ({
                   position={Position.Left}
                   id={`func-${op.name}`}
                   className={cn(
-                    "w-2.5 h-2.5 border-2 transition-colors -left-[5px]",
+                    CANVAS_ROW_HANDLE_CLASS,
+                    CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+                    "border-2 transition-all",
                     hasAnyConnectedOperation
                       ? "!bg-orange-500 !border-orange-500 ring-2 ring-orange-500/30"
-                      : "!bg-background border-muted-foreground/60 hover:!bg-orange-400",
+                      : "!bg-background border-muted-foreground/60 hover:!bg-orange-400 hover:scale-125",
                   )}
                   style={{ top: "50%", transform: "translateY(-50%)" }}
                 />
@@ -786,7 +793,7 @@ export const DatabaseTableRefNode = ({
                     type="target"
                     position={Position.Left}
                     id={`func-${op.id}`}
-                    className="opacity-0 pointer-events-none -left-[5px]"
+                    className={cn("opacity-0 pointer-events-none", CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS)}
                     style={{ top: "50%", transform: "translateY(-50%)" }}
                   />
                 )}
@@ -795,10 +802,12 @@ export const DatabaseTableRefNode = ({
                   position={Position.Right}
                   id={`func-out-${op.name}`}
                   className={cn(
-                    "w-2.5 h-2.5 border-2 transition-colors -right-[5px]",
+                    CANVAS_ROW_HANDLE_CLASS,
+                    CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS,
+                    "border-2 transition-all",
                     hasAnyConnectedOperation
                       ? "!bg-orange-500 !border-orange-500 ring-2 ring-orange-500/30"
-                      : "!bg-background border-muted-foreground/60 hover:!bg-orange-400",
+                      : "!bg-background border-muted-foreground/60 hover:!bg-orange-400 hover:scale-125",
                   )}
                   style={{ top: "50%", transform: "translateY(-50%)" }}
                 />
@@ -807,7 +816,7 @@ export const DatabaseTableRefNode = ({
                     type="source"
                     position={Position.Right}
                     id={`func-out-${op.id}`}
-                    className="opacity-0 pointer-events-none -right-[5px]"
+                    className={cn("opacity-0 pointer-events-none", CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS)}
                     style={{ top: "50%", transform: "translateY(-50%)" }}
                   />
                 )}
@@ -906,10 +915,12 @@ export const DatabaseTableRefNode = ({
                     position={Position.Left}
                     id={`func-${op.name}`}
                     className={cn(
-                      "w-2.5 h-2.5 border-2 transition-colors -left-[5px]",
+                      CANVAS_ROW_HANDLE_CLASS,
+                      CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+                      "border-2 transition-all",
                       isConnected
                         ? "!bg-orange-500 !border-orange-500 ring-2 ring-orange-500/30"
-                        : "!bg-background border-muted-foreground/60 hover:!bg-orange-400",
+                        : "!bg-background border-muted-foreground/60 hover:!bg-orange-400 hover:scale-125",
                     )}
                     style={{ top: "50%", transform: "translateY(-50%)" }}
                   />
@@ -918,7 +929,7 @@ export const DatabaseTableRefNode = ({
                       type="target"
                       position={Position.Left}
                       id={`func-${op.id}`}
-                      className="opacity-0 pointer-events-none -left-[5px]"
+                      className={cn("opacity-0 pointer-events-none", CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS)}
                       style={{ top: "50%", transform: "translateY(-50%)" }}
                     />
                   )}
@@ -929,10 +940,12 @@ export const DatabaseTableRefNode = ({
                     position={Position.Right}
                     id={`func-out-${op.name}`}
                     className={cn(
-                      "w-2.5 h-2.5 border-2 transition-colors -right-[5px]",
+                      CANVAS_ROW_HANDLE_CLASS,
+                      CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS,
+                      "border-2 transition-all",
                       isConnected
                         ? "!bg-orange-500 !border-orange-500 ring-2 ring-orange-500/30"
-                        : "!bg-background border-muted-foreground/60 hover:!bg-orange-400",
+                        : "!bg-background border-muted-foreground/60 hover:!bg-orange-400 hover:scale-125",
                     )}
                     style={{ top: "50%", transform: "translateY(-50%)" }}
                   />
@@ -941,7 +954,7 @@ export const DatabaseTableRefNode = ({
                       type="source"
                       position={Position.Right}
                       id={`func-out-${op.id}`}
-                      className="opacity-0 pointer-events-none -right-[5px]"
+                      className={cn("opacity-0 pointer-events-none", CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS)}
                       style={{ top: "50%", transform: "translateY(-50%)" }}
                     />
                   )}

@@ -17,6 +17,10 @@ import {
   PageSection,
 } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
   Dialog,
@@ -608,7 +612,9 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
                     position={Position.Left}
                     id={`section-state-in-${section.id}-${st.id}`}
                     className={cn(
-                      "w-2 h-2 border-2 border-background cursor-pointer hover:scale-125 transition-all -left-1 z-10",
+                      CANVAS_HANDLE_CLASS,
+                      CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+                      "border-2 border-background cursor-pointer hover:scale-125 transition-all z-10",
                       isConnected
                         ? "!bg-purple-400 ring-2 ring-purple-500/40"
                         : "!bg-purple-500 hover:!bg-purple-400",

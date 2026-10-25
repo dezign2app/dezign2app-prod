@@ -4,6 +4,11 @@ import { Compass, Globe, Trash, AlertTriangle } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -171,21 +176,29 @@ export const PageRefNode = ({
         type="target"
         position={Position.Left}
         id="page-ref-in"
-        className="w-2.5 h-2.5 !bg-indigo-500 rounded-full border-2 border-background -left-1.5"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+          "!bg-indigo-500 rounded-full !border-2 !border-background hover:scale-125 transition-all",
+        )}
         style={{ top: "18px" }}
       />
       <Handle
         type="target"
         position={Position.Left}
         id="ref-in"
-        className="w-2.5 h-2.5 !bg-indigo-500 rounded-full border-2 border-background -left-1.5 opacity-0 pointer-events-none"
+        className={cn("opacity-0 pointer-events-none", CANVAS_HANDLE_LEFT_OFFSET_CLASS)}
         style={{ top: "18px" }}
       />
       <Handle
         type="source"
         position={Position.Right}
         id="ref-out"
-        className="w-2.5 h-2.5 !bg-indigo-500 rounded-full border-2 border-background -right-1.5"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+          "!bg-indigo-500 rounded-full !border-2 !border-background hover:scale-125 transition-all",
+        )}
         style={{ top: "18px" }}
       />
 

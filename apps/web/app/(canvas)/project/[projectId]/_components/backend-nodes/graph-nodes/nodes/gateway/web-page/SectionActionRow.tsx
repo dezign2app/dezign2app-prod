@@ -12,7 +12,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { WEB_PAGE_EVENTS } from "@workspace/canvas";
+import {
+  WEB_PAGE_EVENTS,
+  CANVAS_ROW_HANDLE_CLASS,
+  CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS,
+  CANVAS_HANDLE_CONNECTED_CLASS,
+} from "@workspace/canvas";
 import { NodeDeletionDialog } from "../../../../../node-deletion-dialog";
 
 const EVENT_OPTIONS = [...WEB_PAGE_EVENTS];
@@ -361,10 +367,12 @@ export const SectionActionRow = ({
         position={Position.Right}
         id={`events-${action.id}`}
         className={cn(
-          "w-2 h-2 -right-1 transition-all",
+          CANVAS_ROW_HANDLE_CLASS,
+          CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS,
+          "!border-2 !border-background transition-all",
           action.storageOperationBinding
             ? "!bg-amber-500 !border-amber-500 ring-2 ring-amber-500/40"
-            : "",
+            : "!bg-muted-foreground/40 hover:!bg-primary",
         )}
         style={{ top: "50%" }}
         title="Outbound: Connect to Storage Bucket Ref operation or Endpoint"
@@ -377,8 +385,10 @@ export const SectionActionRow = ({
           position={Position.Left}
           id={`pageload-in-${action.id}`}
           className={cn(
-            "w-2 h-2 -left-1 !bg-emerald-500 transition-all",
-            isActionConnected && "ring-2 ring-emerald-500/60 scale-125",
+            CANVAS_ROW_HANDLE_CLASS,
+            CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+            "!border-2 !border-background !bg-emerald-500 transition-all",
+            isActionConnected && CANVAS_HANDLE_CONNECTED_CLASS,
           )}
           style={{ top: "50%" }}
           title="pageLoad (in): Wire from State Store or API endpoint"
@@ -389,8 +399,10 @@ export const SectionActionRow = ({
           position={Position.Left}
           id={`sse-in-${action.id}`}
           className={cn(
-            "w-2 h-2 -left-1 !bg-amber-500 transition-all",
-            isActionConnected && "ring-2 ring-amber-500/60 scale-125",
+            CANVAS_ROW_HANDLE_CLASS,
+            CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+            "!border-2 !border-background !bg-amber-500 transition-all",
+            isActionConnected && CANVAS_HANDLE_CONNECTED_CLASS,
           )}
           style={{ top: "50%" }}
           title="sse (in): Wire from Realtime SSE connection"
@@ -401,8 +413,10 @@ export const SectionActionRow = ({
           position={Position.Left}
           id={`websocket-in-${action.id}`}
           className={cn(
-            "w-2 h-2 -left-1 !bg-cyan-500 transition-all",
-            isActionConnected && "ring-2 ring-cyan-500/60 scale-125",
+            CANVAS_ROW_HANDLE_CLASS,
+            CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+            "!border-2 !border-background !bg-cyan-500 transition-all",
+            isActionConnected && CANVAS_HANDLE_CONNECTED_CLASS,
           )}
           style={{ top: "50%" }}
           title="websocket (in): Wire from WebSocket connection"
@@ -413,8 +427,10 @@ export const SectionActionRow = ({
           position={Position.Left}
           id={`webrtc-in-${action.id}`}
           className={cn(
-            "w-2 h-2 -left-1 !bg-purple-500 transition-all",
-            isActionConnected && "ring-2 ring-purple-500/60 scale-125",
+            CANVAS_ROW_HANDLE_CLASS,
+            CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+            "!border-2 !border-background !bg-purple-500 transition-all",
+            isActionConnected && CANVAS_HANDLE_CONNECTED_CLASS,
           )}
           style={{ top: "50%" }}
           title="webrtc (in): Wire from WebRTC connection"
@@ -425,8 +441,10 @@ export const SectionActionRow = ({
           position={Position.Left}
           id={`event-in-${action.id}`}
           className={cn(
-            "w-2 h-2 -left-1 !bg-indigo-500 transition-all",
-            isActionConnected && "ring-2 ring-indigo-500/60 scale-125",
+            CANVAS_ROW_HANDLE_CLASS,
+            CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+            "!border-2 !border-background !bg-indigo-500 transition-all",
+            isActionConnected && CANVAS_HANDLE_CONNECTED_CLASS,
           )}
           style={{ top: "50%" }}
           title={`${action.name || action.event || "action"} (in): Wire from State Store action or API trigger`}

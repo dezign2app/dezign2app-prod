@@ -26,6 +26,11 @@ import {
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import {
+  CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+} from "@workspace/canvas/constants";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -378,7 +383,9 @@ export const StorageOperationRefNode = ({
         position={Position.Left}
         id="storage-ref-header"
         className={cn(
-          "w-2.5 h-2.5 -left-[5px] border-2 transition-all cursor-crosshair rounded-full z-10",
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+          "border-2 transition-all cursor-crosshair rounded-full z-10",
           isHeaderConnected
             ? "!bg-amber-500 !border-amber-500 ring-2 ring-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.5)]"
             : "!bg-background border-amber-500/70 hover:!bg-amber-400 hover:scale-125",
@@ -390,7 +397,7 @@ export const StorageOperationRefNode = ({
         type="source"
         position={Position.Left}
         id="storage-ref-header-out"
-        className="opacity-0 pointer-events-none -left-[5px]"
+        className={cn("opacity-0 pointer-events-none", CANVAS_HANDLE_LEFT_OFFSET_CLASS)}
         style={{ top: "18px" }}
       />
 
@@ -590,10 +597,12 @@ export const StorageOperationRefNode = ({
                   position={Position.Right}
                   id={`func-${op.name}`}
                   className={cn(
-                    "w-2.5 h-2.5 border-2 transition-colors -right-[5px]",
+                    CANVAS_HANDLE_CLASS,
+                    CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+                    "border-2 transition-all",
                     hasAnyConnectedOperation
                       ? "!bg-amber-500 !border-amber-500 ring-2 ring-amber-500/30"
-                      : "!bg-background border-muted-foreground/60 hover:!bg-amber-400",
+                      : "!bg-background border-muted-foreground/60 hover:!bg-amber-400 hover:scale-125",
                   )}
                   style={{ top: "50%", transform: "translateY(-50%)" }}
                 />
@@ -602,7 +611,7 @@ export const StorageOperationRefNode = ({
                     type="target"
                     position={Position.Right}
                     id={`func-${op.id}`}
-                    className="opacity-0 pointer-events-none -right-[5px]"
+                    className={cn("opacity-0 pointer-events-none", CANVAS_HANDLE_RIGHT_OFFSET_CLASS)}
                     style={{ top: "50%", transform: "translateY(-50%)" }}
                   />
                 )}
@@ -775,10 +784,12 @@ export const StorageOperationRefNode = ({
                     position={Position.Left}
                     id={`func-${op.name}`}
                     className={cn(
-                      "w-2.5 h-2.5 border-2 transition-colors -left-[5px]",
+                      CANVAS_HANDLE_CLASS,
+                      CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+                      "border-2 transition-all",
                       isLeftConnected
                         ? "!bg-amber-500 !border-amber-500 ring-2 ring-amber-500/30"
-                        : "!bg-background border-muted-foreground/60 hover:!bg-amber-400",
+                        : "!bg-background border-muted-foreground/60 hover:!bg-amber-400 hover:scale-125",
                     )}
                     style={{ top: "50%", transform: "translateY(-50%)" }}
                     title="Inbound: Connect from WebPage action"
@@ -788,7 +799,7 @@ export const StorageOperationRefNode = ({
                       type="target"
                       position={Position.Left}
                       id={`func-${op.id}`}
-                      className="opacity-0 pointer-events-none -left-[5px]"
+                      className={cn("opacity-0 pointer-events-none", CANVAS_HANDLE_LEFT_OFFSET_CLASS)}
                       style={{ top: "50%", transform: "translateY(-50%)" }}
                     />
                   )}
@@ -841,10 +852,12 @@ export const StorageOperationRefNode = ({
                     position={Position.Right}
                     id={`func-out-${op.name}`}
                     className={cn(
-                      "w-2.5 h-2.5 border-2 transition-colors -right-[5px]",
+                      CANVAS_HANDLE_CLASS,
+                      CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+                      "border-2 transition-all",
                       isRightConnected
                         ? "!bg-amber-500 !border-amber-500 ring-2 ring-amber-500/30"
-                        : "!bg-background border-muted-foreground/60 hover:!bg-amber-400",
+                        : "!bg-background border-muted-foreground/60 hover:!bg-amber-400 hover:scale-125",
                     )}
                     style={{ top: "50%", transform: "translateY(-50%)" }}
                     title="Outbound: Connect to Service endpoint"
@@ -854,7 +867,7 @@ export const StorageOperationRefNode = ({
                       type="source"
                       position={Position.Right}
                       id={`func-out-${op.id}`}
-                      className="opacity-0 pointer-events-none -right-[5px]"
+                      className={cn("opacity-0 pointer-events-none", CANVAS_HANDLE_RIGHT_OFFSET_CLASS)}
                       style={{ top: "50%", transform: "translateY(-50%)" }}
                     />
                   )}

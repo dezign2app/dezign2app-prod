@@ -8,7 +8,11 @@ import { Badge } from "@workspace/ui/components/badge";
 import { Button } from "@workspace/ui/components/button";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useDbSyncStore } from "@/lib/stores/dbSyncStore";
-import { DEFAULT_DATABASE_NODE_LABEL, DEFAULT_DATABASE_ENGINE } from "@workspace/canvas";
+import {
+  DEFAULT_DATABASE_NODE_LABEL,
+  DEFAULT_DATABASE_ENGINE,
+  CANVAS_HANDLE_CLASS,
+} from "@workspace/canvas";
 
 import { NodeHeader } from "../graph-nodes/common";
 import { NodeEnvVarsSection } from "../graph-nodes/nodes/ai-security/ExternalEnvVarsDrawer";
@@ -78,7 +82,7 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
         type="target"
         position={Position.Top}
         id="database-target"
-        className="w-3 h-3 border-2 border-background !-top-1.5"
+        className={cn(CANVAS_HANDLE_CLASS, "!border-2 !border-background hover:scale-125 transition-all !-top-[7px]")}
         style={{ backgroundColor: color }}
       />
 
@@ -274,7 +278,7 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
         type="source"
         position={Position.Bottom}
         id="database-source"
-        className="w-3 h-3 border-2 border-background !-bottom-1.5"
+        className={cn(CANVAS_HANDLE_CLASS, "!border-2 !border-background hover:scale-125 transition-all !-bottom-[7px]")}
         style={{ backgroundColor: color }}
       />
     </div>
