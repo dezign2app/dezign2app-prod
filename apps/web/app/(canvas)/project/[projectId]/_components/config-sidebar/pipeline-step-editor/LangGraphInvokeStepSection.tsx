@@ -1792,6 +1792,7 @@ export const LangGraphInvokeStepSection: React.FC<
           const nextStep = {
             ...step,
             langGraphStreamingProtocol: proto,
+            clientDeliveryProtocol: proto === "websocket" ? ("WEBSOCKET" as const) : ("SSE" as const),
           };
           onChange(nextStep);
           if (proto === "websocket" && serviceNodeId) {

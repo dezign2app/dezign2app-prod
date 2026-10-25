@@ -76,20 +76,25 @@ ${dbExport}${realtimeExport}export function formatResponse<T>(data: T, message =
       language: "typescript",
       content: libIndexCode,
     },
+    {
+      filename: "src/lib/realtimeTypes.ts",
+      language: "typescript",
+      content: `export type JsonPrimitive = string | number | boolean | null;
+export type JsonObject = { [key: string]: JsonValue };
+export type JsonArray = JsonValue[];
+export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
+`,
+    },
   ];
 
-  const realtimeReExports: string[] = [];
+  const realtimeReExports: string[] = ['export * from "./realtimeTypes";'];
 
   if (hasSse) {
     const sseCode = `import { Request, Response } from "express";
 import { createLogger } from "@workspace/logger";
+import type { JsonValue } from "./realtimeTypes";
 
 const logger = createLogger("Realtime:SSE");
-
-export type JsonPrimitive = string | number | boolean | null;
-export type JsonObject = { [key: string]: JsonValue };
-export type JsonArray = JsonValue[];
-export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
 
 type SseClient = {
   id: string;
@@ -166,13 +171,9 @@ export function sseBroadcast(eventName: string, data: Record<string, JsonValue |
     const websocketCode = `import { Server as HttpServer, IncomingMessage } from "http";
 import { WebSocketServer, WebSocket, RawData } from "ws";
 import { createLogger } from "@workspace/logger";
+import type { JsonValue } from "./realtimeTypes";
 
 const logger = createLogger("Realtime:WS");
-
-export type JsonPrimitive = string | number | boolean | null;
-export type JsonObject = { [key: string]: JsonValue };
-export type JsonArray = JsonValue[];
-export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
 
 export interface WsClientInfo {
   id: string;
@@ -456,8 +457,15 @@ export function resolveServiceRealtimeCapabilities(
     data.consumedEvents.forEach((ev) => checkSteps(ev.pipelineSteps));
   }
 
-  if (protocols.has("SSE")) hasSse = true;
-  if (protocols.has("WEBSOCKET") || protocols.has("WS") || protocols.has("WEBRTC")) hasWs = true;
+  if (protocols.size > 0) {
+    if (protocols.has("SSE")) hasSse = true;
+    if (protocols.has("WEBSOCKET") || protocols.has("WS") || protocols.has("WEBRTC")) {
+      hasWs = true;
+    } else {
+      // Pipeline steps are specifically configured and none require WebSocket
+      hasWs = false;
+    }
+  }
 
   // Inspect connected WebPage nodes and page_ref nodes on canvas
   if (node) {
@@ -505,7 +513,11 @@ export function resolveServiceRealtimeCapabilities(
           if (targetsThisService) {
             const proto = String(conn.protocol || "SSE").toUpperCase();
             if (proto === "SSE") hasSse = true;
-            if (proto === "WEBSOCKET" || proto === "WS" || proto === "WEBRTC") hasWs = true;
+            if (proto === "WEBSOCKET" || proto === "WS" || proto === "WEBRTC") {
+              if (protocols.size === 0 || protocols.has("WEBSOCKET") || protocols.has("WS") || protocols.has("WEBRTC")) {
+                hasWs = true;
+              }
+            }
           }
         }
       }
@@ -756,10 +768,7 @@ export function generateConfigFiles(
   }
 
   const { hasSse, hasWs } = resolveServiceRealtimeCapabilities(node, endpoints, events, allNodes, allEdges);
-  const requiresWs = Boolean(
-    hasWs ||
-    node.data?.enableWebSocket,
-  );
+  const requiresWs = hasWs;
 
   const dbDeps: Record<string, string> = {};
   if (hasDb) {
@@ -914,6 +923,7 @@ export function generateConfigFiles(
   if (Array.isArray(node.data?.customDependencies)) {
     node.data.customDependencies.forEach((dep) => {
       if (!dep || !dep.name) return;
+      if (!requiresWs && (dep.name === "ws" || dep.name === "@types/ws")) return;
       const ver = dep.version || "latest";
       if (dep.isDev) {
         devDependencies[dep.name] = ver;

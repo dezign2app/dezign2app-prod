@@ -57,9 +57,9 @@ export function upsertDerivedConnection(
     : undefined;
 
   const protocol: ClientDeliveryProtocol = isLangGraph
-    ? (step.langGraphStreamingProtocol === "websocket" || step.clientDeliveryProtocol === "WEBSOCKET"
-      ? "WEBSOCKET"
-      : "SSE")
+    ? (step.langGraphStreamingProtocol
+        ? (step.langGraphStreamingProtocol === "websocket" ? "WEBSOCKET" : "SSE")
+        : (step.clientDeliveryProtocol === "WEBSOCKET" ? "WEBSOCKET" : "SSE"))
     : (step.clientDeliveryProtocol ?? "SSE");
 
   const eventName =
