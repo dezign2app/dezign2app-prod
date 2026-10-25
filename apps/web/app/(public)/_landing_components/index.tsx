@@ -7,7 +7,7 @@ import { ComparisonSection } from "./benefits/ComparisonSection";
 import { CompilerVsAiSection } from "./benefits/CompilerVsAiSection";
 import { StudioViewsSection } from "./studio-views/StudioViewsSection";
 import { CompilerShowcaseSection } from "./compiler/CompilerShowcaseSection";
-import { DesktopStudioSection } from "./desktop/DesktopStudioSection";
+import { VisualVsFileBasedSection } from "./visual-paradigm/VisualVsFileBasedSection";
 import { FutureRoadmapSection } from "./future/FutureRoadmapSection";
 import { PricingSection } from "./pricing/PricingSection";
 import { FaqSection } from "./faq/FaqSection";
@@ -24,7 +24,7 @@ export const Landing: React.FC = () => {
         <CompilerVsAiSection />
         <StudioViewsSection />
         <CompilerShowcaseSection />
-        <DesktopStudioSection />
+        <VisualVsFileBasedSection />
         <FutureRoadmapSection />
         <PricingSection />
         <FaqSection />

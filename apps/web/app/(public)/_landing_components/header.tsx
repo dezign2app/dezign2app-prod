@@ -9,7 +9,7 @@ import { Monitor, ArrowRight } from "lucide-react";
 const navLinks = [
   { name: "Perspectives", href: "/#studio-views" },
   { name: "Compiler", href: "/#compiler" },
-  { name: "Desktop", href: "/#desktop" },
+  { name: "Why Visual", href: "/#why-visual" },
   { name: "Pricing", href: "/#pricing" },
   { name: "Docs", href: "https://docs.dezign2app.com", external: true },
 ];
