@@ -81,14 +81,39 @@ export const createEndpointSlice = (
             pendingEventRemovals.push({ nodeId: updated.nodeId, eventId: eId });
             const handle = `publishedEvents-out-${eId}`;
             nextEdges
-              .filter((edge) => edge && edge.sourceHandle === handle)
+              .filter((edge) => edge && (edge.sourceHandle === handle || edge.targetHandle === handle))
               .forEach((edge) => {
                 removedEdgeIds.push(edge.id);
               });
             nextEdges = nextEdges.filter(
-              (edge) => edge && edge.sourceHandle !== handle,
+              (edge) => edge && edge.sourceHandle !== handle && edge.targetHandle !== handle,
             );
           });
+
+          // If pipelineSteps was not explicitly modified in changes, clean up matching kafka_publish steps
+          if (!("pipelineSteps" in changes) && updated.pipelineSteps) {
+            const removedPubs = oldEp?.publishedEvents?.filter((p) => removedPubIds.includes(p.id)) || [];
+            updated.pipelineSteps = updated.pipelineSteps.filter((step) => {
+              if (step.type !== "kafka_publish") return true;
+              for (const pub of removedPubs) {
+                if (step.brokerNodeId && step.brokerNodeId === pub.brokerNodeId) {
+                  if (!step.messagingResourceId || step.messagingResourceId === pub.messagingResourceId) return false;
+                }
+                if (step.messagingResourceId && step.messagingResourceId === pub.messagingResourceId) return false;
+                if (
+                  pub.name &&
+                  (step.name === pub.name ||
+                    step.name === `Publish ${pub.name}` ||
+                    step.functionRef?.name?.toLowerCase().includes(
+                      pub.name.toLowerCase().replace(/^publish\s*/i, ""),
+                    ))
+                ) {
+                  return false;
+                }
+              }
+              return true;
+            });
+          }
         }
       }
 
@@ -212,8 +237,52 @@ export const createEndpointSlice = (
     if (endpoint) {
       get().pushHistorySnapshot("graph");
       const active = get().activeConfigItem;
+      const pubEventIds = new Set((endpoint.publishedEvents || []).map((p) => p.id));
+      const removedEdges = get().edges.filter((edge) => {
+        if (!edge) return false;
+        if (
+          edge.sourceHandle === `endpoint-out-${id}` ||
+          edge.targetHandle === `endpoint-in-${id}` ||
+          edge.sourceHandle === `endpoint-in-${id}` ||
+          edge.targetHandle === `endpoint-out-${id}` ||
+          edge.sourceHandle?.includes(id) ||
+          edge.targetHandle?.includes(id)
+        ) {
+          return true;
+        }
+        for (const peId of pubEventIds) {
+          if (
+            edge.sourceHandle === `publishedEvents-out-${peId}` ||
+            edge.targetHandle === `publishedEvents-out-${peId}` ||
+            edge.sourceHandle?.includes(peId) ||
+            edge.targetHandle?.includes(peId)
+          ) {
+            return true;
+          }
+        }
+        return false;
+      });
+      const removedEdgeIds = removedEdges.map((e) => e.id);
+      const nextEdges = get().edges.filter((e) => !removedEdgeIds.includes(e.id));
+
+      const nextNodes = get().nodes.map((node) => {
+        if (node.id === endpoint.nodeId && node.data?.endpoints) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              endpoints: node.data.endpoints.filter((ep: Endpoint) => ep.id !== id),
+            },
+          };
+        }
+        return node;
+      });
+
       set({
         endpoints: get().endpoints.filter((e) => e.id !== id),
+        edges: nextEdges,
+        pendingEdgeRemovals: [...get().pendingEdgeRemovals, ...removedEdgeIds],
+        nodes: nextNodes,
         activeConfigItem: active?.id === id ? null : active,
         pendingEndpointRemovals: [
           ...get().pendingEndpointRemovals,

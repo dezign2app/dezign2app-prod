@@ -1,4 +1,11 @@
-import { AnyMessagingResource } from "@workspace/canvas/types";
+import {
+  AnyMessagingResource,
+  Endpoint,
+  PublishedEvent,
+  PublishedEventItem,
+  ConsumedEventItem,
+  PipelineStep,
+} from "@workspace/canvas/types";
 import { sanitizeTopicName } from "@workspace/canvas";
 import {
   BackendCanvasState,
@@ -137,9 +144,35 @@ export const createEventSlice = (
     const nextEndpoints = get().endpoints.map((ep) => {
       if (ep.publishedEvents?.some((pev) => pev.id === id)) {
         endpointsChanged = true;
+        const matchingPub = ep.publishedEvents.find((pev) => pev.id === id);
+        const updatedPubs = ep.publishedEvents.filter((pev) => pev.id !== id);
+        const updatedSteps = (ep.pipelineSteps ?? []).filter((step) => {
+          if (step.type !== "kafka_publish") return true;
+          if (matchingPub?.brokerNodeId && step.brokerNodeId === matchingPub.brokerNodeId) {
+            if (!step.messagingResourceId || step.messagingResourceId === matchingPub.messagingResourceId) {
+              return false;
+            }
+          }
+          if (matchingPub?.messagingResourceId && step.messagingResourceId === matchingPub.messagingResourceId) {
+            return false;
+          }
+          if (
+            matchingPub?.name &&
+            (step.name === matchingPub.name ||
+              step.name === `Publish ${matchingPub.name}` ||
+              step.functionRef?.name?.toLowerCase().includes(
+                matchingPub.name.toLowerCase().replace(/^publish\s*/i, ""),
+              ))
+          ) {
+            return false;
+          }
+          return true;
+        });
+
         const updatedEp = {
           ...ep,
-          publishedEvents: ep.publishedEvents.filter((pev) => pev.id !== id),
+          publishedEvents: updatedPubs,
+          pipelineSteps: updatedSteps,
         };
         pendingEndpointUpserts.push(updatedEp);
         return updatedEp;
@@ -157,13 +190,64 @@ export const createEventSlice = (
       }
     }
 
+    // Clean up node data for service nodes (endpoints, publishedEvents, consumedEvents)
+    let nodesChanged = false;
+    const pendingNodeUpserts = [...get().pendingNodeUpserts];
+    const nextNodes = get().nodes.map((node) => {
+      if (node.type === "service" && node.data) {
+        let nodeDataChanged = false;
+        const newData = { ...node.data };
+        if (newData.publishedEvents?.some((pe: PublishedEventItem) => pe.id === id)) {
+          newData.publishedEvents = newData.publishedEvents.filter((pe: PublishedEventItem) => pe.id !== id);
+          nodeDataChanged = true;
+        }
+        if (newData.consumedEvents?.some((ce: ConsumedEventItem) => ce.id === id)) {
+          newData.consumedEvents = newData.consumedEvents.filter((ce: ConsumedEventItem) => ce.id !== id);
+          nodeDataChanged = true;
+        }
+        if (newData.endpoints?.some((ep: Endpoint) => ep.publishedEvents?.some((pe: PublishedEventItem) => pe.id === id))) {
+          newData.endpoints = newData.endpoints.map((ep: Endpoint) => {
+            const matchingPub = ep.publishedEvents?.find((pe: PublishedEventItem) => pe.id === id);
+            if (matchingPub && ep.publishedEvents) {
+              const updatedPubs = ep.publishedEvents.filter((pe: PublishedEventItem) => pe.id !== id);
+              const updatedSteps = (ep.pipelineSteps ?? []).filter((step: PipelineStep) => {
+                if (step.type !== "kafka_publish") return true;
+                if (matchingPub.brokerNodeId && step.brokerNodeId === matchingPub.brokerNodeId) {
+                  if (!step.messagingResourceId || step.messagingResourceId === matchingPub.messagingResourceId) return false;
+                }
+                if (matchingPub.messagingResourceId && step.messagingResourceId === matchingPub.messagingResourceId) return false;
+                if (matchingPub.name && (step.name === matchingPub.name || step.name === `Publish ${matchingPub.name}` || step.functionRef?.name?.toLowerCase().includes(matchingPub.name.toLowerCase().replace(/^publish\s*/i, "")))) return false;
+                return true;
+              });
+              return { ...ep, publishedEvents: updatedPubs, pipelineSteps: updatedSteps };
+            }
+            return ep;
+          });
+          nodeDataChanged = true;
+        }
+        if (nodeDataChanged) {
+          nodesChanged = true;
+          const updatedNode = { ...node, data: newData };
+          pendingNodeUpserts.push(updatedNode);
+          return updatedNode;
+        }
+      }
+      return node;
+    });
+
     // Clean up all edges connected to this event handle or resource ID
     const currentEdges = get().edges;
     const removedEdges = currentEdges.filter(
       (edge) =>
         edge &&
         (edge.sourceHandle === `publishedEvents-out-${id}` ||
+          edge.targetHandle === `publishedEvents-out-${id}` ||
+          edge.sourceHandle === `publishedEvents-in-${id}` ||
+          edge.targetHandle === `publishedEvents-in-${id}` ||
+          edge.sourceHandle === `consumedEvents-in-${id}` ||
           edge.targetHandle === `consumedEvents-in-${id}` ||
+          edge.sourceHandle === `consumedEvents-out-${id}` ||
+          edge.targetHandle === `consumedEvents-out-${id}` ||
           edge.sourceHandle?.includes(id) ||
           edge.targetHandle?.includes(id) ||
           edge.sourceResourceId === id ||
@@ -175,6 +259,7 @@ export const createEventSlice = (
     set({
       events: nextEvents,
       ...(endpointsChanged ? { endpoints: nextEndpoints, pendingEndpointUpserts } : {}),
+      ...(nodesChanged ? { nodes: nextNodes, pendingNodeUpserts } : {}),
       edges: nextEdges,
       pendingEdgeRemovals: [...get().pendingEdgeRemovals, ...removedEdgeIds],
       activeConfigItem: active?.id === id ? null : active,

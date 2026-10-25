@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateConfigFiles, generateLibFiles, generateServerFile, resolveServiceRealtimeCapabilities } from "../generators/configGenerator";
-import { BackendNode } from "@/types/canvas";
+import { BackendNode, Endpoint, EndpointWithNode } from "@/types/canvas";
 
 describe("Realtime WebSocket Server Generation", () => {
   it("generates src/lib/websocket.ts with initWebSocketServer, room protection, and wsBroadcast", () => {
@@ -315,7 +315,10 @@ describe("Realtime WebSocket Server Generation", () => {
       const names = new Set<string>();
       let match: RegExpExecArray | null;
       while ((match = exportRegex.exec(content)) !== null) {
-        names.add(match[1]);
+        const exportedName = match[1];
+        if (exportedName) {
+          names.add(exportedName);
+        }
       }
       return names;
     };
@@ -346,12 +349,11 @@ describe("Realtime WebSocket Server Generation", () => {
       },
     };
 
-    const endpoint: Endpoint = {
+    const endpoint: EndpointWithNode = {
       id: "ep-stream",
       nodeId: "srv-chat",
-      name: "stream-chat",
-      path: "/chat/stream",
-      method: "POST",
+      name: "/chat/stream",
+      type: "POST",
       pipelineSteps: [
         {
           id: "step-lg",

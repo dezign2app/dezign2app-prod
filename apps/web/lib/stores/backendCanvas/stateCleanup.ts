@@ -1,6 +1,8 @@
 import {
   Endpoint,
   PublishedEvent,
+  PublishedEventItem,
+  ConsumedEventItem,
   PipelineStep,
   KafkaTopic,
   MESSAGING_TYPES,
@@ -10,6 +12,7 @@ import {
 import { PageSection, UIEventItem } from "@/types/canvas";
 import { BackendCanvasState } from "./types";
 import { resolveCascadeDeletedNodeIds } from "./node/nodeEntitySync";
+import { toFolderName } from "@/lib/compiler/kafka/utils";
 
 export function cleanupDeletedNodesState(
   currentState: BackendCanvasState,
@@ -24,7 +27,28 @@ export function cleanupDeletedNodesState(
 
   const allIdsSet = new Set<string>(idsToDeleteArray);
 
-  // 1. Next Nodes (and clean up internal references on auth nodes)
+  // Track deleted messaging / broker nodes for pipeline step and event cleanup
+  const deletedBrokerNodes = currentState.nodes.filter(
+    (n) => n && MESSAGING_TYPES.has(n.type) && allIdsSet.has(n.id),
+  );
+  const deletedBrokerIds = new Set(deletedBrokerNodes.map((n) => n.id));
+  const deletedBrokerTopicIds = new Set<string>();
+  const deletedBrokerTopicNames = new Set<string>();
+  const deletedBrokerPackageNames = new Set<string>();
+
+  deletedBrokerNodes.forEach((n) => {
+    const topics: KafkaTopic[] = n.data?.topics || [];
+    topics.forEach((t) => {
+      if (t.id) deletedBrokerTopicIds.add(t.id);
+      if (t.name) deletedBrokerTopicNames.add(t.name.toLowerCase());
+    });
+    const label = n.data?.label || "Kafka Broker";
+    const packageFolder = toFolderName(label) || "kafka";
+    deletedBrokerPackageNames.add(`@workspace/${packageFolder}`);
+    deletedBrokerPackageNames.add(packageFolder);
+  });
+
+  // 1. Next Nodes (and clean up internal references on auth nodes, services, etc.)
   const nextNodes = currentState.nodes
     .filter((n) => !allIdsSet.has(n.id))
     .map((node) => {
@@ -176,6 +200,85 @@ export function cleanupDeletedNodesState(
         }
       }
 
+      // Clean up service node data (publishedEvents, consumedEvents, endpoints) if referenced broker was deleted
+      if (node.type === "service" && node.data && deletedBrokerIds.size > 0) {
+        let srvChanged = false;
+        const newSrvData = { ...node.data };
+
+        if (newSrvData.publishedEvents) {
+          const filtered = newSrvData.publishedEvents.filter(
+            (pe: PublishedEventItem) =>
+              !(pe.targetNodeId && (allIdsSet.has(pe.targetNodeId) || deletedBrokerIds.has(pe.targetNodeId))) &&
+              !(pe.brokerNodeId && (allIdsSet.has(pe.brokerNodeId) || deletedBrokerIds.has(pe.brokerNodeId))) &&
+              !(pe.messagingResourceId && deletedBrokerTopicIds.has(pe.messagingResourceId)),
+          );
+          if (filtered.length !== newSrvData.publishedEvents.length) {
+            newSrvData.publishedEvents = filtered;
+            srvChanged = true;
+          }
+        }
+
+        if (newSrvData.consumedEvents) {
+          const filtered = newSrvData.consumedEvents.filter(
+            (ce: ConsumedEventItem) =>
+              !(ce.targetNodeId && (allIdsSet.has(ce.targetNodeId) || deletedBrokerIds.has(ce.targetNodeId))) &&
+              !(ce.brokerNodeId && (allIdsSet.has(ce.brokerNodeId) || deletedBrokerIds.has(ce.brokerNodeId))) &&
+              !(ce.messagingResourceId && deletedBrokerTopicIds.has(ce.messagingResourceId)),
+          );
+          if (filtered.length !== newSrvData.consumedEvents.length) {
+            newSrvData.consumedEvents = filtered;
+            srvChanged = true;
+          }
+        }
+
+        if (newSrvData.endpoints) {
+          const newEps = newSrvData.endpoints.map((ep: Endpoint) => {
+            let epChanged = false;
+            let epPubs = ep.publishedEvents;
+            if (epPubs) {
+              const filtered = epPubs.filter(
+                (pe: PublishedEventItem) =>
+                  !(pe.brokerNodeId && (allIdsSet.has(pe.brokerNodeId) || deletedBrokerIds.has(pe.brokerNodeId))) &&
+                  !(pe.messagingResourceId && deletedBrokerTopicIds.has(pe.messagingResourceId)),
+              );
+              if (filtered.length !== epPubs.length) {
+                epPubs = filtered;
+                epChanged = true;
+              }
+            }
+
+            let epSteps = ep.pipelineSteps;
+            if (epSteps) {
+              const filtered = epSteps.filter((step: PipelineStep) => {
+                if (step.type !== "kafka_publish") return true;
+                if (step.brokerNodeId && (allIdsSet.has(step.brokerNodeId) || deletedBrokerIds.has(step.brokerNodeId))) return false;
+                if (step.messagingResourceId && deletedBrokerTopicIds.has(step.messagingResourceId)) return false;
+                if (step.functionRef?.importPath && Array.from(deletedBrokerPackageNames).some((pkg) => step.functionRef!.importPath!.startsWith(pkg))) return false;
+                if (step.functionRef?.name && Array.from(deletedBrokerTopicNames).some((tn) => step.functionRef!.name!.toLowerCase().includes(tn.replace(/[^a-z0-9]/g, "")))) return false;
+                return true;
+              });
+              if (filtered.length !== epSteps.length) {
+                epSteps = filtered;
+                epChanged = true;
+              }
+            }
+
+            if (epChanged) {
+              srvChanged = true;
+              return { ...ep, publishedEvents: epPubs, pipelineSteps: epSteps };
+            }
+            return ep;
+          });
+          if (srvChanged) {
+            newSrvData.endpoints = newEps;
+          }
+        }
+
+        if (srvChanged) {
+          return { ...node, data: newSrvData };
+        }
+      }
+
       return node;
     });
 
@@ -240,9 +343,30 @@ export function cleanupDeletedNodesState(
     .map((ev) => {
       let evChanged = false;
       let updatedEv = ev;
-      if (ev.brokerNodeId && allIdsSet.has(ev.brokerNodeId)) {
-        updatedEv = { ...updatedEv, brokerNodeId: "" };
+      if (
+        (ev.brokerNodeId && (allIdsSet.has(ev.brokerNodeId) || deletedBrokerIds.has(ev.brokerNodeId))) ||
+        (ev.messagingResourceId && deletedBrokerTopicIds.has(ev.messagingResourceId))
+      ) {
+        updatedEv = { ...updatedEv, brokerNodeId: "", messagingResourceId: undefined };
         evChanged = true;
+      }
+      if (
+        deletedBrokerIds.size > 0 &&
+        updatedEv.pipelineSteps &&
+        updatedEv.pipelineSteps.length > 0
+      ) {
+        const filteredSteps = updatedEv.pipelineSteps.filter((s) => {
+          if (s.type !== "kafka_publish") return true;
+          if (s.brokerNodeId && (allIdsSet.has(s.brokerNodeId) || deletedBrokerIds.has(s.brokerNodeId))) return false;
+          if (s.messagingResourceId && deletedBrokerTopicIds.has(s.messagingResourceId)) return false;
+          if (s.functionRef?.importPath && Array.from(deletedBrokerPackageNames).some((pkg) => s.functionRef!.importPath!.startsWith(pkg))) return false;
+          if (s.functionRef?.name && Array.from(deletedBrokerTopicNames).some((tn) => s.functionRef!.name!.toLowerCase().includes(tn.replace(/[^a-z0-9]/g, "")))) return false;
+          return true;
+        });
+        if (filteredSteps.length !== updatedEv.pipelineSteps.length) {
+          updatedEv = { ...updatedEv, pipelineSteps: filteredSteps };
+          evChanged = true;
+        }
       }
       if (
         deletedTransformerNodes.length > 0 &&
@@ -485,12 +609,32 @@ export function cleanupDeletedNodesState(
         }
         if (changed) newCrudExp = cleanedExp;
       }
+      if (
+        deletedBrokerIds.size > 0 &&
+        newPipelineSteps &&
+        newPipelineSteps.length > 0
+      ) {
+        const filteredSteps = newPipelineSteps.filter((s) => {
+          if (s.type !== "kafka_publish") return true;
+          if (s.brokerNodeId && (allIdsSet.has(s.brokerNodeId) || deletedBrokerIds.has(s.brokerNodeId))) return false;
+          if (s.messagingResourceId && deletedBrokerTopicIds.has(s.messagingResourceId)) return false;
+          if (s.functionRef?.importPath && Array.from(deletedBrokerPackageNames).some((pkg) => s.functionRef!.importPath!.startsWith(pkg))) return false;
+          if (s.functionRef?.name && Array.from(deletedBrokerTopicNames).some((tn) => s.functionRef!.name!.toLowerCase().includes(tn.replace(/[^a-z0-9]/g, "")))) return false;
+          return true;
+        });
+        if (filteredSteps.length !== newPipelineSteps.length) {
+          changed = true;
+          newPipelineSteps = filteredSteps;
+        }
+      }
+
       if (newPubEvents) {
         const cleanedEvents = newPubEvents.filter(
           (pev) =>
             !deletedEventIds.has(pev.id) &&
             !allIdsSet.has(pev.id) &&
-            !(pev.brokerNodeId && allIdsSet.has(pev.brokerNodeId)),
+            !(pev.brokerNodeId && (allIdsSet.has(pev.brokerNodeId) || deletedBrokerIds.has(pev.brokerNodeId))) &&
+            !(pev.messagingResourceId && deletedBrokerTopicIds.has(pev.messagingResourceId)),
         );
         if (cleanedEvents.length !== newPubEvents.length) {
           changed = true;
@@ -682,20 +826,62 @@ export function cleanupDeletedEdgesState(
       const isTargetMessaging = targetNode && MESSAGING_TYPES.has(targetNode.type);
       if (isTargetMessaging && targetNode) {
         nextEndpoints = nextEndpoints.map((ep) => {
-          if (ep.id === epId && ep.pipelineSteps && ep.pipelineSteps.length > 0) {
-            const updatedSteps = ep.pipelineSteps.filter((step) => {
-              if (step.type !== "kafka_publish") return true;
-              if (step.brokerNodeId === targetNode.id) return false;
-              return true;
-            });
-            if (updatedSteps.length !== ep.pipelineSteps.length) {
+          if (ep.id === epId) {
+            let epModified = false;
+            let updatedSteps = ep.pipelineSteps;
+            if (ep.pipelineSteps && ep.pipelineSteps.length > 0) {
+              const filteredSteps = ep.pipelineSteps.filter((step) => {
+                if (step.type !== "kafka_publish") return true;
+                if (step.brokerNodeId === targetNode.id) return false;
+                return true;
+              });
+              if (filteredSteps.length !== ep.pipelineSteps.length) {
+                epModified = true;
+                updatedSteps = filteredSteps;
+              }
+            }
+            let updatedPubs = ep.publishedEvents;
+            if (ep.publishedEvents && ep.publishedEvents.length > 0) {
+              const filteredPubs = ep.publishedEvents.filter((pe) => pe.brokerNodeId !== targetNode.id);
+              if (filteredPubs.length !== ep.publishedEvents.length) {
+                epModified = true;
+                updatedPubs = filteredPubs;
+              }
+            }
+            if (epModified) {
               endpointsChanged = true;
-              const updatedEp = { ...ep, pipelineSteps: updatedSteps };
+              const updatedEp = { ...ep, pipelineSteps: updatedSteps, publishedEvents: updatedPubs };
               pendingEndpointUpserts.push(updatedEp);
               return updatedEp;
             }
           }
           return ep;
+        });
+
+        // Update live service node data
+        nextNodes = nextNodes.map((n) => {
+          if (n.type === "service" && n.data?.endpoints) {
+            const hasTargetEp = n.data.endpoints.some((e: Endpoint) => e.id === epId);
+            if (hasTargetEp) {
+              nodesChanged = true;
+              const newEps = n.data.endpoints.map((e: Endpoint) => {
+                if (e.id === epId) {
+                  const filteredSteps = (e.pipelineSteps || []).filter((s: PipelineStep) => {
+                    if (s.type !== "kafka_publish") return true;
+                    if (s.brokerNodeId === targetNode.id) return false;
+                    return true;
+                  });
+                  const filteredPubs = (e.publishedEvents || []).filter((pe: PublishedEvent) => pe.brokerNodeId !== targetNode.id);
+                  return { ...e, pipelineSteps: filteredSteps, publishedEvents: filteredPubs };
+                }
+                return e;
+              });
+              const updatedNode = { ...n, data: { ...n.data, endpoints: newEps } };
+              pendingNodeUpserts.push(updatedNode);
+              return updatedNode;
+            }
+          }
+          return n;
         });
       }
     } else {
@@ -774,8 +960,14 @@ export function cleanupDeletedEdgesState(
     }
 
     // 2. Messaging Event -> Broker Node cleanup: fully delete the publish event & pipeline step when its edge is removed
-    if (edge.sourceHandle?.startsWith("publishedEvents-out-")) {
-      const eventId = edge.sourceHandle.replace("publishedEvents-out-", "");
+    const pubOutHandle = edge.sourceHandle?.startsWith("publishedEvents-out-")
+      ? edge.sourceHandle
+      : edge.targetHandle?.startsWith("publishedEvents-out-")
+        ? edge.targetHandle
+        : null;
+
+    if (pubOutHandle) {
+      const eventId = pubOutHandle.replace("publishedEvents-out-", "");
 
       // Find the event and record it for DB removal
       const deletedEvent = nextEvents.find((ev) => ev.id === eventId);
@@ -829,6 +1021,166 @@ export function cleanupDeletedEdgesState(
         }
         return ep;
       });
+
+      // Update nextNodes live service node data (endpoints and publishedEvents)
+      nextNodes = nextNodes.map((n) => {
+        if (n.type === "service" && n.data) {
+          let nodeDataChanged = false;
+          const newData = { ...n.data };
+          if (newData.publishedEvents?.some((pe: PublishedEventItem) => pe.id === eventId)) {
+            newData.publishedEvents = newData.publishedEvents.filter((pe: PublishedEventItem) => pe.id !== eventId);
+            nodeDataChanged = true;
+          }
+          if (newData.endpoints?.some((ep: Endpoint) => ep.publishedEvents?.some((pe: PublishedEventItem) => pe.id === eventId))) {
+            newData.endpoints = newData.endpoints.map((ep: Endpoint) => {
+              const matchingPub = ep.publishedEvents?.find((pe: PublishedEventItem) => pe.id === eventId);
+              if (matchingPub && ep.publishedEvents) {
+                const updatedPubs = ep.publishedEvents.filter((pe: PublishedEventItem) => pe.id !== eventId);
+                const updatedSteps = (ep.pipelineSteps ?? []).filter((step: PipelineStep) => {
+                  if (step.type !== "kafka_publish") return true;
+                  if (step.brokerNodeId && step.brokerNodeId === matchingPub.brokerNodeId) {
+                    if (!step.messagingResourceId || step.messagingResourceId === matchingPub.messagingResourceId) return false;
+                  }
+                  if (step.messagingResourceId && step.messagingResourceId === matchingPub.messagingResourceId) return false;
+                  if (matchingPub.name && (step.name === matchingPub.name || step.name === `Publish ${matchingPub.name}` || step.functionRef?.name?.toLowerCase().includes(matchingPub.name.toLowerCase().replace(/^publish\s*/i, "")))) return false;
+                  return true;
+                });
+                return { ...ep, publishedEvents: updatedPubs, pipelineSteps: updatedSteps };
+              }
+              return ep;
+            });
+            nodeDataChanged = true;
+          }
+          if (nodeDataChanged) {
+            nodesChanged = true;
+            pendingNodeUpserts.push({ ...n, data: newData });
+            return { ...n, data: newData };
+          }
+        }
+        return n;
+      });
+    }
+
+    // Topic handle cleanup: when a topic-specific edge is deleted, clean up that topic if no remaining edge connects to it
+    const topicHandle = edge.targetHandle?.startsWith("topics:in:")
+      ? edge.targetHandle
+      : edge.sourceHandle?.startsWith("topics:in:")
+        ? edge.sourceHandle
+        : null;
+
+    if (topicHandle) {
+      const topicId = topicHandle.replace("topics:in:", "");
+      const isTopicStillConnected = nextEdges.some(
+        (e) =>
+          e &&
+          (e.targetHandle === topicHandle ||
+            e.sourceHandle === topicHandle ||
+            e.targetResourceId === topicId ||
+            e.sourceResourceId === topicId),
+      );
+
+      if (!isTopicStillConnected) {
+        nextEndpoints = nextEndpoints.map((ep) => {
+          let epModified = false;
+          let updatedPubs = ep.publishedEvents;
+          if (ep.publishedEvents) {
+            const filtered = ep.publishedEvents.filter((pe) => pe.messagingResourceId !== topicId);
+            if (filtered.length !== ep.publishedEvents.length) {
+              epModified = true;
+              updatedPubs = filtered;
+            }
+          }
+          let updatedSteps = ep.pipelineSteps;
+          if (ep.pipelineSteps) {
+            const filtered = ep.pipelineSteps.filter((step) => {
+              if (step.type !== "kafka_publish") return true;
+              if (step.messagingResourceId === topicId) return false;
+              return true;
+            });
+            if (filtered.length !== ep.pipelineSteps.length) {
+              epModified = true;
+              updatedSteps = filtered;
+            }
+          }
+          if (epModified) {
+            endpointsChanged = true;
+            const updatedEp = { ...ep, publishedEvents: updatedPubs, pipelineSteps: updatedSteps };
+            pendingEndpointUpserts.push(updatedEp);
+            return updatedEp;
+          }
+          return ep;
+        });
+
+        nextEvents = nextEvents.map((ev) => {
+          if (ev.messagingResourceId === topicId) {
+            eventsChanged = true;
+            const updatedEv = { ...ev, brokerNodeId: "", messagingResourceId: undefined };
+            pendingEventUpserts.push(updatedEv);
+            return updatedEv;
+          }
+          return ev;
+        });
+
+        nextNodes = nextNodes.map((n) => {
+          if (n.type === "service" && n.data) {
+            let srvChanged = false;
+            const newData = { ...n.data };
+            if (newData.publishedEvents) {
+              const filtered = newData.publishedEvents.filter((pe: PublishedEventItem) => pe.messagingResourceId !== topicId && pe.targetNodeId !== topicId);
+              if (filtered.length !== newData.publishedEvents.length) {
+                newData.publishedEvents = filtered;
+                srvChanged = true;
+              }
+            }
+            if (newData.consumedEvents) {
+              const filtered = newData.consumedEvents.filter((ce: ConsumedEventItem) => ce.messagingResourceId !== topicId && ce.targetNodeId !== topicId);
+              if (filtered.length !== newData.consumedEvents.length) {
+                newData.consumedEvents = filtered;
+                srvChanged = true;
+              }
+            }
+            if (newData.endpoints) {
+              const newEps = newData.endpoints.map((ep: Endpoint) => {
+                let epChanged = false;
+                let epPubs = ep.publishedEvents;
+                if (epPubs) {
+                  const filtered = epPubs.filter((pe: PublishedEventItem) => pe.messagingResourceId !== topicId);
+                  if (filtered.length !== epPubs.length) {
+                    epPubs = filtered;
+                    epChanged = true;
+                  }
+                }
+                let epSteps = ep.pipelineSteps;
+                if (epSteps) {
+                  const filtered = epSteps.filter((step: PipelineStep) => {
+                    if (step.type !== "kafka_publish") return true;
+                    if (step.messagingResourceId === topicId) return false;
+                    return true;
+                  });
+                  if (filtered.length !== epSteps.length) {
+                    epSteps = filtered;
+                    epChanged = true;
+                  }
+                }
+                if (epChanged) {
+                  srvChanged = true;
+                  return { ...ep, publishedEvents: epPubs, pipelineSteps: epSteps };
+                }
+                return ep;
+              });
+              if (srvChanged) {
+                newData.endpoints = newEps;
+              }
+            }
+            if (srvChanged) {
+              nodesChanged = true;
+              pendingNodeUpserts.push({ ...n, data: newData });
+              return { ...n, data: newData };
+            }
+          }
+          return n;
+        });
+      }
     }
 
     // Transformer -> Endpoint edge cleanup: remove transform step when edge is deleted
@@ -1103,16 +1455,44 @@ export function cleanupDeletedEdgesState(
       }
     }
 
-    if (edge.targetHandle?.startsWith("consumedEvents-in-")) {
-      const eventId = edge.targetHandle.replace("consumedEvents-in-", "");
+    const consumeHandle = edge.targetHandle?.startsWith("consumedEvents-in-")
+      ? edge.targetHandle
+      : edge.sourceHandle?.startsWith("consumedEvents-in-")
+        ? edge.sourceHandle
+        : edge.targetHandle?.startsWith("consumedEvents-out-")
+          ? edge.targetHandle
+          : edge.sourceHandle?.startsWith("consumedEvents-out-")
+            ? edge.sourceHandle
+            : null;
+
+    if (consumeHandle) {
+      const eventId = consumeHandle.replace(/^(consumedEvents-in-|consumedEvents-out-)/, "");
       nextEvents = nextEvents.map((ev) => {
-        if (ev.id === eventId && ev.brokerNodeId) {
+        if (ev.id === eventId && (ev.brokerNodeId || ev.messagingResourceId)) {
           eventsChanged = true;
-          const updatedEv = { ...ev, brokerNodeId: "" };
+          const updatedEv = { ...ev, brokerNodeId: "", messagingResourceId: undefined };
           pendingEventUpserts.push(updatedEv);
           return updatedEv;
         }
         return ev;
+      });
+
+      nextNodes = nextNodes.map((n) => {
+        if (n.type === "service" && n.data?.consumedEvents) {
+          const hasEv = n.data.consumedEvents.some((ce: ConsumedEventItem) => ce.id === eventId);
+          if (hasEv) {
+            nodesChanged = true;
+            const updatedCons = n.data.consumedEvents.map((ce: ConsumedEventItem) =>
+              ce.id === eventId
+                ? { ...ce, brokerNodeId: "", messagingResourceId: undefined, targetNodeId: undefined }
+                : ce,
+            );
+            const updatedNode = { ...n, data: { ...n.data, consumedEvents: updatedCons } };
+            pendingNodeUpserts.push(updatedNode);
+            return updatedNode;
+          }
+        }
+        return n;
       });
     }
 
@@ -1658,10 +2038,12 @@ export function cleanupDeletedEdgesState(
 
             let updatedSteps = ep.pipelineSteps;
             if (ep.pipelineSteps && ep.pipelineSteps.length > 0) {
+              const brokerFolder = toFolderName(brokerNode.data?.label || "kafka");
               const remainingSteps = ep.pipelineSteps.filter((step: PipelineStep) => {
                 if (step.type !== "kafka_publish") return true;
                 if (step.brokerNodeId === brokerNode.id) return false;
                 if (step.messagingResourceId && brokerTopicIds.has(step.messagingResourceId)) return false;
+                if (step.functionRef?.importPath && brokerFolder && step.functionRef.importPath.includes(brokerFolder)) return false;
                 return true;
               });
               if (remainingSteps.length !== ep.pipelineSteps.length) {
@@ -1727,10 +2109,12 @@ export function cleanupDeletedEdgesState(
               }
               let filteredSteps = ep.pipelineSteps;
               if (ep.pipelineSteps) {
+                const brokerFolder = toFolderName(brokerNode.data?.label || "kafka");
                 filteredSteps = ep.pipelineSteps.filter((step) => {
                   if (step.type !== "kafka_publish") return true;
                   if (step.brokerNodeId === brokerNode.id) return false;
                   if (step.messagingResourceId && brokerTopicIds.has(step.messagingResourceId)) return false;
+                  if (step.functionRef?.importPath && brokerFolder && step.functionRef.importPath.includes(brokerFolder)) return false;
                   return true;
                 });
                 if (filteredSteps.length !== ep.pipelineSteps.length) {
