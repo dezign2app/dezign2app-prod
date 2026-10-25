@@ -21,12 +21,11 @@ export const HeroCanvasLoadBalancers: React.FC<HeroCanvasLoadBalancersProps> = (
   getCircleRate,
   getCircleSplitRate,
 }) => {
-  const stackCount = 5;
-
   return (
     <AnimatePresence>
       {LOAD_BALANCER_CIRCLES.map((lb) => {
         const isHovered = activeInfraId === lb.id;
+        const stackCount = lb.downstreamInstances || 5;
 
         return (
           <motion.div
@@ -47,7 +46,7 @@ export const HeroCanvasLoadBalancers: React.FC<HeroCanvasLoadBalancersProps> = (
             }}
             className="absolute z-30 flex flex-col items-center pointer-events-auto select-none cursor-pointer"
           >
-            {/* 5 Stacked Load Balancers with 10px left and top padding */}
+            {/* Stacked Load Balancer Disks with 10px offset */}
             <div className="relative w-[74px] h-[74px] group">
               {Array.from({ length: stackCount }).map((_, idx) => {
                 const isFront = idx === stackCount - 1;
@@ -70,8 +69,8 @@ export const HeroCanvasLoadBalancers: React.FC<HeroCanvasLoadBalancersProps> = (
                     }}
                     title={
                       isFront
-                        ? `${lb.label} (${lb.sublabel}) — Hover for live telemetry & specs`
-                        : `Instance #${idx + 1} of ${lb.label}`
+                        ? `${lb.label} (${lb.sublabel}) — Balancing across ${stackCount} instances`
+                        : `HA Node #${idx + 1} of ${lb.label}`
                     }
                   >
                     <Network
@@ -98,7 +97,7 @@ export const HeroCanvasLoadBalancers: React.FC<HeroCanvasLoadBalancersProps> = (
                 {lb.label}
               </span>
               <span className="text-[8.5px] font-mono text-zinc-400 mt-0.5">
-                {getCircleSplitRate(lb) || getCircleRate(lb)} · 5× LBs
+                {getCircleSplitRate(lb) || getCircleRate(lb)} · {stackCount}× Targets
               </span>
             </div>
           </motion.div>

@@ -20,9 +20,11 @@ import {
   INFRA_SSE_RETURN_CONNECTION,
 } from "./canvasData";
 import { TICKETS, type TicketDef, type AgentStep } from "./aiWorkerData";
+import { SECURITY_VECTORS, type SecurityVectorDef, type SecurityStep } from "./ethicalHackerData";
 
 import { HeroCanvasHeader } from "./components/HeroCanvasHeader";
 import { HeroCanvasTicketPipeline } from "./components/HeroCanvasTicketPipeline";
+import { HeroCanvasSecurityPipeline } from "./components/HeroCanvasSecurityPipeline";
 import { HeroCanvasConnections } from "./components/HeroCanvasConnections";
 import { HeroCanvasLoadBalancers } from "./components/HeroCanvasLoadBalancers";
 import { HeroCanvasDbReplicas } from "./components/HeroCanvasDbReplicas";
@@ -30,14 +32,17 @@ import { HeroCanvasInfraFlyingCard } from "./components/HeroCanvasInfraFlyingCar
 import { HeroCanvasNodes } from "./components/HeroCanvasNodes";
 import { HeroCanvasAiGeneratedNode } from "./components/HeroCanvasAiGeneratedNode";
 import { HeroCanvasAiDrone } from "./components/HeroCanvasAiDrone";
+import { HeroCanvasSecurityDrone } from "./components/HeroCanvasSecurityDrone";
 import { HeroCanvasTicketCard } from "./components/HeroCanvasTicketCard";
+import { HeroCanvasSecurityCard } from "./components/HeroCanvasSecurityCard";
 import { HeroCanvasConsole } from "./components/HeroCanvasConsole";
+import { HeroCanvasSecurityConsole } from "./components/HeroCanvasSecurityConsole";
 import { HeroCanvasControls } from "./components/HeroCanvasControls";
 import { HeroCanvasFooter } from "./components/HeroCanvasFooter";
 
 export const HeroCanvasPreview: React.FC = () => {
-  // Feature mode switcher: "architecture" vs "infrastructure" vs "ai-worker"
-  const [activeMode, setActiveMode] = useState<CanvasMode>("infrastructure");
+  // Feature mode switcher: "architecture" vs "infrastructure" vs "ai-worker" vs "ethical-hacker"
+  const [activeMode, setActiveMode] = useState<CanvasMode>("architecture");
   const [trafficIntensity, setTrafficIntensity] = useState<TrafficIntensity>("normal");
   const [ticker, setTicker] = useState<number>(0);
 
@@ -51,8 +56,38 @@ export const HeroCanvasPreview: React.FC = () => {
   const [isConsoleOpen, setIsConsoleOpen] = useState<boolean>(false);
   const [activeConsoleTab, setActiveConsoleTab] = useState<"terminal" | "diff" | "bench">("diff");
 
+  // Ethical Hacker state
+  const [selectedVectorIndex, setSelectedVectorIndex] = useState<number>(0);
+  const [securityStep, setSecurityStep] = useState<number>(0);
+  const [isSecurityCardMinimized, setIsSecurityCardMinimized] = useState<boolean>(true);
+  const [isSecurityConsoleMinimized, setIsSecurityConsoleMinimized] = useState<boolean>(true);
+  const [securityConsoleTab, setSecurityConsoleTab] = useState<"http" | "diff" | "cvss">("diff");
+  const [isSecurityConsoleOpen, setIsSecurityConsoleOpen] = useState<boolean>(false);
+
   const activeTicket: TicketDef = (TICKETS[selectedTicketIndex] ?? TICKETS[0]) as TicketDef;
   const currentStep: AgentStep = (activeTicket.steps[workerStep] ?? activeTicket.steps[0]) as AgentStep;
+
+  const activeVector: SecurityVectorDef = (SECURITY_VECTORS[selectedVectorIndex] ?? SECURITY_VECTORS[0]) as SecurityVectorDef;
+  const activeSecurityStep: SecurityStep = (activeVector.steps[securityStep] ?? activeVector.steps[0]) as SecurityStep;
+
+  // Auto-advance Ethical Hacker steps when active and playing
+  useEffect(() => {
+    if (activeMode !== "ethical-hacker" || !isPlaying) return;
+
+    // Longer pause on step 4 (Mitigated / Exploit Blocked) before looping
+    const delay = securityStep === 4 ? 5200 / playbackSpeed : 3400 / playbackSpeed;
+
+    const timer = setTimeout(() => {
+      setSecurityStep((prev) => {
+        if (prev >= 4) {
+          return 0;
+        }
+        return prev + 1;
+      });
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [activeMode, isPlaying, securityStep, playbackSpeed]);
 
   // Auto-advance AI worker steps when active and playing
   useEffect(() => {
@@ -109,22 +144,33 @@ export const HeroCanvasPreview: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Compute formatted live incoming requests text for a node
+  const isInfra = activeMode === "infrastructure";
+
+  // Compute formatted live per-instance incoming requests text for a node
   const getIncomingBadgeText = useCallback(
     (node: CanvasNode): string | null => {
       if (!node.infraIncoming) return null;
       const multiplier = trafficIntensity === "burst" ? 2.75 : 1;
       const seed = Math.sin(ticker * 1.7 + node.infraIncoming.baseCount * 0.05);
       const jitter = Math.round(seed * node.infraIncoming.variance);
-      const count = Math.max(0, Math.round((node.infraIncoming.baseCount + jitter) * multiplier));
+      const total = Math.max(0, Math.round((node.infraIncoming.baseCount + jitter) * multiplier));
+      const replicas = isInfra ? node.infraReplicas ?? 1 : 1;
+      const perInstance = Math.round(total / replicas);
       const unit = node.infraIncoming.unit || "req/s";
 
-      if (count >= 1000) {
-        return `${(count / 1000).toFixed(1)}k ${unit}`;
+      if (perInstance >= 1000) {
+        const val = perInstance / 1000;
+        const formatted =
+          val >= 10
+            ? val.toFixed(1)
+            : Math.abs(val - Math.round(val * 10) / 10) > 0.02
+            ? val.toFixed(2)
+            : val.toFixed(1);
+        return `${formatted}k ${unit}`;
       }
-      return `${count.toLocaleString()} ${unit}`;
+      return `${perInstance.toLocaleString()} ${unit}`;
     },
-    [ticker, trafficIntensity]
+    [ticker, trafficIntensity, isInfra]
   );
 
   // Compute live TOTAL ingress rate arriving at a circle (displayed as entry rate)
@@ -156,7 +202,14 @@ export const HeroCanvasPreview: React.FC = () => {
       const unit = circle.unit || "req/s";
 
       if (perInstance >= 1000) {
-        return `${(perInstance / 1000).toFixed(1)}k ${unit}`;
+        const val = perInstance / 1000;
+        const formatted =
+          val >= 10
+            ? val.toFixed(1)
+            : Math.abs(val - Math.round(val * 10) / 10) > 0.02
+            ? val.toFixed(2)
+            : val.toFixed(1);
+        return `${formatted}k ${unit}`;
       }
       return `${perInstance.toLocaleString()} ${unit}`;
     },
@@ -169,7 +222,6 @@ export const HeroCanvasPreview: React.FC = () => {
       ? Math.round(68420 + Math.sin(ticker * 2) * 580)
       : Math.round(24850 + Math.sin(ticker * 2) * 220);
 
-  const isInfra = activeMode === "infrastructure";
   const canvasWidth = isInfra ? CANVAS_WIDTH_INFRA : CANVAS_WIDTH_ARCH;
   const canvasHeight = isInfra ? CANVAS_HEIGHT_INFRA : CANVAS_HEIGHT_ARCH;
 
@@ -312,6 +364,8 @@ export const HeroCanvasPreview: React.FC = () => {
         playbackSpeed={playbackSpeed}
         setPlaybackSpeed={setPlaybackSpeed}
         setWorkerStep={setWorkerStep}
+        securityStep={securityStep}
+        setSecurityStep={setSecurityStep}
         totalIngress={totalIngress}
         onModeChange={() => {
           setHoveredInfraId(null);
@@ -332,6 +386,22 @@ export const HeroCanvasPreview: React.FC = () => {
           setActiveConsoleTab={setActiveConsoleTab}
           isConsoleOpen={isConsoleOpen}
           setIsConsoleOpen={setIsConsoleOpen}
+        />
+      )}
+
+      {/* Horizontal Security Audit Pipeline Strip (Ethical Hacker Mode) */}
+      {activeMode === "ethical-hacker" && (
+        <HeroCanvasSecurityPipeline
+          activeVector={activeVector}
+          selectedVectorIndex={selectedVectorIndex}
+          setSelectedVectorIndex={setSelectedVectorIndex}
+          securityStep={securityStep}
+          setSecurityStep={setSecurityStep}
+          currentStep={activeSecurityStep}
+          activeConsoleTab={securityConsoleTab}
+          setActiveConsoleTab={setSecurityConsoleTab}
+          isConsoleOpen={isSecurityConsoleOpen}
+          setIsConsoleOpen={setIsSecurityConsoleOpen}
         />
       )}
 
@@ -389,12 +459,16 @@ export const HeroCanvasPreview: React.FC = () => {
               activeConnections={activeConnections}
               selectedNode={selectedNode}
               hoveredNode={hoveredNode}
+              activeInfraId={activeInfraId}
               activeMode={activeMode}
               trafficIntensity={trafficIntensity}
               reduceMotion={reduceMotion}
               currentStep={activeMode === "ai-worker" ? currentStep : null}
               workerStep={workerStep}
               activeTicket={activeTicket}
+              securityStep={securityStep}
+              activeSecurityStep={activeMode === "ethical-hacker" ? activeSecurityStep : null}
+              activeVector={activeMode === "ethical-hacker" ? activeVector : null}
               canvasWidth={canvasWidth}
               canvasHeight={canvasHeight}
             />
@@ -439,6 +513,8 @@ export const HeroCanvasPreview: React.FC = () => {
               hoveredNode={hoveredNode}
               selectedNode={selectedNode}
               currentStep={activeMode === "ai-worker" ? currentStep : null}
+              securityStep={securityStep}
+              activeSecurityStep={activeMode === "ethical-hacker" ? activeSecurityStep : null}
               isRealtimeEdgeVisible={isRealtimeEdgeVisible}
               getIncomingBadgeText={getIncomingBadgeText}
               setHoveredNode={setHoveredNode}
@@ -459,10 +535,19 @@ export const HeroCanvasPreview: React.FC = () => {
                 activeTicket={activeTicket}
               />
             )}
+
+            {/* Ethical Hacker Red Team Probe Drone Entity */}
+            {activeMode === "ethical-hacker" && activeSecurityStep && (
+              <HeroCanvasSecurityDrone
+                currentStep={activeSecurityStep}
+                securityStep={securityStep}
+                activeVector={activeVector}
+              />
+            )}
           </div>
         </div>
 
-        {/* Floating Active Ticket Card (Top Left) */}
+        {/* Floating Active Ticket Card (Top Left - AI Worker Mode) */}
         {activeMode === "ai-worker" && (
           <HeroCanvasTicketCard
             activeTicket={activeTicket}
@@ -475,7 +560,20 @@ export const HeroCanvasPreview: React.FC = () => {
           />
         )}
 
-        {/* Floating Agent Terminal & Code Diff Inspector (Bottom Right) */}
+        {/* Floating Active Security Vector Card (Top Left - Ethical Hacker Mode) */}
+        {activeMode === "ethical-hacker" && (
+          <HeroCanvasSecurityCard
+            activeVector={activeVector}
+            securityStep={securityStep}
+            setSecurityStep={setSecurityStep}
+            selectedVectorIndex={selectedVectorIndex}
+            setSelectedVectorIndex={setSelectedVectorIndex}
+            isSecurityCardMinimized={isSecurityCardMinimized}
+            setIsSecurityCardMinimized={setIsSecurityCardMinimized}
+          />
+        )}
+
+        {/* Floating Agent Terminal & Code Diff Inspector (Bottom Right - AI Worker Mode) */}
         {activeMode === "ai-worker" && (
           <HeroCanvasConsole
             currentStep={currentStep}
@@ -485,6 +583,23 @@ export const HeroCanvasPreview: React.FC = () => {
             setIsConsoleMinimized={setIsConsoleMinimized}
             activeConsoleTab={activeConsoleTab}
             setActiveConsoleTab={setActiveConsoleTab}
+            isPlaying={isPlaying}
+            setIsPlaying={setIsPlaying}
+            playbackSpeed={playbackSpeed}
+            setPlaybackSpeed={setPlaybackSpeed}
+          />
+        )}
+
+        {/* Floating Red Team Terminal & Remediation Console (Bottom Right - Ethical Hacker Mode) */}
+        {activeMode === "ethical-hacker" && (
+          <HeroCanvasSecurityConsole
+            currentStep={activeSecurityStep}
+            securityStep={securityStep}
+            setSecurityStep={setSecurityStep}
+            isConsoleMinimized={isSecurityConsoleMinimized}
+            setIsConsoleMinimized={setIsSecurityConsoleMinimized}
+            activeConsoleTab={securityConsoleTab}
+            setActiveConsoleTab={setSecurityConsoleTab}
             isPlaying={isPlaying}
             setIsPlaying={setIsPlaying}
             playbackSpeed={playbackSpeed}
@@ -509,6 +624,9 @@ export const HeroCanvasPreview: React.FC = () => {
         currentStep={currentStep}
         workerStep={workerStep}
         activeTicket={activeTicket}
+        securityStep={securityStep}
+        activeSecurityStep={activeMode === "ethical-hacker" ? activeSecurityStep : null}
+        activeVector={activeMode === "ethical-hacker" ? activeVector : null}
         isRealtimeEdgeVisible={isRealtimeEdgeVisible}
       />
     </div>

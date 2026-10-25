@@ -46,6 +46,7 @@ export const NODES: CanvasNode[] = [
       variance: 60,
       unit: "req/s",
     },
+    infraReplicas: 2,
   },
   {
     id: "webapp",
@@ -110,6 +111,7 @@ export const NODES: CanvasNode[] = [
       variance: 140,
       unit: "req/s",
     },
+    infraReplicas: 5,
   },
   {
     id: "landing-pages",
@@ -206,6 +208,7 @@ export const NODES: CanvasNode[] = [
       variance: 130,
       unit: "req/s",
     },
+    infraReplicas: 3,
   },
   {
     id: "kafka",
@@ -395,11 +398,11 @@ export const LOAD_BALANCER_CIRCLES: InfraCircle[] = [
     y: 260,
     label: "Ingress LB",
     sublabel: "Least-Conn",
-    // Total ingress arriving at the LB
-    baseRate: 24850,
-    variance: 220,
+    // Total ingress arriving at the LB for /chat route
+    baseRate: 14200,
+    variance: 140,
     unit: "req/s",
-    // 5 frontend worker instances → each receives ~4.97k req/s
+    // 5 frontend worker instances → each receives ~2.84k req/s
     downstreamInstances: 5,
     type: "load-balancer",
     details: {
@@ -597,21 +600,37 @@ export const DB_REPLICATION_CONNECTIONS: Connection[] = [
    Edges SPLIT and route THROUGH each LB/replica circle in expanded topology
    ========================================================================= */
 export const INFRA_CONNECTIONS: Connection[] = [
-  // ── auth (290,390) ──► Auth LB left (368,390) ──► web (480,390) ──
+  // ── 2× auth instances (290, 370..410) ──► 2× Auth LB Disks (348..358) ──► 2× web ingress ports (480, 370..410) ──
   {
-    id: "auth-to-lb-auth",
-    d: "M 290 390 L 368 390",
+    id: "auth-to-lb-auth-1",
+    d: "M 290 370 L 348 370",
     delay: 0,
     label: "",
-    labelPos: { x: 329, y: 382 },
+    labelPos: { x: 319, y: 362 },
     color: "#52525b",
   },
   {
-    id: "lb-auth-to-web",
-    d: "M 402 390 L 480 390",
+    id: "auth-to-lb-auth-2",
+    d: "M 290 410 C 320 410, 340 380, 358 380",
+    delay: 0.15,
+    label: "",
+    labelPos: { x: 324, y: 402 },
+    color: "#52525b",
+  },
+  {
+    id: "lb-auth-to-web-1",
+    d: "M 382 370 L 480 370",
     delay: 0.1,
-    label: "auth guard",
-    labelPos: { x: 441, y: 378 },
+    label: "auth guard (~2.9k/s)",
+    labelPos: { x: 432, y: 360 },
+    color: "#52525b",
+  },
+  {
+    id: "lb-auth-to-web-2",
+    d: "M 392 380 C 420 380, 445 410, 480 410",
+    delay: 0.25,
+    label: "",
+    labelPos: { x: 436, y: 402 },
     color: "#52525b",
   },
   // ── web/chat (710,330) ──► Ingress LB left (803,260) ──► chat-page (930,190) ──
@@ -623,12 +642,45 @@ export const INFRA_CONNECTIONS: Connection[] = [
     labelPos: { x: 755, y: 295 },
     color: "#52525b",
   },
+  // ── Ingress LB ──► 5× Fan-out edges to 5 Server Instances on /chat (930, 85) ──
   {
-    id: "lb-webpage-to-chatpage",
-    d: "M 837 260 C 875 260, 885 190, 930 190",
+    id: "lb-webpage-to-chatpage-1",
+    d: "M 817 240 C 865 240, 885 120, 930 120",
+    delay: 0.2,
+    label: "",
+    labelPos: { x: 885, y: 140 },
+    color: "#52525b",
+  },
+  {
+    id: "lb-webpage-to-chatpage-2",
+    d: "M 827 250 C 865 250, 885 155, 930 155",
     delay: 0.4,
-    label: "mounts route",
-    labelPos: { x: 890, y: 215 },
+    label: "",
+    labelPos: { x: 885, y: 162 },
+    color: "#52525b",
+  },
+  {
+    id: "lb-webpage-to-chatpage-3",
+    d: "M 837 260 C 865 260, 885 190, 930 190",
+    delay: 0.6,
+    label: "least-conn (~2.84k/s)",
+    labelPos: { x: 885, y: 178 },
+    color: "#52525b",
+  },
+  {
+    id: "lb-webpage-to-chatpage-4",
+    d: "M 847 270 C 875 270, 885 225, 930 225",
+    delay: 0.8,
+    label: "",
+    labelPos: { x: 885, y: 212 },
+    color: "#52525b",
+  },
+  {
+    id: "lb-webpage-to-chatpage-5",
+    d: "M 857 280 C 885 280, 895 260, 930 260",
+    delay: 1.0,
+    label: "",
+    labelPos: { x: 885, y: 245 },
     color: "#52525b",
   },
   // ── web/landing (710,450) ──► landing-pages (930,575) — no LB ──
@@ -636,11 +688,11 @@ export const INFRA_CONNECTIONS: Connection[] = [
     id: "web-landing",
     d: "M 710 450 C 820 450, 820 575, 930 575",
     delay: 0.5,
-    label: "routes",
+    label: "routes (~10.7k/s)",
     labelPos: { x: 820, y: 525 },
     color: "#52525b",
   },
-  // ── chat-page (1150,190) ──► Service Mesh LB left (1243,190) ──► chat-service (1770,190) ──
+  // ── chat-page (1150,190) ──► Service Mesh LB left (1243,190) ──► 3× chat-service (1770,85) ──
   {
     id: "chatpage-to-lb-service",
     d: "M 1150 190 L 1243 190",
@@ -650,28 +702,76 @@ export const INFRA_CONNECTIONS: Connection[] = [
     color: "#52525b",
   },
   {
-    id: "lb-service-to-chatservice",
-    d: "M 1277 190 L 1770 190",
-    delay: 0.9,
-    label: "POST /send-message",
+    id: "lb-service-to-chatservice-1",
+    d: "M 1257 170 C 1450 170, 1550 145, 1770 145",
+    delay: 0.8,
+    label: "",
+    labelPos: { x: 1520, y: 160 },
+    color: "#52525b",
+  },
+  {
+    id: "lb-service-to-chatservice-2",
+    d: "M 1267 180 C 1450 180, 1550 190, 1770 190",
+    delay: 1.0,
+    label: "POST /send-message (3 pods · ~4.3k/s)",
     labelPos: { x: 1520, y: 175 },
     color: "#52525b",
   },
-  // ── table-ref (1580,380) ──► PgBouncer LB bottom (1675,329) ─ through ─ top (1675,295) ──► chat-service (1770,245) ──
   {
-    id: "table-to-lb-db",
-    d: "M 1580 380 C 1630 380, 1675 355, 1675 329",
+    id: "lb-service-to-chatservice-3",
+    d: "M 1277 190 C 1450 190, 1550 235, 1770 235",
     delay: 1.2,
     label: "",
-    labelPos: { x: 1640, y: 365 },
+    labelPos: { x: 1520, y: 220 },
+    color: "#52525b",
+  },
+  // ── table-ref (1580, 350..410) ──► 3× PgBouncer LB Disks (1650..1670) ──► 3× chat-service Pods (1770, 255..295) ──
+  {
+    id: "table-to-lb-db-1",
+    d: "M 1580 350 C 1620 350, 1640 320, 1650 305",
+    delay: 1.1,
+    label: "",
+    labelPos: { x: 1620, y: 340 },
     color: "#52525b",
   },
   {
-    id: "lb-db-to-chatservice",
-    d: "M 1675 295 C 1675 265, 1715 245, 1770 245",
+    id: "table-to-lb-db-2",
+    d: "M 1580 380 C 1625 380, 1650 335, 1660 317",
+    delay: 1.2,
+    label: "write pool (~620 w/s)",
+    labelPos: { x: 1620, y: 368 },
+    color: "#52525b",
+  },
+  {
+    id: "table-to-lb-db-3",
+    d: "M 1580 410 C 1630 410, 1660 350, 1670 329",
     delay: 1.3,
-    label: "SQL query",
-    labelPos: { x: 1720, y: 255 },
+    label: "",
+    labelPos: { x: 1620, y: 395 },
+    color: "#52525b",
+  },
+  {
+    id: "lb-db-to-chatservice-1",
+    d: "M 1650 275 C 1650 250, 1710 255, 1770 255",
+    delay: 1.2,
+    label: "",
+    labelPos: { x: 1715, y: 248 },
+    color: "#52525b",
+  },
+  {
+    id: "lb-db-to-chatservice-2",
+    d: "M 1660 285 C 1660 260, 1715 275, 1770 275",
+    delay: 1.3,
+    label: "SQL query (3 pods · ~3.4k/s)",
+    labelPos: { x: 1715, y: 268 },
+    color: "#52525b",
+  },
+  {
+    id: "lb-db-to-chatservice-3",
+    d: "M 1670 295 C 1670 270, 1720 295, 1770 295",
+    delay: 1.4,
+    label: "",
+    labelPos: { x: 1715, y: 288 },
     color: "#52525b",
   },
   // ── Downstream connections (spacious) ──

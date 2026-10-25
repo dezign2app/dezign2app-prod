@@ -1,9 +1,10 @@
 "use client";
 
 import React from "react";
-import { Move, Bot } from "lucide-react";
+import { Move, Bot, ShieldAlert, ShieldCheck } from "lucide-react";
 import type { CanvasMode, InfraCircle } from "../types";
 import type { TicketDef, AgentStep } from "../aiWorkerData";
+import type { SecurityVectorDef, SecurityStep } from "../ethicalHackerData";
 
 interface HeroCanvasFooterProps {
   activeMode: CanvasMode;
@@ -12,6 +13,9 @@ interface HeroCanvasFooterProps {
   currentStep: AgentStep;
   workerStep: number;
   activeTicket: TicketDef;
+  securityStep?: number;
+  activeSecurityStep?: SecurityStep | null;
+  activeVector?: SecurityVectorDef | null;
   isRealtimeEdgeVisible: boolean;
 }
 
@@ -22,6 +26,9 @@ export const HeroCanvasFooter: React.FC<HeroCanvasFooterProps> = ({
   currentStep,
   workerStep,
   activeTicket,
+  securityStep = 0,
+  activeSecurityStep,
+  activeVector,
   isRealtimeEdgeVisible,
 }) => {
   return (
@@ -38,6 +45,8 @@ export const HeroCanvasFooter: React.FC<HeroCanvasFooterProps> = ({
               ? `Inspecting: ${activeInfraNode.label} (${activeInfraNode.details.engine})`
               : selectedNode
               ? `Selected: ${selectedNode} (Click to toggle)`
+              : activeMode === "ethical-hacker" && activeSecurityStep
+              ? `Ethical Hacker: ${activeSecurityStep.phase} · ${activeSecurityStep.subAction}`
               : activeMode === "ai-worker"
               ? `AI Worker: ${currentStep.subAction} · ${currentStep.title}`
               : activeMode === "infrastructure"
@@ -47,7 +56,41 @@ export const HeroCanvasFooter: React.FC<HeroCanvasFooterProps> = ({
         </div>
       </div>
 
-      {activeMode === "ai-worker" ? (
+      {activeMode === "ethical-hacker" && activeVector && activeSecurityStep ? (
+        <div className="flex items-center gap-3 text-[11px] text-zinc-400">
+          <span className="flex items-center gap-1.5 text-rose-300">
+            {securityStep === 4 ? (
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            ) : (
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+            )}
+            <span>
+              Attack:{" "}
+              <strong className={securityStep === 4 ? "text-emerald-400" : "text-rose-300"}>
+                {activeVector.cwe} ({activeVector.displayNumber})
+              </strong>
+            </span>
+          </span>
+          <span className="text-zinc-700 hidden sm:inline">|</span>
+          <span className="hidden sm:inline">
+            CVSS:{" "}
+            <strong className={securityStep === 4 ? "text-emerald-400" : "text-rose-400"}>
+              {activeVector.cvssScore}
+            </strong>
+          </span>
+          <span className="text-zinc-700 hidden sm:inline">|</span>
+          <span className="hidden sm:inline">
+            Status:{" "}
+            <strong className={securityStep === 4 ? "text-emerald-400" : "text-rose-300"}>
+              {securityStep === 4 ? "Mitigated (403 Forbidden)" : activeSecurityStep.phase}
+            </strong>
+          </span>
+          <span className="text-zinc-700 hidden md:inline">|</span>
+          <span className="hidden md:inline">
+            Endpoint: <strong className="text-zinc-300">{activeVector.endpointPath}</strong>
+          </span>
+        </div>
+      ) : activeMode === "ai-worker" ? (
         <div className="flex items-center gap-3 text-[11px] text-zinc-400">
           <span className="flex items-center gap-1.5 text-cyan-300">
             <Bot className="w-3.5 h-3.5 text-cyan-400" />

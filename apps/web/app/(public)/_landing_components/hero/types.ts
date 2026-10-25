@@ -1,6 +1,6 @@
 import React from "react";
 
-export type CanvasMode = "architecture" | "infrastructure" | "ai-worker";
+export type CanvasMode = "architecture" | "infrastructure" | "ai-worker" | "ethical-hacker";
 export type TrafficIntensity = "normal" | "burst";
 
 export interface NodeHandle {
@@ -38,6 +38,7 @@ export interface CanvasNode {
     variance: number;
     unit?: string;
   };
+  infraReplicas?: number;
 }
 
 export interface Connection {
