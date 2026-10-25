@@ -333,6 +333,14 @@ export function cleanupDeletedNodesState(
     deletedDbRefNodes.map((n) => n.data?.stepId).filter(Boolean),
   );
 
+  // Track any stepIds and dbRefNodeIds referenced by edges attached to deleted nodes
+  currentState.edges.forEach((e) => {
+    if (e && (allIdsSet.has(e.source) || allIdsSet.has(e.target))) {
+      if (e.data?.stepId) deletedDbRefStepIds.add(e.data.stepId);
+      if (e.data?.dbRefNodeId) deletedDbRefIds.add(e.data.dbRefNodeId);
+    }
+  });
+
   // 2. Events to remove (publishers & consumers)
   const eventsToDelete = currentState.events.filter((ev) =>
     allIdsSet.has(ev.nodeId),
@@ -885,78 +893,213 @@ export function cleanupDeletedEdgesState(
         });
       }
     } else {
-      if (dbNodeIdsSet.has(edge.target)) {
+      const edgeSrcNode = currentState.nodes.find((n) => n.id === edge.source);
+      const edgeTgtNode = currentState.nodes.find((n) => n.id === edge.target);
+      const isDbRefSource = edgeSrcNode?.type === "db_ref";
+      const isDbRefTarget = edgeTgtNode?.type === "db_ref";
+      const dbRefNode = isDbRefSource ? edgeSrcNode : isDbRefTarget ? edgeTgtNode : currentState.nodes.find((n) => n.id === edge.data?.dbRefNodeId);
+      const effectiveDbRefId = dbRefNode?.id || edge.data?.dbRefNodeId;
+      const isDbRefConnection = Boolean(effectiveDbRefId || edge.data?.isDbOperation);
+
+      if (dbNodeIdsSet.has(edge.target) || isDbRefTarget) {
         targetDbId = edge.target;
-        currentState.endpoints
-          .filter((ep) => ep.nodeId === edge.source)
-          .forEach((ep) => targetEndpointIds.add(ep.id));
-      } else if (dbNodeIdsSet.has(edge.source)) {
+        if (edge.sourceHandle?.startsWith("endpoint-out-") || edge.sourceHandle?.startsWith("endpoint-in-")) {
+          const epId = edge.sourceHandle.replace(/^endpoint-(?:out|in)-/, "");
+          targetEndpointIds.add(epId);
+        } else if (edge.sourceHandle?.startsWith("routeEndpoints-")) {
+          const epId = edge.sourceHandle.replace(/^routeEndpoints-(?:out|in)-/, "");
+          targetEndpointIds.add(epId);
+        } else {
+          currentState.endpoints
+            .filter((ep) => ep.nodeId === edge.source)
+            .forEach((ep) => targetEndpointIds.add(ep.id));
+        }
+      } else if (dbNodeIdsSet.has(edge.source) || isDbRefSource) {
         targetDbId = edge.source;
-        currentState.endpoints
-          .filter((ep) => ep.nodeId === edge.target)
-          .forEach((ep) => targetEndpointIds.add(ep.id));
+        if (edge.targetHandle?.startsWith("endpoint-in-") || edge.targetHandle?.startsWith("endpoint-out-")) {
+          const epId = edge.targetHandle.replace(/^endpoint-(?:in|out)-/, "");
+          targetEndpointIds.add(epId);
+        } else if (edge.targetHandle?.startsWith("routeEndpoints-")) {
+          const epId = edge.targetHandle.replace(/^routeEndpoints-(?:in|out)-/, "");
+          targetEndpointIds.add(epId);
+        } else {
+          currentState.endpoints
+            .filter((ep) => ep.nodeId === edge.target)
+            .forEach((ep) => targetEndpointIds.add(ep.id));
+        }
       }
-    }
 
-    if (targetDbId) {
-      nextEndpoints = nextEndpoints.map((ep) => {
-        if (
-          targetEndpointIds.size > 0 &&
-          !targetEndpointIds.has(ep.id)
-        )
-          return ep;
+      if (effectiveDbRefId) {
+        targetDbId = targetDbId || effectiveDbRefId;
+        if (dbRefNode?.data?.endpointId) {
+          targetEndpointIds.add(dbRefNode.data.endpointId);
+        }
+        if (edge.data?.endpointId) {
+          targetEndpointIds.add(edge.data.endpointId);
+        }
+      }
 
-        const currentDbIds =
-          ep.databaseNodeIds ||
-          (ep.databaseNodeId && ep.databaseNodeId !== "none"
-            ? [ep.databaseNodeId]
-            : []);
+      const targetStepId = edge.data?.stepId || dbRefNode?.data?.stepId;
 
-        if (currentDbIds.includes(targetDbId!)) {
-          endpointsChanged = true;
-          const newDbIds = currentDbIds.filter((id) => id !== targetDbId);
-          const newDbId = newDbIds[0] || "none";
+      if (targetDbId || effectiveDbRefId) {
+        const dbRefIdToClean = effectiveDbRefId || (dbRefNode ? dbRefNode.id : null);
+        nextEndpoints = nextEndpoints.map((ep) => {
+          if (
+            targetEndpointIds.size > 0 &&
+            !targetEndpointIds.has(ep.id)
+          )
+            return ep;
 
-          const newCrudOps = { ...(ep.crudOperations || {}) };
-          delete newCrudOps[targetDbId!];
+          const currentDbIds =
+            ep.databaseNodeIds ||
+            (ep.databaseNodeId && ep.databaseNodeId !== "none"
+              ? [ep.databaseNodeId]
+              : []);
 
-          const newCrudExp = { ...(ep.crudExplanations || {}) };
-          delete newCrudExp[targetDbId!];
+          const hasDbId = Boolean(
+            (targetDbId && currentDbIds.includes(targetDbId)) ||
+            (dbRefIdToClean && currentDbIds.includes(dbRefIdToClean))
+          );
 
-          let newPipelineSteps = ep.pipelineSteps;
-          if (newPipelineSteps && newPipelineSteps.length > 0) {
-            const relatedEntityIds = new Set(
-              currentState.nodes
-                .filter(
-                  (n) =>
-                    n &&
-                    (n.id === targetDbId ||
-                      n.parentId === targetDbId ||
-                      (n.data as any)?.databaseId === targetDbId),
-                )
-                .map((n) => n.id),
+          const hasMatchingStep = (ep.pipelineSteps || []).some(
+            (s) =>
+              s.type === "db_operation" &&
+              ((dbRefIdToClean && s.dbRefNodeId === dbRefIdToClean) ||
+                (targetDbId && (s.dbRefNodeId === targetDbId || s.databaseId === targetDbId)) ||
+                (targetStepId && s.id === targetStepId)),
+          );
+
+          if (hasDbId || hasMatchingStep) {
+            endpointsChanged = true;
+            const newDbIds = currentDbIds.filter(
+              (id) => id !== targetDbId && id !== dbRefIdToClean,
             );
-            newPipelineSteps = newPipelineSteps.filter((step) => {
+            const newDbId = newDbIds[0] || "none";
+
+            const newCrudOps = { ...(ep.crudOperations || {}) };
+            if (targetDbId) delete newCrudOps[targetDbId];
+            if (dbRefIdToClean) delete newCrudOps[dbRefIdToClean];
+
+            const newCrudExp = { ...(ep.crudExplanations || {}) };
+            if (targetDbId) delete newCrudExp[targetDbId];
+            if (dbRefIdToClean) delete newCrudExp[dbRefIdToClean];
+
+            let newPipelineSteps = ep.pipelineSteps;
+            if (newPipelineSteps && newPipelineSteps.length > 0) {
+              const relatedEntityIds = new Set(
+                currentState.nodes
+                  .filter(
+                    (n) =>
+                      n &&
+                      ((targetDbId && (n.id === targetDbId || n.parentId === targetDbId || n.data?.databaseId === targetDbId)) ||
+                       (dbRefIdToClean && (n.id === dbRefIdToClean || n.data?.tableRef === n.id))),
+                  )
+                  .map((n) => n.id),
+              );
+              newPipelineSteps = newPipelineSteps.filter((step) => {
+                if (step.type !== "db_operation") return true;
+                if (dbRefIdToClean && step.dbRefNodeId === dbRefIdToClean) return false;
+                if (targetDbId && step.dbRefNodeId === targetDbId) return false;
+                if (targetStepId && step.id === targetStepId) return false;
+                if (isDbRefConnection && step.dbRefNodeId) {
+                  if (step.dbRefNodeId === edge.source || step.dbRefNodeId === edge.target) return false;
+                }
+                if (targetDbId && step.databaseId === targetDbId) return false;
+                if (step.tableNodeId && relatedEntityIds.has(step.tableNodeId) && (isDbRefConnection || !step.dbRefNodeId)) {
+                  return false;
+                }
+                return true;
+              });
+            }
+
+            const updatedEp = {
+              ...ep,
+              databaseNodeIds: newDbIds,
+              databaseNodeId: newDbId,
+              crudOperations: newCrudOps,
+              crudExplanations: newCrudExp,
+              pipelineSteps: newPipelineSteps,
+            };
+            pendingEndpointUpserts.push(updatedEp);
+            return updatedEp;
+          }
+          return ep;
+        });
+
+        // Clean up events if connected to consumed event listener
+        const targetEventIds = new Set<string>();
+        if (edge.sourceHandle?.startsWith("consumedEvents-")) {
+          targetEventIds.add(edge.sourceHandle.replace(/^consumedEvents-(?:in|out)-/, ""));
+        }
+        if (edge.targetHandle?.startsWith("consumedEvents-")) {
+          targetEventIds.add(edge.targetHandle.replace(/^consumedEvents-(?:in|out)-/, ""));
+        }
+        if (dbRefNode?.data?.consumedEventId) {
+          targetEventIds.add(dbRefNode.data.consumedEventId);
+        }
+        if (targetEventIds.size > 0 || (isDbRefConnection && currentState.events.some((ev) => ev.nodeId === edge.source || ev.nodeId === edge.target))) {
+          nextEvents = nextEvents.map((ev) => {
+            if (targetEventIds.size > 0 && !targetEventIds.has(ev.id)) return ev;
+            if (!ev.pipelineSteps || ev.pipelineSteps.length === 0) return ev;
+            const filteredSteps = ev.pipelineSteps.filter((step) => {
               if (step.type !== "db_operation") return true;
-              if (step.databaseId && step.databaseId === targetDbId) return false;
-              if (step.tableNodeId && relatedEntityIds.has(step.tableNodeId)) return false;
+              if (dbRefIdToClean && step.dbRefNodeId === dbRefIdToClean) return false;
+              if (targetDbId && step.dbRefNodeId === targetDbId) return false;
+              if (targetStepId && step.id === targetStepId) return false;
+              if (isDbRefConnection && (step.dbRefNodeId === edge.source || step.dbRefNodeId === edge.target)) return false;
               return true;
             });
-          }
-
-          const updatedEp = {
-            ...ep,
-            databaseNodeIds: newDbIds,
-            databaseNodeId: newDbId,
-            crudOperations: newCrudOps,
-            crudExplanations: newCrudExp,
-            pipelineSteps: newPipelineSteps,
-          };
-          pendingEndpointUpserts.push(updatedEp);
-          return updatedEp;
+            if (filteredSteps.length !== ev.pipelineSteps.length) {
+              eventsChanged = true;
+              const updatedEv = { ...ev, pipelineSteps: filteredSteps };
+              pendingEventUpserts.push(updatedEv);
+              return updatedEv;
+            }
+            return ev;
+          });
         }
-        return ep;
-      });
+
+        // Clean up db_ref node data if no other edge remains
+        if (dbRefIdToClean) {
+          const remainingEdgesForRef = nextEdges.filter(
+            (e) => e && (e.source === dbRefIdToClean || e.target === dbRefIdToClean),
+          );
+          if (remainingEdgesForRef.length === 0) {
+            nextNodes = nextNodes.map((n) => {
+              if (n.id === dbRefIdToClean && n.type === "db_ref") {
+                nodesChanged = true;
+                const updated = {
+                  ...n,
+                  data: {
+                    ...n.data,
+                    targetServiceId: undefined,
+                    endpointId: undefined,
+                    consumedEventId: undefined,
+                    stepId: undefined,
+                  },
+                };
+                pendingNodeUpserts.push(updated);
+                return updated;
+              }
+              return n;
+            });
+          }
+        }
+
+        if (endpointsChanged) {
+          nextNodes = nextNodes.map((n) => {
+            if (n.type === "service" && n.data?.endpoints) {
+              const serviceEpMap = new Map(nextEndpoints.filter((e) => e.nodeId === n.id).map((e) => [e.id, e]));
+              const updatedEps = n.data.endpoints.map((e: Endpoint) => serviceEpMap.get(e.id) || e);
+              nodesChanged = true;
+              const updated = { ...n, data: { ...n.data, endpoints: updatedEps } };
+              pendingNodeUpserts.push(updated);
+              return updated;
+            }
+            return n;
+          });
+        }
+      }
     }
 
     // 2. Messaging Event -> Broker Node cleanup: fully delete the publish event & pipeline step when its edge is removed

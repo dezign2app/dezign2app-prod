@@ -186,6 +186,18 @@ export interface ConnectedRedis {
   label: string;
 }
 
+export interface ConnectedDbRef {
+  id: string;
+  dbRefNodeId: string;
+  dbRefNode: BackendNode;
+  tableNodeId?: string;
+  tableNode?: BackendNode;
+  databaseId?: string;
+  databaseNode?: BackendNode;
+  label: string;
+  operationName?: string;
+}
+
 export interface ConnectedServiceCall {
   id: string;
   edgeId: string;

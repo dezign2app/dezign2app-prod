@@ -2,6 +2,7 @@ export * from "./types";
 export * from "./utils";
 export * from "./autoDeriveHandles";
 export * from "./handlers/databaseConnect";
+export * from "./handlers/databaseRefConnect";
 export * from "./handlers/eventBrokerConnect";
 export * from "./handlers/transformerConnect";
 export * from "./handlers/frontendConnect";
