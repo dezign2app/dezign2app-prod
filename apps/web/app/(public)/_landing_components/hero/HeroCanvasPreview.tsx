@@ -21,7 +21,21 @@ import {
   Zap,
   Workflow,
   ArrowUpRight,
+  Bot,
+  Sparkles,
+  CheckCircle2,
+  GitPullRequest,
+  Play,
+  Pause,
+  RotateCcw,
+  Check,
+  Code2,
+  Clock,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
+import { TICKETS } from "./aiWorkerData";
+
 
 interface NodeHandle {
   id: string;
@@ -89,9 +103,12 @@ interface InfraCircle {
   y: number;
   label: string;
   sublabel: string;
+  // For LBs: total incoming rate at the LB entry point
   baseRate: number;
   variance: number;
   unit?: string;
+  // Number of downstream backend instances traffic is split across (LBs only)
+  downstreamInstances?: number;
   type: "load-balancer" | "db-replica";
   details: InfraDetails;
 }
@@ -487,9 +504,12 @@ const LOAD_BALANCER_CIRCLES: InfraCircle[] = [
     y: 260,
     label: "Ingress LB",
     sublabel: "Least-Conn",
+    // Total ingress arriving at the LB
     baseRate: 24850,
     variance: 220,
     unit: "req/s",
+    // 5 frontend worker instances → each receives ~4.97k req/s
+    downstreamInstances: 5,
     type: "load-balancer",
     details: {
       category: "EDGE INGRESS / L7 PROXY",
@@ -497,9 +517,9 @@ const LOAD_BALANCER_CIRCLES: InfraCircle[] = [
       algorithm: "Least-Connections with Dynamic Weights",
       latencyP99: "3.2ms",
       activeConns: "4,180 active",
-      health: "100% (2/2 targets healthy)",
+      health: "100% (5/5 targets healthy)",
       upstream: "web (:3000) ⇄ /chat route",
-      description: "Terminates public HTTPS/HTTP2 traffic, applies IP rate limits, and dynamically distributes sessions across frontend workers.",
+      description: "Terminates public HTTPS/HTTP2 traffic, applies IP rate limits, and distributes sessions across 5 frontend worker replicas.",
       metrics: [
         { label: "SSL Termination", value: "TLS 1.3 / Auto Let's Encrypt", color: "text-cyan-400" },
         { label: "Session Persistence", value: "IP Hash / Cookie Affinity", color: "text-zinc-300" },
@@ -514,9 +534,12 @@ const LOAD_BALANCER_CIRCLES: InfraCircle[] = [
     y: 390,
     label: "Auth LB",
     sublabel: "Session Proxy",
+    // Total auth-related traffic arriving at the LB
     baseRate: 5840,
     variance: 60,
     unit: "req/s",
+    // 2 auth instances → each gets ~2.9k req/s
+    downstreamInstances: 2,
     type: "load-balancer",
     details: {
       category: "AUTHENTICATION GATEWAY",
@@ -524,9 +547,9 @@ const LOAD_BALANCER_CIRCLES: InfraCircle[] = [
       algorithm: "Round Robin + IP Sticky Session",
       latencyP99: "1.4ms",
       activeConns: "890 active",
-      health: "100% (Auth instance online)",
+      health: "100% (2/2 Auth instances online)",
       upstream: "better-auth (:3000/api/auth) ⇄ PostgreSQL",
-      description: "Guards and dispatches authentication handshakes, token verifications, and OAuth callbacks with zero-trust CSRF filtering.",
+      description: "Guards and distributes authentication handshakes, token verifications, and OAuth callbacks across 2 auth instances with zero-trust CSRF filtering.",
       metrics: [
         { label: "Rate Limit Guard", value: "120 req/s per IP", color: "text-amber-400" },
         { label: "JWT Cache", value: "Redis Cluster (hit 99.2%)", color: "text-cyan-400" },
@@ -541,9 +564,12 @@ const LOAD_BALANCER_CIRCLES: InfraCircle[] = [
     y: 190,
     label: "Service Mesh LB",
     sublabel: "Envoy Proxy",
+    // Total traffic arriving at the service mesh LB
     baseRate: 12850,
     variance: 130,
     unit: "req/s",
+    // 3 Express pods → each handles ~4.3k req/s
+    downstreamInstances: 3,
     type: "load-balancer",
     details: {
       category: "INTERNAL SERVICE MESH",
@@ -553,7 +579,7 @@ const LOAD_BALANCER_CIRCLES: InfraCircle[] = [
       activeConns: "2,340 active",
       health: "100% (3 Express pods online)",
       upstream: "/chat UI ➔ chat service (:3002)",
-      description: "Routes internal JSON & protobuf requests between chat clients and backend worker pools with automatic circuit breaking.",
+      description: "Routes internal JSON & protobuf requests between chat clients and distributes load across 3 backend worker pods with automatic circuit breaking.",
       metrics: [
         { label: "Circuit Breaker", value: "Closed (Err rate < 0.01%)", color: "text-emerald-400" },
         { label: "Retry Policy", value: "Max 3 (Exponential Backoff)", color: "text-cyan-400" },
@@ -568,9 +594,12 @@ const LOAD_BALANCER_CIRCLES: InfraCircle[] = [
     y: 312,
     label: "PgBouncer LB",
     sublabel: "Query Router",
+    // Total query throughput arriving at the pooler
     baseRate: 10250,
     variance: 110,
     unit: "req/s",
+    // 3 targets: 1 primary (writes) + 2 read replicas
+    downstreamInstances: 3,
     type: "load-balancer",
     details: {
       category: "DATABASE CONNECTION POOLER",
@@ -580,9 +609,9 @@ const LOAD_BALANCER_CIRCLES: InfraCircle[] = [
       activeConns: "185 / 250 pool",
       health: "100% (Primary + 2 Replicas)",
       upstream: "conversations schema (:5432)",
-      description: "Eliminates connection thrashing by pooling server connections and automatically routing write queries to Primary and SELECT queries to Replicas.",
+      description: "Routes write queries to Primary and read queries across 2 replicas, eliminating connection thrashing via transaction-level pooling.",
       metrics: [
-        { label: "Read / Write Split", value: "Automated via Query AST", color: "text-amber-400" },
+        { label: "Read / Write Split", value: "Writes → Primary · Reads → 2× Replica", color: "text-amber-400" },
         { label: "Pool Mode", value: "Transaction Pooling", color: "text-cyan-400" },
         { label: "Reserve Pool", value: "15 emergency connections", color: "text-zinc-300" },
         { label: "Query Cache", value: "Prepared Statements OK", color: "text-emerald-400" },
@@ -792,10 +821,41 @@ const INFRA_SSE_RETURN_CONNECTION: Connection = {
 };
 
 export const HeroCanvasPreview: React.FC = () => {
-  // Feature mode switcher: "architecture" vs "infrastructure"
-  const [activeMode, setActiveMode] = useState<"architecture" | "infrastructure">("infrastructure");
+  // Feature mode switcher: "architecture" vs "infrastructure" vs "ai-worker"
+  const [activeMode, setActiveMode] = useState<"architecture" | "infrastructure" | "ai-worker">("ai-worker");
   const [trafficIntensity, setTrafficIntensity] = useState<"normal" | "burst">("normal");
   const [ticker, setTicker] = useState<number>(0);
+
+  // AI Worker state
+  const [selectedTicketIndex, setSelectedTicketIndex] = useState<number>(0);
+  const [workerStep, setWorkerStep] = useState<number>(0);
+  const [isPlaying, setIsPlaying] = useState<boolean>(true);
+  const [playbackSpeed, setPlaybackSpeed] = useState<1 | 2>(1);
+  const [isTicketCardMinimized, setIsTicketCardMinimized] = useState<boolean>(false);
+  const [isConsoleMinimized, setIsConsoleMinimized] = useState<boolean>(false);
+  const [activeConsoleTab, setActiveConsoleTab] = useState<"terminal" | "diff" | "bench">("terminal");
+
+  const activeTicket = TICKETS[selectedTicketIndex];
+  const currentStep = activeTicket?.steps?.[workerStep] || activeTicket.steps[0];
+
+  // Auto-advance AI worker steps when active and playing
+  useEffect(() => {
+    if (activeMode !== "ai-worker" || !isPlaying) return;
+
+    // Longer pause on step 5 (PR merged / solved) before looping to next step or next ticket
+    const delay = workerStep === 5 ? 5000 / playbackSpeed : 3400 / playbackSpeed;
+
+    const timer = setTimeout(() => {
+      setWorkerStep((prev) => {
+        if (prev >= 5) {
+          return 0;
+        }
+        return prev + 1;
+      });
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [activeMode, isPlaying, workerStep, playbackSpeed]);
 
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
@@ -851,19 +911,38 @@ export const HeroCanvasPreview: React.FC = () => {
     [ticker, trafficIntensity]
   );
 
-  // Compute live rate for circles
+  // Compute live TOTAL ingress rate arriving at a circle (displayed as entry rate)
   const getCircleRate = useCallback(
     (circle: InfraCircle): string => {
       const multiplier = trafficIntensity === "burst" ? 2.75 : 1;
       const seed = Math.sin(ticker * 1.6 + circle.baseRate * 0.04);
       const jitter = Math.round(seed * circle.variance);
-      const count = Math.max(0, Math.round((circle.baseRate + jitter) * multiplier));
+      const total = Math.max(0, Math.round((circle.baseRate + jitter) * multiplier));
       const unit = circle.unit || "req/s";
 
-      if (count >= 1000) {
-        return `${(count / 1000).toFixed(1)}k ${unit}`;
+      if (total >= 1000) {
+        return `${(total / 1000).toFixed(1)}k ${unit}`;
       }
-      return `${count.toLocaleString()} ${unit}`;
+      return `${total.toLocaleString()} ${unit}`;
+    },
+    [ticker, trafficIntensity]
+  );
+
+  // Compute live PER-INSTANCE rate after the LB distributes traffic
+  const getCircleSplitRate = useCallback(
+    (circle: InfraCircle): string | null => {
+      if (!circle.downstreamInstances || circle.downstreamInstances <= 1) return null;
+      const multiplier = trafficIntensity === "burst" ? 2.75 : 1;
+      const seed = Math.sin(ticker * 1.6 + circle.baseRate * 0.04);
+      const jitter = Math.round(seed * circle.variance);
+      const total = Math.max(0, Math.round((circle.baseRate + jitter) * multiplier));
+      const perInstance = Math.round(total / circle.downstreamInstances);
+      const unit = circle.unit || "req/s";
+
+      if (perInstance >= 1000) {
+        return `${(perInstance / 1000).toFixed(1)}k ${unit}`;
+      }
+      return `${perInstance.toLocaleString()} ${unit}`;
     },
     [ticker, trafficIntensity]
   );
@@ -890,11 +969,24 @@ export const HeroCanvasPreview: React.FC = () => {
     if (isInfra) {
       const base = [...INFRA_CONNECTIONS, ...DB_REPLICATION_CONNECTIONS];
       return isRealtimeEdgeVisible ? [...base, INFRA_SSE_RETURN_CONNECTION] : base;
+    } else if (activeMode === "ai-worker") {
+      // In ai-worker mode:
+      // When the new node is generated (step >= 2), replace direct edge with the AI-synthesized connections
+      if (workerStep >= 2 && activeTicket.aiConnections.length > 0) {
+        const filtered = ARCH_CONNECTIONS.filter(
+          (c) => c.id !== activeTicket.replacedConnectionId
+        );
+        const base = [...filtered, ...activeTicket.aiConnections];
+        return isRealtimeEdgeVisible ? [...base, ARCH_SSE_RETURN_CONNECTION] : base;
+      }
+      const base = ARCH_CONNECTIONS;
+      return isRealtimeEdgeVisible ? [...base, ARCH_SSE_RETURN_CONNECTION] : base;
     } else {
       const base = ARCH_CONNECTIONS;
       return isRealtimeEdgeVisible ? [...base, ARCH_SSE_RETURN_CONNECTION] : base;
     }
-  }, [isInfra, isRealtimeEdgeVisible]);
+  }, [isInfra, isRealtimeEdgeVisible, activeMode, workerStep, activeTicket]);
+
 
   // Dynamically compute the exact zoom scale that fits all nodes in view
   const computeFitZoom = useCallback(() => {
@@ -1032,7 +1124,11 @@ export const HeroCanvasPreview: React.FC = () => {
 
             {/* Tab 2: Infrastructure Manager (Upcoming) */}
             <button
-              onClick={() => setActiveMode("infrastructure")}
+              onClick={() => {
+                setActiveMode("infrastructure");
+                setHoveredInfraId(null);
+                setSelectedInfraId(null);
+              }}
               className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-mono font-medium transition-all ${
                 activeMode === "infrastructure"
                   ? "bg-teal-950/90 text-teal-300 border border-teal-700/80 shadow-xs"
@@ -1046,12 +1142,69 @@ export const HeroCanvasPreview: React.FC = () => {
                 Upcoming
               </span>
             </button>
+
+            {/* Tab 3: Autonomous AI Worker (Upcoming) */}
+            <button
+              onClick={() => {
+                setActiveMode("ai-worker");
+                setHoveredInfraId(null);
+                setSelectedInfraId(null);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-mono font-medium transition-all ${
+                activeMode === "ai-worker"
+                  ? "bg-violet-950/90 text-violet-300 border border-violet-600/80 shadow-xs ring-1 ring-violet-500/30"
+                  : "text-zinc-400 hover:text-violet-300 hover:bg-zinc-800/50"
+              }`}
+            >
+              <Bot className="w-3.5 h-3.5 text-violet-400" />
+              <span>AI Worker</span>
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/40 font-semibold uppercase tracking-wider flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-ping inline-block" />
+                Upcoming
+              </span>
+            </button>
           </div>
         </div>
 
-        {/* Right Toolbar Status & Interactive Traffic Simulator */}
+        {/* Right Toolbar Status & Interactive Controls */}
         <div className="flex items-center gap-2.5">
-          {activeMode === "infrastructure" ? (
+          {activeMode === "ai-worker" ? (
+            <div className="flex items-center gap-2">
+              {/* Active Ticket Pill */}
+              <div className="flex items-center gap-2 px-2.5 py-1 rounded bg-[#0d0718] border border-violet-800/70 text-[11px] font-mono text-violet-300">
+                <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
+                <span className="text-zinc-400 hidden sm:inline">Ticket:</span>
+                <span className="font-bold text-violet-300">{activeTicket.displayNumber}</span>
+                <span className="text-zinc-600 hidden sm:inline">·</span>
+                <span className={workerStep === 5 ? "text-emerald-400 font-bold" : "text-violet-300 font-semibold"}>
+                  {workerStep === 5 ? "PR Merged ✓" : `Step ${workerStep + 1}/6`}
+                </span>
+              </div>
+
+              {/* Play / Pause Toggle Button */}
+              <button
+                onClick={() => setIsPlaying((p) => !p)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 transition-colors"
+                title={isPlaying ? "Pause AI Worker" : "Resume AI Worker"}
+              >
+                {isPlaying ? (
+                  <Pause className="w-3.5 h-3.5 text-amber-400" />
+                ) : (
+                  <Play className="w-3.5 h-3.5 text-emerald-400" />
+                )}
+                <span className="hidden sm:inline">{isPlaying ? "Pause" : "Play"}</span>
+              </button>
+
+              {/* Reset / Replay Ticket Button */}
+              <button
+                onClick={() => setWorkerStep(0)}
+                className="p-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-800 transition-colors"
+                title="Restart Ticket Resolution"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : activeMode === "infrastructure" ? (
             <>
               {/* Realtime Ingress Counter */}
               <div className="flex items-center gap-2 px-2.5 py-1 rounded bg-[#09090d] border border-zinc-800 text-[11px] font-mono">
@@ -1223,6 +1376,45 @@ export const HeroCanvasPreview: React.FC = () => {
                   </g>
                 );
               })}
+
+              {/* Laser Beam from AI Worker to Targeted Active Node */}
+              {activeMode === "ai-worker" && currentStep && !reduceMotion && (
+                <g key={`worker-laser-${workerStep}-${activeTicket.id}`}>
+                  <defs>
+                    <linearGradient id="workerLaserGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#c084fc" stopOpacity="0.95" />
+                      <stop offset="100%" stopColor="#a855f7" stopOpacity="0.3" />
+                    </linearGradient>
+                  </defs>
+                  <motion.path
+                    initial={{ pathLength: 0, opacity: 0 }}
+                    animate={{ pathLength: 1, opacity: [0.65, 1, 0.65] }}
+                    transition={{
+                      pathLength: { duration: 0.3 },
+                      opacity: { duration: 1.2, repeat: Infinity, ease: "easeInOut" },
+                    }}
+                    d={`M ${currentStep.agentTarget.x + 24} ${currentStep.agentTarget.y + 44} C ${currentStep.agentTarget.x + 24} ${(currentStep.agentTarget.y + currentStep.targetNodeCenter.y) / 2}, ${currentStep.targetNodeCenter.x} ${(currentStep.agentTarget.y + currentStep.targetNodeCenter.y) / 2}, ${currentStep.targetNodeCenter.x} ${currentStep.targetNodeCenter.y}`}
+                    fill="none"
+                    stroke="url(#workerLaserGrad)"
+                    strokeWidth="2.2"
+                    strokeDasharray="5 4"
+                  />
+                  <circle
+                    cx={currentStep.targetNodeCenter.x}
+                    cy={currentStep.targetNodeCenter.y}
+                    r="6"
+                    fill="#c084fc"
+                    className="animate-ping"
+                    opacity="0.8"
+                  />
+                  <circle
+                    cx={currentStep.targetNodeCenter.x}
+                    cy={currentStep.targetNodeCenter.y}
+                    r="3.5"
+                    fill="#f3e8ff"
+                  />
+                </g>
+              )}
             </svg>
 
             {/* Small Circles Representing Load Balancers along the Connections */}
@@ -1279,9 +1471,17 @@ export const HeroCanvasPreview: React.FC = () => {
                         >
                           {lb.label}
                         </span>
-                        <span className="text-[8px] font-mono text-emerald-400 font-semibold mt-0.5">
-                          {getCircleRate(lb)}
-                        </span>
+                        {/* Show split-per-instance rate if this LB fans out to multiple backends */}
+                        {lb.downstreamInstances && lb.downstreamInstances > 1 ? (
+                          <span className="text-[8px] font-mono text-emerald-400 font-semibold mt-0.5 flex items-center gap-0.5">
+                            <span>{getCircleSplitRate(lb)}</span>
+                            <span className="text-zinc-500 font-normal">×{lb.downstreamInstances}</span>
+                          </span>
+                        ) : (
+                          <span className="text-[8px] font-mono text-emerald-400 font-semibold mt-0.5">
+                            {getCircleRate(lb)}
+                          </span>
+                        )}
                       </div>
                     </motion.div>
                   );
@@ -1467,14 +1667,41 @@ export const HeroCanvasPreview: React.FC = () => {
                         <div className="grid grid-cols-2 gap-1.5 bg-black/60 rounded-lg p-2 border border-zinc-800/80">
                           <div className="flex flex-col">
                             <span className="text-[8px] uppercase tracking-wider text-zinc-500 font-mono">
-                              Live Throughput
+                              {isLb && activeInfraNode.downstreamInstances && activeInfraNode.downstreamInstances > 1
+                                ? "Traffic Split"
+                                : "Live Throughput"}
                             </span>
-                            <span className="text-xs font-bold font-mono text-emerald-400 mt-0.5">
-                              {currentRate}
-                            </span>
-                            <span className="text-[8px] font-mono text-zinc-500">
-                              {trafficIntensity === "burst" ? "2.8x spike load" : "steady ingress"}
-                            </span>
+                            {isLb && activeInfraNode.downstreamInstances && activeInfraNode.downstreamInstances > 1 ? (
+                              /* Traffic split breakdown: total → ÷N → per-instance */
+                              <div className="flex flex-col gap-0.5 mt-0.5">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[8px] font-mono text-zinc-500 shrink-0">In</span>
+                                  <span className="text-[10px] font-bold font-mono text-emerald-400">
+                                    {currentRate}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[8px] font-mono text-zinc-500 shrink-0">÷{activeInfraNode.downstreamInstances}</span>
+                                  <span className="text-[8px] font-mono text-zinc-500">backends</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[8px] font-mono text-zinc-500 shrink-0">→</span>
+                                  <span className="text-[10px] font-bold font-mono text-cyan-300">
+                                    {getCircleSplitRate(activeInfraNode)}
+                                  </span>
+                                  <span className="text-[8px] font-mono text-zinc-500">each</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <span className="text-xs font-bold font-mono text-emerald-400 mt-0.5">
+                                  {currentRate}
+                                </span>
+                                <span className="text-[8px] font-mono text-zinc-500">
+                                  {trafficIntensity === "burst" ? "2.8x spike load" : "steady ingress"}
+                                </span>
+                              </>
+                            )}
                           </div>
 
                           <div className="flex flex-col">
@@ -1536,6 +1763,7 @@ export const HeroCanvasPreview: React.FC = () => {
               const Icon = node.icon;
               const isHovered = hoveredNode === node.id;
               const isSelected = selectedNode === node.id;
+              const isAgentActiveNode = activeMode === "ai-worker" && currentStep?.activeNodeId === node.id;
               const incomingBadge = isInfra ? getIncomingBadgeText(node) : null;
               const currentX = isInfra ? node.infraX : node.archX;
               const currentY = isInfra ? node.infraY : node.archY;
@@ -1547,7 +1775,7 @@ export const HeroCanvasPreview: React.FC = () => {
                   animate={{
                     x: currentX,
                     y: currentY,
-                    scale: isSelected ? 1.03 : isHovered ? 1.02 : 1,
+                    scale: isSelected ? 1.03 : isAgentActiveNode ? 1.03 : isHovered ? 1.02 : 1,
                   }}
                   transition={{
                     type: "spring",
@@ -1570,11 +1798,28 @@ export const HeroCanvasPreview: React.FC = () => {
                     } ${
                       isSelected
                         ? "ring-2 ring-emerald-400 border-emerald-400 shadow-2xl shadow-emerald-950/70"
+                        : isAgentActiveNode
+                        ? "ring-2 ring-violet-400 border-violet-400 shadow-2xl shadow-violet-900/80"
                         : isHovered
                         ? "ring-1 ring-zinc-400 shadow-xl shadow-black/60"
                         : "hover:border-zinc-600"
                     }`}
                   >
+                    {/* Small Rectangle Badge Showing AI Worker Activity */}
+                    <AnimatePresence>
+                      {isAgentActiveNode && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.7, y: 4 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.7, y: 4 }}
+                          transition={{ type: "spring", stiffness: 450, damping: 25 }}
+                          className="absolute -top-3.5 left-2 z-30 flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#160a2c] border border-violet-400 shadow-lg text-[9px] font-mono font-bold text-violet-300 select-none whitespace-nowrap"
+                        >
+                          <Bot className="w-2.5 h-2.5 text-violet-400 animate-pulse" />
+                          <span>AI Worker Modifying...</span>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                     {/* Small Rectangle Badge with Numbers Showing Incoming Requests */}
                     <AnimatePresence>
                       {incomingBadge && (
