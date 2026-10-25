@@ -84,8 +84,8 @@ export const Footer = () => {
                 <Link href="/#compiler" className="hover:text-white transition-colors">
                   Monorepo Compiler
                 </Link>
-                <Link href="/#desktop" className="hover:text-white transition-colors">
-                  Desktop Studio
+                <Link href="/#why-visual" className="hover:text-white transition-colors">
+                  Why Visual
                 </Link>
                 <Link href="/#pricing" className="hover:text-white transition-colors">
                   Pricing
