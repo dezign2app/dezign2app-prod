@@ -305,9 +305,9 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
       if (source.kind === "realtime_payload") {
         if (!source.fieldPath) return runtimeState.incomingPayload;
         const parts = source.fieldPath.split(".");
-        let cur: any = runtimeState.incomingPayload;
+        let cur: JSONValue | undefined = runtimeState.incomingPayload;
         for (const p of parts) {
-          if (cur == null) return undefined;
+          if (cur === null || typeof cur !== "object" || Array.isArray(cur)) return undefined;
           cur = cur[p];
         }
         return cur !== undefined ? cur : `<stream:${source.fieldPath}>`;

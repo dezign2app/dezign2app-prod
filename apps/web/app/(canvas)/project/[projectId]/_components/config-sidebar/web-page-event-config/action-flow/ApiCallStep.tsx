@@ -34,6 +34,7 @@ import type {
   FrontendActionStepDraft,
   AvailablePath,
 } from "./types";
+import type { PageSection } from "@/types/canvas";
 import { ResponseFieldPicker } from "./ResponseFieldPicker";
 import { ActionFlowCombobox, ComboboxOption } from "./ActionFlowCombobox";
 import { ensureActionServiceConnection, cleanupActionStepEdge } from "./actionStepCanvasSync";
@@ -405,7 +406,7 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
               sectionStateVars.some((v) => v.name === source.stateKey));
 
           const storeFieldOptions: ComboboxOption[] = selectedStore
-            ? ((selectedStore.data?.fields || []) as any[]).map((f: any) => ({
+            ? (selectedStore.data?.fields || []).map((f) => ({
                 value: f.name,
                 label: `${f.name} (${f.type || "string"})`,
                 type: f.type || "string",
@@ -418,7 +419,7 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
               }))
             : [
                 ...stateStores.flatMap((s) =>
-                  ((s.data?.fields || []) as any[]).map((f: any) => ({
+                  (s.data?.fields || []).map((f) => ({
                     value: f.name,
                     label: `${s.data?.label || s.data?.storeName || "Store"}.${f.name}`,
                     type: f.type || "string",
@@ -708,15 +709,15 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
 
   const sectionStateVars = React.useMemo(() => {
     const pageNode = allNodes.find((n) => n.id === webPageNodeId);
-    const sections = pageNode?.data?.sections || [];
+    const sections: PageSection[] = pageNode?.data?.sections || [];
     const list: Array<{ name: string; type?: string; storeName?: string; storeId?: string }> = [];
-    sections.forEach((sec: any) => {
-      (sec.stateObjects || []).forEach((st: any) => {
+    sections.forEach((sec) => {
+      (sec.stateObjects || []).forEach((st) => {
         if (st.name && !list.some((existing) => existing.name === st.name)) {
           list.push({ name: st.name, type: st.type, storeName: st.storeName, storeId: st.storeId });
         }
       });
-      (sec.states || []).forEach((st: any) => {
+      (sec.states || []).forEach((st) => {
         if (st.name && !list.some((existing) => existing.name === st.name)) {
           list.push({ name: st.name, type: st.type });
         }
@@ -1125,9 +1126,9 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                 {selectedEndpoint.name || "/endpoint"}
               </span>
             </div>
-            {(selectedEndpoint as any).description && (
+            {selectedEndpoint.summary && (
               <span className="truncate max-w-[180px] italic">
-                {(selectedEndpoint as any).description}
+                {selectedEndpoint.summary}
               </span>
             )}
           </div>

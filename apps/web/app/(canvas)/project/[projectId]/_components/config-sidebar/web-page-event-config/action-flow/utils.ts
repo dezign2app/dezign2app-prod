@@ -253,22 +253,31 @@ export function deriveStepsFromEdges(
   existing?: FrontendActionStepDraft[],
   isProtected?: boolean,
 ): FrontendActionStepDraft[] {
-  const existingMap = new Map<string, FrontendActionStepDraft>();
-  const orderMap = new Map<number, FrontendActionStepDraft>();
+  const existingByEdgeId = new Map<string, FrontendActionStepDraft>();
+  const existingByEndpoint = new Map<string, FrontendActionStepDraft>();
+  const nonEdgeSteps: FrontendActionStepDraft[] = [];
 
   if (existing) {
     for (const draft of existing) {
-      existingMap.set(draft.id, draft);
       if (draft.edgeId) {
-        existingMap.set(draft.edgeId, draft);
+        existingByEdgeId.set(draft.edgeId, draft);
+        if (draft.serviceNodeId && draft.endpointId) {
+          existingByEndpoint.set(`${draft.serviceNodeId}:${draft.endpointId}`, draft);
+        }
+      } else {
+        // Retain steps without a canvas edge (e.g. state_mutation, update_query_params, navigate)
+        nonEdgeSteps.push(draft);
       }
-      orderMap.set(draft.order, draft);
     }
   }
 
-  return canvasSteps.map((cStep, idx) => {
-    const order = idx + 1;
-    const existingDraft = existingMap.get(cStep.edgeId) || orderMap.get(order);
+  const edgeSteps: FrontendActionStepDraft[] = canvasSteps.map((cStep, idx) => {
+    const existingDraft =
+      existingByEdgeId.get(cStep.edgeId) ||
+      (cStep.targetNodeId && cStep.endpointId
+        ? existingByEndpoint.get(`${cStep.targetNodeId}:${cStep.endpointId}`)
+        : undefined);
+
     const stepType: FrontendActionStepType = cStep.isStorageRef
       ? "storage_put"
       : "api_call";
@@ -285,21 +294,25 @@ export function deriveStepsFromEdges(
       const presignedUrlSource =
         existingDraft?.presignedUrlSource || defaultPresignedUrlSource;
 
-      const fileSource = existingDraft?.fileSource || {
-        kind: "user_input" as const,
+      const defaultFileSource: { kind: "state_var" | "user_input"; key: string } = {
+        kind: "user_input",
         key: "file",
       };
+      const fileSource = existingDraft?.fileSource || defaultFileSource;
 
       const contentType =
         existingDraft?.contentType || "application/octet-stream";
 
       const draft: FrontendActionStepDraft = {
         id: existingDraft?.id || cStep.edgeId,
-        order,
+        order: existingDraft?.order ?? (cStep.step ?? idx + 1),
         type: "storage_put",
+        name: existingDraft?.name || `Upload to ${cStep.bucketName || "Storage"}`,
         edgeId: cStep.edgeId,
         storageRefNodeId: cStep.targetNodeId,
         storageServiceNodeId: existingDraft?.storageServiceNodeId,
+        bucketId: cStep.bucketName,
+        bucketName: cStep.bucketName,
         presignedUrlSource,
         fileSource,
         contentType,
@@ -320,10 +333,15 @@ export function deriveStepsFromEdges(
             isProtected,
           );
 
+    const endpointName = cStep.endpoint?.name
+      ? `${cStep.endpoint.type || "POST"} ${cStep.endpoint.name}`
+      : "Call Endpoint";
+
     const draft: FrontendActionStepDraft = {
       id: existingDraft?.id || cStep.edgeId,
-      order,
+      order: existingDraft?.order ?? (cStep.step ?? idx + 1),
       type: "api_call",
+      name: existingDraft?.name || endpointName,
       edgeId: cStep.edgeId,
       serviceNodeId: cStep.targetNodeId,
       endpointId: cStep.endpointId,
@@ -332,6 +350,15 @@ export function deriveStepsFromEdges(
 
     return draft;
   });
+
+  // Merge edge steps with non-edge steps and sort by order
+  const combined = [...edgeSteps, ...nonEdgeSteps].sort((a, b) => a.order - b.order);
+
+  // Normalize order to 1-based sequential integers
+  return combined.map((step, index) => ({
+    ...step,
+    order: index + 1,
+  }));
 }
 
 /**

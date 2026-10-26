@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { BackendNode, BackendEdge } from "@/types/canvas";
+import { BackendNode, BackendEdge, FrontendActionStepDraft } from "@/types/canvas";
 
 describe("Multi-step Action Edge Flow (Numbered Topology)", () => {
   beforeEach(() => {
@@ -276,6 +276,118 @@ describe("Multi-step Action Edge Flow (Numbered Topology)", () => {
     if (authBinding?.source.kind === "auth_token") {
       expect(authBinding.source.tokenType).toBe("session");
     }
+  });
+
+  it("configures api_call request step in actionSteps when action already has a state_mutation step", () => {
+    setupTestCanvas();
+    const store = useBackendCanvasStore.getState();
+
+    // Pre-populate action with an existing state_mutation step
+    const pageNodeBefore = store.nodes.find((n) => n.id === "page-1")!;
+    const existingMutationStep: FrontendActionStepDraft = {
+      id: "step-mutation-1",
+      order: 1,
+      type: "state_mutation",
+      name: "Mutate AppStore",
+      stateTargetKind: "store",
+      stateStoreNodeId: "store-1",
+      stateKey: "message",
+      stateActionName: "append",
+      stateUpdateType: "append",
+    };
+
+    const currentSections = pageNodeBefore.data?.sections ?? [];
+    store.updateNode("page-1", {
+      data: {
+        ...pageNodeBefore.data,
+        sections: currentSections.map((sec) => ({
+          ...sec,
+          actions: (sec.actions ?? []).map((act) =>
+            act.id === "act-upload-1"
+              ? { ...act, actionSteps: [existingMutationStep] }
+              : act,
+          ),
+        })),
+      },
+    });
+
+    // Draw edge from WebPage action to Service endpoint
+    store.onConnect({
+      source: "page-1",
+      target: "service-1",
+      sourceHandle: "events-act-upload-1",
+      targetHandle: "endpoint-in-ep-presign",
+    });
+
+    const pageNode = useBackendCanvasStore.getState().nodes.find((n) => n.id === "page-1");
+    const action = pageNode?.data?.sections?.[0]?.actions?.[0];
+
+    expect(action?.actionSteps).toBeDefined();
+    expect(action?.actionSteps).toHaveLength(2);
+    expect(action?.actionSteps?.[0]?.type).toBe("state_mutation");
+    expect(action?.actionSteps?.[1]?.type).toBe("api_call");
+    expect(action?.actionSteps?.[1]?.order).toBe(2);
+    expect(action?.actionSteps?.[1]?.serviceNodeId).toBe("service-1");
+    expect(action?.actionSteps?.[1]?.endpointId).toBe("ep-presign");
+
+    // The edge sequence order should be 2
+    const edge = useBackendCanvasStore.getState().edges.find((e) => e.target === "service-1");
+    expect(edge?.data?.sequenceOrder).toBe(2);
+    expect(edge?.data?.label).toBe("2");
+
+    // pendingEdgeUpserts should also have sequenceOrder 2
+    const pendingUpsert = useBackendCanvasStore.getState().pendingEdgeUpserts.find((e) => e.id === edge?.id);
+    expect(pendingUpsert?.data?.sequenceOrder).toBe(2);
+    expect(pendingUpsert?.data?.label).toBe("2");
+  });
+
+  it("configures api_call request step when endpoint is defined inside routeGroups", () => {
+    setupTestCanvas();
+    const store = useBackendCanvasStore.getState();
+
+    // Add service node with routeGroups
+    const groupServiceNode: BackendNode = {
+      id: "service-grouped",
+      type: "service",
+      position: { x: 800, y: 300 },
+      fractionalIndex: "a4",
+      data: {
+        label: "Grouped Service",
+        routeGroups: [
+          {
+            id: "rg-users",
+            name: "Users Group",
+            basePath: "/users",
+            endpoints: [
+              {
+                id: "ep-grouped-create",
+                name: "/users/create",
+                type: "POST",
+                summary: "Create a new user in group",
+              },
+            ],
+          },
+        ],
+      },
+    };
+    store.addNode(groupServiceNode);
+
+    // Connect from WebPage action to grouped endpoint handle
+    store.onConnect({
+      source: "page-1",
+      target: "service-grouped",
+      sourceHandle: "events-act-upload-1",
+      targetHandle: "endpoint-in-ep-grouped-create",
+    });
+
+    const pageNode = useBackendCanvasStore.getState().nodes.find((n) => n.id === "page-1");
+    const action = pageNode?.data?.sections?.[0]?.actions?.[0];
+
+    expect(action?.actionSteps).toBeDefined();
+    expect(action?.actionSteps).toHaveLength(1);
+    expect(action?.actionSteps?.[0]?.type).toBe("api_call");
+    expect(action?.actionSteps?.[0]?.serviceNodeId).toBe("service-grouped");
+    expect(action?.actionSteps?.[0]?.endpointId).toBe("ep-grouped-create");
   });
 });
 

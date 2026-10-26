@@ -50,6 +50,12 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
 }) => {
   const [drafts, setDrafts] = useState<FrontendActionStepDraft[]>(() => {
     if (item?.actionSteps && item.actionSteps.length > 0) {
+      const hasUnmergedCanvasStep = canvasSteps.some(
+        (c) => !item.actionSteps?.some((s) => s.edgeId === c.edgeId),
+      );
+      if (hasUnmergedCanvasStep) {
+        return deriveStepsFromEdges(canvasSteps, item.actionSteps, isProtected);
+      }
       return item.actionSteps.map((s) => {
         if (s.type === "api_call") {
           const ep = endpoints.find((e) => e.id === s.endpointId);
@@ -71,23 +77,33 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
   // Sync with item.actionSteps or canvasSteps if external changes happen
   useEffect(() => {
     if (item?.actionSteps && item.actionSteps.length > 0) {
-      const mapped = item.actionSteps.map((s) => {
-        if (s.type === "api_call") {
-          const ep = endpoints.find((e) => e.id === s.endpointId);
-          const bindings = s.requestBindings && s.requestBindings.length > 0
-            ? autoMapAuthBindings(s.requestBindings, ep, isProtected)
-            : buildInitialBindingsFromEndpoint(ep, isProtected);
-          return {
-            ...s,
-            requestBindings: bindings,
-          };
-        }
-        return s;
-      });
-      setDrafts(mapped);
+      const hasUnmergedCanvasStep = canvasSteps.some(
+        (c) => !item.actionSteps?.some((s) => s.edgeId === c.edgeId),
+      );
+      if (hasUnmergedCanvasStep) {
+        const derived = deriveStepsFromEdges(canvasSteps, item.actionSteps, isProtected);
+        setDrafts(derived);
+        onSave(derived);
+      } else {
+        const mapped = item.actionSteps.map((s) => {
+          if (s.type === "api_call") {
+            const ep = endpoints.find((e) => e.id === s.endpointId);
+            const bindings = s.requestBindings && s.requestBindings.length > 0
+              ? autoMapAuthBindings(s.requestBindings, ep, isProtected)
+              : buildInitialBindingsFromEndpoint(ep, isProtected);
+            return {
+              ...s,
+              requestBindings: bindings,
+            };
+          }
+          return s;
+        });
+        setDrafts(mapped);
+      }
     } else if (canvasSteps.length > 0) {
       const derived = deriveStepsFromEdges(canvasSteps, item?.actionSteps, isProtected);
       setDrafts(derived);
+      onSave(derived);
     } else {
       setDrafts([]);
     }
