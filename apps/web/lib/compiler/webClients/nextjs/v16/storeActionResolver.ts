@@ -1,17 +1,7 @@
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { UIEventItem, StoreActionBinding } from "@workspace/canvas/types";
+import { UIEventItem, StoreActionBinding, StoreActionType } from "@workspace/canvas/types";
 
-export type StoreActionType =
-  | "set"
-  | "append"
-  | "pop"
-  | "remove"
-  | "toggle"
-  | "increment"
-  | "reset"
-  | "populate"
-  | "custom"
-  | "mutate";
+export type { StoreActionType };
 
 export interface ResolvedStoreActionBinding {
   storeNodeId: string;
@@ -50,10 +40,13 @@ function isValidStoreActionType(val: string | undefined): val is StoreActionType
   return (
     val === "set" ||
     val === "append" ||
+    val === "prepend" ||
     val === "pop" ||
     val === "remove" ||
     val === "toggle" ||
     val === "increment" ||
+    val === "decrement" ||
+    val === "update" ||
     val === "reset" ||
     val === "populate" ||
     val === "custom" ||
@@ -84,6 +77,7 @@ function extractActionIdFromHandle(handleId: string | null | undefined): string 
     handleId.startsWith("section-state-in-") ||
     handleId.startsWith("state-in-") ||
     handleId.startsWith("store-state-") ||
+    handleId.startsWith("store-field-") ||
     handleId.startsWith("setter-") ||
     handleId.startsWith("append-") ||
     handleId.startsWith("pop-")
@@ -127,6 +121,7 @@ function resolveStoreBindingFromHandle(
   storeNode: BackendNode,
   storeHandleId: string | null | undefined,
   pageAction: UIEventItem,
+  edge?: BackendEdge,
 ): { actionId: string; actionName: string; actionType: StoreActionType; targetFieldId?: string; targetFieldName?: string } {
   const storeActions = storeNode.data?.actions;
   const storeFields = storeNode.data?.fields;
@@ -188,6 +183,93 @@ function resolveStoreBindingFromHandle(
           targetFieldName: found.targetFieldName,
         };
       }
+    }
+  }
+
+  // 3b. Store field handle: store-field-in-${f.id} or store-field-out-${f.id} or edge.data.targetFieldId
+  if (
+    storeHandleId?.startsWith("store-field-in-") ||
+    storeHandleId?.startsWith("store-field-out-") ||
+    Boolean(edge?.data?.targetFieldId)
+  ) {
+    let targetFieldId = edge?.data?.targetFieldId;
+    if (!targetFieldId && storeHandleId?.startsWith("store-field-")) {
+      targetFieldId = storeHandleId.replace(/^store-field-(in-|out-)/, "");
+    }
+
+    const matchedField = targetFieldId
+      ? (storeFields || []).find((f) => f.id === targetFieldId)
+      : undefined;
+
+    if (matchedField) {
+      const cap = matchedField.name.charAt(0).toUpperCase() + matchedField.name.slice(1);
+
+      const actionSteps = pageAction.actionSteps;
+      const matchingStep = Array.isArray(actionSteps)
+        ? actionSteps.find(
+            (s) =>
+              s.type === "state_mutation" &&
+              (s.stateStoreNodeId === storeNode.id || !s.stateStoreNodeId) &&
+              (s.stateTargetFieldId === matchedField.id || s.stateKey === matchedField.name),
+          )
+        : undefined;
+
+      const requestedAction =
+        matchingStep?.stateActionName ||
+        matchingStep?.stateUpdateType ||
+        edge?.data?.actionName ||
+        edge?.data?.actionType ||
+        "set";
+
+      const validActionType: StoreActionType = isValidStoreActionType(requestedAction)
+        ? requestedAction
+        : "set";
+
+      let actionName = `set${cap}`;
+      if (validActionType === "append") {
+        actionName = `append${cap}`;
+      } else if (validActionType === "prepend") {
+        actionName = `prepend${cap}`;
+      } else if (validActionType === "pop") {
+        actionName = `pop${cap}`;
+      } else if (validActionType === "remove") {
+        actionName = `remove${cap}`;
+      } else if (validActionType === "toggle") {
+        actionName = `toggle${cap}`;
+      } else if (validActionType === "increment") {
+        actionName = `increment${cap}`;
+      } else if (validActionType === "decrement") {
+        actionName = `decrement${cap}`;
+      } else if (validActionType === "update") {
+        actionName = `update${cap}`;
+      } else if (validActionType === "reset") {
+        actionName = `reset${cap}`;
+      } else if (validActionType === "custom" && matchingStep?.stateActionName) {
+        actionName = matchingStep.stateActionName;
+      }
+
+      const matchedAction = (storeActions || []).find(
+        (a) =>
+          (a.targetFieldId === matchedField.id && a.actionType === validActionType) ||
+          (a.targetFieldId === matchedField.id && a.name.toLowerCase() === actionName.toLowerCase()),
+      );
+      if (matchedAction) {
+        return {
+          actionId: matchedAction.id,
+          actionName: matchedAction.name,
+          actionType: isValidStoreActionType(matchedAction.actionType) ? matchedAction.actionType : validActionType,
+          targetFieldId: matchedField.id,
+          targetFieldName: matchedField.name,
+        };
+      }
+
+      return {
+        actionId: `field-${validActionType}-${matchedField.id}`,
+        actionName,
+        actionType: validActionType,
+        targetFieldId: matchedField.id,
+        targetFieldName: matchedField.name,
+      };
     }
   }
 
@@ -268,9 +350,11 @@ function resolveStoreBindingFromHandle(
       : "set";
 
     return {
-      actionId: "builtin-mutate",
+      actionId: firstField ? `setter-${firstField.id}` : "builtin-mutate",
       actionName: setterName,
       actionType: "set",
+      targetFieldId: firstField?.id,
+      targetFieldName: firstField?.name,
     };
   }
 
@@ -371,8 +455,25 @@ function resolveStoreBindingFromHandle(
         actionId: firstAct.id,
         actionName: firstAct.name,
         actionType,
+        targetFieldId: firstAct.targetFieldId,
+        targetFieldName: firstAct.targetFieldName,
       };
     }
+  }
+
+  const fallbackFirstField =
+    Array.isArray(storeFields) && storeFields.length > 0
+      ? storeFields[0]
+      : undefined;
+  if (fallbackFirstField) {
+    const cap = fallbackFirstField.name.charAt(0).toUpperCase() + fallbackFirstField.name.slice(1);
+    return {
+      actionId: `setter-${fallbackFirstField.id}`,
+      actionName: `set${cap}`,
+      actionType: "set",
+      targetFieldId: fallbackFirstField.id,
+      targetFieldName: fallbackFirstField.name,
+    };
   }
 
   return {
@@ -475,24 +576,32 @@ function resolveActionWithBindings(
     const resolvedBindings: StoreActionBinding[] = matches.map((match, mIdx) => {
       const storeNode = match.storeNode;
       const storeName = storeNode.data?.storeName || storeNode.data?.label || "App";
-      const inferred = resolveStoreBindingFromHandle(storeNode, match.storeHandle, act);
+      const inferred = resolveStoreBindingFromHandle(storeNode, match.storeHandle, act, match.edge);
 
-      const edgeData = match.edge.data as Record<string, unknown> | undefined;
+      const edgeData = match.edge.data;
       const existing =
         (act.storeActionBindings || []).find(
           (b) =>
             (edgeData?.bindingId && b.id === edgeData.bindingId) ||
             (b.storeNodeId === storeNode.id &&
-              (b.actionId === inferred.actionId || b.actionName === inferred.actionName)),
+              (b.actionId === inferred.actionId ||
+                b.actionName === inferred.actionName ||
+                (b.targetFieldId && b.targetFieldId === inferred.targetFieldId) ||
+                (b.targetFieldName && b.targetFieldName === inferred.targetFieldName))),
         ) || (mIdx === 0 ? act.storeActionBinding : undefined);
 
+      const resolvedActionName =
+        existing?.actionName && existing.actionName !== "set" && existing.actionName !== "mutate"
+          ? existing.actionName
+          : inferred.actionName;
+
       return {
-        id: existing?.id || (edgeData?.bindingId as string) || `bnd-${act.id}-${mIdx}`,
+        id: existing?.id || edgeData?.bindingId || `bnd-${act.id}-${mIdx}`,
         storeNodeId: storeNode.id,
         storeName,
         actionId: existing?.actionId || inferred.actionId,
-        actionName: existing?.actionName || inferred.actionName,
-        actionType: (existing?.actionType as any) || inferred.actionType,
+        actionName: resolvedActionName,
+        actionType: existing?.actionType || inferred.actionType,
         targetFieldId: existing?.targetFieldId || inferred.targetFieldId,
         targetFieldName: existing?.targetFieldName || inferred.targetFieldName,
         updateSource:
@@ -622,14 +731,14 @@ export function resolveStoreActionBindings(
                 event: "message",
               };
               const binding = storeNode
-                ? resolveStoreBindingFromHandle(storeNode, storeHandle, fakeAction)
+                ? resolveStoreBindingFromHandle(storeNode, storeHandle, fakeAction, matchEdge)
                 : {
                     actionId: "custom",
                     actionName: "message",
                     actionType: "custom" as const,
                   };
 
-              const edgeData = matchEdge.data as Record<string, unknown> | undefined;
+              const edgeData = matchEdge.data;
               const existing =
                 (conn.storeActionBindings || []).find(
                   (b) =>
@@ -639,12 +748,12 @@ export function resolveStoreActionBindings(
                 ) || (mIdx === 0 ? conn.storeActionBinding : undefined);
 
               return {
-                id: existing?.id || (edgeData?.bindingId as string) || `bnd-rtc-${conn.id}-${mIdx}`,
+                id: existing?.id || edgeData?.bindingId || `bnd-rtc-${conn.id}-${mIdx}`,
                 storeNodeId,
                 storeName,
                 actionId: existing?.actionId || binding.actionId,
                 actionName: existing?.actionName || binding.actionName,
-                actionType: (existing?.actionType as any) || binding.actionType,
+                actionType: existing?.actionType || binding.actionType,
                 targetFieldId: existing?.targetFieldId || binding.targetFieldId,
                 targetFieldName: existing?.targetFieldName || binding.targetFieldName,
                 updateSource: existing?.updateSource || "full_message",
@@ -696,4 +805,42 @@ export function resolveStoreActionBindings(
       },
     };
   });
+}
+
+export function resolveStoreActionMethodName(binding: {
+  actionName?: string;
+  actionType?: StoreActionType | string;
+  targetFieldName?: string;
+}): string {
+  if (binding.actionName && binding.actionName !== "set" && binding.actionName !== "mutate") {
+    return binding.actionName;
+  }
+  if (binding.targetFieldName) {
+    const cap = binding.targetFieldName.charAt(0).toUpperCase() + binding.targetFieldName.slice(1);
+    switch (binding.actionType) {
+      case "append":
+        return `append${cap}`;
+      case "prepend":
+        return `prepend${cap}`;
+      case "pop":
+        return `pop${cap}`;
+      case "remove":
+        return `remove${cap}`;
+      case "toggle":
+        return `toggle${cap}`;
+      case "increment":
+        return `increment${cap}`;
+      case "decrement":
+        return `decrement${cap}`;
+      case "update":
+        return `update${cap}`;
+      case "reset":
+        return `reset${cap}`;
+      default:
+        return `set${cap}`;
+    }
+  }
+  if (binding.actionType === "reset") return "reset";
+  if (binding.actionType === "populate") return "populate";
+  return binding.actionName || "set";
 }

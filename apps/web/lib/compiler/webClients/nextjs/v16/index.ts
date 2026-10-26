@@ -25,7 +25,7 @@ import {
 import {
   generatePageAndComponentFiles,
 } from "./pageFileGenerator";
-import { generateZustandStores } from "./storeGenerators";
+import { generateZustandStores, toPascalCase } from "./storeGenerators";
 import { generateBrowserStorageHelper } from "./browserStorageGenerator";
 import { resolveAppProviders } from "./providerGenerators";
 import { isServiceAssociatedWithWebApp } from "./serviceResolver";
@@ -159,8 +159,13 @@ export function compileNextjsV16WebClient(
   const graphStateStores: GlobalStoreDefinition[] = associatedStateStoreNodes.map((sn) => {
     const d = sn.data || {};
     const storeName = d.storeName || d.label || "App";
-    const scope = "global";
-    const storage = "memory";
+    const rawStorage = d.storage;
+    const storage: "memory" | "localStorage" | "sessionStorage" =
+      rawStorage === "localStorage" || rawStorage === "sessionStorage"
+        ? rawStorage
+        : "memory";
+    const rawScope = d.scope;
+    const scope: "global" | "local" = rawScope === "local" ? "local" : "global";
 
     // If local store, attempt to map to connected or target page
     let targetPage = enrichedWebClientNodes.find((p) => p.id === d.targetPageId);
@@ -176,6 +181,15 @@ export function compileNextjsV16WebClient(
           : connectedPageEdge.target;
         targetPage = enrichedWebClientNodes.find((p) => p.id === pageId);
       }
+    }
+
+    if (scope === "local" && targetPage) {
+      const pagePath = (targetPage.data?.path || targetPage.data?.label || "page")
+        .replace(/^\//, "")
+        .trim();
+      const baseName = toPascalCase(storeName);
+      const storeCompName = baseName.endsWith("Store") ? baseName : `${baseName}Store`;
+      localStorePaths[sn.id] = `app/${pagePath}/_stores/use${storeCompName}.ts`;
     }
 
     return {

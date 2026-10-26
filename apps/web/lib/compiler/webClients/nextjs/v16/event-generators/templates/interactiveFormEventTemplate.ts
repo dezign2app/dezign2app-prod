@@ -1,5 +1,6 @@
 import { StoreActionBinding } from "@workspace/canvas/types";
 import { ResolvedEventParameters } from "../types";
+import { resolveStoreActionMethodName } from "../../storeActionResolver";
 
 function resolveActionLibImports(libraries?: string[]): string {
   if (!libraries || libraries.length === 0) return "";
@@ -96,15 +97,7 @@ export function generateInteractiveFormEventTemplate({
       const rawStoreName = b.storeName?.replace(/Store$/i, "");
       if (!rawStoreName) return;
       const storeHookName = `use${rawStoreName.charAt(0).toUpperCase() + rawStoreName.slice(1)}Store`;
-      const storeActionName =
-        b.actionName ||
-        (b.targetFieldName
-          ? `set${b.targetFieldName.charAt(0).toUpperCase() + b.targetFieldName.slice(1)}`
-          : b.actionType === "reset"
-          ? "reset"
-          : b.actionType === "populate"
-          ? "populate"
-          : "set");
+      const storeActionName = resolveStoreActionMethodName(b);
 
       const hasApiUrl = Boolean(url && url.trim() && url !== "#");
       const src = !hasApiUrl

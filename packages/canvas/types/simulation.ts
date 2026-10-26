@@ -273,10 +273,13 @@ export type PageSection = {
 export type StoreActionType =
   | "set"
   | "append"
+  | "prepend"
   | "pop"
   | "remove"
   | "toggle"
   | "increment"
+  | "decrement"
+  | "update"
   | "reset"
   | "populate"
   | "custom"
