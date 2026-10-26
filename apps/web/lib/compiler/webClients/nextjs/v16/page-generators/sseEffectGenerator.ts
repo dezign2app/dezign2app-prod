@@ -1,9 +1,11 @@
 import type { LinkedRealtimeConnectionInfo } from "../types";
+import { resolveStoreActionMethodName } from "../storeActionResolver";
 
 function generateRealtimeStoreSnippet(
   binding: {
     storeName?: string;
     actionName?: string;
+    actionType?: string;
     targetFieldName?: string;
     updateSource?: string;
     valuePath?: string;
@@ -15,11 +17,7 @@ function generateRealtimeStoreSnippet(
   if (!binding?.storeName) return "";
   const cleanStore = binding.storeName.replace(/Store$/i, "");
   const hookName = `use${cleanStore.charAt(0).toUpperCase() + cleanStore.slice(1)}Store`;
-  const actionName =
-    binding.actionName ||
-    (binding.targetFieldName
-      ? `set${binding.targetFieldName.charAt(0).toUpperCase() + binding.targetFieldName.slice(1)}`
-      : "mutate");
+  const actionName = resolveStoreActionMethodName(binding);
 
   const src = binding.updateSource || "full_message";
   const vPath = binding.valuePath?.trim();

@@ -1,4 +1,5 @@
 import { StoreActionBinding } from "@workspace/canvas/types";
+import { resolveStoreActionMethodName } from "../../storeActionResolver";
 
 export interface StorageUploadConfig {
   /** Maximum file size in megabytes derived from the connected bucket config */
@@ -74,11 +75,7 @@ export function generateStorageUploadEventTemplate({
       const rawStoreName = b.storeName?.replace(/Store$/i, "");
       if (!rawStoreName) return;
       const hookName = `use${rawStoreName.charAt(0).toUpperCase() + rawStoreName.slice(1)}Store`;
-      const actionName =
-        b.actionName ||
-        (b.targetFieldName
-          ? `set${b.targetFieldName.charAt(0).toUpperCase() + b.targetFieldName.slice(1)}`
-          : "set");
+      const actionName = resolveStoreActionMethodName(b);
       postTrigger += `      ${hookName}.getState().${actionName}({ signedUrl, key: objectKey });\n`;
     });
     return postTrigger;

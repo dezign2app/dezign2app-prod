@@ -1,7 +1,7 @@
 import { CompiledFile, GlobalStoreDefinition, GlobalStoreField, StateVariableType } from "@workspace/canvas/types";
 import { toSingular, toPlural } from "../../../utils";
 
-function toPascalCase(str: string): string {
+export function toPascalCase(str: string): string {
   const clean = str.trim();
   if (!clean) return "App";
   if (/[\s\-_]/.test(clean)) {
@@ -129,9 +129,10 @@ export function generateZustandStore(
 
   const isArrayField = (f: { type?: string; isArray?: boolean }) =>
     Boolean(f.isArray || f.type === "array" || f.type?.endsWith("[]"));
+  const isStringField = (f: { type?: string }) => f.type === "string";
 
   const activeAppendFields = fields.filter((f) => {
-    if (!isArrayField(f)) return false;
+    if (!isArrayField(f) && !isStringField(f) && !f.actions?.includes("append")) return false;
     const fPascal = toPascalCase(f.name);
     const appendName = `append${fPascal}`;
     const isOverridden = actionNames.has(toCamelCase(appendName));
@@ -142,12 +143,19 @@ export function generateZustandStore(
 
   const appendLines = activeAppendFields.map((f) => {
     const fPascal = toPascalCase(f.name);
-    const itemTsType = f.type.endsWith("[]")
-      ? f.type.slice(0, -2)
-      : f.type === "array"
-      ? "unknown"
-      : "unknown";
-    return `  append${fPascal}: (item: ${itemTsType}) => void;`;
+    let itemTsType = "string";
+    if (isArrayField(f)) {
+      itemTsType = f.type.endsWith("[]")
+        ? f.type.slice(0, -2)
+        : f.type === "array"
+        ? "unknown"
+        : "unknown";
+    } else if (f.type === "string") {
+      itemTsType = "string";
+    } else {
+      itemTsType = mapFieldTypeToTs(f.type);
+    }
+    return `  append${fPascal}: (item?: ${itemTsType}) => void;`;
   });
 
   const activePopFields = fields.filter((f) => {
@@ -164,6 +172,111 @@ export function generateZustandStore(
     const fPascal = toPascalCase(f.name);
     return `  pop${fPascal}: () => void;`;
   });
+
+  const activeRemoveFields = fields.filter((f) => {
+    if (!isArrayField(f) && !f.actions?.includes("remove")) return false;
+    const fPascal = toPascalCase(f.name);
+    const removeName = `remove${fPascal}`;
+    const isOverridden = actionNames.has(toCamelCase(removeName));
+    const isDisabled =
+      disabledManipulators.has(removeName) || disabledManipulators.has(`remove-${f.id}`);
+    return !isOverridden && !isDisabled;
+  });
+
+  const removeLines = activeRemoveFields.map((f) => {
+    const fPascal = toPascalCase(f.name);
+    return `  remove${fPascal}: (indexOrId?: string | number) => void;`;
+  });
+
+  const isBooleanField = (f: { type?: string }) => f.type === "boolean";
+  const activeToggleFields = fields.filter((f) => {
+    if (!isBooleanField(f) && !f.actions?.includes("toggle")) return false;
+    const fPascal = toPascalCase(f.name);
+    const toggleName = `toggle${fPascal}`;
+    const isOverridden = actionNames.has(toCamelCase(toggleName));
+    const isDisabled =
+      disabledManipulators.has(toggleName) || disabledManipulators.has(`toggle-${f.id}`);
+    return !isOverridden && !isDisabled;
+  });
+
+  const toggleLines = activeToggleFields.map((f) => {
+    const fPascal = toPascalCase(f.name);
+    return `  toggle${fPascal}: () => void;`;
+  });
+
+  const isNumberField = (f: { type?: string }) => f.type === "number";
+  const activeIncrementFields = fields.filter((f) => {
+    if (!isNumberField(f) && !f.actions?.includes("increment")) return false;
+    const fPascal = toPascalCase(f.name);
+    const incName = `increment${fPascal}`;
+    const isOverridden = actionNames.has(toCamelCase(incName));
+    const isDisabled =
+      disabledManipulators.has(incName) || disabledManipulators.has(`increment-${f.id}`);
+    return !isOverridden && !isDisabled;
+  });
+
+  const incrementLines = activeIncrementFields.map((f) => {
+    const fPascal = toPascalCase(f.name);
+    return `  increment${fPascal}: (amount?: number) => void;`;
+  });
+
+  const activeDecrementFields = fields.filter((f) => {
+    if (!isNumberField(f) && !f.actions?.includes("decrement")) return false;
+    const fPascal = toPascalCase(f.name);
+    const decName = `decrement${fPascal}`;
+    const isOverridden = actionNames.has(toCamelCase(decName));
+    const isDisabled =
+      disabledManipulators.has(decName) || disabledManipulators.has(`decrement-${f.id}`);
+    return !isOverridden && !isDisabled;
+  });
+
+  const decrementLines = activeDecrementFields.map((f) => {
+    const fPascal = toPascalCase(f.name);
+    return `  decrement${fPascal}: (amount?: number) => void;`;
+  });
+
+  const isObjectField = (f: { type?: string }) => f.type === "object" || f.type === "Record<string, unknown>";
+  const activePrependFields = fields.filter((f) => {
+    if (!isStringField(f) && !isArrayField(f) && !f.actions?.includes("prepend")) return false;
+    const fPascal = toPascalCase(f.name);
+    const prepName = `prepend${fPascal}`;
+    const isOverridden = actionNames.has(toCamelCase(prepName));
+    const isDisabled =
+      disabledManipulators.has(prepName) || disabledManipulators.has(`prepend-${f.id}`);
+    return !isOverridden && !isDisabled;
+  });
+
+  const prependLines = activePrependFields.map((f) => {
+    const fPascal = toPascalCase(f.name);
+    const itemTsType = isArrayField(f)
+      ? (f.type.endsWith("[]") ? f.type.slice(0, -2) : "unknown")
+      : "string";
+    return `  prepend${fPascal}: (item?: ${itemTsType}) => void;`;
+  });
+
+  const activeUpdateFields = fields.filter((f) => {
+    if (!isObjectField(f) && !f.actions?.includes("update")) return false;
+    const fPascal = toPascalCase(f.name);
+    const updateName = `update${fPascal}`;
+    const isOverridden = actionNames.has(toCamelCase(updateName));
+    const isDisabled =
+      disabledManipulators.has(updateName) || disabledManipulators.has(`update-${f.id}`);
+    return !isOverridden && !isDisabled;
+  });
+
+  const updateLines = activeUpdateFields.map((f) => {
+    const fPascal = toPascalCase(f.name);
+    return `  update${fPascal}: (patch?: Partial<${mapFieldTypeToTs(f.type)}> | Record<string, unknown>) => void;`;
+  });
+
+  const resetFieldLines = fields
+    .filter((f) => {
+      if (!f.actions?.includes("reset")) return false;
+      const fPascal = toPascalCase(f.name);
+      const resetName = `reset${fPascal}`;
+      return !actionNames.has(toCamelCase(resetName)) && !disabledManipulators.has(resetName);
+    })
+    .map((f) => `  reset${toPascalCase(f.name)}: () => void;`);
 
   // Target unwrap field for collection responses (e.g. API returning { data: [...] } into a store field)
   const rawBase = baseName.replace(/Store$/i, "");
@@ -434,7 +547,10 @@ ${payloadPrep}
   const appendImpls = activeAppendFields.map((f) => {
     const fName = toCamelCase(f.name);
     const fPascal = toPascalCase(f.name);
-    return `  append${fPascal}: (item) => set((s) => ({ ${fName}: Array.isArray(s.${fName}) ? [...s.${fName}, item] : [item] })),`;
+    if (isStringField(f)) {
+      return `  append${fPascal}: (item = "") => set((s) => ({ ${fName}: (s.${fName} || "") + String(item ?? "") })),`;
+    }
+    return `  append${fPascal}: (item) => set((s) => ({ ${fName}: Array.isArray(s.${fName}) ? (item !== undefined ? [...s.${fName}, item] : s.${fName}) : (typeof s.${fName} === "string" ? (s.${fName} || "") + String(item ?? "") : (item !== undefined ? [item] : [])) })),`;
   });
 
   const popImpls = activePopFields.map((f) => {
@@ -442,6 +558,59 @@ ${payloadPrep}
     const fPascal = toPascalCase(f.name);
     return `  pop${fPascal}: () => set((s) => ({ ${fName}: Array.isArray(s.${fName}) ? s.${fName}.slice(0, -1) : [] })),`;
   });
+
+  const removeImpls = activeRemoveFields.map((f) => {
+    const fName = toCamelCase(f.name);
+    const fPascal = toPascalCase(f.name);
+    return `  remove${fPascal}: (indexOrId) => set((s) => ({ ${fName}: Array.isArray(s.${fName}) ? s.${fName}.filter((it, idx) => idx !== indexOrId && !(typeof it === "object" && it !== null && "id" in it && it.id === indexOrId)) : [] })),`;
+  });
+
+  const toggleImpls = activeToggleFields.map((f) => {
+    const fName = toCamelCase(f.name);
+    const fPascal = toPascalCase(f.name);
+    return `  toggle${fPascal}: () => set((s) => ({ ${fName}: !s.${fName} })),`;
+  });
+
+  const incrementImpls = activeIncrementFields.map((f) => {
+    const fName = toCamelCase(f.name);
+    const fPascal = toPascalCase(f.name);
+    return `  increment${fPascal}: (amount = 1) => set((s) => ({ ${fName}: (typeof s.${fName} === "number" ? s.${fName} : 0) + amount })),`;
+  });
+
+  const decrementImpls = activeDecrementFields.map((f) => {
+    const fName = toCamelCase(f.name);
+    const fPascal = toPascalCase(f.name);
+    return `  decrement${fPascal}: (amount = 1) => set((s) => ({ ${fName}: (typeof s.${fName} === "number" ? s.${fName} : 0) - amount })),`;
+  });
+
+  const prependImpls = activePrependFields.map((f) => {
+    const fName = toCamelCase(f.name);
+    const fPascal = toPascalCase(f.name);
+    if (isArrayField(f)) {
+      return `  prepend${fPascal}: (item) => set((s) => ({ ${fName}: Array.isArray(s.${fName}) ? (item !== undefined ? [item, ...s.${fName}] : s.${fName}) : (item !== undefined ? [item] : []) })),`;
+    }
+    return `  prepend${fPascal}: (item = "") => set((s) => ({ ${fName}: String(item ?? "") + (s.${fName} || "") })),`;
+  });
+
+  const updateImpls = activeUpdateFields.map((f) => {
+    const fName = toCamelCase(f.name);
+    const fPascal = toPascalCase(f.name);
+    return `  update${fPascal}: (patch) => set((s) => ({ ${fName}: typeof s.${fName} === "object" && s.${fName} !== null ? (patch ? { ...s.${fName}, ...patch } : s.${fName}) : (patch || s.${fName}) })),`;
+  });
+
+  const resetFieldImpls = fields
+    .filter((f) => {
+      if (!f.actions?.includes("reset")) return false;
+      const fPascal = toPascalCase(f.name);
+      const resetName = `reset${fPascal}`;
+      return !actionNames.has(toCamelCase(resetName)) && !disabledManipulators.has(resetName);
+    })
+    .map((f) => {
+      const fName = toCamelCase(f.name);
+      const fPascal = toPascalCase(f.name);
+      const defVal = formatDefaultValue(f);
+      return `  reset${fPascal}: () => set({ ${fName}: ${defVal} }),`;
+    });
 
   const descriptionComment = store.description
     ? `/**\n * ${store.description.replace(/\n/g, "\n * ")}\n */\n`
@@ -462,6 +631,10 @@ ${payloadPrep}
 
   const builtInSignatures: string[] = [];
   const builtInImpls: string[] = [];
+
+  // Generic set method supporting partial updates or updater function
+  builtInSignatures.push(`  set: (updater?: Partial<${interfaceName}> | ((state: ${interfaceName}) => Partial<${interfaceName}>)) => void;`);
+  builtInImpls.push("      set: (updater) => set(typeof updater === \"function\" ? updater : (updater || {})),");
 
   if (!hasPopulate && !isPopulateDisabled) {
     builtInSignatures.push(`  populate: (data?: Partial<${interfaceName}> | object) => void;`);
@@ -484,13 +657,43 @@ ${payloadPrep}
     builtInImpls.push("      reset: () => set(initialState),");
   }
 
+  const allSignatures = [
+    ...fieldTypeLines,
+    ...setterLines,
+    ...toggleLines,
+    ...incrementLines,
+    ...decrementLines,
+    ...prependLines,
+    ...appendLines,
+    ...updateLines,
+    ...popLines,
+    ...removeLines,
+    ...resetFieldLines,
+    ...customActionSignatures,
+    ...builtInSignatures,
+  ];
+
+  const allImpls = [
+    ...setterImpls,
+    ...toggleImpls,
+    ...incrementImpls,
+    ...decrementImpls,
+    ...prependImpls,
+    ...appendImpls,
+    ...updateImpls,
+    ...popImpls,
+    ...removeImpls,
+    ...resetFieldImpls,
+    ...customActionImpls,
+    ...builtInImpls,
+  ];
+
   const storeCreation = isPersisted
     ? `export const ${hookName} = create<${interfaceName}>()(
   persist(
     (set, get) => ({
       ...initialState,
-${setterImpls.map((l) => `    ${l}`).join("\n")}
-${appendImpls.length > 0 ? `${appendImpls.map((l) => `    ${l}`).join("\n")}\n` : ""}${popImpls.length > 0 ? `${popImpls.map((l) => `    ${l}`).join("\n")}\n` : ""}${customActionImpls.length > 0 ? `${customActionImpls.map((l) => `    ${l}`).join("\n")}\n` : ""}${builtInImpls.join("\n")}
+${allImpls.map((l) => `    ${l.trim()}`).join("\n")}
     }),
     {
       name: "${storageKey}",
@@ -500,8 +703,7 @@ ${appendImpls.length > 0 ? `${appendImpls.map((l) => `    ${l}`).join("\n")}\n` 
 );`
     : `export const ${hookName} = create<${interfaceName}>((set, get) => ({
   ...initialState,
-${setterImpls.join("\n")}
-${appendImpls.length > 0 ? `${appendImpls.join("\n")}\n` : ""}${popImpls.length > 0 ? `${popImpls.join("\n")}\n` : ""}${customActionImpls.length > 0 ? `${customActionImpls.join("\n")}\n` : ""}${builtInImpls.join("\n")}
+${allImpls.map((l) => `  ${l.trim()}`).join("\n")}
 }));`;
 
   const STANDARD_TS_TYPES = new Set([
@@ -542,9 +744,7 @@ ${appendImpls.length > 0 ? `${appendImpls.join("\n")}\n` : ""}${popImpls.length 
 ${imports}${typesImportStmt}
 
 ${descriptionComment}export interface ${interfaceName} {
-${fieldTypeLines.join("\n")}
-${setterLines.join("\n")}
-${appendLines.length > 0 ? `${appendLines.join("\n")}\n` : ""}${popLines.length > 0 ? `${popLines.join("\n")}\n` : ""}${customActionSignatures.length > 0 ? `${customActionSignatures.join("\n")}\n` : ""}${builtInSignatures.join("\n")}
+${allSignatures.join("\n")}
 }
 
 const initialState = {
