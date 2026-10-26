@@ -581,12 +581,8 @@ export function handleFrontendConnect({
             ? "populate-out"
             : actionType === "reset"
             ? "reset-out"
-            : actionType === "append" && targetFieldId
-            ? `append-out-${targetFieldId}`
-            : (actionType === "pop" || actionType === "remove") && targetFieldId
-            ? `pop-out-${targetFieldId}`
             : targetFieldId
-            ? `setter-out-${targetFieldId}`
+            ? `store-field-out-${targetFieldId}`
             : actionId && !actionId.startsWith("builtin-")
             ? `store-action-out-${actionId}`
             : "mutate-out";

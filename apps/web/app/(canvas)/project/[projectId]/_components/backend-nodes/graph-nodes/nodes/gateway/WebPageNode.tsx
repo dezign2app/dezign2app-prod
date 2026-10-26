@@ -140,15 +140,17 @@ export const WebPageNode = ({
 
           const actId = b.actionId || "";
           let sourceHandle = "mutate-out";
-          if (actId.startsWith("setter-")) {
+          if (b.targetFieldId) {
+            sourceHandle = `store-field-out-${b.targetFieldId}`;
+          } else if (actId.startsWith("setter-")) {
             const fId = b.targetFieldId || actId.replace("setter-", "");
-            sourceHandle = `setter-out-${fId}`;
+            sourceHandle = `store-field-out-${fId}`;
           } else if (actId.startsWith("append-")) {
             const fId = b.targetFieldId || actId.replace("append-", "");
-            sourceHandle = `append-out-${fId}`;
+            sourceHandle = `store-field-out-${fId}`;
           } else if (actId.startsWith("pop-")) {
             const fId = b.targetFieldId || actId.replace("pop-", "");
-            sourceHandle = `pop-out-${fId}`;
+            sourceHandle = `store-field-out-${fId}`;
           } else if (b.actionType === "populate" || actId === "builtin-populate" || actId === "populate") {
             sourceHandle = "populate-out";
           } else if (b.actionType === "reset" || actId === "builtin-reset" || actId === "reset") {
@@ -161,7 +163,10 @@ export const WebPageNode = ({
             (e) =>
               e.source === storeNode!.id &&
               e.target === id &&
-              (e.sourceHandle === sourceHandle || (sourceHandle === "mutate-out" && e.sourceHandle?.startsWith("setter-out-"))) &&
+              (e.sourceHandle === sourceHandle ||
+                (b.targetFieldId && e.sourceHandle === `store-field-out-${b.targetFieldId}`) ||
+                (b.targetFieldId && e.sourceHandle === `setter-out-${b.targetFieldId}`) ||
+                (sourceHandle === "mutate-out" && e.sourceHandle?.startsWith("setter-out-"))) &&
               (e.targetHandle === targetHandle || e.targetHandle === `events-${act.id}` || e.targetHandle?.endsWith(`-${act.id}`)),
           );
 

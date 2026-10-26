@@ -269,8 +269,10 @@ describe("actionStepCanvasSync - previous edge update and removal", () => {
     expect(edge1Id).toBeDefined();
     let edges = useBackendCanvasStore.getState().edges;
     expect(edges).toHaveLength(1);
-    expect(edges[0]?.target).toBe("store-node-1");
-    expect(edges[0]?.targetHandle).toBe("store-field-in-f-user");
+    expect(edges[0]?.source).toBe("store-node-1");
+    expect(edges[0]?.target).toBe("page-1");
+    expect(edges[0]?.sourceHandle).toBe("store-field-out-f-user");
+    expect(edges[0]?.targetHandle).toBe("pageload-in-act-load");
     expect(edges[0]?.data?.targetFieldId).toBe("f-user");
     expect(edges[0]?.data?.isStateMutation).toBe(true);
     expect(edges[0]?.data?.sequenceOrder).toBe(1);
@@ -288,7 +290,10 @@ describe("actionStepCanvasSync - previous edge update and removal", () => {
     expect(edge2Id).toBe(edge1Id);
     edges = useBackendCanvasStore.getState().edges;
     expect(edges).toHaveLength(1);
-    expect(edges[0]?.targetHandle).toBe("store-field-in-f-count");
+    expect(edges[0]?.source).toBe("store-node-1");
+    expect(edges[0]?.target).toBe("page-1");
+    expect(edges[0]?.sourceHandle).toBe("store-field-out-f-count");
+    expect(edges[0]?.targetHandle).toBe("pageload-in-act-load");
     expect(edges[0]?.data?.targetFieldId).toBe("f-count");
     expect(edges[0]?.data?.isStateMutation).toBe(true);
 
