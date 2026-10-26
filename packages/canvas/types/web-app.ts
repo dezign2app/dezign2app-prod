@@ -111,6 +111,16 @@ export interface RealtimeConnection {
   subscriptionBindings?: FrontendRequestFieldBinding[];
   /** Action flow steps to execute when realtime message arrives */
   actionSteps?: FrontendActionStepDraft[];
+  /** Whether this connection is pushed by a LangGraph agent */
+  isLangGraph?: boolean;
+  /** Active stream modes configured in LangGraph invoke step (messages, updates, values, custom) */
+  langGraphStreamModes?: string[];
+  /** Streamed state channels */
+  langGraphStreamingFields?: string[];
+  /** Whether reasoning tokens are included in the stream */
+  langGraphStreamIncludeReasoning?: boolean;
+  /** Linked LangGraph agent node ID */
+  langGraphTargetNodeId?: string;
 }
 
 export interface GlobalStoreField {

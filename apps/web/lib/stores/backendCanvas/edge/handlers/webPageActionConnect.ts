@@ -60,7 +60,11 @@ export function handleWebPageActionConnect({
     otherNode.type === "service" ||
     otherNode.type === "serverless" ||
     otherNode.type === "worker" ||
-    Boolean(otherNode.data?.endpoints);
+    otherNode.type === "api_gateway" ||
+    otherNode.type === "langgraph" ||
+    otherNode.type === "external" ||
+    Boolean(otherNode.data?.endpoints && otherNode.data.endpoints.length > 0) ||
+    Boolean(otherNode.data?.routeGroups && otherNode.data.routeGroups.length > 0);
 
   const isStorageTarget =
     isStorageRefNode(otherNode.type) || otherNode.type === "storage";
@@ -99,25 +103,60 @@ export function handleWebPageActionConnect({
   let targetDesc = "";
 
   if (isServiceTarget) {
-    const endpointId = otherHandle
+    const cleanedHandleId = otherHandle
       .replace(/^(?:routeEndpoints|endpoints|endpoint)-(?:in|out)-/, "")
       .replace(/^func-(?:in-)?/, "");
 
     const allEndpoints = get().endpoints;
-    const serviceEndpoints = allEndpoints.filter(
+    const storeEndpoints = allEndpoints.filter(
       (e) => e.nodeId === otherNode.id,
     );
-    const endpoint: Endpoint | undefined =
-      allEndpoints.find((e) => e.id === endpointId) ||
-      serviceEndpoints.find(
-        (e) => e.id === endpointId || e.name === endpointId,
-      ) ||
-      (otherNode.data?.endpoints || []).find(
-        (e: any) => e.id === endpointId || e.name === endpointId,
-      ) ||
-      serviceEndpoints[0];
+    const directEndpoints: Endpoint[] = otherNode.data?.endpoints || [];
+    const routeGroupEndpoints: Endpoint[] = (otherNode.data?.routeGroups || []).flatMap(
+      (g) => g.endpoints || [],
+    );
 
-    if (!endpoint) return false;
+    const candidateEndpoints: Endpoint[] = [];
+    const seenEndpointIds = new Set<string>();
+
+    for (const ep of [...storeEndpoints, ...directEndpoints, ...routeGroupEndpoints]) {
+      if (ep.id && !seenEndpointIds.has(ep.id)) {
+        seenEndpointIds.add(ep.id);
+        candidateEndpoints.push(ep);
+      }
+    }
+
+    let endpoint: Endpoint | undefined = candidateEndpoints.find(
+      (e) =>
+        e.id === cleanedHandleId ||
+        e.name === cleanedHandleId ||
+        `/${e.name}` === cleanedHandleId ||
+        e.name === `/${cleanedHandleId}` ||
+        (Boolean(cleanedHandleId) &&
+          (e.id.includes(cleanedHandleId) || cleanedHandleId.includes(e.id))),
+    );
+
+    if (!endpoint && candidateEndpoints.length > 0) {
+      endpoint = candidateEndpoints[0];
+    }
+
+    if (!endpoint) {
+      const fallbackId = `ep-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const fallbackName = `/api/${actionId || "action"}`;
+      const newEp: Endpoint = {
+        id: fallbackId,
+        name: fallbackName,
+        type: "POST",
+        summary: `Endpoint for ${actionId || "action"}`,
+      };
+      endpoint = newEp;
+      get().updateNode(otherNode.id, {
+        data: {
+          ...otherNode.data,
+          endpoints: [...directEndpoints, newEp],
+        },
+      });
+    }
 
     targetDesc = `${endpoint.type || "POST"} ${endpoint.name || "endpoint"}`;
     const requestBindings = buildInitialBindingsFromEndpoint(
@@ -403,20 +442,21 @@ export function handleWebPageActionConnect({
       },
     });
 
-    // Ensure newEdge data has sequenceOrder and label set
+    // Ensure newEdge data has sequenceOrder and label set in both edges and pendingEdgeUpserts
+    const updatedEdge: BackendEdge = {
+      ...newEdge,
+      data: {
+        ...newEdge.data,
+        sequenceOrder: calculatedStepNumber,
+        label: String(calculatedStepNumber),
+      },
+    };
+
     const allEdges = get().edges;
     set({
-      edges: allEdges.map((e) =>
-        e.id === newEdge.id
-          ? {
-              ...e,
-              data: {
-                ...e.data,
-                sequenceOrder: calculatedStepNumber,
-                label: String(calculatedStepNumber),
-              },
-            }
-          : e,
+      edges: allEdges.map((e) => (e.id === newEdge.id ? updatedEdge : e)),
+      pendingEdgeUpserts: get().pendingEdgeUpserts.map((e) =>
+        e.id === newEdge.id ? updatedEdge : e,
       ),
     });
 

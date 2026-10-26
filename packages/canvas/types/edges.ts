@@ -29,6 +29,7 @@ export type BackendEdge = {
     packageName?: string;
     // --- State Store Subscription & Action Binding Fields ---
     isStateSubscription?: boolean;
+    isStateMutation?: boolean;
     isStoreAction?: boolean;
     isStoreActionBinding?: boolean;
     storeName?: string;

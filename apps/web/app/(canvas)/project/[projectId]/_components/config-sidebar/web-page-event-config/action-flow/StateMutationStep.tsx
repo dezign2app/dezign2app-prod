@@ -1,7 +1,8 @@
 import React from "react";
-import { Sliders, Database, ArrowRight } from "lucide-react";
+import { Sliders, Database, ArrowRight, Info, Sparkles } from "lucide-react";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
+import { Badge } from "@workspace/ui/components/badge";
 import {
   Select,
   SelectContent,
@@ -17,6 +18,17 @@ import type {
 } from "./types";
 import { ResponseFieldPicker } from "./ResponseFieldPicker";
 import { ActionFlowCombobox } from "./ActionFlowCombobox";
+import {
+  getActionsForReducer,
+  isValuelessAction,
+  getActionMetadata,
+  getChannelReducerName,
+  type ReducerActionMeta,
+} from "../../../backend-nodes/graph-nodes/langgraph/langgraph-canvas/components/inspector/state-inspector/constants";
+import {
+  ensureActionStateStoreConnection,
+  cleanupActionStepEdge,
+} from "./actionStepCanvasSync";
 
 export interface StateMutationStepProps {
   draft: FrontendActionStepDraft;
@@ -24,6 +36,7 @@ export interface StateMutationStepProps {
   stepIndex: number;
   allNodes: BackendNode[];
   webPageNodeId?: string;
+  actionId?: string;
   incomingPaths?: AvailablePath[];
   onChange: (updated: FrontendActionStepDraft) => void;
 }
@@ -34,6 +47,7 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
   stepIndex,
   allNodes,
   webPageNodeId,
+  actionId,
   incomingPaths,
   onChange,
 }) => {
@@ -85,11 +99,21 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
     return stateStores.find((s) => s.id === draft.stateStoreNodeId);
   }, [stateStores, draft.stateStoreNodeId]);
 
+  const selectedField = React.useMemo(() => {
+    if (!selectedTargetStore) return undefined;
+    const fields = selectedTargetStore.data?.fields || [];
+    return (
+      fields.find((f) => f.id === draft.stateTargetFieldId) ||
+      fields.find((f) => f.name === draft.stateKey) ||
+      fields[0]
+    );
+  }, [selectedTargetStore, draft.stateTargetFieldId, draft.stateKey]);
+
   const targetStoreFieldOptions = React.useMemo(() => {
     if (!selectedTargetStore) return [];
     return (selectedTargetStore.data?.fields || []).map((f) => ({
       value: f.name,
-      label: `${f.name} (${f.type || "string"})`,
+      label: `${f.name} (${f.type || "string"}${f.isArray ? "[]" : ""})`,
       type: f.type || "string",
     }));
   }, [selectedTargetStore]);
@@ -112,8 +136,161 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
   }, [stateStores, sectionStateVars]);
 
   const targetKind = draft.stateTargetKind || "local";
-  const updateType = draft.stateUpdateType || "set";
   const stateKey = draft.stateKey || "";
+  const currentAction = draft.stateActionName || draft.stateUpdateType || "set";
+  const isValueless = isValuelessAction(currentAction);
+
+  const availableFieldActions: ReducerActionMeta[] = React.useMemo(() => {
+    if (targetKind !== "store" || !selectedField) {
+      return [
+        { action: "set", label: "set (value)", description: "Direct assignment", requiresValue: true },
+        { action: "toggle", label: "toggle (no value)", description: "Inverts boolean", requiresValue: false },
+        { action: "increment", label: "increment (value)", description: "Adds to number", requiresValue: true },
+        { action: "decrement", label: "decrement (value)", description: "Subtracts from number", requiresValue: true },
+        { action: "reset", label: "reset (no value)", description: "Resets to initial/default", requiresValue: false },
+      ];
+    }
+
+    const actions = getActionsForReducer(
+      selectedField.type,
+      selectedField.reducer,
+      selectedField.customReducerCode,
+    );
+
+    if (Array.isArray(selectedField.actions) && selectedField.actions.length > 0) {
+      selectedField.actions.forEach((actName) => {
+        if (!actions.some((a) => a.action === actName)) {
+          actions.push(getActionMetadata(actName, selectedField.type));
+        }
+      });
+    }
+
+    return actions.length > 0
+      ? actions
+      : [
+          { action: "set", label: "set (value)", description: "Direct assignment", requiresValue: true },
+          { action: "reset", label: "reset (no value)", description: "Resets value", requiresValue: false },
+        ];
+  }, [targetKind, selectedField]);
+
+  const handleScopeChange = (val: "local" | "store") => {
+    if (val === "local") {
+      if (draft.edgeId) {
+        cleanupActionStepEdge(draft.edgeId);
+      }
+      onChange({
+        ...draft,
+        stateTargetKind: "local",
+        stateStoreNodeId: undefined,
+        stateTargetFieldId: undefined,
+        edgeId: undefined,
+        stateActionName: "set",
+        stateUpdateType: "set",
+      });
+    } else {
+      const firstStore = stateStores[0];
+      const firstField = firstStore?.data?.fields?.[0];
+      let edgeId = draft.edgeId;
+      if (webPageNodeId && actionId && firstStore) {
+        edgeId = ensureActionStateStoreConnection({
+          webPageNodeId,
+          actionId,
+          stateStoreNodeId: firstStore.id,
+          targetFieldId: firstField?.id,
+          stepOrder: stepIndex + 1,
+          previousEdgeId: draft.edgeId,
+        });
+      }
+      onChange({
+        ...draft,
+        stateTargetKind: "store",
+        stateStoreNodeId: firstStore?.id,
+        stateTargetFieldId: firstField?.id,
+        stateKey: firstField?.name || draft.stateKey,
+        stateActionName: "set",
+        stateUpdateType: "set",
+        stateReducerName: firstField?.reducer || getChannelReducerName(firstField?.name),
+        edgeId,
+      });
+    }
+  };
+
+  const handleStoreSelect = (val: string) => {
+    const storeObj = stateStores.find((s) => s.id === val);
+    const firstField = storeObj?.data?.fields?.[0];
+    const targetFieldId = firstField?.id;
+    let edgeId = draft.edgeId;
+
+    if (webPageNodeId && actionId) {
+      edgeId = ensureActionStateStoreConnection({
+        webPageNodeId,
+        actionId,
+        stateStoreNodeId: val,
+        targetFieldId,
+        stepOrder: stepIndex + 1,
+        previousEdgeId: draft.edgeId,
+      });
+    }
+
+    const firstFieldActions = firstField
+      ? getActionsForReducer(firstField.type, firstField.reducer, firstField.customReducerCode)
+      : [];
+    const defaultAction = firstFieldActions[0]?.action || "set";
+
+    onChange({
+      ...draft,
+      stateStoreNodeId: val,
+      stateTargetFieldId: targetFieldId,
+      stateKey: firstField?.name || draft.stateKey,
+      stateActionName: defaultAction,
+      stateUpdateType: defaultAction,
+      stateReducerName: firstField?.reducer || getChannelReducerName(firstField?.name),
+      edgeId,
+    });
+  };
+
+  const handleFieldSelect = (fieldName: string) => {
+    const fieldObj = selectedTargetStore?.data?.fields?.find((f) => f.name === fieldName);
+    const targetFieldId = fieldObj?.id;
+    let edgeId = draft.edgeId;
+
+    if (webPageNodeId && actionId && draft.stateStoreNodeId) {
+      edgeId = ensureActionStateStoreConnection({
+        webPageNodeId,
+        actionId,
+        stateStoreNodeId: draft.stateStoreNodeId,
+        targetFieldId,
+        stepOrder: stepIndex + 1,
+        previousEdgeId: draft.edgeId,
+      });
+    }
+
+    const fieldActions = fieldObj
+      ? getActionsForReducer(fieldObj.type, fieldObj.reducer, fieldObj.customReducerCode)
+      : [];
+    const defaultAction = fieldActions.some((a) => a.action === draft.stateActionName)
+      ? draft.stateActionName
+      : (fieldActions[0]?.action || "set");
+
+    onChange({
+      ...draft,
+      stateKey: fieldName,
+      stateTargetFieldId: targetFieldId,
+      stateActionName: defaultAction,
+      stateUpdateType: defaultAction,
+      stateReducerName: fieldObj?.reducer || getChannelReducerName(fieldObj?.name),
+      edgeId,
+    });
+  };
+
+  const handleActionSelect = (newAction: string) => {
+    onChange({
+      ...draft,
+      stateActionName: newAction,
+      stateUpdateType: newAction,
+    });
+  };
+
   const valueSource = draft.stateValueSource || {
     kind: "literal",
     value: "",
@@ -128,9 +305,7 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
           </Label>
           <Select
             value={targetKind}
-            onValueChange={(val: "local" | "store") =>
-              onChange({ ...draft, stateTargetKind: val })
-            }
+            onValueChange={handleScopeChange}
           >
             <SelectTrigger className="h-7 text-xs bg-background">
               <SelectValue />
@@ -149,15 +324,7 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
             </Label>
             <Select
               value={draft.stateStoreNodeId || ""}
-              onValueChange={(val) => {
-                const storeObj = stateStores.find((s) => s.id === val);
-                const firstField = storeObj?.data?.fields?.[0]?.name || "";
-                onChange({
-                  ...draft,
-                  stateStoreNodeId: val,
-                  stateKey: firstField || draft.stateKey,
-                });
-              }}
+              onValueChange={handleStoreSelect}
             >
               <SelectTrigger className="h-7 text-xs bg-background">
                 <SelectValue placeholder="Choose store node" />
@@ -194,13 +361,25 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
       </div>
 
       {targetKind === "store" && (
-        <div className="space-y-1">
-          <Label className="text-[10px] text-muted-foreground">
-            Target Field in Store to Mutate
-          </Label>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <Label className="text-[10px] text-muted-foreground">
+              Target Field in Store to Mutate
+            </Label>
+            {selectedField && (
+              <div className="flex items-center gap-1.5 text-[10px] font-mono">
+                <Badge variant="outline" className="text-[9px] h-4 px-1 font-normal">
+                  {selectedField.type || "string"}{selectedField.isArray ? "[]" : ""}
+                </Badge>
+                <Badge variant="secondary" className="text-[9px] h-4 px-1.5 font-normal text-purple-400 bg-purple-500/10 border border-purple-500/20">
+                  {selectedField.reducer || (selectedField.customReducerCode ? "custom" : "replace")}
+                </Badge>
+              </div>
+            )}
+          </div>
           <ActionFlowCombobox
             value={stateKey}
-            onChange={(val) => onChange({ ...draft, stateKey: val })}
+            onChange={handleFieldSelect}
             placeholder="e.g. searchResults, items, count"
             headerLabel="Fields in Selected Store"
             options={targetStoreFieldOptions}
@@ -211,27 +390,31 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
           <Label className="text-[10px] text-muted-foreground">
-            Operation Type
+            {targetKind === "store" ? "Reducer Action to Dispatch" : "Operation Type"}
           </Label>
           <Select
-            value={updateType}
-            onValueChange={(val: "set" | "toggle" | "increment" | "reset") =>
-              onChange({ ...draft, stateUpdateType: val })
-            }
+            value={currentAction}
+            onValueChange={handleActionSelect}
           >
-            <SelectTrigger className="h-7 text-xs bg-background">
+            <SelectTrigger className="h-7 text-xs bg-background font-mono">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="set">Set Value</SelectItem>
-              <SelectItem value="toggle">Toggle Boolean</SelectItem>
-              <SelectItem value="increment">Increment Number</SelectItem>
-              <SelectItem value="reset">Reset to Default</SelectItem>
+              {availableFieldActions.map((act) => (
+                <SelectItem key={act.action} value={act.action} className="text-xs font-mono">
+                  <div className="flex items-center gap-1.5">
+                    {act.action !== "set" && act.action !== "default" && (
+                      <span className="text-amber-500 text-[10px]">⚡</span>
+                    )}
+                    <span className="font-medium">{act.label}</span>
+                  </div>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
 
-        {updateType === "set" && (
+        {!isValueless && (
           <div className="space-y-1">
             <Label className="text-[10px] text-muted-foreground">
               Value Source
@@ -315,7 +498,12 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
         )}
       </div>
 
-      {updateType === "set" && (
+      {isValueless ? (
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-secondary/40 border border-border text-muted-foreground text-[11px] font-mono">
+          <Info className="w-3.5 h-3.5 text-muted-foreground/70 shrink-0" />
+          <span>No value required for &ldquo;{currentAction}&rdquo; (dispatches action without payload)</span>
+        </div>
+      ) : (
         <div className="pt-1">
           {valueSource.kind === "literal" && (
             <div className="space-y-1">

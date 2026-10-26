@@ -93,7 +93,7 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
         manualConn?.eventName ||
         s.clientDeliveryEventName ||
         (isLangGraph
-          ? (protocol === "WEBSOCKET" ? "agent_stream" : (sourceItemName || s.name || "message"))
+          ? (protocol === "WEBSOCKET" ? "agent_stream" : "message")
           : (sourceItemName || "message"));
       const room = manualConn?.room || s.clientDeliveryRoom || (isLangGraph ? s.langGraphStreamingRoom : undefined);
 
@@ -120,6 +120,11 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
         storeActionBindings: manualConn?.storeActionBindings,
         actionSteps: manualConn?.actionSteps ?? [],
         subscriptionBindings: manualConn?.subscriptionBindings,
+        isLangGraph,
+        langGraphStreamModes: isLangGraph ? (s.langGraphStreamModes || manualConn?.langGraphStreamModes) : manualConn?.langGraphStreamModes,
+        langGraphStreamingFields: isLangGraph ? (s.langGraphStreamingFields || manualConn?.langGraphStreamingFields) : manualConn?.langGraphStreamingFields,
+        langGraphStreamIncludeReasoning: isLangGraph ? (s.langGraphStreamIncludeReasoning ?? manualConn?.langGraphStreamIncludeReasoning) : manualConn?.langGraphStreamIncludeReasoning,
+        langGraphTargetNodeId: isLangGraph ? (s.langGraphTargetNodeId || manualConn?.langGraphTargetNodeId) : manualConn?.langGraphTargetNodeId,
       };
     }
     if (manualConn) return { ...manualConn, actionSteps: manualConn.actionSteps ?? [] };
@@ -596,6 +601,8 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
                 realtimeSourceLabel={conn.sourceServiceLabel || derivedInfo?.sourceNode?.data?.label}
                 realtimeSourceItemName={conn.sourceItemName}
                 incomingPaths={suggestedPaths}
+                isLangGraph={conn.isLangGraph || Boolean(derivedInfo?.step?.type === "langgraph_invoke")}
+                langGraphStreamModes={conn.langGraphStreamModes || derivedInfo?.step?.langGraphStreamModes}
                 onSave={(drafts: FrontendActionStepDraft[]) =>
                   handleUpdateManual({ actionSteps: drafts })
                 }

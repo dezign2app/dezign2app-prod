@@ -215,5 +215,127 @@ describe("resolveRealtimePayloadPaths", () => {
     expect(paths.some((p) => p.path === "data.senderId" && p.type === "string")).toBe(true);
     expect(paths.some((p) => p.path === "data.createdAt" && p.type === "string")).toBe(true);
   });
+
+  it("resolves token, node, and reasoning payload paths when linked to a LangGraph streaming step", () => {
+    const langGraphNode: BackendNode = {
+      id: "node-lg-1",
+      type: "langgraph",
+      fractionalIndex: "a2",
+      position: { x: 400, y: 0 },
+      data: {
+        label: "ChatAgent",
+        stateChannels: [
+          { key: "messages", type: "messages", reducer: "add_messages" },
+          { key: "userPreferences", type: "object", reducer: "replace" },
+        ],
+      },
+    };
+
+    const lgStep: any = {
+      id: "step-lg-invoke",
+      type: "langgraph_invoke",
+      name: "Invoke ChatAgent",
+      langGraphStreamingEnabled: true,
+      langGraphStreamingProtocol: "sse",
+      langGraphStreamModes: ["messages"],
+      langGraphStreamIncludeReasoning: true,
+      langGraphTargetNodeId: "node-lg-1",
+    };
+
+    const conn: RealtimeConnection = {
+      id: "conn-lg",
+      protocol: "SSE",
+      eventName: "message",
+      sourceServiceLabel: "Conversations",
+      sourceItemName: "/send-message/:id",
+      isLangGraph: true,
+      langGraphStreamModes: ["messages"],
+      langGraphStreamIncludeReasoning: true,
+      langGraphTargetNodeId: "node-lg-1",
+    };
+
+    const paths = resolveRealtimePayloadPaths({
+      conn,
+      derivedInfo: {
+        step: lgStep,
+        sourceNode: undefined,
+        sourceEventId: null,
+        sourceEndpointId: "ep-1",
+      },
+      endpoints: [
+        {
+          id: "ep-1",
+          name: "/send-message/:id",
+          type: "POST",
+          pipelineSteps: [lgStep],
+          nodeId: "srv-1",
+        },
+      ],
+      events: [],
+      nodes: [langGraphNode],
+      edges: [],
+    });
+
+    // Check token, node, reasoning, done, content are populated
+    expect(paths.some((p) => p.path === "token" && p.type === "string")).toBe(true);
+    expect(paths.some((p) => p.path === "node" && p.type === "string")).toBe(true);
+    expect(paths.some((p) => p.path === "reasoning" && p.type === "string")).toBe(true);
+    expect(paths.some((p) => p.path === "done" && p.type === "boolean")).toBe(true);
+    expect(paths.some((p) => p.path === "content" && p.type === "string")).toBe(true);
+  });
+
+  it("resolves state channels when LangGraph streaming mode includes 'values'", () => {
+    const langGraphNode: BackendNode = {
+      id: "node-lg-1",
+      type: "langgraph",
+      fractionalIndex: "a2",
+      position: { x: 400, y: 0 },
+      data: {
+        label: "ChatAgent",
+        stateChannels: [
+          { key: "messages", type: "messages", reducer: "add_messages" },
+          { key: "context", type: "string", reducer: "replace" },
+        ],
+      },
+    };
+
+    const lgStep: any = {
+      id: "step-lg-invoke-values",
+      type: "langgraph_invoke",
+      name: "Invoke ChatAgent Values",
+      langGraphStreamingEnabled: true,
+      langGraphStreamingProtocol: "sse",
+      langGraphStreamModes: ["values"],
+      langGraphTargetNodeId: "node-lg-1",
+    };
+
+    const conn: RealtimeConnection = {
+      id: "conn-lg-values",
+      protocol: "SSE",
+      eventName: "message",
+      isLangGraph: true,
+      langGraphStreamModes: ["values"],
+      langGraphTargetNodeId: "node-lg-1",
+    };
+
+    const paths = resolveRealtimePayloadPaths({
+      conn,
+      derivedInfo: {
+        step: lgStep,
+        sourceNode: undefined,
+        sourceEventId: null,
+        sourceEndpointId: "ep-1",
+      },
+      endpoints: [],
+      events: [],
+      nodes: [langGraphNode],
+      edges: [],
+    });
+
+    expect(paths.some((p) => p.path === "data")).toBe(true);
+    expect(paths.some((p) => p.path === "data.messages")).toBe(true);
+    expect(paths.some((p) => p.path === "data.context")).toBe(true);
+    expect(paths.some((p) => p.path === "mode")).toBe(true);
+  });
 });
 

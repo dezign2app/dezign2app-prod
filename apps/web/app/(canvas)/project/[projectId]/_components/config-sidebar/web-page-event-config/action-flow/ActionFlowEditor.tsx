@@ -22,6 +22,7 @@ import {
   ensureActionServiceConnection,
   ensureActionStorageConnection,
   ensureActionTransformerConnection,
+  ensureActionStateStoreConnection,
   cleanupActionStepEdge,
   reorderActionStepEdges,
 } from "./actionStepCanvasSync";
@@ -42,11 +43,19 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
   realtimeSourceLabel,
   realtimeSourceItemName,
   incomingPaths,
+  isLangGraph,
+  langGraphStreamModes,
   onSave,
   onDeleteStep,
 }) => {
   const [drafts, setDrafts] = useState<FrontendActionStepDraft[]>(() => {
     if (item?.actionSteps && item.actionSteps.length > 0) {
+      const hasUnmergedCanvasStep = canvasSteps.some(
+        (c) => !item.actionSteps?.some((s) => s.edgeId === c.edgeId),
+      );
+      if (hasUnmergedCanvasStep) {
+        return deriveStepsFromEdges(canvasSteps, item.actionSteps, isProtected);
+      }
       return item.actionSteps.map((s) => {
         if (s.type === "api_call") {
           const ep = endpoints.find((e) => e.id === s.endpointId);
@@ -68,23 +77,33 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
   // Sync with item.actionSteps or canvasSteps if external changes happen
   useEffect(() => {
     if (item?.actionSteps && item.actionSteps.length > 0) {
-      const mapped = item.actionSteps.map((s) => {
-        if (s.type === "api_call") {
-          const ep = endpoints.find((e) => e.id === s.endpointId);
-          const bindings = s.requestBindings && s.requestBindings.length > 0
-            ? autoMapAuthBindings(s.requestBindings, ep, isProtected)
-            : buildInitialBindingsFromEndpoint(ep, isProtected);
-          return {
-            ...s,
-            requestBindings: bindings,
-          };
-        }
-        return s;
-      });
-      setDrafts(mapped);
+      const hasUnmergedCanvasStep = canvasSteps.some(
+        (c) => !item.actionSteps?.some((s) => s.edgeId === c.edgeId),
+      );
+      if (hasUnmergedCanvasStep) {
+        const derived = deriveStepsFromEdges(canvasSteps, item.actionSteps, isProtected);
+        setDrafts(derived);
+        onSave(derived);
+      } else {
+        const mapped = item.actionSteps.map((s) => {
+          if (s.type === "api_call") {
+            const ep = endpoints.find((e) => e.id === s.endpointId);
+            const bindings = s.requestBindings && s.requestBindings.length > 0
+              ? autoMapAuthBindings(s.requestBindings, ep, isProtected)
+              : buildInitialBindingsFromEndpoint(ep, isProtected);
+            return {
+              ...s,
+              requestBindings: bindings,
+            };
+          }
+          return s;
+        });
+        setDrafts(mapped);
+      }
     } else if (canvasSteps.length > 0) {
       const derived = deriveStepsFromEdges(canvasSteps, item?.actionSteps, isProtected);
       setDrafts(derived);
+      onSave(derived);
     } else {
       setDrafts([]);
     }
@@ -194,6 +213,33 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
       }
     }
 
+    // Auto-draw canvas edge if adding a state_mutation step and a state_store node is available
+    if (type === "state_mutation") {
+      const stateStoreNodes = allNodes.filter((n) => n.type === "state_store");
+      const firstStore = stateStoreNodes[0];
+      if (firstStore && webPageNodeId && actionId) {
+        const firstField = firstStore.data?.fields?.[0];
+        const targetFieldId = firstField?.id;
+        const edgeId = ensureActionStateStoreConnection({
+          webPageNodeId,
+          actionId,
+          stateStoreNodeId: firstStore.id,
+          targetFieldId,
+          stepOrder: newOrder,
+        });
+        initialDefaults = {
+          stateTargetKind: "store",
+          stateStoreNodeId: firstStore.id,
+          stateTargetFieldId: targetFieldId,
+          stateKey: firstField?.name || "stateVar",
+          stateActionName: "set",
+          stateUpdateType: "set",
+          stateReducerName: firstField?.reducer || "replace",
+          edgeId,
+        };
+      }
+    }
+
     const newStep = createDefaultFrontendStep(type, newOrder, initialDefaults);
     const updatedDrafts = [...drafts, newStep];
     setDrafts(updatedDrafts);
@@ -285,6 +331,8 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
           sourceServiceLabel={realtimeSourceLabel}
           sourceItemName={realtimeSourceItemName}
           incomingPaths={incomingPaths}
+          isLangGraph={isLangGraph}
+          langGraphStreamModes={langGraphStreamModes}
         />
       )}
 

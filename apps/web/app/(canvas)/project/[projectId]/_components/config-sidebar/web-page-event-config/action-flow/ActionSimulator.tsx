@@ -305,9 +305,9 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
       if (source.kind === "realtime_payload") {
         if (!source.fieldPath) return runtimeState.incomingPayload;
         const parts = source.fieldPath.split(".");
-        let cur: any = runtimeState.incomingPayload;
+        let cur: JSONValue | undefined = runtimeState.incomingPayload;
         for (const p of parts) {
-          if (cur == null) return undefined;
+          if (cur === null || typeof cur !== "object" || Array.isArray(cur)) return undefined;
           cur = cur[p];
         }
         return cur !== undefined ? cur : `<stream:${source.fieldPath}>`;
@@ -479,12 +479,34 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
         let nextVal: JSONValue = prevVal ?? "";
         const resolvedVal = resolveSourceValue(step.stateValueSource);
 
-        if (step.stateUpdateType === "toggle") {
+        const action = step.stateActionName || step.stateUpdateType || "set";
+
+        const safeResolvedVal: JSONValue = resolvedVal !== undefined ? resolvedVal : "";
+
+        if (action === "toggle") {
           nextVal = !prevVal;
-        } else if (step.stateUpdateType === "increment") {
-          nextVal = (Number(prevVal) || 0) + (Number(resolvedVal) || 1);
-        } else if (step.stateUpdateType === "reset") {
-          nextVal = "";
+        } else if (action === "increment" || action === "add") {
+          nextVal = (Number(prevVal) || 0) + (Number(safeResolvedVal) || 1);
+        } else if (action === "decrement" || action === "subtract") {
+          nextVal = (Number(prevVal) || 0) - (Number(safeResolvedVal) || 1);
+        } else if (action === "append") {
+          nextVal = Array.isArray(prevVal)
+            ? [...prevVal, safeResolvedVal]
+            : String(prevVal ?? "") + String(safeResolvedVal);
+        } else if (action === "prepend") {
+          nextVal = Array.isArray(prevVal)
+            ? [safeResolvedVal, ...prevVal]
+            : String(safeResolvedVal) + String(prevVal ?? "");
+        } else if (action === "pop") {
+          nextVal = Array.isArray(prevVal) ? prevVal.slice(0, -1) : (prevVal ?? "");
+        } else if (action === "reset" || action === "clear") {
+          nextVal = Array.isArray(prevVal)
+            ? []
+            : typeof prevVal === "number"
+              ? 0
+              : typeof prevVal === "boolean"
+                ? false
+                : "";
         } else {
           nextVal = resolvedVal !== undefined ? resolvedVal : "updated";
         }

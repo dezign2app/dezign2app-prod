@@ -1,5 +1,11 @@
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import type { BackendNode, BackendEdge, RealtimeConnection } from "@workspace/canvas";
+import type {
+  BackendNode,
+  BackendEdge,
+  RealtimeConnection,
+  PageSection,
+  UIEventItem,
+} from "@workspace/canvas";
 import type { FrontendActionStepDraft } from "./types";
 
 export function getWebPageSourceHandle(webPageNodeId: string, actionId: string): string {
@@ -187,10 +193,7 @@ export function ensureActionStorageConnection({
       allNodes.find((n) => n.type === "storage");
 
     // Resolve the human-readable bucket name from the storage node's buckets array
-    const storageBuckets = (storageNode?.data?.buckets ?? []) as Array<{
-      id?: string;
-      name?: string;
-    }>;
+    const storageBuckets = storageNode?.data?.buckets ?? [];
     const matchedBucket = storageBuckets.find(
       (b) => b.id === bucketId || b.name === bucketId,
     );
@@ -450,6 +453,178 @@ export function ensureActionTransformerConnection({
     data: {
       sequenceOrder: stepOrder,
       label: String(stepOrder),
+    },
+  });
+
+  return newEdgeId;
+}
+
+export function getWebPageActionInboundHandle(webPageNodeId: string, actionId: string): string {
+  const store = useBackendCanvasStore.getState();
+  const wpNode = store.nodes.find((n) => n.id === webPageNodeId);
+  const sections: PageSection[] = wpNode?.data?.sections || [];
+  const action: UIEventItem | undefined = sections
+    .flatMap((s: PageSection): UIEventItem[] => s.actions || [])
+    .find((a: UIEventItem): boolean => a.id === actionId);
+  const evtStr = action?.event || action?.name || "";
+  const evtLower = evtStr.toLowerCase();
+  const isPageLoad = evtStr === "pageLoad";
+  const isSse = evtStr === "sse" || evtStr === "sseMessage" || evtLower === "sse";
+  const isWebsocket =
+    evtStr === "websocket" ||
+    evtStr === "ws" ||
+    evtStr === "websocketMessage" ||
+    evtLower === "websocket" ||
+    evtLower === "ws";
+  const isWebrtc = evtStr === "webrtc" || evtLower === "webrtc";
+
+  return isPageLoad
+    ? `pageload-in-${actionId}`
+    : isSse
+    ? `sse-in-${actionId}`
+    : isWebsocket
+    ? `websocket-in-${actionId}`
+    : isWebrtc
+    ? `webrtc-in-${actionId}`
+    : `event-in-${actionId}`;
+}
+
+export interface EnsureActionStateStoreConnectionParams {
+  webPageNodeId: string;
+  actionId: string;
+  stateStoreNodeId: string;
+  targetFieldId?: string;
+  stepOrder: number;
+  previousEdgeId?: string;
+}
+
+export function ensureActionStateStoreConnection({
+  webPageNodeId,
+  actionId,
+  stateStoreNodeId,
+  targetFieldId,
+  stepOrder,
+  previousEdgeId,
+}: EnsureActionStateStoreConnectionParams): string | undefined {
+  if (!webPageNodeId || !actionId || !stateStoreNodeId) return undefined;
+
+  const store = useBackendCanvasStore.getState();
+  const sourceHandle = targetFieldId ? `store-field-out-${targetFieldId}` : "store-out";
+  const targetHandle = getWebPageActionInboundHandle(webPageNodeId, actionId);
+
+  // 1. Identify previous edge for this step (if any)
+  const prevEdge =
+    (previousEdgeId ? store.edges.find((e) => e.id === previousEdgeId) : undefined) ||
+    store.edges.find(
+      (e) =>
+        ((e.source === stateStoreNodeId && e.target === webPageNodeId) ||
+          (e.source === webPageNodeId && e.target === stateStoreNodeId)) &&
+        (e.data?.sequenceOrder === stepOrder ||
+          e.data?.label === String(stepOrder)),
+    );
+
+  // 2. Find existing edge already targeting or connecting this state_store and action
+  const existingTargetEdge = store.edges.find((e) => {
+    const isMatchingNodes =
+      (e.source === stateStoreNodeId && e.target === webPageNodeId) ||
+      (e.source === webPageNodeId && e.target === stateStoreNodeId);
+    if (!isMatchingNodes) return false;
+    return (
+      e.targetHandle === targetHandle ||
+      e.sourceHandle === targetHandle ||
+      e.targetHandle === `events-${actionId}` ||
+      e.sourceHandle === `events-${actionId}` ||
+      e.targetHandle?.endsWith(`-${actionId}`) ||
+      e.sourceHandle?.endsWith(`-${actionId}`)
+    );
+  });
+
+  if (prevEdge) {
+    if (existingTargetEdge && existingTargetEdge.id !== prevEdge.id) {
+      store.deleteEdge(prevEdge.id);
+      if (
+        existingTargetEdge.source !== stateStoreNodeId ||
+        existingTargetEdge.target !== webPageNodeId ||
+        existingTargetEdge.sourceHandle !== sourceHandle ||
+        existingTargetEdge.targetHandle !== targetHandle ||
+        existingTargetEdge.data?.sequenceOrder !== stepOrder ||
+        existingTargetEdge.data?.label !== String(stepOrder) ||
+        existingTargetEdge.data?.targetFieldId !== targetFieldId
+      ) {
+        store.updateEdge(existingTargetEdge.id, {
+          source: stateStoreNodeId,
+          target: webPageNodeId,
+          sourceHandle,
+          targetHandle,
+          data: {
+            ...existingTargetEdge.data,
+            sequenceOrder: stepOrder,
+            label: String(stepOrder),
+            targetFieldId,
+            isStateMutation: true,
+          },
+        });
+      }
+      return existingTargetEdge.id;
+    }
+
+    store.updateEdge(prevEdge.id, {
+      source: stateStoreNodeId,
+      target: webPageNodeId,
+      sourceHandle,
+      targetHandle,
+      data: {
+        ...prevEdge.data,
+        sequenceOrder: stepOrder,
+        label: String(stepOrder),
+        targetFieldId,
+        isStateMutation: true,
+      },
+    });
+    return prevEdge.id;
+  }
+
+  if (existingTargetEdge) {
+    if (
+      existingTargetEdge.source !== stateStoreNodeId ||
+      existingTargetEdge.target !== webPageNodeId ||
+      existingTargetEdge.sourceHandle !== sourceHandle ||
+      existingTargetEdge.targetHandle !== targetHandle ||
+      existingTargetEdge.data?.sequenceOrder !== stepOrder ||
+      existingTargetEdge.data?.label !== String(stepOrder) ||
+      existingTargetEdge.data?.targetFieldId !== targetFieldId
+    ) {
+      store.updateEdge(existingTargetEdge.id, {
+        source: stateStoreNodeId,
+        target: webPageNodeId,
+        sourceHandle,
+        targetHandle,
+        data: {
+          ...existingTargetEdge.data,
+          sequenceOrder: stepOrder,
+          label: String(stepOrder),
+          targetFieldId,
+          isStateMutation: true,
+        },
+      });
+    }
+    return existingTargetEdge.id;
+  }
+
+  // Draw new edge automatically on canvas: from StateStore right handle to WebPage action left handle
+  const newEdgeId = `edge-action-${actionId}-${stateStoreNodeId}-${Date.now()}`;
+  store.addEdge({
+    id: newEdgeId,
+    source: stateStoreNodeId,
+    target: webPageNodeId,
+    sourceHandle,
+    targetHandle,
+    type: "connection",
+    data: {
+      sequenceOrder: stepOrder,
+      label: String(stepOrder),
+      targetFieldId,
+      isStateMutation: true,
     },
   });
 

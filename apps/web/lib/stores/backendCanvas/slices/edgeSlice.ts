@@ -1,5 +1,5 @@
 import { BackendEdge } from "@/types/canvas";
-import { isValidConnection, normalizePageRoute } from "@workspace/canvas";
+import { isValidConnection, normalizePageRoute, isBackendEdgeType } from "@workspace/canvas";
 import { toast } from "sonner";
 import {
   applyEdgeChanges,
@@ -175,7 +175,12 @@ export const createEdgeSlice = (
     const fractionalIndex = generateKeyBetween(lastEdgeIndex, null);
 
     const isActionHandle = connection.sourceHandle?.startsWith("events-");
-    let initialData = (connection as any).data;
+    type ConnectionWithData = Connection & { data?: BackendEdge["data"] };
+    const hasConnectionData = (conn: Connection): conn is ConnectionWithData =>
+      "data" in conn && typeof conn === "object" && conn !== null;
+    let initialData: BackendEdge["data"] = hasConnectionData(connection)
+      ? connection.data
+      : undefined;
 
     if (isActionHandle && sourceNode?.type === "webPage") {
       const existingActionEdges = get().edges.filter(
@@ -226,7 +231,7 @@ export const createEdgeSlice = (
       id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       source: connection.source!,
       target: connection.target!,
-      type: edgeType as BackendEdge["type"],
+      type: isBackendEdgeType(edgeType) ? edgeType : "connection",
       sourceHandle: connection.sourceHandle,
       targetHandle: connection.targetHandle,
       fractionalIndex,

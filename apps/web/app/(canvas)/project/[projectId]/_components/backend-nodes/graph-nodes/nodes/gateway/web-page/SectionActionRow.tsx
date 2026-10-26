@@ -167,7 +167,15 @@ export const SectionActionRow = ({
   const handleDelete = () => {
     const store = useBackendCanvasStore.getState();
     const matchingEdges = store.edges.filter(
-      (e) => e.source === nodeId && e.sourceHandle === `events-${action.id}`,
+      (e) =>
+        (e.source === nodeId && e.sourceHandle === `events-${action.id}`) ||
+        (e.target === nodeId &&
+          (e.targetHandle === `event-in-${action.id}` ||
+            e.targetHandle === `pageload-in-${action.id}` ||
+            e.targetHandle === `sse-in-${action.id}` ||
+            e.targetHandle === `websocket-in-${action.id}` ||
+            e.targetHandle === `webrtc-in-${action.id}` ||
+            e.targetHandle?.endsWith(`-${action.id}`))),
     );
     matchingEdges.forEach((edge) => {
       const targetNode = store.nodes.find((n) => n.id === edge.target);

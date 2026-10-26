@@ -4,6 +4,7 @@ import type { BackendNode, BackendEdge } from "@workspace/canvas";
 import {
   ensureActionServiceConnection,
   ensureActionStorageConnection,
+  ensureActionStateStoreConnection,
   cleanupActionStepEdge,
 } from "../actionStepCanvasSync";
 
@@ -78,13 +79,29 @@ describe("actionStepCanvasSync - previous edge update and removal", () => {
       },
     };
 
+    const stateStoreNode: BackendNode = {
+      id: "store-node-1",
+      type: "state_store",
+      position: { x: 500, y: 700 },
+      fractionalIndex: "a4",
+      data: {
+        label: "AppStore",
+        storeName: "AppStore",
+        fields: [
+          { id: "f-user", name: "currentUser", type: "string", reducer: "replace" },
+          { id: "f-count", name: "count", type: "number", reducer: "counterActions" },
+        ],
+      },
+    };
+
     const store = useBackendCanvasStore.getState();
     store.addNode(webPageNode);
     store.addNode(usersServiceNode);
     store.addNode(ordersServiceNode);
     store.addNode(storageNode);
+    store.addNode(stateStoreNode);
 
-    return { webPageNode, usersServiceNode, ordersServiceNode, storageNode };
+    return { webPageNode, usersServiceNode, ordersServiceNode, storageNode, stateStoreNode };
   };
 
   it("updates existing edge and does NOT leave previous edge when endpoint is changed", () => {
@@ -235,5 +252,56 @@ describe("actionStepCanvasSync - previous edge update and removal", () => {
     // The old orphaned avatars ref node was deleted
     const nodes = useBackendCanvasStore.getState().nodes;
     expect(nodes.some((n) => n.id === res1?.refNodeId)).toBe(false);
+  });
+
+  it("creates and updates state_store connection edge with isStateMutation and targetFieldId", () => {
+    setupCanvas();
+
+    // 1. Connect to currentUser field
+    const edge1Id = ensureActionStateStoreConnection({
+      webPageNodeId: "page-1",
+      actionId: "act-load",
+      stateStoreNodeId: "store-node-1",
+      targetFieldId: "f-user",
+      stepOrder: 1,
+    });
+
+    expect(edge1Id).toBeDefined();
+    let edges = useBackendCanvasStore.getState().edges;
+    expect(edges).toHaveLength(1);
+    expect(edges[0]?.source).toBe("store-node-1");
+    expect(edges[0]?.target).toBe("page-1");
+    expect(edges[0]?.sourceHandle).toBe("store-field-out-f-user");
+    expect(edges[0]?.targetHandle).toBe("pageload-in-act-load");
+    expect(edges[0]?.data?.targetFieldId).toBe("f-user");
+    expect(edges[0]?.data?.isStateMutation).toBe(true);
+    expect(edges[0]?.data?.sequenceOrder).toBe(1);
+
+    // 2. Change target field to count
+    const edge2Id = ensureActionStateStoreConnection({
+      webPageNodeId: "page-1",
+      actionId: "act-load",
+      stateStoreNodeId: "store-node-1",
+      targetFieldId: "f-count",
+      stepOrder: 1,
+      previousEdgeId: edge1Id,
+    });
+
+    expect(edge2Id).toBe(edge1Id);
+    edges = useBackendCanvasStore.getState().edges;
+    expect(edges).toHaveLength(1);
+    expect(edges[0]?.source).toBe("store-node-1");
+    expect(edges[0]?.target).toBe("page-1");
+    expect(edges[0]?.sourceHandle).toBe("store-field-out-f-count");
+    expect(edges[0]?.targetHandle).toBe("pageload-in-act-load");
+    expect(edges[0]?.data?.targetFieldId).toBe("f-count");
+    expect(edges[0]?.data?.isStateMutation).toBe(true);
+
+    // 3. Cleanup edge
+    if (edge2Id) {
+      cleanupActionStepEdge(edge2Id);
+    }
+    edges = useBackendCanvasStore.getState().edges;
+    expect(edges).toHaveLength(0);
   });
 });
