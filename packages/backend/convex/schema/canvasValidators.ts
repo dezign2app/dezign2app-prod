@@ -385,8 +385,9 @@ export const backendEdgeDataValidator = v.object({
   baseTypeName: v.optional(v.string()),
   extendedTypeName: v.optional(v.string()),
   packageName: v.optional(v.string()),
-  // --- State Store Subscription Fields ---
+  // --- State Store Subscription & Mutation Fields ---
   isStateSubscription: v.optional(v.boolean()),
+  isStateMutation: v.optional(v.boolean()),
   storeName: v.optional(v.string()),
   fieldName: v.optional(v.string()),
   storeId: v.optional(v.string()),

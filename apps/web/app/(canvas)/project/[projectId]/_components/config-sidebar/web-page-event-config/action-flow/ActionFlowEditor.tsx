@@ -22,6 +22,7 @@ import {
   ensureActionServiceConnection,
   ensureActionStorageConnection,
   ensureActionTransformerConnection,
+  ensureActionStateStoreConnection,
   cleanupActionStepEdge,
   reorderActionStepEdges,
 } from "./actionStepCanvasSync";
@@ -192,6 +193,33 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
               source: { kind: "literal", value: "" },
             }),
           ),
+        };
+      }
+    }
+
+    // Auto-draw canvas edge if adding a state_mutation step and a state_store node is available
+    if (type === "state_mutation") {
+      const stateStoreNodes = allNodes.filter((n) => n.type === "state_store");
+      const firstStore = stateStoreNodes[0];
+      if (firstStore && webPageNodeId && actionId) {
+        const firstField = firstStore.data?.fields?.[0];
+        const targetFieldId = firstField?.id;
+        const edgeId = ensureActionStateStoreConnection({
+          webPageNodeId,
+          actionId,
+          stateStoreNodeId: firstStore.id,
+          targetFieldId,
+          stepOrder: newOrder,
+        });
+        initialDefaults = {
+          stateTargetKind: "store",
+          stateStoreNodeId: firstStore.id,
+          stateTargetFieldId: targetFieldId,
+          stateKey: firstField?.name || "stateVar",
+          stateActionName: "set",
+          stateUpdateType: "set",
+          stateReducerName: firstField?.reducer || "replace",
+          edgeId,
         };
       }
     }

@@ -763,6 +763,29 @@ describe("Convex canvasValidators exact schema", () => {
     expect(backendEdgeDataValidator.fields.isStoreActionBinding).toBeDefined();
   });
 
+  it("validates state mutation edge data with isStateMutation, label, sequenceOrder, and targetFieldId in Convex & Zod schemas", async () => {
+    const { edgeDataSchema } = await import("@workspace/canvas/schemas");
+    const { backendEdgeDataValidator } = await import(
+      "../../../../../packages/backend/convex/schema/canvasValidators"
+    );
+
+    // Exact edge data reported in user's Convex upsertBackendEdge error
+    const edgeData = {
+      isStateMutation: true,
+      label: "1",
+      sequenceOrder: 1,
+      targetFieldId: "b6f9a896-0242-4c70-ad2d-54f10f5274ae",
+    };
+
+    const parsedEdge = edgeDataSchema.safeParse(edgeData);
+    expect(parsedEdge.success).toBe(true);
+
+    expect(backendEdgeDataValidator.fields.isStateMutation).toBeDefined();
+    expect(backendEdgeDataValidator.fields.label).toBeDefined();
+    expect(backendEdgeDataValidator.fields.sequenceOrder).toBeDefined();
+    expect(backendEdgeDataValidator.fields.targetFieldId).toBeDefined();
+  });
+
   it("validates StorageBucketRefNode data schema with storageOperations, bucketId, and storageNodeId in Convex & Zod schemas", async () => {
     const {
       storageOperationRefDataSchema,

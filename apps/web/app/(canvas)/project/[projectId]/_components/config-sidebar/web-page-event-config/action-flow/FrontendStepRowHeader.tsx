@@ -44,7 +44,14 @@ export function formatStepCodePreview(
 
     case "state_mutation": {
       const key = step.stateKey || "state";
-      const op = step.stateUpdateType || "set";
+      const op = step.stateActionName || step.stateUpdateType || "set";
+      const isStore = step.stateTargetKind === "store";
+      if (isStore) {
+        const storeNode = allNodes.find((n) => n.id === step.stateStoreNodeId);
+        const storeName = storeNode?.data?.label || storeNode?.data?.storeName || "store";
+        if (op === "reset" || op === "clear") return `${storeName}.dispatch("${key}", "${op}")`;
+        return `${storeName}.dispatch("${key}", { action: "${op}", ... })`;
+      }
       if (op === "toggle") return `setState(${key} => !${key})`;
       if (op === "increment") return `setState(${key} => ${key} + 1)`;
       if (op === "reset") return `resetState("${key}")`;

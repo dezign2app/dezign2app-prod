@@ -14,6 +14,7 @@ export const edgeDataSchema = z.object({
   packageName: z.string().optional(),
   // --- State Store Subscription Fields ---
   isStateSubscription: z.boolean().optional(),
+  isStateMutation: z.boolean().optional(),
   storeName: z.string().optional(),
   fieldName: z.string().optional(),
   storeId: z.string().optional(),

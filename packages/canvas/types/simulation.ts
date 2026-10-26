@@ -389,7 +389,10 @@ export type FrontendActionStepDraft = {
   stateTargetKind?: "local" | "store";
   stateStoreNodeId?: string;
   stateKey?: string;
-  stateUpdateType?: "set" | "toggle" | "increment" | "reset";
+  stateUpdateType?: "set" | "toggle" | "increment" | "reset" | string;
+  stateReducerName?: string;
+  stateActionName?: string;
+  stateTargetFieldId?: string;
   stateValueSource?: FrontendFieldSource;
 
   // --- For type === "navigation" ---
