@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ChevronLeft, Layers } from "lucide-react";
+import { ChevronLeft, Layers, Trash2 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 
@@ -14,6 +14,7 @@ export interface ComponentBreadcrumbsHeaderProps {
   onNavigateBack: () => void;
   onNavigateToPage: () => void;
   onNavigateToSection: () => void;
+  onDelete?: () => void;
 }
 
 export const ComponentBreadcrumbsHeader: React.FC<ComponentBreadcrumbsHeaderProps> = ({
@@ -23,6 +24,7 @@ export const ComponentBreadcrumbsHeader: React.FC<ComponentBreadcrumbsHeaderProp
   onNavigateBack,
   onNavigateToPage,
   onNavigateToSection,
+  onDelete,
 }) => {
   return (
     <div className="flex items-center justify-between p-3.5 rounded-xl bg-purple-500/[0.05] border border-purple-500/20">
@@ -72,12 +74,27 @@ export const ComponentBreadcrumbsHeader: React.FC<ComponentBreadcrumbsHeaderProp
         </div>
       </div>
 
-      <Badge
-        variant="outline"
-        className="text-[10px] font-mono px-2 py-0.5 text-purple-600 dark:text-purple-400 border-purple-500/30 font-semibold"
-      >
-        &lt;{displayLabel} /&gt;
-      </Badge>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <Badge
+          variant="outline"
+          className="text-[10px] font-mono px-2 py-0.5 text-purple-600 dark:text-purple-400 border-purple-500/30 font-semibold"
+        >
+          &lt;{displayLabel} /&gt;
+        </Badge>
+        {onDelete && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onDelete}
+            className="h-6 px-1.5 text-[11px] text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-1 cursor-pointer transition-colors"
+            title="Delete component"
+          >
+            <Trash2 size={11} className="text-muted-foreground hover:text-destructive" />
+            <span className="hidden sm:inline font-medium">Delete</span>
+          </Button>
+        )}
+      </div>
     </div>
   );
 };

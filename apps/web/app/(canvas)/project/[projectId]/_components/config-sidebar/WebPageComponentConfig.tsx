@@ -3,7 +3,7 @@
 import React, { useMemo, useCallback, useState, useEffect } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useShallow } from "zustand/react/shallow";
-import { Trash2, AlertCircle, SlidersHorizontal } from "lucide-react";
+import { Trash2, AlertCircle } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import {
   PageSection,
@@ -105,6 +105,11 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
 
   const componentBinding: SectionComponentBinding | undefined =
     targetSection?.componentBindings?.find((c) => c.id === id);
+
+  const displayLabel = useMemo(() => {
+    const raw = componentBinding?.name || componentBinding?.label || "";
+    return toPascalCase(raw) || "Component";
+  }, [componentBinding?.name, componentBinding?.label]);
 
   // Helper to persist updates to component binding
   const handleUpdate = useCallback(
@@ -475,10 +480,35 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
     [handleUpdateElement],
   );
 
+  const handleDeleteEntireComponent = useCallback(() => {
+    const currentParent = useBackendCanvasStore
+      .getState()
+      .nodes.find((n) => n.id === nodeId);
+    if (!currentParent?.data || !targetSection) return;
+
+    const currentBindings = targetSection.componentBindings || [];
+    const updatedBindings = currentBindings.filter((c) => c.id !== id);
+    const updatedSections = sections.map((sec) =>
+      sec.id === targetSection.id
+        ? { ...sec, componentBindings: updatedBindings }
+        : sec,
+    );
+
+    updateNode(nodeId, {
+      data: {
+        ...currentParent.data,
+        label: currentParent.data.label || "Web Page",
+        sections: updatedSections,
+      },
+    });
+    setActiveConfigItem(null);
+    toast.success(`Removed <${displayLabel} /> component`);
+  }, [targetSection, id, sections, updateNode, nodeId, setActiveConfigItem, displayLabel]);
+
   const handleDeleteElement = useCallback(
     (elId: string) => {
       if (currentElements.length <= 1) {
-        toast.error("Component must contain at least one UI component.");
+        handleDeleteEntireComponent();
         return;
       }
       const updated = currentElements.filter((el) => el.id !== elId);
@@ -488,7 +518,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
       }
       toast.success("Component removed");
     },
-    [currentElements, activeElementId, handleUpdateElements],
+    [currentElements, activeElementId, handleUpdateElements, handleDeleteEntireComponent],
   );
 
   const handleMoveElement = useCallback(
@@ -685,8 +715,6 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
   );
   const sampleValue: JSONValue | undefined = boundStateObj?.defaultValue;
 
-  const rawName = componentBinding.name || componentBinding.label || "";
-  const displayLabel = toPascalCase(rawName) || "Component";
   const stateName = componentBinding.valueStateName || displayLabel || "value";
 
   const formattedPreviewValue = String(
@@ -727,6 +755,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
             nodeId,
           })
         }
+        onDelete={handleDeleteEntireComponent}
       />
 
       {/* 2. Component Identity & Naming */}
@@ -797,72 +826,30 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
 
       <Separator className="bg-border/50" />
 
-      {/* 5. Component Prop Mappings Section with Switcher between Selected Components */}
-      <div className="flex flex-col gap-3">
-        {currentElements.length > 1 && (
-          <div className="flex flex-col gap-2 p-2.5 rounded-xl bg-muted/20 border border-border/50">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="font-semibold text-foreground flex items-center gap-1.5">
-                <SlidersHorizontal size={13} className="text-primary" />
-                <span>Switch Component to Map:</span>
-              </span>
-              <span className="text-[10px] text-muted-foreground font-mono">
-                {currentElements.findIndex((e) => e.id === activeElement.id) + 1} of {currentElements.length}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {currentElements.map((el, idx) => {
-                const isActive = el.id === activeElement.id;
-                const opt =
-                  COMPONENT_OPTIONS.find((o) => o.id === toStateRenderComponent(el.elementType)) ||
-                  DEFAULT_COMPONENT_OPTION;
-                const Icon = opt.icon;
-                return (
-                  <button
-                    key={el.id}
-                    type="button"
-                    onClick={() => setActiveElementId(el.id)}
-                    className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer",
-                      isActive
-                        ? "bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/40 shadow-xs font-semibold ring-1 ring-cyan-500/30"
-                        : "bg-background/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50",
-                    )}
-                  >
-                    <Icon size={13} className={isActive ? "text-cyan-500" : "text-muted-foreground"} />
-                    <span>{el.label || el.name || `Component ${idx + 1}`}</span>
-                    <Badge variant="outline" className="text-[9px] font-mono px-1 py-0 capitalize border-current/30">
-                      {el.elementType}
-                    </Badge>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        <ComponentPropMappingsSection
-          currentComponent={activeRenderComponent}
-          selectedOption={activeOption}
-          displayLabel={activeElement.label || activeElement.name || displayLabel}
-          stateName={activeElement.valueStateName || activeElement.label || stateName}
-          stateType={activeBindingStateType}
-          storeName={activeElement.valueStoreName}
-          storeId={activeSelectedStore?.id}
-          availableActions={availableActions}
-          availableStateVars={availableStateVars}
-          stateStoreNodes={stateStores}
-          propMappings={activePropMappings}
-          onUpdatePropMapping={handleUpdateActivePropMapping}
-          onOpenEventConfig={handleOpenActionFlow}
-          onCreateAction={handleCreateActiveElementAction}
-        />
-      </div>
+      {/* 5. Component Prop Mappings Section for Active Component */}
+      <ComponentPropMappingsSection
+        currentComponent={activeRenderComponent}
+        selectedOption={activeOption}
+        displayLabel={activeElement.label || activeElement.name || displayLabel}
+        stateName={activeElement.valueStateName || activeElement.label || stateName}
+        stateType={activeBindingStateType}
+        storeName={activeElement.valueStoreName}
+        storeId={activeSelectedStore?.id}
+        availableActions={availableActions}
+        availableStateVars={availableStateVars}
+        stateStoreNodes={stateStores}
+        propMappings={activePropMappings}
+        onUpdatePropMapping={handleUpdateActivePropMapping}
+        onOpenEventConfig={handleOpenActionFlow}
+        onCreateAction={handleCreateActiveElementAction}
+      />
 
       <Separator className="bg-border/50" />
 
       {/* 6. Event & Action Trigger Binding for Active Component */}
       <ComponentEventActionCard
+        elementLabel={activeElement.label || activeElement.name || displayLabel}
+        elementType={activeElement.elementType || activeOption.id || "component"}
         triggerEvent={activeElement.triggerEvent || (activeElement.elementType === "button" ? "click" : "change")}
         actionId={activeElement.actionId}
         actionName={activeElement.actionName}
@@ -875,7 +862,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
       <Separator className="bg-border/50" />
 
       {/* 6.5 API Response & State Store Mapping */}
-      <ComponentResponseMappingCard
+      {/* <ComponentResponseMappingCard
         nodeId={nodeId}
         sectionId={targetSection.id}
         componentBinding={componentBinding}
@@ -884,36 +871,29 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         stateStores={stateStores}
         onUpdateComponent={handleUpdate}
         onUpdateElements={handleUpdateElements}
-      />
+      /> */}
 
 
-      {/* 7. Delete Component Binding Button */}
-      <div className="pt-2 border-t border-border/40 flex justify-end">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            const currentBindings = targetSection.componentBindings || [];
-            const updatedBindings = currentBindings.filter((c) => c.id !== id);
-            const updatedSections = sections.map((sec) =>
-              sec.id === targetSection.id
-                ? { ...sec, componentBindings: updatedBindings }
-                : sec,
-            );
-            updateNode(nodeId, {
-              data: {
-                ...parentNode.data,
-                sections: updatedSections,
-              },
-            });
-            setActiveConfigItem(null);
-            toast.success("Component binding removed");
-          }}
-          className="h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive flex items-center gap-1.5 cursor-pointer"
-        >
-          <Trash2 size={12} />
-          <span>Delete Component Binding</span>
-        </Button>
+      {/* 7. Danger Zone - Delete Entire Component */}
+      <div className="p-3.5 rounded-xl border border-destructive/30 bg-destructive/5 space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col">
+            <span className="text-xs font-semibold text-destructive">Danger Zone</span>
+            <span className="text-[11px] text-muted-foreground">
+              Permanently delete &lt;<span className="font-mono font-medium text-foreground">{displayLabel}</span> /&gt; from this section.
+            </span>
+          </div>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            onClick={handleDeleteEntireComponent}
+            className="h-7 text-xs font-medium gap-1.5 shrink-0 cursor-pointer"
+          >
+            <Trash2 size={12} />
+            <span>Delete Component</span>
+          </Button>
+        </div>
       </div>
 
       {/* 7. Generate Form Dialog */}

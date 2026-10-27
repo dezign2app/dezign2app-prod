@@ -16,6 +16,8 @@ import {
 } from "@workspace/ui/components/select";
 
 export interface ComponentEventActionCardProps {
+  elementLabel?: string;
+  elementType?: string;
   triggerEvent?: string;
   actionId?: string;
   actionName?: string;
@@ -26,6 +28,8 @@ export interface ComponentEventActionCardProps {
 }
 
 export const ComponentEventActionCard: React.FC<ComponentEventActionCardProps> = ({
+  elementLabel,
+  elementType,
   triggerEvent = "click",
   actionId,
   actionName,
@@ -34,51 +38,90 @@ export const ComponentEventActionCard: React.FC<ComponentEventActionCardProps> =
   onCreateAction,
   onOpenActionFlow,
 }) => {
+  const cleanLabel = elementLabel || "Selected Component";
+  const cleanType = elementType || "element";
+
   return (
     <Card className="border-border/60 shadow-xs">
-      <CardHeader className="p-4 pb-2">
+      <CardHeader className="p-4 pb-2.5">
         <CardTitle className="text-xs font-semibold flex items-center justify-between">
           <span className="flex items-center gap-1.5">
             <Zap size={13} className="text-amber-500" />
-            <span>Event &amp; Action Trigger Binding</span>
+            <span>Interactive Event &amp; Action Trigger</span>
           </span>
-          {actionId && (
-            <Badge variant="outline" className="text-[10px] text-amber-600 dark:text-amber-400 border-amber-500/30">
-              Wired
-            </Badge>
-          )}
+          <div className="flex items-center gap-1.5">
+            {elementType && (
+              <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 capitalize text-muted-foreground border-border/60">
+                &lt;{cleanType} /&gt;
+              </Badge>
+            )}
+            {actionId ? (
+              <Badge variant="outline" className="text-[10px] text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/10 font-medium">
+                Wired
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px] text-muted-foreground border-border/50 font-normal">
+                Not Wired
+              </Badge>
+            )}
+          </div>
         </CardTitle>
-        <CardDescription className="text-[11px]">
-          Execute section actions and workflows when interacting with this component
+        <CardDescription className="text-[11px] leading-relaxed">
+          Configure what happens when a user interacts with the{" "}
+          <strong className="text-foreground font-medium font-mono">
+            &ldquo;{cleanLabel}&rdquo;
+          </strong>{" "}
+          ({cleanType}) element.
         </CardDescription>
       </CardHeader>
-      <CardContent className="p-4 pt-1 space-y-3 text-xs">
-        <div className="space-y-1">
+      <CardContent className="p-4 pt-1 space-y-3.5 text-xs">
+        {/* Target Element Callout */}
+        <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-muted/40 border border-border/50 text-[11px]">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-muted-foreground shrink-0">Attached to Element:</span>
+            <span className="font-semibold text-foreground font-mono truncate">
+              {cleanLabel}
+            </span>
+          </div>
+          <Badge variant="secondary" className="text-[9px] font-mono capitalize px-1.5 py-0 shrink-0">
+            {cleanType}
+          </Badge>
+        </div>
+
+        <div className="space-y-1.5">
           <Label className="text-[11px] text-muted-foreground flex items-center justify-between">
-            <span>Trigger Event</span>
+            <span className="font-medium text-foreground/90">
+              When user interacts with &ldquo;{cleanLabel}&rdquo; via:
+            </span>
             <span className="text-[10px] text-muted-foreground/70 font-normal">
-              DOM or interaction event
+              DOM Event
             </span>
           </Label>
           <Select
-            value={triggerEvent || "click"}
+            value={triggerEvent || (cleanType === "button" ? "click" : "change")}
             onValueChange={(val) => onUpdate({ triggerEvent: val })}
           >
             <SelectTrigger className="h-8 text-xs bg-background">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="click">onClick (Button click / tap)</SelectItem>
-              <SelectItem value="change">onChange (Input change / toggle)</SelectItem>
+              <SelectItem value="click">
+                onClick {cleanType === "button" ? "(Button click / tap)" : "(Element click / tap)"}
+              </SelectItem>
+              <SelectItem value="change">
+                onChange {cleanType === "input" ? "(Input text change)" : "(Value change / toggle)"}
+              </SelectItem>
               <SelectItem value="submit">onSubmit (Form submission)</SelectItem>
               <SelectItem value="select">onSelect (Dropdown option chosen)</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <Label className="text-[11px] text-muted-foreground">Target Action Workflow</Label>
+            <Label className="text-[11px] font-medium text-foreground/90">
+              Execute Action Workflow:
+            </Label>
             <Button
               type="button"
               variant="ghost"
