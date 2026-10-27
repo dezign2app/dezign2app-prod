@@ -253,6 +253,9 @@ export const TypesNode = ({
   const sourceServiceName =
     data.sourceServiceName ||
     sourceServiceNode?.data?.label ||
+    (data.label && data.label.toLowerCase().endsWith(" types")
+      ? data.label.replace(/\s+types$/i, "").trim()
+      : undefined) ||
     "Service";
 
   const sourceEntityId = isConsolidated
@@ -303,7 +306,7 @@ export const TypesNode = ({
   return (
     <div
       className={cn(
-        "group relative flex flex-col gap-2.5 rounded-xl bg-card/95 backdrop-blur border-2 min-w-[250px] max-w-[320px] shadow-md transition-all duration-150 cursor-pointer select-none",
+        "group relative flex flex-col gap-2.5 rounded-xl bg-card/95 backdrop-blur border-2 min-w-[260px] max-w-[350px] shadow-md transition-all duration-150 cursor-pointer select-none",
         hasInstallError
           ? "border-red-500 shadow-red-500/20 ring-1 ring-red-500/50"
           : selected
@@ -406,6 +409,7 @@ export const TypesNode = ({
       <TypesNodeList
         nodeId={id}
         isPackageNode={isPackageNode}
+        serviceName={isServiceDerived ? sourceServiceName : undefined}
         connectedTypes={connectedTypes}
         restTypes={restTypes}
         totalCount={totalCount}

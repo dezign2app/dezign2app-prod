@@ -9,6 +9,7 @@ import {
   CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
   CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS,
 } from "@workspace/canvas/constants";
+import { toPascalCase } from "@/lib/utils";
 import type { TypeRowProps } from "./types";
 
 export const TypeRow = React.memo(function TypeRow({
@@ -17,6 +18,7 @@ export const TypeRow = React.memo(function TypeRow({
   incoming,
   outgoing,
   isPackageNode,
+  serviceName,
   onOpenConfig,
   onExtend,
   onDelete,
@@ -34,6 +36,16 @@ export const TypeRow = React.memo(function TypeRow({
     }
     return "alias";
   }, [item]);
+
+  const displayName = React.useMemo(() => {
+    if (serviceName) {
+      const pascal = toPascalCase(serviceName);
+      if (pascal && item.name.startsWith(pascal) && item.name.length > pascal.length) {
+        return item.name.slice(pascal.length);
+      }
+    }
+    return item.name;
+  }, [item.name, serviceName]);
 
   return (
     <div
@@ -98,8 +110,11 @@ export const TypeRow = React.memo(function TypeRow({
         >
           {item.kind === "interface" ? "intf" : item.kind === "enum" ? "enum" : item.kind === "function" ? "fn" : "type"}
         </span>
-        <span className="font-mono text-[11px] text-foreground font-semibold truncate">
-          {item.name}
+        <span
+          className="font-mono text-[11px] text-foreground font-semibold truncate"
+          title={`Full type: ${item.name}`}
+        >
+          {displayName}
         </span>
         {item.extendedFrom && (
           <span

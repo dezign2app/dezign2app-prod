@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { BackendNode } from "@/types/canvas";
-import { Endpoint } from "@workspace/canvas/types";
+import { Endpoint, GlobalStoreDefinition } from "@workspace/canvas/types";
 import { generateTypesPackage } from "../generators/typesGenerator";
 import { generateZustandStores } from "../webClients/nextjs/v16/storeGenerators";
 
@@ -237,4 +237,42 @@ describe("compileTypesDisambiguation", () => {
     // Only "ConversationsService" should have Conversations in it in index.ts, or at most from entities barrel
     expect(indexFile!.content).not.toContain("export * as Conversations from");
   });
+
+  it("generates type-safe store with custom interface types initialized to null and typed as nullable", () => {
+    const storeDef: GlobalStoreDefinition = {
+      id: "store-app",
+      name: "App",
+      storage: "memory",
+      scope: "global",
+      fields: [
+        { id: "f-msg", name: "message", type: "string", defaultValue: "" },
+        { id: "f-resp", name: "response", type: "ConversationsPostSendMessageByIdResponse", defaultValue: "" },
+      ],
+      actions: [],
+    };
+
+    const files = generateZustandStores([storeDef]);
+    const storeFile = files.find((f) => f.filename === "lib/stores/useAppStore.ts");
+    expect(storeFile).toBeDefined();
+
+    const code = storeFile!.content;
+    // 1. Types import
+    expect(code).toContain('import type { ConversationsPostSendMessageByIdResponse } from "@workspace/types";');
+
+    // 2. Interface typing
+    expect(code).toContain("message: string;");
+    expect(code).toContain("response: ConversationsPostSendMessageByIdResponse | null;");
+    expect(code).toContain("setMessage: (value: string) => void;");
+    expect(code).toContain("setResponse: (value: ConversationsPostSendMessageByIdResponse | null) => void;");
+
+    // 3. Initial state
+    expect(code).toContain('message: "",');
+    expect(code).toContain("response: null,");
+    expect(code).not.toContain('response: "",');
+
+    // 4. Update and Reset implementations
+    expect(code).toContain("updateResponse: (patch) => set((s) => ({ response: (patch ? ({ ...(typeof s.response === \"object\" && s.response !== null ? s.response : {}), ...patch } as unknown as ConversationsPostSendMessageByIdResponse | null) : s.response) })),");
+    expect(code).toContain("reset: () => set(initialState),");
+  });
 });
+

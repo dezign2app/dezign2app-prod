@@ -99,13 +99,17 @@ export function generateSimpleButtonEventTemplate({
       }
 
       if (src === "response_property" && vPath) {
+        const isFullPayload = vPath === "*" || vPath === "$" || vPath === "data" || vPath === "response";
         const chain = vPath.split(".").filter(Boolean).map((k) => `?.[${JSON.stringify(k)}]`).join("");
+        const extractionExpr = isFullPayload
+          ? `(resData${chain} !== undefined ? resData${chain} : resData)`
+          : `resData${chain}`;
         postTrigger += `      if (triggerResult) {
         const resData =
           triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
             ? triggerResult.data
             : triggerResult;
-        const extracted = resData${chain};
+        const extracted = ${extractionExpr};
         ${storeHookName}.getState().${storeActionName}(extracted);
       }\n`;
         return;

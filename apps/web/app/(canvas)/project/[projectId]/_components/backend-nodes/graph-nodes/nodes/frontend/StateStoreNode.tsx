@@ -42,6 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
+import { TwoStepTypeSelector } from "../../../../shared/TwoStepTypeSelector";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -588,53 +589,22 @@ export const StateStoreNode = ({
                       <div className="flex items-center justify-between">
                         <span className="text-[9px] text-muted-foreground font-medium">Type</span>
                       </div>
-                      <Select
-                        value={isCustomType ? `custom:${f.type}` : f.type}
-                        onValueChange={(val) => {
-                          if (val.startsWith("custom:")) {
-                            const customName = val.replace("custom:", "");
-                            handleUpdateField(f.id, {
-                              type: customName,
-                              actions: getSupportedActionsForType("object"),
-                            });
-                          } else {
-                            handleUpdateField(f.id, {
-                              type: val,
-                              actions: getSupportedActionsForType(val),
-                            });
+                      <TwoStepTypeSelector
+                        value={f.type}
+                        onValueChange={(newType) => {
+                          const isCustom = availableCustomTypes.some((t) => t.name === newType);
+                          const patch: Partial<GlobalStoreField> = {
+                            type: newType,
+                            actions: getSupportedActionsForType(isCustom ? "object" : newType, f.isArray),
+                          };
+                          if (isCustom && (f.defaultValue === "" || f.defaultValue === undefined)) {
+                            patch.defaultValue = null;
                           }
+                          handleUpdateField(f.id, patch);
                         }}
-                      >
-                        <SelectTrigger
-                          size="sm"
-                          className="h-6 text-[10px] bg-background font-mono w-full"
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="font-mono text-xs">
-                          <SelectItem value="string">string</SelectItem>
-                          <SelectItem value="number">number</SelectItem>
-                          <SelectItem value="boolean">boolean</SelectItem>
-                          <SelectItem value="array">array</SelectItem>
-                          <SelectItem value="object">object (generic)</SelectItem>
-                          {availableCustomTypes.length > 0 && (
-                            <>
-                              <div className="px-2 py-1 text-[10px] uppercase font-bold text-cyan-400 bg-cyan-500/10 rounded-sm my-1 flex items-center gap-1 font-mono">
-                                <Braces className="w-3 h-3" /> Custom Types
-                              </div>
-                              {availableCustomTypes.map((t) => (
-                                <SelectItem
-                                  key={t.id}
-                                  value={`custom:${t.name}`}
-                                  className="text-xs font-mono text-cyan-300"
-                                >
-                                  {t.name} ({t.kind})
-                                </SelectItem>
-                              ))}
-                            </>
-                          )}
-                        </SelectContent>
-                      </Select>
+                        allNodes={allNodes}
+                        compact
+                      />
                     </div>
 
                     {/* Reducer & Actions breakdown */}

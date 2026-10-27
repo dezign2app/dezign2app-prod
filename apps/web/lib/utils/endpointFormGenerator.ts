@@ -280,6 +280,195 @@ export function extractEndpointResponseFields(endpoint: Endpoint): ExtractedEndp
     }
   }
 
+  // 4. LangGraph Agent Invocation or Pipeline Steps fallback
+  if (result.length === 0 && Array.isArray(endpoint.pipelineSteps) && endpoint.pipelineSteps.length > 0) {
+    const lgStep = endpoint.pipelineSteps.find(
+      (s: any) =>
+        s.enabled !== false &&
+        (s.type === "langgraph_invoke" || Boolean(s.langGraphTargetNodeId)),
+    );
+
+    if (lgStep) {
+      const isStreaming = Boolean(
+        lgStep.langGraphStreamingEnabled ||
+        lgStep.langGraphStreamingProtocol === "sse" ||
+        lgStep.langGraphStreamingProtocol === "raw" ||
+        (lgStep.langGraphStreamingProtocol !== "websocket" &&
+          lgStep.langGraphStreamingProtocol !== "kafka" &&
+          lgStep.langGraphStreamingProtocol !== "redis_stream" &&
+          lgStep.langGraphStreamingEnabled !== false),
+      );
+
+      if (isStreaming) {
+        const streamModes: string[] =
+          Array.isArray(lgStep.langGraphStreamModes) && lgStep.langGraphStreamModes.length > 0
+            ? lgStep.langGraphStreamModes
+            : ["messages"];
+        const selectedStreamingFields: string[] = Array.isArray(lgStep.langGraphStreamingFields)
+          ? lgStep.langGraphStreamingFields.filter(Boolean)
+          : [];
+        // Only include reasoning if explicitly enabled
+        const includeReasoning = lgStep.langGraphStreamIncludeReasoning === true;
+
+        if (selectedStreamingFields.length > 0) {
+          // The user explicitly selected which channel fields to stream
+          selectedStreamingFields.forEach((fieldName: string) => {
+            const clean = fieldName.trim();
+            if (!clean) return;
+            const lower = clean.toLowerCase();
+            if (seenNames.has(lower)) return;
+            seenNames.add(lower);
+
+            let fieldType = "string";
+            let fieldDesc = `Streamed channel '${clean}'`;
+
+            if (clean === "content" || clean === "messages") {
+              fieldDesc = "Accumulated AI response content / text stream";
+            } else if (clean === "tokens") {
+              fieldType = "string[]";
+              fieldDesc = "Streamed LLM token chunks array";
+            } else if (clean === "reasoning") {
+              fieldDesc = "Model reasoning / thought trace tokens";
+            } else if (clean === "updates") {
+              fieldType = "array";
+              fieldDesc = "Graph node state updates emitted during execution";
+            } else if (clean === "values") {
+              fieldType = "object";
+              fieldDesc = "Full graph state snapshot";
+            }
+
+            result.push({
+              id: `res-lg-${clean}`,
+              name: clean,
+              type: fieldType,
+              description: fieldDesc,
+            });
+          });
+
+          if (includeReasoning && !seenNames.has("reasoning")) {
+            seenNames.add("reasoning");
+            result.push({
+              id: `res-lg-reasoning`,
+              name: "reasoning",
+              type: "string",
+              description: "Model reasoning / thought trace tokens",
+            });
+          }
+        } else {
+          // Default streaming: only include what is explicitly enabled by streamModes & toggles
+          if (streamModes.includes("messages")) {
+            seenNames.add("content");
+            result.push({
+              id: `res-lg-content`,
+              name: "content",
+              type: "string",
+              description: "Accumulated AI response content / text stream",
+            });
+          }
+
+          if (includeReasoning && !seenNames.has("reasoning")) {
+            seenNames.add("reasoning");
+            result.push({
+              id: `res-lg-reasoning`,
+              name: "reasoning",
+              type: "string",
+              description: "Model reasoning / thought trace tokens",
+            });
+          }
+
+          if (streamModes.includes("updates") && !seenNames.has("updates")) {
+            seenNames.add("updates");
+            result.push({
+              id: `res-lg-updates`,
+              name: "updates",
+              type: "array",
+              description: "Graph node state updates emitted during execution",
+            });
+          }
+
+          if (streamModes.includes("values") && !seenNames.has("values")) {
+            seenNames.add("values");
+            result.push({
+              id: `res-lg-values`,
+              name: "values",
+              type: "object",
+              description: "Full graph state snapshot",
+            });
+          }
+
+          if (streamModes.includes("custom") && !seenNames.has("custom")) {
+            seenNames.add("custom");
+            result.push({
+              id: `res-lg-custom`,
+              name: "custom",
+              type: "array",
+              description: "Arbitrary custom events emitted by graph nodes",
+            });
+          }
+        }
+      } else {
+        const outputMode = lgStep.langGraphOutputMode || "last_message";
+        const selectedOutputFields: string[] = Array.isArray(lgStep.langGraphOutputFields)
+          ? lgStep.langGraphOutputFields.filter(Boolean)
+          : [];
+
+        if (outputMode === "specific_fields" && selectedOutputFields.length > 0) {
+          selectedOutputFields.forEach((fieldName: string) => {
+            const clean = fieldName.trim();
+            if (!clean) return;
+            const lower = clean.toLowerCase();
+            if (seenNames.has(lower)) return;
+            seenNames.add(lower);
+
+            result.push({
+              id: `res-lg-${clean}`,
+              name: clean,
+              type: "string",
+              description: `Agent output channel '${clean}'`,
+            });
+          });
+        } else if (outputMode === "full_state") {
+          seenNames.add("values");
+          result.push({
+            id: `res-lg-values`,
+            name: "values",
+            type: "object",
+            description: "Full graph state snapshot",
+          });
+        } else {
+          // "last_message" or default
+          seenNames.add("response");
+          result.push({
+            id: `res-lg-response`,
+            name: "response",
+            type: "string",
+            description: "Agent execution response content",
+          });
+        }
+      }
+    } else {
+      const returnStep = endpoint.pipelineSteps.find(
+        (s: any) => s.type === "return_response" && s.enabled !== false,
+      );
+      if (returnStep && Array.isArray(returnStep.inputBindings)) {
+        returnStep.inputBindings.forEach((b: any, bIdx: number) => {
+          const propName = b.argName?.trim() || `data_${bIdx}`;
+          if (!propName || propName === "_spread") return;
+          const lower = propName.toLowerCase();
+          if (seenNames.has(lower)) return;
+          seenNames.add(lower);
+
+          result.push({
+            id: `res-ret-${propName}`,
+            name: propName,
+            type: "string",
+            description: `Response field '${propName}' from return_response step`,
+          });
+        });
+      }
+    }
+  }
+
   return result;
 }
 

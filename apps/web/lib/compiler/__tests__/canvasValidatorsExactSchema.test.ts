@@ -1405,6 +1405,84 @@ describe("Convex canvasValidators exact schema", () => {
     const parsed = browserStorageNodeDataSchema.safeParse(userPayload);
     expect(parsed.success).toBe(true);
   });
+
+  it("validates webPage node data with LangGraph realtime connections in Zod and Convex schemas", async () => {
+    const { webPageDataSchema } = await import("@workspace/canvas/schemas");
+    const { realtimeConnectionConvexValidator, webPageConvexDataValidator } = await import(
+      "../../../../../packages/backend/convex/schema/canvasValidators"
+    );
+
+    const langgraphPageData = {
+      isLayout: false,
+      label: "/chat/[id]",
+      pathParams: [
+        { id: "param-id", name: "id", required: true, type: "string" },
+      ],
+      position: { x: 2401.0, y: 216.13888925893298 },
+      realtimeConnections: [
+        {
+          description: "send-message/:id",
+          eventName: "message",
+          id: "step-langgraph-1792659298445-sb5z",
+          isLangGraph: true,
+          langGraphStreamModes: ["messages"],
+          langGraphStreamingFields: [],
+          langGraphTargetNodeId: "e2a2e9a8-dcc1-4422-802e-9b3e0d9eefbe",
+          protocol: "SSE" as const,
+          sourceEventId: "ubifohs",
+          sourceItemName: "send-message/:id",
+          sourceItemType: "endpoint" as const,
+          sourceServiceLabel: "Conversations",
+          sourceServiceNodeId: "c3f60469-228a-4a1e-b5cd-3484a0d8e86b",
+        },
+      ],
+      sections: [
+        {
+          id: "sec-chat",
+          name: "ChatSection",
+          actions: [
+            {
+              id: "evt-1792918032760",
+              name: "pageLoad",
+              event: "pageLoad",
+              actionSteps: [
+                {
+                  edgeId: "edge-action-evt-1792918032760-3a2f7f5a-79a8-4b4c-8937-73d876fb53b1-1792990642511",
+                  id: "step-1792990642516-crlvm",
+                  order: 1.0,
+                  stateActionName: "set",
+                  stateKey: "message",
+                  stateReducerName: "message_reducer",
+                  stateStoreNodeId: "3a2f7f5a-79a8-4b4c-8937-73d876fb53b1",
+                  stateTargetFieldId: "b6f9a896-0242-4c70-ad2d-54f10f5274ae",
+                  stateTargetKind: "store",
+                  stateUpdateType: "set",
+                  stateValueSource: { kind: "literal" as const, value: "" },
+                  type: "state_mutation" as const,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const parsed = webPageDataSchema.safeParse(langgraphPageData);
+    expect(parsed.success).toBe(true);
+
+    expect(realtimeConnectionConvexValidator.fields.isLangGraph).toBeDefined();
+    expect(realtimeConnectionConvexValidator.fields.langGraphStreamModes).toBeDefined();
+    expect(realtimeConnectionConvexValidator.fields.langGraphStreamingFields).toBeDefined();
+    expect(realtimeConnectionConvexValidator.fields.langGraphStreamIncludeReasoning).toBeDefined();
+    expect(realtimeConnectionConvexValidator.fields.langGraphTargetNodeId).toBeDefined();
+    expect(realtimeConnectionConvexValidator.fields.sourceServiceName).toBeDefined();
+    expect(realtimeConnectionConvexValidator.fields.sourceServicePort).toBeDefined();
+    expect(webPageConvexDataValidator.fields.groupId).toBeDefined();
+    expect(webPageConvexDataValidator.fields.group).toBeDefined();
+    expect(webPageConvexDataValidator.fields.badge).toBeDefined();
+    expect(webPageConvexDataValidator.fields.graphPosition).toBeDefined();
+    expect(webPageConvexDataValidator.fields.realtimeConnections).toBeDefined();
+  });
 });
 
 

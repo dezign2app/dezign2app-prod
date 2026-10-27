@@ -23,6 +23,36 @@ function toCamelCase(str: string): string {
   return clean.charAt(0).toLowerCase() + clean.slice(1);
 }
 
+export const STANDARD_TS_TYPES = new Set([
+  "string",
+  "number",
+  "boolean",
+  "unknown",
+  "any",
+  "void",
+  "null",
+  "undefined",
+  "never",
+  "Date",
+  "object",
+  "array",
+  "unknown[]",
+  "any[]",
+  "Record<string, unknown>",
+  "Record<string, any>",
+]);
+
+function isArrayField(f: { type?: string; isArray?: boolean }): boolean {
+  return Boolean(f.isArray || f.type === "array" || f.type?.endsWith("[]"));
+}
+
+function isCustomTypeField(f: { type?: string; isArray?: boolean }): boolean {
+  if (isArrayField(f)) return false;
+  const rawType = (f.type || "string").trim();
+  const baseType = rawType.replace(/\[\]$/, "").trim();
+  return Boolean(baseType && !STANDARD_TS_TYPES.has(baseType) && !STANDARD_TS_TYPES.has(rawType));
+}
+
 function mapFieldTypeToTs(type: StateVariableType | string): string {
   switch (type) {
     case "string":
@@ -45,12 +75,48 @@ function mapFieldTypeToTs(type: StateVariableType | string): string {
 }
 
 function formatDefaultValue(field: GlobalStoreField): string {
-  if (field.defaultValue !== undefined && field.defaultValue !== null) {
-    if (typeof field.defaultValue === "string") {
-      return JSON.stringify(field.defaultValue);
+  const isArray = isArrayField(field);
+  const isCustom = isCustomTypeField(field);
+
+  if (isArray) {
+    if (field.defaultValue !== undefined && field.defaultValue !== null && field.defaultValue !== "") {
+      try {
+        const parsed = typeof field.defaultValue === "string" ? JSON.parse(field.defaultValue) : field.defaultValue;
+        if (Array.isArray(parsed)) return JSON.stringify(parsed);
+      } catch {}
     }
-    if (typeof field.defaultValue === "number" || typeof field.defaultValue === "boolean") {
-      return String(field.defaultValue);
+    return "[]";
+  }
+
+  if (isCustom) {
+    if (field.defaultValue !== undefined && field.defaultValue !== null && field.defaultValue !== "") {
+      try {
+        const parsed = typeof field.defaultValue === "string" ? JSON.parse(field.defaultValue) : field.defaultValue;
+        if (typeof parsed === "object" && parsed !== null) {
+          return JSON.stringify(parsed);
+        }
+      } catch {}
+    }
+    return "null";
+  }
+
+  if (field.defaultValue !== undefined && field.defaultValue !== null && field.defaultValue !== "") {
+    if (field.type === "number") {
+      const num = Number(field.defaultValue);
+      return !isNaN(num) ? String(num) : "0";
+    }
+    if (field.type === "boolean") {
+      return String(field.defaultValue === true || field.defaultValue === "true");
+    }
+    if (field.type === "object") {
+      try {
+        const parsed = typeof field.defaultValue === "string" ? JSON.parse(field.defaultValue) : field.defaultValue;
+        if (typeof parsed === "object" && parsed !== null) return JSON.stringify(parsed);
+      } catch {}
+      return "{}";
+    }
+    if (field.type === "string") {
+      return JSON.stringify(String(field.defaultValue));
     }
     try {
       return JSON.stringify(field.defaultValue);
@@ -97,10 +163,29 @@ export function generateZustandStore(
     { id: "field-state", name: "value", type: "string" as StateVariableType, defaultValue: "" }
   ];
 
+  const resolveFieldType = (f: GlobalStoreField): string => {
+    let rawTs: string;
+    if (isArrayField(f)) {
+      if (f.type?.endsWith("[]")) {
+        rawTs = f.type;
+      } else if (f.type === "array") {
+        rawTs = "unknown[]";
+      } else {
+        const base = mapFieldTypeToTs(f.type);
+        rawTs = base === "unknown" ? "unknown[]" : `${base}[]`;
+      }
+    } else {
+      rawTs = mapFieldTypeToTs(f.type);
+    }
+    const isCustom = isCustomTypeField(f);
+    const isNullable = isCustom || f.required === false;
+    return isNullable ? `${rawTs} | null` : rawTs;
+  };
+
   // TypeScript fields
   const fieldTypeLines = fields.map((f) => {
     const fName = toCamelCase(f.name);
-    const tsType = mapFieldTypeToTs(f.type);
+    const tsType = resolveFieldType(f);
     return `  ${fName}: ${tsType};`;
   });
 
@@ -123,12 +208,10 @@ export function generateZustandStore(
   const setterLines = activeSetterFields.map((f) => {
     const fName = toCamelCase(f.name);
     const fPascal = toPascalCase(f.name);
-    const tsType = mapFieldTypeToTs(f.type);
+    const tsType = resolveFieldType(f);
     return `  set${fPascal}: (value: ${tsType}) => void;`;
   });
 
-  const isArrayField = (f: { type?: string; isArray?: boolean }) =>
-    Boolean(f.isArray || f.type === "array" || f.type?.endsWith("[]"));
   const isStringField = (f: { type?: string }) => f.type === "string";
 
   const activeAppendFields = fields.filter((f) => {
@@ -235,7 +318,8 @@ export function generateZustandStore(
     return `  decrement${fPascal}: (amount?: number) => void;`;
   });
 
-  const isObjectField = (f: { type?: string }) => f.type === "object" || f.type === "Record<string, unknown>";
+  const isObjectField = (f: { type?: string; isArray?: boolean }) =>
+    f.type === "object" || f.type === "Record<string, unknown>" || isCustomTypeField(f);
   const activePrependFields = fields.filter((f) => {
     if (!isStringField(f) && !isArrayField(f) && !f.actions?.includes("prepend")) return false;
     const fPascal = toPascalCase(f.name);
@@ -266,7 +350,8 @@ export function generateZustandStore(
 
   const updateLines = activeUpdateFields.map((f) => {
     const fPascal = toPascalCase(f.name);
-    return `  update${fPascal}: (patch?: Partial<${mapFieldTypeToTs(f.type)}> | Record<string, unknown>) => void;`;
+    const baseTs = mapFieldTypeToTs(f.type);
+    return `  update${fPascal}: (patch?: Partial<${baseTs}> | Record<string, unknown> | null) => void;`;
   });
 
   const resetFieldLines = fields
@@ -595,7 +680,8 @@ ${payloadPrep}
   const updateImpls = activeUpdateFields.map((f) => {
     const fName = toCamelCase(f.name);
     const fPascal = toPascalCase(f.name);
-    return `  update${fPascal}: (patch) => set((s) => ({ ${fName}: typeof s.${fName} === "object" && s.${fName} !== null ? (patch ? { ...s.${fName}, ...patch } : s.${fName}) : (patch || s.${fName}) })),`;
+    const fullTs = resolveFieldType(f);
+    return `  update${fPascal}: (patch) => set((s) => ({ ${fName}: (patch ? ({ ...(typeof s.${fName} === "object" && s.${fName} !== null ? s.${fName} : {}), ...patch } as unknown as ${fullTs}) : s.${fName}) })),`;
   });
 
   const resetFieldImpls = fields
@@ -705,25 +791,6 @@ ${allImpls.map((l) => `    ${l.trim()}`).join("\n")}
   ...initialState,
 ${allImpls.map((l) => `  ${l.trim()}`).join("\n")}
 }));`;
-
-  const STANDARD_TS_TYPES = new Set([
-    "string",
-    "number",
-    "boolean",
-    "unknown",
-    "any",
-    "void",
-    "null",
-    "undefined",
-    "never",
-    "Date",
-    "object",
-    "array",
-    "unknown[]",
-    "any[]",
-    "Record<string, unknown>",
-    "Record<string, any>",
-  ]);
 
   const customImports = new Set<string>();
   fields.forEach((f) => {
