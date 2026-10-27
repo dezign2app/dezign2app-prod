@@ -331,6 +331,7 @@ export interface StoreActionBinding {
   actionType?: StoreActionType;
   targetFieldId?: string;
   targetFieldName?: string;
+  targetFieldType?: string;
   updateSource?: "response" | "response_property" | "payload" | "direct" | "static" | "full_message" | "nested_property";
   valuePath?: string;
   customValue?: string;

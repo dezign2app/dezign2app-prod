@@ -799,7 +799,7 @@ export default ${sectionCompName};
               const actName = act?.name || "inputChange";
               const actUrl = act?.url || "";
               const actMethod = act?.method || "POST";
-              return `          <Input key="${st.id}" type="${inType}" value={${valExpr}} onChange={(e) => onTrigger?.("${actName}", "change", "${actUrl}", "${actMethod}", { value: e.target.value })}${ph}${readOnlyAttr}${dis}${uxAttrs} className="h-8 text-xs max-w-xs" />`;
+              return `          <Input key="${st.id}" type="${inType}" value={${valExpr}} onChange={(e) => onTrigger?.("${actName}", "change", "${actUrl}", "${actMethod}", false, undefined, undefined, { value: e.target.value })}${ph}${readOnlyAttr}${dis}${uxAttrs} className="h-8 text-xs max-w-xs" />`;
             }
 
             if (props?.onChangeMode === "custom" && props?.customOnChange) {
@@ -881,7 +881,7 @@ export default ${sectionCompName};
       if (valVar && hasSetter) {
         let changeAttr = ` onChange={(e) => ${setterVar}(e.target.value)}`;
         if (hasAction) {
-          changeAttr = ` onChange={(e) => { ${setterVar}(e.target.value); onTrigger?.("${actName}", "change", "${actUrl}", "${actMethod}", { value: e.target.value }); }}`;
+          changeAttr = ` onChange={(e) => { ${setterVar}(e.target.value); onTrigger?.("${actName}", "change", "${actUrl}", "${actMethod}", false, undefined, undefined, { value: e.target.value }); }}`;
         }
         return `<Input key="${item.id}" placeholder="${ph}" value={String(${valVar} ?? "")}${changeAttr}${disabledAttr} className="h-8 text-xs max-w-xs" />`;
       }
@@ -896,7 +896,7 @@ export default ${sectionCompName};
       if (valVar && hasSetter) {
         let changeAttr = ` onCheckedChange={(checked) => ${setterVar}(checked)}`;
         if (hasAction) {
-          changeAttr = ` onCheckedChange={(checked) => { ${setterVar}(checked); onTrigger?.("${actName}", "change", "${actUrl}", "${actMethod}", { checked }); }}`;
+          changeAttr = ` onCheckedChange={(checked) => { ${setterVar}(checked); onTrigger?.("${actName}", "change", "${actUrl}", "${actMethod}", false, undefined, undefined, { checked }); }}`;
         }
         return `<div key="${item.id}" className="flex items-center gap-2 text-xs"><Switch checked={Boolean(${valVar})}${changeAttr}${disabledAttr} /><span>${labelText}</span></div>`;
       }
