@@ -25,6 +25,7 @@ ${hasAuth ? `import { getAuthBearerToken } from "./auth-token";\n` : ""}export i
 
 export interface ApiStreamResult {
   content: string;
+  response?: string;
   tokens: string[];
   reasoning?: string;
   reasoningTokens?: string[];
@@ -185,6 +186,7 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
 
           return {
             content: finalContent,
+            response: finalContent,
             tokens: [...tokens],
             reasoning: reasoningTokens.join(""),
             reasoningTokens: [...reasoningTokens],
@@ -296,6 +298,7 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
             tokens.push(textChunk);
             resData = {
               content: textAccumulated,
+              response: textAccumulated,
               tokens: [...tokens],
               streamed: true,
               statusText: res.statusText,
@@ -311,6 +314,7 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
 
         resData = {
           content: textAccumulated,
+          response: textAccumulated,
           tokens,
           streamed: true,
           statusText: res.statusText,

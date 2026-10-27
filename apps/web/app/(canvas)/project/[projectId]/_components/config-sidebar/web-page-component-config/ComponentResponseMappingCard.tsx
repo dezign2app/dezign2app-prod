@@ -464,23 +464,30 @@ export const ComponentResponseMappingCard: React.FC<ComponentResponseMappingCard
 
     responseFields.forEach((rf, idx) => {
       const cleanVar = toCamelCase(rf.name);
-      ensureStoreVariable(cleanVar, rf.type || "string");
+      // Smart match existing store variables: e.g. if store already has 'response' and response field is 'content'
+      const existingCandidate =
+        activeStoreFields.find((f: GlobalStoreField) => f.name.toLowerCase() === cleanVar.toLowerCase()) ||
+        (cleanVar === "content" ? activeStoreFields.find((f: GlobalStoreField) => f.name.toLowerCase() === "response") : undefined) ||
+        (cleanVar === "response" ? activeStoreFields.find((f: GlobalStoreField) => f.name.toLowerCase() === "content") : undefined);
+
+      const targetVarName = existingCandidate ? existingCandidate.name : cleanVar;
+      ensureStoreVariable(targetVarName, rf.type || "string");
 
       if (!nextBindings.some((b) => b.valuePath === rf.name)) {
         nextBindings.push({
-          id: `bind-${Date.now()}-${idx}-${cleanVar}`,
+          id: `bind-${Date.now()}-${idx}-${targetVarName}`,
           storeNodeId: activeStoreNode.id,
           storeName: activeStoreName,
-          actionName: `set${toPascalCase(cleanVar)}`,
+          actionName: `set${toPascalCase(targetVarName)}`,
           actionType: "set",
-          targetFieldName: cleanVar,
+          targetFieldName: targetVarName,
           updateSource: "response_property",
           valuePath: rf.name,
         });
       }
 
       // Check if UI element already exists
-      const hasEl = currentElements.some((el) => el.valueStateName === cleanVar);
+      const hasEl = currentElements.some((el) => el.valueStateName === targetVarName || el.valueStateName === cleanVar);
       if (!hasEl) {
         const isBool = rf.type === "boolean";
         const cType: ComponentBindingType = isBool ? "badge" : "card";
