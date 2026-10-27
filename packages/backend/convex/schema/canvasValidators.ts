@@ -794,6 +794,8 @@ export const realtimeConnectionConvexValidator = v.object({
   description: v.optional(v.string()),
   sourceServiceNodeId: v.optional(v.string()),
   sourceServiceLabel: v.optional(v.string()),
+  sourceServiceName: v.optional(v.string()),
+  sourceServicePort: v.optional(v.string()),
   sourceEventId: v.optional(v.string()),
   sourceItemName: v.optional(v.string()),
   sourceItemType: v.optional(
@@ -803,6 +805,11 @@ export const realtimeConnectionConvexValidator = v.object({
   storeActionBindings: v.optional(v.array(storeActionBindingConvexValidator)),
   subscriptionBindings: v.optional(v.array(v.any())),
   actionSteps: v.optional(v.array(v.any())),
+  isLangGraph: v.optional(v.boolean()),
+  langGraphStreamModes: v.optional(v.array(v.string())),
+  langGraphStreamingFields: v.optional(v.array(v.string())),
+  langGraphStreamIncludeReasoning: v.optional(v.boolean()),
+  langGraphTargetNodeId: v.optional(v.string()),
 });
 
 // Web Page Node Data Validator
@@ -832,7 +839,11 @@ export const webPageConvexDataValidator = v.object({
   requireAuth: v.optional(v.boolean()),
   color: v.optional(v.string()),
   parentId: v.optional(v.string()),
+  groupId: v.optional(v.string()),
+  group: v.optional(v.string()),
+  badge: v.optional(v.string()),
   position: v.optional(v.object({ x: v.number(), y: v.number() })),
+  graphPosition: v.optional(v.object({ x: v.number(), y: v.number() })),
   style: v.optional(
     v.record(
       v.string(),

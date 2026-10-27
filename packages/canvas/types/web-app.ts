@@ -101,6 +101,8 @@ export interface RealtimeConnection {
    */
   sourceServiceNodeId?: string;
   sourceServiceLabel?: string;
+  sourceServiceName?: string;
+  sourceServicePort?: string;
   sourceEventId?: string;
   sourceItemName?: string;
   sourceItemType?: "endpoint" | "event";

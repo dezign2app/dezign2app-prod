@@ -370,6 +370,8 @@ export const pageSectionSchema = z.object({
   description: z.string().optional().describe("Functional description of what this section does"),
   uiPrompt: z.string().optional().describe("Visual styling and theme prompt for this section"),
   libraries: z.array(z.string()).optional().describe("Third-party libraries used in this section"),
+  images: z.array(z.string()).optional(),
+  primaryImageUrl: z.string().optional(),
 });
 
 export const realtimeConnectionSchema = z.object({
@@ -397,6 +399,8 @@ export const realtimeConnectionSchema = z.object({
   description: z.string().optional().describe("Description of real-time listener"),
   sourceServiceNodeId: z.string().optional().describe("ID of service node pushing this stream"),
   sourceServiceLabel: z.string().optional().describe("Label of service node pushing this stream"),
+  sourceServiceName: z.string().optional().describe("Name of service pushing this stream"),
+  sourceServicePort: z.string().optional().describe("Port of service pushing this stream"),
   sourceEventId: z.string().optional().describe("ID of source event or endpoint"),
   sourceItemName: z.string().optional().describe("Name of endpoint or event pushing this stream"),
   sourceItemType: z.enum(["endpoint", "event"]).optional().describe("Type of pipeline owner"),
@@ -404,6 +408,11 @@ export const realtimeConnectionSchema = z.object({
   storeActionBindings: z.array(storeActionBindingSchema).optional(),
   subscriptionBindings: z.array(z.any()).optional().describe("Parameter and auth mappings to establish subscription"),
   actionSteps: z.array(z.any()).optional().describe("Sequential action steps to execute on realtime message"),
+  isLangGraph: z.boolean().optional().describe("Whether this connection is pushed by a LangGraph agent"),
+  langGraphStreamModes: z.array(z.string()).optional().describe("Active stream modes configured in LangGraph invoke step"),
+  langGraphStreamingFields: z.array(z.string()).optional().describe("Streamed state channels"),
+  langGraphStreamIncludeReasoning: z.boolean().optional().describe("Whether reasoning tokens are included in the stream"),
+  langGraphTargetNodeId: z.string().optional().describe("Linked LangGraph agent node ID"),
 });
 
 export const webPageDataSchema = simpleDataSchema.extend({
