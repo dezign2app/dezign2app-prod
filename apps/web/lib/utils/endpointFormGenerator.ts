@@ -280,6 +280,141 @@ export function extractEndpointResponseFields(endpoint: Endpoint): ExtractedEndp
     }
   }
 
+  // 4. LangGraph Agent Invocation or Pipeline Steps fallback
+  if (result.length === 0 && Array.isArray(endpoint.pipelineSteps) && endpoint.pipelineSteps.length > 0) {
+    const lgStep = endpoint.pipelineSteps.find(
+      (s: any) =>
+        s.enabled !== false &&
+        (s.type === "langgraph_invoke" || Boolean(s.langGraphTargetNodeId)),
+    );
+
+    if (lgStep) {
+      const isStreaming = Boolean(
+        lgStep.langGraphStreamingEnabled ||
+        lgStep.langGraphStreamingProtocol === "sse" ||
+        lgStep.langGraphStreamingProtocol === "raw" ||
+        (lgStep.langGraphStreamingProtocol !== "websocket" &&
+          lgStep.langGraphStreamingProtocol !== "kafka" &&
+          lgStep.langGraphStreamingProtocol !== "redis_stream" &&
+          lgStep.langGraphStreamingEnabled !== false),
+      );
+
+      if (isStreaming) {
+        const streamModes: string[] = lgStep.langGraphStreamModes || ["messages"];
+        const includeReasoning = lgStep.langGraphStreamIncludeReasoning !== false;
+
+        result.push({
+          id: `res-lg-content`,
+          name: "content",
+          type: "string",
+          description: "Accumulated AI response content / text stream",
+        });
+
+        result.push({
+          id: `res-lg-tokens`,
+          name: "tokens",
+          type: "string[]",
+          description: "Streamed LLM token chunks array",
+        });
+
+        if (includeReasoning) {
+          result.push({
+            id: `res-lg-reasoning`,
+            name: "reasoning",
+            type: "string",
+            description: "Model reasoning / thought trace tokens",
+          });
+        }
+
+        result.push({
+          id: `res-lg-threadId`,
+          name: "threadId",
+          type: "string",
+          description: "Conversation thread ID for multi-turn sessions",
+        });
+
+        result.push({
+          id: `res-lg-streamed`,
+          name: "streamed",
+          type: "boolean",
+          description: "Whether response was streamed over SSE",
+          defaultValue: true,
+        });
+
+        result.push({
+          id: `res-lg-response`,
+          name: "response",
+          type: "object",
+          description: "Full accumulated stream result payload",
+        });
+
+        if (streamModes.includes("updates")) {
+          result.push({
+            id: `res-lg-updates`,
+            name: "updates",
+            type: "array",
+            description: "Graph node state updates emitted during execution",
+          });
+        }
+
+        if (streamModes.includes("values")) {
+          result.push({
+            id: `res-lg-values`,
+            name: "values",
+            type: "object",
+            description: "Full graph state snapshot",
+          });
+        }
+
+        result.push({
+          id: `res-lg-statusText`,
+          name: "statusText",
+          type: "string",
+          description: "HTTP status text (e.g. 'OK')",
+        });
+      } else {
+        result.push({
+          id: `res-lg-response`,
+          name: "response",
+          type: "string",
+          description: "Agent execution response content",
+        });
+        result.push({
+          id: `res-lg-threadId`,
+          name: "threadId",
+          type: "string",
+          description: "Conversation thread ID",
+        });
+        result.push({
+          id: `res-lg-messages`,
+          name: "messages",
+          type: "array",
+          description: "Conversation messages history",
+        });
+      }
+    } else {
+      const returnStep = endpoint.pipelineSteps.find(
+        (s: any) => s.type === "return_response" && s.enabled !== false,
+      );
+      if (returnStep && Array.isArray(returnStep.inputBindings)) {
+        returnStep.inputBindings.forEach((b: any, bIdx: number) => {
+          const propName = b.argName?.trim() || `data_${bIdx}`;
+          if (!propName || propName === "_spread") return;
+          const lower = propName.toLowerCase();
+          if (seenNames.has(lower)) return;
+          seenNames.add(lower);
+
+          result.push({
+            id: `res-ret-${propName}`,
+            name: propName,
+            type: "string",
+            description: `Response field '${propName}' from return_response step`,
+          });
+        });
+      }
+    }
+  }
+
   return result;
 }
 

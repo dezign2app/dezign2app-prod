@@ -132,6 +132,19 @@ export const ComponentResponseMappingCard: React.FC<ComponentResponseMappingCard
     return extractEndpointResponseFields(activeEndpoint);
   }, [activeEndpoint]);
 
+  const isLangGraphStreaming = useMemo(() => {
+    if (!activeEndpoint?.pipelineSteps) return false;
+    return activeEndpoint.pipelineSteps.some(
+      (s: any) =>
+        s.enabled !== false &&
+        (s.type === "langgraph_invoke" || Boolean(s.langGraphTargetNodeId)) &&
+        (s.langGraphStreamingEnabled ||
+          s.langGraphStreamingProtocol === "sse" ||
+          s.langGraphStreamingProtocol === "raw" ||
+          !s.langGraphStreamingProtocol),
+    );
+  }, [activeEndpoint]);
+
   // 4. Default target store node
   const defaultStoreNode = useMemo(() => {
     if (componentBinding.valueStoreName) {
@@ -587,9 +600,14 @@ export const ComponentResponseMappingCard: React.FC<ComponentResponseMappingCard
                   {autoDetectedEndpoint.type}
                 </Badge>
                 <span className="font-mono text-xs font-medium">{autoDetectedEndpoint.name}</span>
+                {isLangGraphStreaming && (
+                  <Badge variant="outline" className="text-[9px] bg-amber-500/15 text-amber-500 border-amber-500/30 font-medium">
+                    SSE Stream
+                  </Badge>
+                )}
               </div>
               <span className="text-[11px] text-muted-foreground truncate max-w-[140px]">
-                {autoDetectedEndpoint.summary || "Endpoint"}
+                {autoDetectedEndpoint.summary || (isLangGraphStreaming ? "LangGraph Agent" : "Endpoint")}
               </span>
             </div>
           ) : (
@@ -736,16 +754,32 @@ export const ComponentResponseMappingCard: React.FC<ComponentResponseMappingCard
                           </Button>
                         </div>
                       ) : (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleMapField(rf.name, rf.name)}
-                          className="h-6 text-[11px] px-2 border-cyan-500/30 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/10 cursor-pointer"
-                        >
-                          <Plus size={10} className="mr-1" />
-                          Map to Store
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Select
+                            value=""
+                            onValueChange={(val) => {
+                              if (val === "__create__") {
+                                handleMapField(rf.name, rf.name);
+                              } else if (val) {
+                                handleMapField(rf.name, val);
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="h-6 text-[10px] px-2 min-w-[110px] bg-background border-cyan-500/30 text-cyan-600 dark:text-cyan-400">
+                              <SelectValue placeholder="Map to Store..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__create__" className="text-cyan-600 dark:text-cyan-400 font-medium">
+                                + Create &apos;{rf.name}&apos; in Store
+                              </SelectItem>
+                              {activeStoreFields.map((sf: GlobalStoreField) => (
+                                <SelectItem key={sf.id} value={sf.name}>
+                                  {activeStoreName}.{sf.name} ({sf.type})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       )}
                     </div>
 

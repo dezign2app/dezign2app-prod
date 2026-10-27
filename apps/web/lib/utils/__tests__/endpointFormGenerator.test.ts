@@ -316,6 +316,53 @@ describe("endpointFormGenerator", () => {
       expect(fields.find((f) => f.name === "alive")?.type).toBe("boolean");
       expect(fields.find((f) => f.name === "version")?.type).toBe("string");
     });
+
+    it("extracts streaming response fields from langgraph_invoke pipeline step with SSE", () => {
+      const ep: Endpoint = {
+        id: "ep-send-msg",
+        name: "send-message/:id",
+        type: "POST",
+        pipelineSteps: [
+          {
+            id: "step-1",
+            name: "AgentInvocation",
+            type: "langgraph_invoke",
+            langGraphStreamingEnabled: true,
+            langGraphStreamingProtocol: "sse",
+            langGraphStreamIncludeReasoning: true,
+          },
+        ],
+      };
+
+      const fields = extractEndpointResponseFields(ep);
+      expect(fields.length).toBeGreaterThanOrEqual(5);
+      expect(fields.find((f) => f.name === "content")?.type).toBe("string");
+      expect(fields.find((f) => f.name === "tokens")?.type).toBe("string[]");
+      expect(fields.find((f) => f.name === "streamed")?.type).toBe("boolean");
+      expect(fields.find((f) => f.name === "reasoning")?.type).toBe("string");
+      expect(fields.find((f) => f.name === "threadId")?.type).toBe("string");
+    });
+
+    it("extracts buffered response fields from langgraph_invoke pipeline step when not streaming", () => {
+      const ep: Endpoint = {
+        id: "ep-buffered-chat",
+        name: "chat",
+        type: "POST",
+        pipelineSteps: [
+          {
+            id: "step-1",
+            name: "AgentInvocation",
+            type: "langgraph_invoke",
+            langGraphStreamingEnabled: false,
+          },
+        ],
+      };
+
+      const fields = extractEndpointResponseFields(ep);
+      expect(fields.find((f) => f.name === "response")?.type).toBe("string");
+      expect(fields.find((f) => f.name === "threadId")?.type).toBe("string");
+      expect(fields.find((f) => f.name === "messages")?.type).toBe("array");
+    });
   });
 
   describe("parameterless GET / action button generation", () => {
