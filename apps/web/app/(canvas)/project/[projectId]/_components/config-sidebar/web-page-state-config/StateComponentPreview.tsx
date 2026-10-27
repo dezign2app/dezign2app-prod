@@ -173,15 +173,29 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
 
                     {elType === "switch" && (
                       <div className="flex items-center justify-between p-1.5 rounded-lg bg-muted/20 border border-border/40">
-                        <Label className="text-xs font-medium cursor-pointer">{el.label || el.name}</Label>
+                        <div className="flex flex-col">
+                          <Label className="text-xs font-medium cursor-pointer">{el.label || el.name}</Label>
+                          {el.valueStateName && (
+                            <span className="text-[9px] font-mono text-cyan-600 dark:text-cyan-400">
+                              {el.valueStoreName ? `${el.valueStoreName}.` : ""}{el.valueStateName}
+                            </span>
+                          )}
+                        </div>
                         <Switch onClick={(e) => e.stopPropagation()} />
                       </div>
                     )}
 
                     {elType === "checkbox" && (
-                      <div className="flex items-center gap-2 p-1">
-                        <Checkbox onClick={(e) => e.stopPropagation()} />
-                        <Label className="text-xs font-medium cursor-pointer">{el.label || el.name}</Label>
+                      <div className="flex items-center justify-between p-1">
+                        <div className="flex items-center gap-2">
+                          <Checkbox onClick={(e) => e.stopPropagation()} />
+                          <Label className="text-xs font-medium cursor-pointer">{el.label || el.name}</Label>
+                        </div>
+                        {el.valueStateName && (
+                          <span className="text-[9px] font-mono text-cyan-600 dark:text-cyan-400">
+                            {el.valueStoreName ? `${el.valueStoreName}.` : ""}{el.valueStateName}
+                          </span>
+                        )}
                       </div>
                     )}
 

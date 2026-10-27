@@ -685,13 +685,7 @@ export default ${sectionCompName};
           const label = staticLabel;
           const labelInline = isStoreLabel ? `{String(${labelVar})}: ` : `${staticLabel}: `;
 
-          const prefix = props?.prefix || cfg?.prefix || "";
-          const suffix = props?.suffix || cfg?.suffix || "";
-          const hasAffix = Boolean(prefix || suffix);
-          const rawValExpr = `typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})`;
-          const valExprWithAffix = hasAffix
-            ? `${prefix ? `"${prefix}" + ` : ""}(${rawValExpr})${suffix ? ` + "${suffix}"` : ""}`
-            : rawValExpr;
+          const valExprWithAffix = `typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})`;
 
           const comp = cfg?.component;
           const variant = cfg?.variant || (comp === "badge" ? "secondary" : "default");

@@ -26,8 +26,6 @@ export interface DisplayFormattingSectionProps {
   currentVariant: NonNullable<StateRenderConfig["variant"]>;
   formatter: NonNullable<StateRenderConfig["formatter"]>;
   fallbackText: string;
-  prefix?: string;
-  suffix?: string;
   stateStoreNodes?: BackendNode[];
   boundStoreId?: string;
   onUpdateRenderConfig: (changes: Partial<StateRenderConfig>) => void;

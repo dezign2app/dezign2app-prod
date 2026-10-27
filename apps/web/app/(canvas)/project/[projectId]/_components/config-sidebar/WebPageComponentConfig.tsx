@@ -349,8 +349,12 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         propMappings: updatedProps,
       };
 
-      if (changes.valueBinding && !componentBinding.valueStateName) {
+      if (changes.valueBinding !== undefined) {
         topLevelUpdates.valueStateName = changes.valueBinding;
+      }
+      if (changes.valueStoreName !== undefined) {
+        topLevelUpdates.valueStoreName = changes.valueStoreName;
+        topLevelUpdates.valueSourceType = changes.valueStoreName ? "store" : undefined;
       }
       if (changes.onChangeActionId) {
         topLevelUpdates.actionId = changes.onChangeActionId;
@@ -598,6 +602,10 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
 
       if (changes.valueBinding !== undefined) {
         elementChanges.valueStateName = changes.valueBinding;
+      }
+      if (changes.valueStoreName !== undefined) {
+        elementChanges.valueStoreName = changes.valueStoreName;
+        elementChanges.valueSourceType = changes.valueStoreName ? "store" : undefined;
       }
       if (changes.onChangeActionId !== undefined) {
         elementChanges.actionId = changes.onChangeActionId;

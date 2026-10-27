@@ -69,8 +69,6 @@ export type StateRenderComponent =
 export interface ComponentPropMappings {
   // Input
   inputType?: "text" | "number" | "password" | "email" | "tel" | "url" | "date" | "search";
-  placeholder?: string;
-
   // Input ReadOnly Flag & Dynamic Binding
   readOnlyMode?: "static" | "state_binding" | "expression";
   readOnly?: boolean;
@@ -90,7 +88,32 @@ export interface ComponentPropMappings {
   disabledStoreName?: string;
 
   valueBinding?: string;
+  valueMode?: "store_var" | "inline" | "expression";
+  valueStoreId?: string;
+  valueStoreName?: string;
   defaultValue?: string | number;
+
+  // Switch & Checkbox state bindings
+  checkedBinding?: string;
+  checkedStoreId?: string;
+  checkedStoreName?: string;
+  checkedMode?: "store_var" | "inline" | "expression";
+
+  // Input UX & Placeholder
+  placeholder?: string;
+  placeholderMode?: "store_var" | "inline" | "expression";
+  placeholderStoreId?: string;
+  placeholderStoreName?: string;
+
+  // Card Value & Progress Value
+  cardValueBinding?: string;
+  cardValueStoreId?: string;
+  cardValueStoreName?: string;
+  cardValueMode?: "store_var" | "inline" | "expression";
+  progressValueBinding?: string;
+  progressValueStoreId?: string;
+  progressValueStoreName?: string;
+  progressValueMode?: "store_var" | "inline" | "expression";
 
   // Input onChange & Interactivity
   onChangeMode?: "two_way" | "action" | "custom";
@@ -112,7 +135,13 @@ export interface ComponentPropMappings {
 
   // Card
   titleBinding?: string;
+  titleMode?: "store_var" | "inline" | "expression";
+  titleStoreId?: string;
+  titleStoreName?: string;
   descriptionBinding?: string;
+  descriptionMode?: "store_var" | "inline" | "expression";
+  descriptionStoreId?: string;
+  descriptionStoreName?: string;
 
   // Button
   buttonSize?: "default" | "sm" | "lg" | "icon";
@@ -123,18 +152,23 @@ export interface ComponentPropMappings {
 
   // Alert
   alertTitle?: string;
+  alertTitleMode?: "store_var" | "inline" | "expression";
+  alertTitleStoreId?: string;
+  alertTitleStoreName?: string;
 
   // Avatar
   avatarFallback?: string;
+  avatarFallbackMode?: "store_var" | "inline" | "expression";
+  avatarFallbackStoreId?: string;
+  avatarFallbackStoreName?: string;
   avatarSrc?: string;
+  avatarSrcMode?: "store_var" | "inline" | "expression";
+  avatarSrcStoreId?: string;
+  avatarSrcStoreName?: string;
 
   // Skeleton
   skeletonWidth?: string;
   skeletonHeight?: string;
-
-  // Prefix & Suffix
-  prefix?: string;
-  suffix?: string;
 
   // Custom props
   customProps?: Record<string, string>;
@@ -149,8 +183,6 @@ export interface StateRenderConfig {
   labelStoreId?: string;
   labelStoreName?: string;
   labelStoreVar?: string;
-  prefix?: string;
-  suffix?: string;
   fallbackText?: string;
   formatter?: "none" | "currency" | "number" | "json" | "date";
   clickAction?: "none" | "trigger_event" | "copy_to_clipboard" | "navigate" | "toggle_state" | "dispatch_store_action";
