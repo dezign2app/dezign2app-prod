@@ -474,10 +474,10 @@ describe("compileNextjsV16StateStoreNode", () => {
     const storeFile = result.files.find((f) => f.filename === "lib/stores/useUserProfileStore.ts");
     expect(storeFile).toBeDefined();
     expect(storeFile!.content).toContain('import type { CartItem, UserProfile } from "@workspace/types";');
-    expect(storeFile!.content).toContain("currentUser: UserProfile;");
+    expect(storeFile!.content).toContain("currentUser: UserProfile | null;");
     expect(storeFile!.content).toContain("cartItems: CartItem[];");
     expect(storeFile!.content).toContain("theme: string;");
-    expect(storeFile!.content).toContain("setCurrentUser: (value: UserProfile) => void;");
+    expect(storeFile!.content).toContain("setCurrentUser: (value: UserProfile | null) => void;");
     expect(storeFile!.content).toContain("setCartItems: (value: CartItem[]) => void;");
   });
 

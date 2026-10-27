@@ -257,14 +257,20 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
       const newActions = getSupportedActionsForType(newType, isArray);
       const newSuggestedCode = getSuggestedReducerCodeForChannelType(cleanBase, customMatch);
 
-      onUpdateField(field.id, {
+      const patch: Partial<GlobalStoreField> = {
         type: newType,
         isArray,
         actions: newActions,
         customReducerCode: newSuggestedCode,
-      });
+      };
+
+      if (customMatch && !isArray && (field.defaultValue === "" || field.defaultValue === undefined)) {
+        patch.defaultValue = null;
+      }
+
+      onUpdateField(field.id, patch);
     },
-    [field.id, isArray, availableCustomTypes, onUpdateField],
+    [field.id, field.defaultValue, isArray, availableCustomTypes, onUpdateField],
   );
 
   const handleToggleArray = useCallback(() => {

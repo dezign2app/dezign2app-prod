@@ -593,10 +593,14 @@ export const StateStoreNode = ({
                         value={f.type}
                         onValueChange={(newType) => {
                           const isCustom = availableCustomTypes.some((t) => t.name === newType);
-                          handleUpdateField(f.id, {
+                          const patch: Partial<GlobalStoreField> = {
                             type: newType,
                             actions: getSupportedActionsForType(isCustom ? "object" : newType, f.isArray),
-                          });
+                          };
+                          if (isCustom && (f.defaultValue === "" || f.defaultValue === undefined)) {
+                            patch.defaultValue = null;
+                          }
+                          handleUpdateField(f.id, patch);
                         }}
                         allNodes={allNodes}
                         compact
