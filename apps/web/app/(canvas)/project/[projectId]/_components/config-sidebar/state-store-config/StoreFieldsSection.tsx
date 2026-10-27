@@ -49,6 +49,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
+import { TwoStepTypeSelector } from "../../shared/TwoStepTypeSelector";
 import { TypeCombobox } from "../TypeCombobox";
 import { LocalInput, LocalTextarea } from "../../backend-nodes/graph-nodes/shared";
 import { cn } from "@workspace/ui/lib/utils";
@@ -477,15 +478,15 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
 
       {/* ── Variable Properties Row: Type, Array, Optional, Initial Value, UI Component ── */}
       <div className="p-3 space-y-2.5 bg-background/40">
-        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-          <div className="flex items-center gap-1 flex-1 min-w-[130px]">
-            <Label className="text-[10px] text-muted-foreground font-mono shrink-0">
+        <div className="flex items-start gap-2 flex-wrap sm:flex-nowrap">
+          <div className="flex items-start gap-1 flex-1 min-w-[130px]">
+            <Label className="text-[10px] text-muted-foreground font-mono shrink-0 pt-1.5">
               Type
             </Label>
-            <TypeCombobox
+            <TwoStepTypeSelector
               value={baseType}
               onValueChange={handleTypeChange}
-              className="h-7 text-xs font-mono flex-1 min-w-[110px]"
+              className="flex-1"
             />
             <Button
               type="button"
@@ -493,7 +494,7 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
               size="sm"
               title={isArray ? "Array type active (click to make single)" : "Single value (click to make array [])"}
               className={cn(
-                "h-7 px-2 font-mono text-xs font-bold shrink-0 rounded-md transition-all cursor-pointer",
+                "h-7 px-2 font-mono text-xs font-bold shrink-0 rounded-md transition-all cursor-pointer mt-0",
                 isArray
                   ? "bg-indigo-600 text-white shadow-xs hover:bg-indigo-500"
                   : "bg-secondary/60 text-muted-foreground hover:bg-secondary hover:text-foreground border border-border/40",
