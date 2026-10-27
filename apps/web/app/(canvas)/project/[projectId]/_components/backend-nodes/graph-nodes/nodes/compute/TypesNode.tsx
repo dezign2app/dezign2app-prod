@@ -334,7 +334,7 @@ export const TypesNode = ({
                 ? "!bg-sky-400"
                 : "!bg-indigo-400",
         )}
-        style={{ top: "24px" }}
+        style={{ top: "24px", transform: "translateY(-50%)" }}
         title="Incoming Type Reference"
       />
       <Handle
@@ -353,7 +353,7 @@ export const TypesNode = ({
                 ? "!bg-sky-400"
                 : "!bg-indigo-400",
         )}
-        style={{ top: "24px" }}
+        style={{ top: "24px", transform: "translateY(-50%)" }}
         title="Outgoing Type Reference"
       />
 
