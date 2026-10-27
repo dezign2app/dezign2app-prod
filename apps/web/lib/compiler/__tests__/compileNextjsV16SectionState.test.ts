@@ -1339,6 +1339,138 @@ describe("compileNextjsV16SectionState", () => {
     expect(code).not.toContain("<SaveSettingsAction");
     expect(code).not.toContain('import { SaveSettingsAction }');
   });
+
+  it("compiles dynamic sidebar component binding with Zustand state store navItems", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-sidebar-dynamic",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/dashboard",
+        appSlug: "dash-app",
+        sections: [
+          {
+            id: "sec-nav",
+            name: "Navigation Section",
+            renderMode: "client",
+            loadStrategy: "eager",
+            actions: [],
+            stateObjects: [],
+            componentBindings: [
+              {
+                id: "comp-app-sidebar",
+                name: "AppSidebar",
+                componentType: "sidebar",
+                label: "App Sidebar",
+                valueStateName: "navItems",
+                valueStoreName: "AppStore",
+                propMappings: {
+                  sidebarTitle: "Acme Console",
+                  sidebarNavMode: "dynamic",
+                  sidebarNavBinding: "navItems",
+                  sidebarNavStoreName: "AppStore",
+                  sidebarCollapsible: "icon",
+                  sidebarVariant: "inset",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([webPageNode]);
+    const file = result.files.find((f) => f.filename.includes("NavigationSection.tsx"));
+    expect(file).toBeDefined();
+    const code = file!.content;
+
+    // Must be client component
+    expect(code).toContain('"use client";');
+
+    // Must import store hook and select navItems
+    expect(code).toContain('import { useAppStore } from "@/lib/stores";');
+    expect(code).toContain("const navItems = useAppStore((s) => s.navItems);");
+
+    // Must import Shadcn sidebar primitives and Link
+    expect(code).toContain(
+      'import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@workspace/ui/components/sidebar";',
+    );
+    expect(code).toContain('import Link from "next/link";');
+
+    // Must render Sidebar with configured title, collapsible, and variant
+    expect(code).toContain('<Sidebar collapsible="icon" variant="inset" className="w-full">');
+    expect(code).toContain('<SidebarHeader className="p-3 border-b text-xs font-bold">Acme Console</SidebarHeader>');
+
+    // Must map over dynamic navItems
+    expect(code).toContain("(navItems || []).map((navItem: any, idx: number) =>");
+    expect(code).toContain("<Link href={navItem?.link || \"#\"} className=\"text-xs\">");
+    expect(code).toContain("<span>{navItem?.name || \"Nav\"}</span>");
+  });
+
+  it("compiles static sidebar component binding with inline navigation items", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-sidebar-static",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/admin",
+        appSlug: "admin-app",
+        sections: [
+          {
+            id: "sec-admin-nav",
+            name: "Admin Navigation",
+            renderMode: "client",
+            loadStrategy: "eager",
+            actions: [],
+            stateObjects: [],
+            componentBindings: [
+              {
+                id: "comp-static-sidebar",
+                name: "AdminSidebar",
+                componentType: "sidebar",
+                label: "Admin Navigation",
+                propMappings: {
+                  sidebarTitle: "Admin Portal",
+                  sidebarNavMode: "static",
+                  sidebarCollapsible: "offcanvas",
+                  sidebarVariant: "sidebar",
+                  sidebarStaticItems: [
+                    { id: "nav-users", name: "Users", link: "/admin/users" },
+                    { id: "nav-billing", name: "Billing", link: "/admin/billing" },
+                    { id: "nav-audit", name: "Audit Logs", link: "/admin/audit" },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([webPageNode]);
+    const file = result.files.find((f) => f.filename.includes("AdminNavigationSection.tsx"));
+    expect(file).toBeDefined();
+    const code = file!.content;
+
+    // Must import Shadcn sidebar primitives
+    expect(code).toContain(
+      'import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@workspace/ui/components/sidebar";',
+    );
+    expect(code).toContain('import Link from "next/link";');
+
+    // Must render title
+    expect(code).toContain('<SidebarHeader className="p-3 border-b text-xs font-bold">Admin Portal</SidebarHeader>');
+
+    // Must render each static item
+    expect(code).toContain('<Link href="/admin/users" className="text-xs">');
+    expect(code).toContain('<span>Users</span>');
+    expect(code).toContain('<Link href="/admin/billing" className="text-xs">');
+    expect(code).toContain('<span>Billing</span>');
+    expect(code).toContain('<Link href="/admin/audit" className="text-xs">');
+    expect(code).toContain('<span>Audit Logs</span>');
+  });
 });
 
 

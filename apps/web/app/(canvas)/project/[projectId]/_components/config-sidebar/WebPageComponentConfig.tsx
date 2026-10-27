@@ -61,6 +61,7 @@ const toStateRenderComponent = (val: string): StateRenderComponent => {
     case "table":
     case "code":
     case "text":
+    case "sidebar":
       return val;
     default:
       return "input";
@@ -88,6 +89,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
     useCallback((s) => s.nodes.find((n) => n.id === nodeId), [nodeId]),
   );
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
+  const addNode = useBackendCanvasStore((s) => s.addNode);
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
 
   // All state store nodes for state binding dropdowns
@@ -708,6 +710,92 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
     [activeElement.id, handleCreateActionForElement],
   );
 
+  const handleCreateNavStateVariable = useCallback(
+    (preferredStoreId?: string) => {
+      const currentNodes = useBackendCanvasStore.getState().nodes;
+      const currentStores = currentNodes.filter((n) => n.type === "state_store");
+
+      let targetStore = preferredStoreId
+        ? currentStores.find((s) => s.id === preferredStoreId)
+        : currentStores[0];
+
+      const defaultItems = [
+        { id: "nav-1", name: "Dashboard", link: "/dashboard", icon: "LayoutDashboard" },
+        { id: "nav-2", name: "Analytics", link: "/analytics", icon: "BarChart3" },
+        { id: "nav-3", name: "Projects", link: "/projects", icon: "Folder" },
+        { id: "nav-4", name: "Settings", link: "/settings", icon: "Settings" },
+      ];
+
+      let storeIdToUse = targetStore?.id;
+      let storeNameToUse = targetStore?.data?.label || targetStore?.data?.storeName || "AppStore";
+
+      if (!targetStore) {
+        const newStoreId = `store-${Date.now()}`;
+        storeIdToUse = newStoreId;
+        storeNameToUse = "AppStore";
+
+        const parentPos = parentNode?.position || { x: 100, y: 100 };
+        const newStoreNode = {
+          id: newStoreId,
+          type: "state_store" as const,
+          position: { x: parentPos.x + 380, y: parentPos.y },
+          data: {
+            label: "AppStore",
+            storeName: "AppStore",
+            description: "Global Application Navigation & State Store",
+            fields: [
+              {
+                id: `f-${Date.now()}`,
+                name: "navItems",
+                type: "array",
+                isArray: true,
+                defaultValue: defaultItems,
+                description: "Sidebar navigation menu items",
+              },
+            ],
+            actions: [],
+          },
+        };
+
+        addNode(newStoreNode);
+      } else {
+        const existingFields = targetStore.data?.fields || [];
+        const hasNavItems = existingFields.some((f: any) => f.name === "navItems");
+
+        if (!hasNavItems) {
+          const newField = {
+            id: `f-${Date.now()}`,
+            name: "navItems",
+            type: "array",
+            isArray: true,
+            defaultValue: defaultItems,
+            description: "Sidebar navigation menu items",
+          };
+          updateNode(targetStore.id, {
+            data: {
+              ...targetStore.data,
+              fields: [...existingFields, newField],
+            },
+          });
+        }
+      }
+
+      handleUpdateActivePropMapping({
+        sidebarNavMode: "dynamic",
+        sidebarNavBinding: "navItems",
+        sidebarNavStoreId: storeIdToUse,
+        sidebarNavStoreName: storeNameToUse,
+        valueBinding: "navItems",
+        valueStoreName: storeNameToUse,
+        valueStoreId: storeIdToUse,
+        valueMode: "store_var",
+      });
+
+      toast.success(`Provisioned and bound "navItems" state in ${storeNameToUse}!`);
+    },
+    [parentNode, addNode, updateNode, handleUpdateActivePropMapping],
+  );
+
   if (!parentNode || !targetSection || !componentBinding) {
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground gap-3">
@@ -860,6 +948,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         onUpdatePropMapping={handleUpdateActivePropMapping}
         onOpenEventConfig={handleOpenActionFlow}
         onCreateAction={handleCreateActiveElementAction}
+        onCreateNavStateVariable={handleCreateNavStateVariable}
       />
 
       <Separator className="bg-border/50" />

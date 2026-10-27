@@ -269,7 +269,10 @@ export function generateSectionComponent(
 
   const componentStoreNames = (section.componentBindings || []).flatMap((comp) => {
     const list: string[] = [];
-    const valStore = comp.valueStoreName || findStoreNameForState(comp.valueStateName, comp.valueStateId);
+    const valStore =
+      comp.propMappings?.sidebarNavStoreName ||
+      comp.valueStoreName ||
+      findStoreNameForState(comp.valueStateName, comp.valueStateId);
     if (valStore) list.push(valStore);
     const disStore = comp.disabledStoreName || findStoreNameForState(comp.disabledStateName);
     if (disStore) list.push(disStore);
@@ -586,10 +589,12 @@ export function generateSectionComponent(
   };
 
   (section.componentBindings || []).forEach((comp) => {
+    const valState = comp.propMappings?.sidebarNavBinding || comp.valueStateName;
+    const valStore = comp.propMappings?.sidebarNavStoreName || comp.valueStoreName;
     processComponentBindingState({
-      valueStateName: comp.valueStateName,
+      valueStateName: valState,
       valueStateId: comp.valueStateId,
-      valueStoreName: comp.valueStoreName,
+      valueStoreName: valStore,
       disabledStateName: comp.disabledStateName,
       disabledStoreName: comp.disabledStoreName,
       loadingStateName: comp.loadingStateName,
@@ -960,6 +965,87 @@ export default ${sectionCompName};
         return `<Textarea key="${item.id}" placeholder="${ph}" value={String(${valVar} ?? "")} onChange={(e) => ${setterVar}(e.target.value)}${disabledAttr} className="text-xs max-w-sm" />`;
       }
       return `<Textarea key="${item.id}" placeholder="${ph}"${disabledAttr} className="text-xs max-w-sm" />`;
+    }
+
+    if (item.type === "sidebar") {
+      neededShadcnImports.add(
+        'import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@workspace/ui/components/sidebar";',
+      );
+      neededShadcnImports.add('import Link from "next/link";');
+
+      const title = item.propMappings?.sidebarTitle || item.label || item.name || "App";
+      const collapsible = item.propMappings?.sidebarCollapsible || "offcanvas";
+      const variant = item.propMappings?.sidebarVariant || "sidebar";
+      const navMode = item.propMappings?.sidebarNavMode || "dynamic";
+      const activeNavVar = item.propMappings?.sidebarNavBinding
+        ? toCamelCase(item.propMappings.sidebarNavBinding)
+        : valVar;
+
+      if (navMode === "dynamic" && activeNavVar) {
+        return `<div key="${item.id}" className="w-full max-w-xs border rounded-lg overflow-hidden bg-card text-card-foreground">
+            <SidebarProvider>
+              <Sidebar collapsible="${collapsible}" variant="${variant}" className="w-full">
+                <SidebarHeader className="p-3 border-b text-xs font-bold">${title}</SidebarHeader>
+                <SidebarContent>
+                  <SidebarGroup>
+                    <SidebarGroupLabel className="text-[10px]">Navigation</SidebarGroupLabel>
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        {(${activeNavVar} || []).map((navItem: any, idx: number) => (
+                          <SidebarMenuItem key={navItem?.id || idx}>
+                            <SidebarMenuButton asChild tooltip={navItem?.name}>
+                              <Link href={navItem?.link || "#"} className="text-xs">
+                                <span>{navItem?.name || "Nav"}</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        ))}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </SidebarGroup>
+                </SidebarContent>
+              </Sidebar>
+            </SidebarProvider>
+          </div>`;
+      }
+
+      const staticItems =
+        item.propMappings?.sidebarStaticItems && item.propMappings.sidebarStaticItems.length > 0
+          ? item.propMappings.sidebarStaticItems
+          : [
+              { id: "nav-1", name: "Dashboard", link: "/dashboard" },
+              { id: "nav-2", name: "Settings", link: "/settings" },
+            ];
+
+      const staticItemsJsx = staticItems
+        .map(
+          (sItem) => `                        <SidebarMenuItem key="${sItem.id}">
+                          <SidebarMenuButton asChild tooltip="${sItem.name}">
+                            <Link href="${sItem.link || "#"}" className="text-xs">
+                              <span>${sItem.name}</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>`,
+        )
+        .join("\n");
+
+      return `<div key="${item.id}" className="w-full max-w-xs border rounded-lg overflow-hidden bg-card text-card-foreground">
+            <SidebarProvider>
+              <Sidebar collapsible="${collapsible}" variant="${variant}" className="w-full">
+                <SidebarHeader className="p-3 border-b text-xs font-bold">${title}</SidebarHeader>
+                <SidebarContent>
+                  <SidebarGroup>
+                    <SidebarGroupLabel className="text-[10px]">Navigation</SidebarGroupLabel>
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+${staticItemsJsx}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </SidebarGroup>
+                </SidebarContent>
+              </Sidebar>
+            </SidebarProvider>
+          </div>`;
     }
 
     // Default fallback

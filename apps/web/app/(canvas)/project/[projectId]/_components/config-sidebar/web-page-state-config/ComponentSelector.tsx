@@ -29,6 +29,7 @@ const toStateRenderComponent = (val: string): StateRenderComponent => {
     case "table":
     case "code":
     case "text":
+    case "sidebar":
       return val;
     default:
       return "input";
@@ -95,7 +96,7 @@ export const ComponentSelector: React.FC<ComponentSelectorProps> = React.memo(({
         <div className="flex items-center gap-2">
           <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
             <Sliders size={13} className="text-primary" />
-            <span>Select Shadcn Component</span>
+            <span>Select Component</span>
           </Label>
           {hasMultiSupport && elements && (
             <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 text-muted-foreground">

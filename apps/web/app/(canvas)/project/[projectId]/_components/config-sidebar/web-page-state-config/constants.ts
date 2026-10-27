@@ -12,6 +12,7 @@ import {
   Loader2,
   Code2,
   Table as TableIcon,
+  PanelLeft,
 } from "lucide-react";
 import {
   StateRenderComponent,
@@ -121,6 +122,13 @@ export const COMPONENT_OPTIONS: ComponentOption[] = [
     icon: TableIcon,
     recommendedFor: ["array", "object"],
   },
+  {
+    id: "sidebar",
+    label: "Sidebar",
+    description: "Collapsible vertical navigation panel with static or dynamic links",
+    icon: PanelLeft,
+    recommendedFor: ["array", "object"],
+  },
 ];
 
 export const isVariant = (val: string): val is NonNullable<StateRenderConfig["variant"]> =>
@@ -152,3 +160,9 @@ export const isOnChangeMode = (val: string): val is NonNullable<ComponentPropMap
 
 export const isButtonSize = (val: string): val is NonNullable<ComponentPropMappings["buttonSize"]> =>
   val === "default" || val === "sm" || val === "lg" || val === "icon";
+
+export const isSidebarCollapsible = (val: string): val is NonNullable<ComponentPropMappings["sidebarCollapsible"]> =>
+  val === "offcanvas" || val === "icon" || val === "none";
+
+export const isSidebarVariant = (val: string): val is NonNullable<ComponentPropMappings["sidebarVariant"]> =>
+  val === "sidebar" || val === "floating" || val === "inset";

@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   User,
   Loader2,
+  PanelLeft,
 } from "lucide-react";
 import { ComponentBindingType } from "@workspace/canvas";
 import { cn } from "@workspace/ui/lib/utils";
@@ -121,6 +122,13 @@ export const COMPONENT_BINDING_OPTIONS: ComponentTypeOption[] = [
     description: "Shimmer placeholder for asynchronous loading states",
     icon: Loader2,
     recommendedFor: ["boolean"],
+  },
+  {
+    id: "sidebar",
+    label: "Sidebar",
+    description: "Collapsible vertical navigation panel with static or dynamic links",
+    icon: PanelLeft,
+    recommendedFor: ["array", "object[]"],
   },
 ];
 
