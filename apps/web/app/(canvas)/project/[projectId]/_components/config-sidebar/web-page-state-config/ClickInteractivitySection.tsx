@@ -75,7 +75,7 @@ export const ClickInteractivitySection: React.FC<ClickInteractivitySectionProps>
       id: n.id,
       name: n.data?.storeName || n.data?.label || "Store",
       scope: n.data?.scope,
-      fields: (n.data?.fields || []).map((f: any) => ({
+      fields: (n.data?.fields || []).map((f: { id: string; name: string; type?: string }) => ({
         id: f.id,
         name: f.name,
         type: f.type,

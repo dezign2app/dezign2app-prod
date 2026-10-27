@@ -122,7 +122,7 @@ function resolveStoreBindingFromHandle(
   storeHandleId: string | null | undefined,
   pageAction: UIEventItem,
   edge?: BackendEdge,
-): { actionId: string; actionName: string; actionType: StoreActionType; targetFieldId?: string; targetFieldName?: string } {
+): { actionId: string; actionName: string; actionType: StoreActionType; targetFieldId?: string; targetFieldName?: string; targetFieldType?: string } {
   const storeActions = storeNode.data?.actions;
   const storeFields = storeNode.data?.fields;
 
@@ -175,12 +175,14 @@ function resolveStoreBindingFromHandle(
         const actionType: StoreActionType = isValidStoreActionType(found.actionType)
           ? found.actionType
           : "custom";
+        const foundField = (storeFields || []).find((f) => f.id === found.targetFieldId || f.name === found.targetFieldName);
         return {
           actionId: found.id,
           actionName: found.name,
           actionType,
           targetFieldId: found.targetFieldId,
           targetFieldName: found.targetFieldName,
+          targetFieldType: foundField?.type,
         };
       }
     }
@@ -254,12 +256,14 @@ function resolveStoreBindingFromHandle(
           (a.targetFieldId === matchedField.id && a.name.toLowerCase() === actionName.toLowerCase()),
       );
       if (matchedAction) {
+        const actionTargetField = (storeFields || []).find((f) => f.id === matchedAction.targetFieldId);
         return {
           actionId: matchedAction.id,
           actionName: matchedAction.name,
           actionType: isValidStoreActionType(matchedAction.actionType) ? matchedAction.actionType : validActionType,
           targetFieldId: matchedField.id,
           targetFieldName: matchedField.name,
+          targetFieldType: actionTargetField?.type || matchedField.type,
         };
       }
 
@@ -269,6 +273,7 @@ function resolveStoreBindingFromHandle(
         actionType: validActionType,
         targetFieldId: matchedField.id,
         targetFieldName: matchedField.name,
+        targetFieldType: matchedField.type,
       };
     }
   }
@@ -595,6 +600,18 @@ function resolveActionWithBindings(
           ? existing.actionName
           : inferred.actionName;
 
+      const storeFields = storeNode.data?.fields || [];
+      const resolvedFieldType =
+        existing?.targetFieldType ||
+        inferred.targetFieldType ||
+        storeFields.find(
+          (f) =>
+            (inferred.targetFieldId && f.id === inferred.targetFieldId) ||
+            (inferred.targetFieldName && f.name === inferred.targetFieldName) ||
+            (existing?.targetFieldId && f.id === existing.targetFieldId) ||
+            (existing?.targetFieldName && f.name === existing.targetFieldName),
+        )?.type;
+
       return {
         id: existing?.id || edgeData?.bindingId || `bnd-${act.id}-${mIdx}`,
         storeNodeId: storeNode.id,
@@ -604,6 +621,7 @@ function resolveActionWithBindings(
         actionType: existing?.actionType || inferred.actionType,
         targetFieldId: existing?.targetFieldId || inferred.targetFieldId,
         targetFieldName: existing?.targetFieldName || inferred.targetFieldName,
+        targetFieldType: resolvedFieldType,
         updateSource:
           existing?.updateSource || (inferred.actionType === "reset" ? "direct" : "response"),
         valuePath: existing?.valuePath,

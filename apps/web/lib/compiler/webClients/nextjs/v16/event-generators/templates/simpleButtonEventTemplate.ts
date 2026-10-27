@@ -104,13 +104,38 @@ export function generateSimpleButtonEventTemplate({
         const extractionExpr = isFullPayload
           ? `(resData${chain} !== undefined ? resData${chain} : resData)`
           : `resData${chain}`;
+        const isStringTarget =
+          b.targetFieldType === "string" ||
+          (!b.targetFieldType &&
+            (b.targetFieldName?.toLowerCase().includes("message") ||
+              b.targetFieldName?.toLowerCase().includes("text") ||
+              b.targetFieldName?.toLowerCase().includes("title") ||
+              b.targetFieldName?.toLowerCase().includes("desc") ||
+              b.targetFieldName?.toLowerCase().includes("input") ||
+              storeActionName.toLowerCase().includes("message") ||
+              storeActionName.toLowerCase().includes("text")));
+        const isNumberTarget = b.targetFieldType === "number";
+        const isBooleanTarget = b.targetFieldType === "boolean";
+        const isArrayTarget = b.targetFieldType === "array" || Boolean(b.targetFieldType?.endsWith("[]"));
+
+        let passedExpr = "extracted";
+        if (isStringTarget) {
+          passedExpr = `typeof extracted === "string" ? extracted : (extracted !== null && extracted !== undefined ? String(extracted) : "")`;
+        } else if (isNumberTarget) {
+          passedExpr = `typeof extracted === "number" ? extracted : (Number(extracted) || 0)`;
+        } else if (isBooleanTarget) {
+          passedExpr = `typeof extracted === "boolean" ? extracted : Boolean(extracted)`;
+        } else if (isArrayTarget) {
+          passedExpr = `Array.isArray(extracted) ? extracted : (extracted !== null && extracted !== undefined ? [extracted] : [])`;
+        }
+
         postTrigger += `      if (triggerResult) {
         const resData =
           triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
             ? triggerResult.data
             : triggerResult;
         const extracted = ${extractionExpr};
-        ${storeHookName}.getState().${storeActionName}(extracted);
+        ${storeHookName}.getState().${storeActionName}(${passedExpr});
       }\n`;
         return;
       }
@@ -152,12 +177,37 @@ export function generateSimpleButtonEventTemplate({
       }
 
       // Default response:
+      const isStringTarget =
+        b.targetFieldType === "string" ||
+        (!b.targetFieldType &&
+          (b.targetFieldName?.toLowerCase().includes("message") ||
+            b.targetFieldName?.toLowerCase().includes("text") ||
+            b.targetFieldName?.toLowerCase().includes("title") ||
+            b.targetFieldName?.toLowerCase().includes("desc") ||
+            b.targetFieldName?.toLowerCase().includes("input") ||
+            storeActionName.toLowerCase().includes("message") ||
+            storeActionName.toLowerCase().includes("text")));
+      const isNumberTarget = b.targetFieldType === "number";
+      const isBooleanTarget = b.targetFieldType === "boolean";
+      const isArrayTarget = b.targetFieldType === "array" || Boolean(b.targetFieldType?.endsWith("[]"));
+
+      let passedExpr = "resData";
+      if (isStringTarget) {
+        passedExpr = `typeof resData === "string" ? resData : (resData !== null && resData !== undefined ? String(resData) : "")`;
+      } else if (isNumberTarget) {
+        passedExpr = `typeof resData === "number" ? resData : (Number(resData) || 0)`;
+      } else if (isBooleanTarget) {
+        passedExpr = `typeof resData === "boolean" ? resData : Boolean(resData)`;
+      } else if (isArrayTarget) {
+        passedExpr = `Array.isArray(resData) ? resData : (resData !== null && resData !== undefined ? [resData] : [])`;
+      }
+
       postTrigger += `      if (triggerResult) {
         const resData =
           triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
             ? triggerResult.data
             : triggerResult;
-        ${storeHookName}.getState().${storeActionName}(resData);
+        ${storeHookName}.getState().${storeActionName}(${passedExpr});
       }\n`;
     });
 

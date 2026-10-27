@@ -58,6 +58,29 @@ import {
 } from "@/lib/utils/endpointFormGenerator";
 import { cn } from "@workspace/ui/lib/utils";
 
+const toComponentBindingTypeOrNone = (val: string): ComponentBindingType | "none" => {
+  switch (val) {
+    case "none":
+    case "button":
+    case "input":
+    case "card":
+    case "switch":
+    case "table":
+    case "badge":
+    case "select":
+    case "checkbox":
+    case "progress":
+    case "alert":
+    case "avatar":
+    case "skeleton":
+    case "code":
+    case "text":
+      return val;
+    default:
+      return "none";
+  }
+};
+
 export interface ComponentResponseMappingCardProps {
   nodeId: string; // WebPageNode ID
   sectionId?: string;
@@ -135,7 +158,7 @@ export const ComponentResponseMappingCard: React.FC<ComponentResponseMappingCard
   const isLangGraphStreaming = useMemo(() => {
     if (!activeEndpoint?.pipelineSteps) return false;
     return activeEndpoint.pipelineSteps.some(
-      (s: any) =>
+      (s) =>
         s.enabled !== false &&
         (s.type === "langgraph_invoke" || Boolean(s.langGraphTargetNodeId)) &&
         (s.langGraphStreamingEnabled ||
@@ -803,7 +826,7 @@ export const ComponentResponseMappingCard: React.FC<ComponentResponseMappingCard
                           onValueChange={(val) =>
                             handleToggleUiElement(
                               boundVarName || rf.name,
-                              val as ComponentBindingType | "none",
+                              toComponentBindingTypeOrNone(val),
                               rf.type,
                             )
                           }

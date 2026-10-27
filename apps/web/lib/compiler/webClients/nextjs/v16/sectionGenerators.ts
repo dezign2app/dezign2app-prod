@@ -1,4 +1,4 @@
-import { PageSection } from "@workspace/canvas/types";
+import { PageSection, ComponentPropMappings } from "@workspace/canvas/types";
 import { EventComponentMeta } from "./eventGenerators";
 
 export interface SectionMeta {
@@ -685,13 +685,7 @@ export default ${sectionCompName};
           const label = staticLabel;
           const labelInline = isStoreLabel ? `{String(${labelVar})}: ` : `${staticLabel}: `;
 
-          const prefix = props?.prefix || cfg?.prefix || "";
-          const suffix = props?.suffix || cfg?.suffix || "";
-          const hasAffix = Boolean(prefix || suffix);
-          const rawValExpr = `typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})`;
-          const valExprWithAffix = hasAffix
-            ? `${prefix ? `"${prefix}" + ` : ""}(${rawValExpr})${suffix ? ` + "${suffix}"` : ""}`
-            : rawValExpr;
+          const valExprWithAffix = `typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})`;
 
           const comp = cfg?.component;
           const variant = cfg?.variant || (comp === "badge" ? "secondary" : "default");
@@ -805,7 +799,7 @@ export default ${sectionCompName};
               const actName = act?.name || "inputChange";
               const actUrl = act?.url || "";
               const actMethod = act?.method || "POST";
-              return `          <Input key="${st.id}" type="${inType}" value={${valExpr}} onChange={(e) => onTrigger?.("${actName}", "change", "${actUrl}", "${actMethod}", { value: e.target.value })}${ph}${readOnlyAttr}${dis}${uxAttrs} className="h-8 text-xs max-w-xs" />`;
+              return `          <Input key="${st.id}" type="${inType}" value={${valExpr}} onChange={(e) => onTrigger?.("${actName}", "change", "${actUrl}", "${actMethod}", false, undefined, undefined, { value: e.target.value })}${ph}${readOnlyAttr}${dis}${uxAttrs} className="h-8 text-xs max-w-xs" />`;
             }
 
             if (props?.onChangeMode === "custom" && props?.customOnChange) {
@@ -851,6 +845,7 @@ export default ${sectionCompName};
       actionName?: string;
       triggerEvent?: string;
       description?: string;
+      propMappings?: ComponentPropMappings;
     },
     isChild: boolean = false,
   ): string => {
@@ -882,11 +877,11 @@ export default ${sectionCompName};
 
     if (item.type === "input") {
       neededShadcnImports.add('import { Input } from "@workspace/ui/components/input";');
-      const ph = item.placeholder || item.label || "Enter text...";
+      const ph = item.propMappings?.placeholder || item.placeholder || item.label || "Enter text...";
       if (valVar && hasSetter) {
         let changeAttr = ` onChange={(e) => ${setterVar}(e.target.value)}`;
         if (hasAction) {
-          changeAttr = ` onChange={(e) => { ${setterVar}(e.target.value); onTrigger?.("${actName}", "change", "${actUrl}", "${actMethod}", { value: e.target.value }); }}`;
+          changeAttr = ` onChange={(e) => { ${setterVar}(e.target.value); onTrigger?.("${actName}", "change", "${actUrl}", "${actMethod}", false, undefined, undefined, { value: e.target.value }); }}`;
         }
         return `<Input key="${item.id}" placeholder="${ph}" value={String(${valVar} ?? "")}${changeAttr}${disabledAttr} className="h-8 text-xs max-w-xs" />`;
       }
@@ -901,7 +896,7 @@ export default ${sectionCompName};
       if (valVar && hasSetter) {
         let changeAttr = ` onCheckedChange={(checked) => ${setterVar}(checked)}`;
         if (hasAction) {
-          changeAttr = ` onCheckedChange={(checked) => { ${setterVar}(checked); onTrigger?.("${actName}", "change", "${actUrl}", "${actMethod}", { checked }); }}`;
+          changeAttr = ` onCheckedChange={(checked) => { ${setterVar}(checked); onTrigger?.("${actName}", "change", "${actUrl}", "${actMethod}", false, undefined, undefined, { checked }); }}`;
         }
         return `<div key="${item.id}" className="flex items-center gap-2 text-xs"><Switch checked={Boolean(${valVar})}${changeAttr}${disabledAttr} /><span>${labelText}</span></div>`;
       }
@@ -992,6 +987,7 @@ export default ${sectionCompName};
                 actionName: el.actionName,
                 triggerEvent: el.triggerEvent,
                 description: el.description,
+                propMappings: el.propMappings,
               }, true)}`)
               .join("\n");
 
@@ -1014,6 +1010,7 @@ export default ${sectionCompName};
             actionName: comp.actionName,
             triggerEvent: comp.triggerEvent,
             description: comp.description,
+            propMappings: comp.propMappings,
           }, false)}`;
         })
         .join("\n")}\n        </div>`

@@ -349,8 +349,15 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         propMappings: updatedProps,
       };
 
-      if (changes.valueBinding && !componentBinding.valueStateName) {
+      if (changes.labelBinding !== undefined) {
+        topLevelUpdates.label = changes.labelBinding;
+      }
+      if (changes.valueBinding !== undefined) {
         topLevelUpdates.valueStateName = changes.valueBinding;
+      }
+      if (changes.valueStoreName !== undefined) {
+        topLevelUpdates.valueStoreName = changes.valueStoreName;
+        topLevelUpdates.valueSourceType = changes.valueStoreName ? "store" : undefined;
       }
       if (changes.onChangeActionId) {
         topLevelUpdates.actionId = changes.onChangeActionId;
@@ -411,6 +418,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
       const first = nextElements[0];
       handleUpdate({
         elements: nextElements,
+        propMappings: first?.propMappings,
         componentType: first?.elementType || componentBinding?.componentType || "button",
         valueStateName: first?.valueStateName,
         valueStoreName: first?.valueStoreName,
@@ -581,12 +589,18 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
   }, [activeElement.valueStoreName, activeElement.valueStateName, storeFields, localStates]);
 
   const activePropMappings: ComponentPropMappings = useMemo(() => {
-    return activeElement.propMappings || {};
-  }, [activeElement.propMappings]);
+    return {
+      ...(componentBinding?.propMappings || {}),
+      ...(activeElement.propMappings || {}),
+    };
+  }, [componentBinding?.propMappings, activeElement.propMappings]);
 
   const handleUpdateActivePropMapping = useCallback(
     (changes: Partial<ComponentPropMappings>) => {
-      const currentProps = activeElement.propMappings || {};
+      const currentProps = {
+        ...(componentBinding?.propMappings || {}),
+        ...(activeElement.propMappings || {}),
+      };
       const updatedProps: ComponentPropMappings = {
         ...currentProps,
         ...changes,
@@ -598,6 +612,10 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
 
       if (changes.valueBinding !== undefined) {
         elementChanges.valueStateName = changes.valueBinding;
+      }
+      if (changes.valueStoreName !== undefined) {
+        elementChanges.valueStoreName = changes.valueStoreName;
+        elementChanges.valueSourceType = changes.valueStoreName ? "store" : undefined;
       }
       if (changes.onChangeActionId !== undefined) {
         elementChanges.actionId = changes.onChangeActionId;
@@ -615,7 +633,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
 
       handleUpdateElement(activeElement.id, elementChanges);
     },
-    [activeElement, availableActions, handleUpdateElement],
+    [activeElement, componentBinding?.propMappings, availableActions, handleUpdateElement],
   );
 
   const handleCreateActionForElement = useCallback(

@@ -1099,10 +1099,7 @@ describe("compileNextjsV16SectionState", () => {
                   labelMode: "store_var",
                   labelStoreName: "BillingStore",
                   labelStoreVar: "planName",
-                  propMappings: {
-                    prefix: "$",
-                    suffix: "/mo",
-                  },
+                  propMappings: {},
                 },
               },
             ],
@@ -1124,10 +1121,6 @@ describe("compileNextjsV16SectionState", () => {
 
     // Must render label mapped to planName
     expect(code).toContain("{String(planName)}:");
-
-    // Must render value with prefix "$" and suffix "/mo"
-    expect(code).toContain('"$" +');
-    expect(code).toContain('+ "/mo"');
   });
 
   it("compiles componentBindings as primary UI and suppresses duplicate actions and state badges", () => {

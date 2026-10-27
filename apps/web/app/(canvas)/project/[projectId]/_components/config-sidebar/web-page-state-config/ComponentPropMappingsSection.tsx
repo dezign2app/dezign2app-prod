@@ -17,6 +17,9 @@ import {
   Ban,
   Database,
   Plus,
+  ToggleLeft,
+  SquareCheck,
+  Tag,
 } from "lucide-react";
 import { StateRenderComponent, ComponentPropMappings, UIEventItem, BackendNode } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -34,6 +37,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { ComponentOption, isInputType, isButtonSize, isOnChangeMode } from "./constants";
+import { StateStoreVariablePicker } from "./StateStoreVariablePicker";
 
 export interface ComponentPropMappingsSectionProps {
   currentComponent: StateRenderComponent;
@@ -93,10 +97,17 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
     },
     [rawOnUpdatePropMapping],
   );
+  const effectiveStoreName = propMappings.valueStoreName || storeName;
+  const effectiveStoreId = propMappings.valueStoreId || storeId;
+
   const capitalizedState = stateName
     ? stateName.charAt(0).toUpperCase() + stateName.slice(1)
     : "State";
-  const defaultSetterName = `set${capitalizedState}`;
+  const activeBoundVar = propMappings.valueBinding || stateName;
+  const capitalizedBoundVar = activeBoundVar
+    ? activeBoundVar.charAt(0).toUpperCase() + activeBoundVar.slice(1)
+    : capitalizedState;
+  const defaultSetterName = `set${capitalizedBoundVar}`;
   const onChangeMode = propMappings.onChangeMode || (propMappings.readOnly ? "custom" : "two_way");
   const isDebounceEnabled = Boolean(propMappings.debounceUpdate);
   const debounceMs = propMappings.debounceMs ?? 300;
@@ -117,7 +128,7 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
 
     (actualStoreNodes || []).forEach((n) => {
       const sName = n.data?.storeName || n.data?.label || "Store";
-      const fields = (n.data?.fields || []).map((f: any) => ({
+      const fields = (n.data?.fields || []).map((f: { id: string; name: string; type?: string }) => ({
         id: f.id,
         name: f.name,
         type: f.type,
@@ -209,112 +220,147 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
               <Type size={13} className="text-primary" />
               <span>Input Field Configuration</span>
             </div>
-            {storeName ? (
+            {effectiveStoreName ? (
               <Badge variant="secondary" className="text-[9px] font-mono px-1.5 py-0 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                Bound to {storeName}Store
+                Bound to {effectiveStoreName.endsWith("Store") ? effectiveStoreName : `${effectiveStoreName}Store`}
               </Badge>
             ) : (
               <Badge variant="outline" className="text-[9px] font-mono px-1.5 py-0 text-muted-foreground">
-                Local Section State
+                Unbound Component
               </Badge>
             )}
           </div>
 
           {/* 1. Value Binding */}
+          <StateStoreVariablePicker
+            label="Value Binding"
+            propName="value"
+            valueBinding={propMappings.valueBinding ?? stateName}
+            storeName={effectiveStoreName}
+            storeId={effectiveStoreId}
+            mode={propMappings.valueMode}
+            stateStores={stateStores}
+            expectedType={stateType === "number" ? "number" : stateType === "boolean" ? "boolean" : "any"}
+            placeholder={stateName}
+            onChange={(res) => {
+              onUpdatePropMapping({
+                valueBinding: res.valueBinding,
+                valueStoreName: res.storeName,
+                valueStoreId: res.storeId,
+                valueMode: res.mode,
+                targetSetterName: res.suggestedSetterName || propMappings.targetSetterName,
+                ...(res.varType === "number" && !propMappings.inputType ? { inputType: "number" } : {}),
+              });
+            }}
+          />
+
+          {/* 2. Input Field Label (with Enable/Disable switch & StateStore mapping) */}
+          {(() => {
+            const isLabelEnabled = propMappings.hasLabel !== false;
+            return (
+              <div className="flex flex-col gap-2 p-2.5 rounded-xl bg-background/80 border border-border/40">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Tag size={12} className="text-primary" />
+                    <Label htmlFor="input-label-toggle" className="text-[11px] font-semibold text-foreground cursor-pointer flex items-center gap-1">
+                      <span>Input Field Label</span>
+                      <code className="font-mono text-[10px] text-cyan-500 font-medium">label</code>
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] text-muted-foreground font-mono">
+                      {isLabelEnabled ? "Enabled" : "Hidden"}
+                    </span>
+                    <Switch
+                      id="input-label-toggle"
+                      checked={isLabelEnabled}
+                      onCheckedChange={(checked) => {
+                        onUpdatePropMapping({
+                          hasLabel: checked,
+                          ...(checked && !propMappings.labelBinding ? { labelBinding: displayLabel } : {}),
+                        });
+                      }}
+                      className="scale-80 origin-right"
+                    />
+                  </div>
+                </div>
+
+                {isLabelEnabled && (
+                  <StateStoreVariablePicker
+                    label="Label Text / Mapping"
+                    propName="label"
+                    valueBinding={propMappings.labelBinding ?? displayLabel}
+                    storeName={propMappings.labelStoreName}
+                    storeId={propMappings.labelStoreId}
+                    mode={propMappings.labelMode}
+                    stateStores={stateStores}
+                    placeholder={displayLabel || "Input Label"}
+                    description="Text or dynamic StateStore variable displayed above the input field."
+                    onChange={(res) => {
+                      onUpdatePropMapping({
+                        labelBinding: res.valueBinding,
+                        labelStoreName: res.storeName,
+                        labelStoreId: res.storeId,
+                        labelMode: res.mode,
+                        hasLabel: true,
+                      });
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })()}
+
+          {/* 3. Input Type */}
           <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
-              <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
-                <span>Value Binding</span>
-                <code className="font-mono text-[10px] text-cyan-500">value</code>
-              </Label>
-              <span className="text-[9px] text-muted-foreground font-mono">
-                {propMappings.valueBinding || stateName}
-              </span>
-            </div>
-            <LocalInput
-              value={propMappings.valueBinding ?? stateName}
-              onChange={(e) => onUpdatePropMapping({ valueBinding: e.target.value })}
-              placeholder={stateName}
-              className="h-8 text-xs font-mono bg-background"
-            />
-            <span className="text-[10px] text-muted-foreground">
-              Controlled expression feeding into input <code className="font-mono text-[10px]">value</code>. Defaults to <code className="font-mono text-[10px]">{stateName}</code>.
-            </span>
+            <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
+              <span>Input Type</span>
+              <code className="font-mono text-[10px] text-cyan-500">type</code>
+            </Label>
+            <Select
+              value={propMappings.inputType || (stateType === "number" ? "number" : "text")}
+              onValueChange={(val) => {
+                if (isInputType(val)) {
+                  onUpdatePropMapping({ inputType: val });
+                }
+              }}
+            >
+              <SelectTrigger className="h-8 text-xs bg-background font-mono">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="text">text (Standard text)</SelectItem>
+                <SelectItem value="search">search (Search input)</SelectItem>
+                <SelectItem value="number">number (Numeric counter)</SelectItem>
+                <SelectItem value="password">password (Masked secret)</SelectItem>
+                <SelectItem value="email">email (Email format)</SelectItem>
+                <SelectItem value="tel">tel (Phone / mobile)</SelectItem>
+                <SelectItem value="url">url (Web address URL)</SelectItem>
+                <SelectItem value="date">date (Date picker)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* 2. Input Type & Placeholder */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
-                <span>Type</span>
-                <code className="font-mono text-[10px] text-cyan-500">type</code>
-              </Label>
-              <Select
-                value={propMappings.inputType || (stateType === "number" ? "number" : "text")}
-                onValueChange={(val) => {
-                  if (isInputType(val)) {
-                    onUpdatePropMapping({ inputType: val });
-                  }
-                }}
-              >
-                <SelectTrigger className="h-8 text-xs bg-background font-mono">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="text">text (Standard text)</SelectItem>
-                  <SelectItem value="search">search (Search input)</SelectItem>
-                  <SelectItem value="number">number (Numeric counter)</SelectItem>
-                  <SelectItem value="password">password (Masked secret)</SelectItem>
-                  <SelectItem value="email">email (Email format)</SelectItem>
-                  <SelectItem value="tel">tel (Phone / mobile)</SelectItem>
-                  <SelectItem value="url">url (Web address URL)</SelectItem>
-                  <SelectItem value="date">date (Date picker)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
-                <span>Placeholder</span>
-                <code className="font-mono text-[10px] text-cyan-500">placeholder</code>
-              </Label>
-              <LocalInput
-                value={propMappings.placeholder || ""}
-                onChange={(e) => onUpdatePropMapping({ placeholder: e.target.value })}
-                placeholder={`Enter ${displayLabel}...`}
-                className="h-8 text-xs bg-background"
-              />
-            </div>
-          </div>
-
-          {/* Prefix & Suffix */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
-                <span>Prefix</span>
-                <code className="font-mono text-[10px] text-cyan-500">prefix</code>
-              </Label>
-              <LocalInput
-                value={propMappings.prefix || ""}
-                onChange={(e) => onUpdatePropMapping({ prefix: e.target.value })}
-                placeholder="e.g. $"
-                className="h-8 text-xs font-mono bg-background"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
-                <span>Suffix</span>
-                <code className="font-mono text-[10px] text-cyan-500">suffix</code>
-              </Label>
-              <LocalInput
-                value={propMappings.suffix || ""}
-                onChange={(e) => onUpdatePropMapping({ suffix: e.target.value })}
-                placeholder="e.g. items, USD, %"
-                className="h-8 text-xs font-mono bg-background"
-              />
-            </div>
-          </div>
+          {/* 3. Placeholder Mapping */}
+          <StateStoreVariablePicker
+            label="Placeholder"
+            propName="placeholder"
+            valueBinding={propMappings.placeholder || ""}
+            storeName={propMappings.placeholderStoreName}
+            storeId={propMappings.placeholderStoreId}
+            mode={propMappings.placeholderMode}
+            stateStores={stateStores}
+            placeholder={`Enter ${displayLabel}...`}
+            description="Static text or dynamic variable token for input placeholder."
+            onChange={(res) => {
+              onUpdatePropMapping({
+                placeholder: res.valueBinding,
+                placeholderStoreName: res.storeName,
+                placeholderStoreId: res.storeId,
+                placeholderMode: res.mode,
+              });
+            }}
+          />
 
           {/* 3. onChange Handling Mode */}
           <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
@@ -366,8 +412,8 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
                   <span>Direct State Mutation Wired</span>
                 </div>
                 <div className="text-[10px] text-muted-foreground font-mono">
-                  {storeName
-                    ? `Calls ${storeName}Store.${propMappings.targetSetterName || defaultSetterName}(e.target.value)`
+                  {effectiveStoreName
+                    ? `Calls ${effectiveStoreName.endsWith("Store") ? effectiveStoreName : `${effectiveStoreName}Store`}.${propMappings.targetSetterName || defaultSetterName}(e.target.value)`
                     : `Calls ${propMappings.targetSetterName || defaultSetterName}(e.target.value)`}
                 </div>
                 <div className="flex items-center gap-2 pt-1">
@@ -947,102 +993,108 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
               />
             </div>
           </div>
-
-          {/* Prefix & Suffix */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 border-t border-border/40">
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
-                <span>Prefix</span>
-                <code className="font-mono text-[10px] text-cyan-500">prefix</code>
-              </Label>
-              <LocalInput
-                value={propMappings.prefix || ""}
-                onChange={(e) => onUpdatePropMapping({ prefix: e.target.value })}
-                placeholder="e.g. $"
-                className="h-8 text-xs font-mono bg-background"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
-                <span>Suffix</span>
-                <code className="font-mono text-[10px] text-cyan-500">suffix</code>
-              </Label>
-              <LocalInput
-                value={propMappings.suffix || ""}
-                onChange={(e) => onUpdatePropMapping({ suffix: e.target.value })}
-                placeholder="e.g. items, USD, %"
-                className="h-8 text-xs font-mono bg-background"
-              />
-            </div>
-          </div>
         </div>
       )}
 
       {/* Card Component Props */}
       {currentComponent === "card" && (
         <div className="flex flex-col gap-3 p-3.5 rounded-xl bg-muted/20 border border-border/50">
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-[11px] font-medium text-foreground">
-              Card Title (<code className="font-mono text-[10px] text-cyan-500">title</code>)
-            </Label>
-            <LocalInput
-              value={propMappings.titleBinding || ""}
-              onChange={(e) => onUpdatePropMapping({ titleBinding: e.target.value })}
-              placeholder={displayLabel}
-              className="h-8 text-xs bg-background"
-            />
-            <span className="text-[10px] text-muted-foreground">
-              Header title text displayed above the stat value.
-            </span>
-          </div>
+          {/* Card Metric Stat Binding */}
+          <StateStoreVariablePicker
+            label="Card Metric Stat Value"
+            propName="value"
+            valueBinding={propMappings.cardValueBinding || propMappings.valueBinding || stateName}
+            storeName={propMappings.cardValueStoreName || effectiveStoreName}
+            storeId={propMappings.cardValueStoreId || effectiveStoreId}
+            mode={propMappings.valueMode}
+            stateStores={stateStores}
+            placeholder={stateName}
+            description="Main numerical or text metric displayed inside the card body."
+            onChange={(res) => {
+              onUpdatePropMapping({
+                cardValueBinding: res.valueBinding,
+                cardValueStoreName: res.storeName,
+                cardValueStoreId: res.storeId,
+                valueBinding: res.valueBinding,
+                valueStoreName: res.storeName,
+                valueStoreId: res.storeId,
+                valueMode: res.mode,
+              });
+            }}
+          />
 
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-[11px] font-medium text-foreground">
-              Card Subtitle / Description (<code className="font-mono text-[10px] text-cyan-500">description</code>)
-            </Label>
-            <LocalInput
-              value={propMappings.descriptionBinding || ""}
-              onChange={(e) => onUpdatePropMapping({ descriptionBinding: e.target.value })}
-              placeholder="e.g. Total count or last 30 days"
-              className="h-8 text-xs bg-background"
-            />
-          </div>
+          {/* Card Title */}
+          <StateStoreVariablePicker
+            label="Card Title"
+            propName="title"
+            valueBinding={propMappings.titleBinding || ""}
+            storeName={propMappings.titleStoreName}
+            storeId={propMappings.titleStoreId}
+            mode={propMappings.titleMode}
+            stateStores={stateStores}
+            placeholder={displayLabel}
+            description="Header title text displayed above the stat value."
+            onChange={(res) => {
+              onUpdatePropMapping({
+                titleBinding: res.valueBinding,
+                titleStoreName: res.storeName,
+                titleStoreId: res.storeId,
+                titleMode: res.mode,
+              });
+            }}
+          />
 
-          {/* Prefix & Suffix */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 border-t border-border/40">
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
-                <span>Prefix</span>
-                <code className="font-mono text-[10px] text-cyan-500">prefix</code>
-              </Label>
-              <LocalInput
-                value={propMappings.prefix || ""}
-                onChange={(e) => onUpdatePropMapping({ prefix: e.target.value })}
-                placeholder="e.g. $"
-                className="h-8 text-xs font-mono bg-background"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
-                <span>Suffix</span>
-                <code className="font-mono text-[10px] text-cyan-500">suffix</code>
-              </Label>
-              <LocalInput
-                value={propMappings.suffix || ""}
-                onChange={(e) => onUpdatePropMapping({ suffix: e.target.value })}
-                placeholder="e.g. items, USD, %"
-                className="h-8 text-xs font-mono bg-background"
-              />
-            </div>
-          </div>
+          {/* Card Subtitle / Description */}
+          <StateStoreVariablePicker
+            label="Card Subtitle / Description"
+            propName="description"
+            valueBinding={propMappings.descriptionBinding || ""}
+            storeName={propMappings.descriptionStoreName}
+            storeId={propMappings.descriptionStoreId}
+            mode={propMappings.descriptionMode}
+            stateStores={stateStores}
+            placeholder="e.g. Total count or last 30 days"
+            description="Subtitle or supplementary description text in card."
+            onChange={(res) => {
+              onUpdatePropMapping({
+                descriptionBinding: res.valueBinding,
+                descriptionStoreName: res.storeName,
+                descriptionStoreId: res.storeId,
+                descriptionMode: res.mode,
+              });
+            }}
+          />
         </div>
       )}
 
       {/* Progress Component Props */}
       {currentComponent === "progress" && (
         <div className="flex flex-col gap-3 p-3.5 rounded-xl bg-muted/20 border border-border/50">
+          {/* Progress Value Binding */}
+          <StateStoreVariablePicker
+            label="Progress Value Binding"
+            propName="value"
+            valueBinding={propMappings.progressValueBinding || propMappings.valueBinding || stateName}
+            storeName={propMappings.progressValueStoreName || effectiveStoreName}
+            storeId={propMappings.progressValueStoreId || effectiveStoreId}
+            mode={propMappings.valueMode}
+            stateStores={stateStores}
+            expectedType="number"
+            placeholder={stateName}
+            description="Numeric StateStore variable feeding the progress bar (0 - 100)."
+            onChange={(res) => {
+              onUpdatePropMapping({
+                progressValueBinding: res.valueBinding,
+                progressValueStoreName: res.storeName,
+                progressValueStoreId: res.storeId,
+                valueBinding: res.valueBinding,
+                valueStoreName: res.storeName,
+                valueStoreId: res.storeId,
+                valueMode: res.mode,
+              });
+            }}
+          />
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label className="text-[11px] font-medium text-foreground">
@@ -1077,53 +1129,70 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
       {/* Alert Component Props */}
       {currentComponent === "alert" && (
         <div className="flex flex-col gap-3 p-3.5 rounded-xl bg-muted/20 border border-border/50">
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-[11px] font-medium text-foreground">
-              Alert Title (<code className="font-mono text-[10px] text-cyan-500">title</code>)
-            </Label>
-            <LocalInput
-              value={propMappings.alertTitle || ""}
-              onChange={(e) => onUpdatePropMapping({ alertTitle: e.target.value })}
-              placeholder="e.g. System Notice"
-              className="h-8 text-xs bg-background"
-            />
-            <span className="text-[10px] text-muted-foreground">
-              Prominent bold headline rendered at the top of the alert banner.
-            </span>
-          </div>
+          <StateStoreVariablePicker
+            label="Alert Title"
+            propName="title"
+            valueBinding={propMappings.alertTitle || ""}
+            storeName={propMappings.alertTitleStoreName}
+            storeId={propMappings.alertTitleStoreId}
+            mode={propMappings.alertTitleMode}
+            stateStores={stateStores}
+            placeholder="e.g. System Notice"
+            description="Prominent headline rendered at top of alert banner."
+            onChange={(res) => {
+              onUpdatePropMapping({
+                alertTitle: res.valueBinding,
+                alertTitleStoreName: res.storeName,
+                alertTitleStoreId: res.storeId,
+                alertTitleMode: res.mode,
+              });
+            }}
+          />
         </div>
       )}
 
       {/* Avatar Component Props */}
       {currentComponent === "avatar" && (
         <div className="flex flex-col gap-3 p-3.5 rounded-xl bg-muted/20 border border-border/50">
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-[11px] font-medium text-foreground">
-              Image URL (<code className="font-mono text-[10px] text-cyan-500">src</code>)
-            </Label>
-            <LocalInput
-              value={propMappings.avatarSrc || ""}
-              onChange={(e) => onUpdatePropMapping({ avatarSrc: e.target.value })}
-              placeholder="https://example.com/avatar.jpg"
-              className="h-8 text-xs font-mono bg-background"
-            />
-            <span className="text-[10px] text-muted-foreground">
-              Direct image link or leave empty to use initials fallback.
-            </span>
-          </div>
+          <StateStoreVariablePicker
+            label="Image URL"
+            propName="src"
+            valueBinding={propMappings.avatarSrc || ""}
+            storeName={propMappings.avatarSrcStoreName}
+            storeId={propMappings.avatarSrcStoreId}
+            mode={propMappings.avatarSrcMode}
+            stateStores={stateStores}
+            placeholder="https://example.com/avatar.jpg"
+            description="Direct image link or leave empty to use initials fallback."
+            onChange={(res) => {
+              onUpdatePropMapping({
+                avatarSrc: res.valueBinding,
+                avatarSrcStoreName: res.storeName,
+                avatarSrcStoreId: res.storeId,
+                avatarSrcMode: res.mode,
+              });
+            }}
+          />
 
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-[11px] font-medium text-foreground">
-              Fallback Initials (<code className="font-mono text-[10px] text-cyan-500">fallback</code>)
-            </Label>
-            <LocalInput
-              value={propMappings.avatarFallback || ""}
-              onChange={(e) => onUpdatePropMapping({ avatarFallback: e.target.value })}
-              placeholder={displayLabel.slice(0, 2).toUpperCase() || "AV"}
-              maxLength={4}
-              className="h-8 text-xs font-mono bg-background"
-            />
-          </div>
+          <StateStoreVariablePicker
+            label="Fallback Initials"
+            propName="fallback"
+            valueBinding={propMappings.avatarFallback || ""}
+            storeName={propMappings.avatarFallbackStoreName}
+            storeId={propMappings.avatarFallbackStoreId}
+            mode={propMappings.avatarFallbackMode}
+            stateStores={stateStores}
+            placeholder={displayLabel.slice(0, 2).toUpperCase() || "AV"}
+            description="Initials rendered when image is loading or fails."
+            onChange={(res) => {
+              onUpdatePropMapping({
+                avatarFallback: res.valueBinding,
+                avatarFallbackStoreName: res.storeName,
+                avatarFallbackStoreId: res.storeId,
+                avatarFallbackMode: res.mode,
+              });
+            }}
+          />
         </div>
       )}
 
@@ -1181,6 +1250,66 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
       {/* Switch & Checkbox Props */}
       {(currentComponent === "switch" || currentComponent === "checkbox") && (
         <div className="flex flex-col gap-3 p-3.5 rounded-xl bg-muted/20 border border-border/50">
+          {/* Header pill / store indicator */}
+          <div className="flex items-center justify-between pb-2 border-b border-border/40 text-[11px]">
+            <div className="flex items-center gap-1.5 font-medium text-foreground">
+              {currentComponent === "switch" ? (
+                <ToggleLeft size={13} className="text-primary" />
+              ) : (
+                <SquareCheck size={13} className="text-primary" />
+              )}
+              <span>{currentComponent === "switch" ? "Switch" : "Checkbox"} Configuration</span>
+            </div>
+            {effectiveStoreName ? (
+              <Badge variant="secondary" className="text-[9px] font-mono px-1.5 py-0 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                Bound to {effectiveStoreName.endsWith("Store") ? effectiveStoreName : `${effectiveStoreName}Store`}
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-[9px] font-mono px-1.5 py-0 text-muted-foreground">
+                Unbound Component
+              </Badge>
+            )}
+          </div>
+
+          {/* Checked State Binding */}
+          <StateStoreVariablePicker
+            label="Checked State Binding"
+            propName="checked"
+            valueBinding={propMappings.checkedBinding || propMappings.valueBinding || stateName}
+            storeName={propMappings.checkedStoreName || effectiveStoreName}
+            storeId={propMappings.checkedStoreId || effectiveStoreId}
+            mode={propMappings.checkedMode}
+            stateStores={stateStores}
+            expectedType="boolean"
+            placeholder={stateName}
+            description="Boolean StateStore variable controlling the toggled on/off state."
+            onChange={(res) => {
+              onUpdatePropMapping({
+                checkedBinding: res.valueBinding,
+                checkedStoreName: res.storeName,
+                checkedStoreId: res.storeId,
+                checkedMode: res.mode,
+                valueBinding: res.valueBinding,
+                valueStoreName: res.storeName,
+                valueStoreId: res.storeId,
+                targetSetterName: res.suggestedSetterName || propMappings.targetSetterName,
+              });
+            }}
+          />
+
+          {/* Direct State Mutation Wiring preview */}
+          <div className="p-2 rounded-lg bg-background/80 border border-border/40 text-[11px] space-y-1">
+            <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+              <CheckCircle2 size={12} />
+              <span>Toggle Mutation Wired</span>
+            </div>
+            <div className="text-[10px] text-muted-foreground font-mono">
+              {effectiveStoreName
+                ? `Calls ${effectiveStoreName.endsWith("Store") ? effectiveStoreName : `${effectiveStoreName}Store`}.${propMappings.targetSetterName || defaultSetterName}(checked)`
+                : `Calls ${propMappings.targetSetterName || defaultSetterName}(checked)`}
+            </div>
+          </div>
+
           <div className="flex items-center justify-between p-2 rounded-lg bg-background/80 border border-border/40">
             <div className="flex flex-col">
               <Label className="text-[11px] font-medium cursor-pointer">
@@ -1199,88 +1328,59 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
       {/* Badge Component Props */}
       {currentComponent === "badge" && (
         <div className="flex flex-col gap-3 p-3.5 rounded-xl bg-muted/20 border border-border/50 text-xs">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span>State value bound to:</span>
-            <Badge variant="outline" className="font-mono text-[10px] text-cyan-600 dark:text-cyan-400 border-cyan-500/30">
-              {stateName}
-            </Badge>
-          </div>
+          {/* State Variable Binding */}
+          <StateStoreVariablePicker
+            label="Badge State Value"
+            propName="children"
+            valueBinding={propMappings.valueBinding ?? stateName}
+            storeName={effectiveStoreName}
+            storeId={effectiveStoreId}
+            mode={propMappings.valueMode}
+            stateStores={stateStores}
+            placeholder={stateName}
+            description="StateStore variable displayed inside the badge pill."
+            onChange={(res) => {
+              onUpdatePropMapping({
+                valueBinding: res.valueBinding,
+                valueStoreName: res.storeName,
+                valueStoreId: res.storeId,
+                valueMode: res.mode,
+              });
+            }}
+          />
           <span className="text-[10px] text-muted-foreground">
             Badge variant (default, secondary, outline, destructive) can be adjusted in the Formatting section below.
           </span>
 
-          {/* Prefix & Suffix */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-border/40">
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
-                <span>Prefix</span>
-                <code className="font-mono text-[10px] text-cyan-500">prefix</code>
-              </Label>
-              <LocalInput
-                value={propMappings.prefix || ""}
-                onChange={(e) => onUpdatePropMapping({ prefix: e.target.value })}
-                placeholder="e.g. $"
-                className="h-8 text-xs font-mono bg-background"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
-                <span>Suffix</span>
-                <code className="font-mono text-[10px] text-cyan-500">suffix</code>
-              </Label>
-              <LocalInput
-                value={propMappings.suffix || ""}
-                onChange={(e) => onUpdatePropMapping({ suffix: e.target.value })}
-                placeholder="e.g. items, USD, %"
-                className="h-8 text-xs font-mono bg-background"
-              />
-            </div>
-          </div>
         </div>
       )}
 
       {/* Code / Text Component Props */}
       {(currentComponent === "code" || currentComponent === "text") && (
         <div className="flex flex-col gap-3 p-3.5 rounded-xl bg-muted/20 border border-border/50 text-xs">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span>Value rendered from:</span>
-            <Badge variant="outline" className="font-mono text-[10px] text-cyan-600 dark:text-cyan-400 border-cyan-500/30">
-              {stateName}
-            </Badge>
-          </div>
+          <StateStoreVariablePicker
+            label="Rendered State Value"
+            propName="children"
+            valueBinding={propMappings.valueBinding ?? stateName}
+            storeName={effectiveStoreName}
+            storeId={effectiveStoreId}
+            mode={propMappings.valueMode}
+            stateStores={stateStores}
+            placeholder={stateName}
+            description="StateStore variable whose value is rendered and syntax-formatted."
+            onChange={(res) => {
+              onUpdatePropMapping({
+                valueBinding: res.valueBinding,
+                valueStoreName: res.storeName,
+                valueStoreId: res.storeId,
+                valueMode: res.mode,
+              });
+            }}
+          />
           <span className="text-[10px] text-muted-foreground">
             Renders raw or serialized state value with syntax formatting.
           </span>
 
-          {/* Prefix & Suffix */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-border/40">
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
-                <span>Prefix</span>
-                <code className="font-mono text-[10px] text-cyan-500">prefix</code>
-              </Label>
-              <LocalInput
-                value={propMappings.prefix || ""}
-                onChange={(e) => onUpdatePropMapping({ prefix: e.target.value })}
-                placeholder="e.g. $"
-                className="h-8 text-xs font-mono bg-background"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
-                <span>Suffix</span>
-                <code className="font-mono text-[10px] text-cyan-500">suffix</code>
-              </Label>
-              <LocalInput
-                value={propMappings.suffix || ""}
-                onChange={(e) => onUpdatePropMapping({ suffix: e.target.value })}
-                placeholder="e.g. items, USD, %"
-                className="h-8 text-xs font-mono bg-background"
-              />
-            </div>
-          </div>
         </div>
       )}
     </div>

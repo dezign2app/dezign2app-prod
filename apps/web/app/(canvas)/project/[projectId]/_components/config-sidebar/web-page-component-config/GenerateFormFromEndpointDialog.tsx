@@ -56,6 +56,33 @@ import {
 } from "@/lib/utils/endpointFormGenerator";
 import { Endpoint, BackendNode, ComponentBindingType } from "@/types/canvas";
 
+const toComponentBindingType = (val: string): ComponentBindingType => {
+  switch (val) {
+    case "button":
+    case "input":
+    case "card":
+    case "switch":
+    case "table":
+    case "badge":
+    case "select":
+    case "checkbox":
+    case "progress":
+    case "alert":
+    case "avatar":
+    case "skeleton":
+    case "code":
+    case "text":
+      return val;
+    default:
+      return "input";
+  }
+};
+
+const toComponentBindingTypeOrNone = (val: string): ComponentBindingType | "none" => {
+  if (val === "none") return "none";
+  return toComponentBindingType(val);
+};
+
 export interface GenerateFormFromEndpointDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -144,7 +171,7 @@ const FieldConfigRow = React.memo(function FieldConfigRow({
         <Select
           value={field.suggestedComponentType}
           onValueChange={(val) =>
-            onChange(idx, { suggestedComponentType: val as ComponentBindingType })
+            onChange(idx, { suggestedComponentType: toComponentBindingType(val) })
           }
           disabled={!field.enabled}
         >
@@ -246,7 +273,7 @@ const ResponseFieldConfigRow = React.memo(function ResponseFieldConfigRow({
       <div className="flex items-center gap-2 shrink-0">
         <Select
           value={field.suggestedComponentType}
-          onValueChange={(val) => onSelectComponentType(idx, val as ComponentBindingType | "none")}
+          onValueChange={(val) => onSelectComponentType(idx, toComponentBindingTypeOrNone(val))}
           disabled={!field.enabled}
         >
           <SelectTrigger className="h-7 text-[11px] bg-background w-32" title="Response UI Display Type">
@@ -617,9 +644,10 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
       toast.success(result.summaryMessage);
       onSuccess?.(result.createdComponentBindingId);
       onOpenChange(false);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to generate form from endpoint:", err);
-      toast.error(err?.message || "Failed to generate form from endpoint");
+      const msg = err instanceof Error ? err.message : "Failed to generate form from endpoint";
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }

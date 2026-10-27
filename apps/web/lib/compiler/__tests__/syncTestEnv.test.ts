@@ -377,9 +377,9 @@ describe("syncTestEnv via Compiler", () => {
       ],
     );
 
-    expect(notFoundPageCode).toContain("handleTriggerAction");
-    expect(notFoundPageCode).toContain("executeApiAction");
-    expect(notFoundPageCode).toContain("onTrigger={handleTriggerAction}");
+    expect(notFoundPageCode).not.toContain("handleTriggerAction");
+    expect(notFoundPageCode).not.toContain("executeApiAction");
+    expect(notFoundPageCode).not.toContain("onTrigger={handleTriggerAction}");
 
     const targetNotFoundPagePath = path.join(TEST_ENV_DIR, "apps/web/app/(public)/not-found/page.tsx");
     if (fs.existsSync(path.dirname(targetNotFoundPagePath))) {
