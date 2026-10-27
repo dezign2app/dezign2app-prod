@@ -9,6 +9,7 @@ import type { TypesNodeListProps } from "./types";
 export const TypesNodeList: React.FC<TypesNodeListProps> = ({
   nodeId,
   isPackageNode,
+  serviceName,
   connectedTypes,
   restTypes,
   totalCount,
@@ -49,6 +50,7 @@ export const TypesNodeList: React.FC<TypesNodeListProps> = ({
                   incoming={hasIncomingEdge(item.id)}
                   outgoing={hasOutgoingEdge(item.id)}
                   isPackageNode={isPackageNode}
+                  serviceName={serviceName}
                   onOpenConfig={(e) => onOpenConfigForType(item.id, e)}
                   onExtend={(e) => {
                     e.stopPropagation();
@@ -103,6 +105,7 @@ export const TypesNodeList: React.FC<TypesNodeListProps> = ({
                       incoming={hasIncomingEdge(item.id)}
                       outgoing={hasOutgoingEdge(item.id)}
                       isPackageNode={isPackageNode}
+                      serviceName={serviceName}
                       onOpenConfig={(e) => onOpenConfigForType(item.id, e)}
                       onExtend={(e) => {
                         e.stopPropagation();

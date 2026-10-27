@@ -8,6 +8,7 @@ export interface TypeRowProps {
   incoming: boolean;
   outgoing: boolean;
   isPackageNode: boolean;
+  serviceName?: string;
   onOpenConfig: (e: React.MouseEvent) => void;
   onExtend: (e: React.MouseEvent) => void;
   onDelete?: (e: React.MouseEvent) => void;
@@ -54,6 +55,7 @@ export interface TypesNodeEntityWarningBannerProps {
 export interface TypesNodeListProps {
   nodeId: string;
   isPackageNode: boolean;
+  serviceName?: string;
   connectedTypes: CustomTypeItem[];
   restTypes: CustomTypeItem[];
   totalCount: number;
