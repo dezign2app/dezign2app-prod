@@ -9,12 +9,14 @@ import {
   Check,
   X,
   Search,
+  Zap,
 } from "lucide-react";
 import {
   BackendNode,
   PageStateObject,
   GlobalStoreField,
   PageSection,
+  UIEventItem,
 } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -418,10 +420,62 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
   // Delete a state object
   const handleDeleteState = (stateId: string) => {
     const nextStates = configuredStates.filter((s) => s.id !== stateId);
-    updateSectionStates(nextStates);
+    const nextActions = (section.actions || []).filter(
+      (a) => !(a.scope === "item" && a.itemSourceStateId === stateId),
+    );
+    const updated = sections.map((s) =>
+      s.id === section.id
+        ? { ...s, stateObjects: nextStates, actions: nextActions }
+        : s,
+    );
+    updateSections(updated);
     const targetHandle = `section-state-in-${section.id}-${stateId}`;
     edges
       .filter((e) => e.target === nodeId && e.targetHandle === targetHandle)
+      .forEach((e) => deleteEdge(e.id));
+  };
+
+  // Handle adding an item-level event action for array states
+  const handleAddItemEvent = (stateId: string, stateName: string) => {
+    const newEventId = `item-evt-${Date.now()}`;
+    const newEvent: UIEventItem = {
+      id: newEventId,
+      name: `${stateName}ItemClick`,
+      event: "click",
+      scope: "item",
+      itemSourceStateId: stateId,
+      itemContextFields: ["id"],
+    };
+    const updated = sections.map((s) =>
+      s.id === section.id ? { ...s, actions: [...(s.actions || []), newEvent] } : s,
+    );
+    updateSections(updated);
+    setActiveConfigItem({
+      type: "pageEvent",
+      id: newEventId,
+      nodeId,
+      sectionId: section.id,
+    });
+  };
+
+  const handleDeleteItemEvent = (eventId: string) => {
+    const updated = sections.map((s) =>
+      s.id === section.id
+        ? {
+            ...s,
+            actions: (s.actions || []).filter((a) => a.id !== eventId),
+          }
+        : s,
+    );
+    updateSections(updated);
+    const targetHandle = `event-in-${eventId}`;
+    const sourceHandle = `events-${eventId}`;
+    edges
+      .filter(
+        (e) =>
+          (e.target === nodeId && e.targetHandle === targetHandle) ||
+          (e.source === nodeId && e.sourceHandle === sourceHandle),
+      )
       .forEach((e) => deleteEdge(e.id));
   };
 
@@ -601,100 +655,193 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
                   e.targetHandle === `section-state-in-${section.id}-${st.id}`,
               );
 
+              const isArrayState =
+                st.type === "array" ||
+                st.type?.endsWith("[]") ||
+                st.type?.includes("[]");
+              const itemActions = (section.actions || []).filter(
+                (act) => act.scope === "item" && act.itemSourceStateId === st.id,
+              );
+
               return (
-                <div
-                  key={st.id}
-                  className="group/row relative flex items-center justify-between px-2 py-1 rounded bg-background/60 border border-border/50 text-[9px] hover:bg-muted/30 transition-colors font-mono"
-                >
-                  {/* Left incoming handle for this state subscription */}
-                  <Handle
-                    type="target"
-                    position={Position.Left}
-                    id={`section-state-in-${section.id}-${st.id}`}
-                    className={cn(
-                      CANVAS_HANDLE_CLASS,
-                      CANVAS_HANDLE_LEFT_OFFSET_CLASS,
-                      "border-2 border-background cursor-pointer hover:scale-125 transition-all z-10",
-                      isConnected
-                        ? "!bg-purple-400 ring-2 ring-purple-500/40"
-                        : "!bg-purple-500 hover:!bg-purple-400",
-                    )}
-                    style={{ top: "50%" }}
-                    title={`State subscription: ${st.name} from store ${st.storeName || ""}${isConnected ? " (connected)" : ""}`}
-                  />
+                <div key={st.id} className="flex flex-col gap-1">
+                  <div className="group/row relative flex items-center justify-between px-2 py-1 rounded bg-background/60 border border-border/50 text-[9px] hover:bg-muted/30 transition-colors font-mono">
+                    {/* Left incoming handle for this state subscription */}
+                    <Handle
+                      type="target"
+                      position={Position.Left}
+                      id={`section-state-in-${section.id}-${st.id}`}
+                      className={cn(
+                        CANVAS_HANDLE_CLASS,
+                        CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+                        "border-2 border-background cursor-pointer hover:scale-125 transition-all z-10",
+                        isConnected
+                          ? "!bg-purple-400 ring-2 ring-purple-500/40"
+                          : "!bg-purple-500 hover:!bg-purple-400",
+                      )}
+                      style={{ top: "50%" }}
+                      title={`State subscription: ${st.name} from store ${st.storeName || ""}${isConnected ? " (connected)" : ""}`}
+                    />
 
-                  <div className="flex items-center gap-1.5 min-w-0 flex-1 pl-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shrink-0" />
-                    <span
-                      className="font-medium text-foreground/90 truncate cursor-pointer hover:text-cyan-400 transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveConfigItem({
-                          type: "pageState",
-                          id: st.id,
-                          nodeId,
-                          sectionId: section.id,
-                        });
-                      }}
-                      title="Click to configure state variable"
-                    >
-                      {st.name}
-                    </span>
-                    <span className="text-[7px] px-1 py-0.2 rounded bg-secondary text-muted-foreground/80 border border-border/40 shrink-0">
-                      {st.type}
-                    </span>
-                    {st.renderConfig?.component && st.renderConfig.component !== "text" && (
-                      <span className="text-[7px] px-1 py-0.2 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">
-                        {st.renderConfig.component}
-                      </span>
-                    )}
-                    {st.renderConfig?.enabled === false && (
-                      <span className="text-[7px] px-1 py-0.2 rounded bg-muted/60 text-muted-foreground/60 border border-border/30 shrink-0" title="Hidden from UI">
-                        hidden
-                      </span>
-                    )}
-                    {st.storeName && (
-                      <span className="text-[7px] px-1 py-0.2 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 shrink-0 truncate max-w-[65px]">
-                        {st.storeName}
-                      </span>
-                    )}
-                    {st.defaultValue !== undefined && st.defaultValue !== "" && (
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1 pl-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shrink-0" />
                       <span
-                        className="text-[7px] text-muted-foreground/60 truncate max-w-[50px]"
-                        title={String(st.defaultValue)}
+                        className="font-medium text-foreground/90 truncate cursor-pointer hover:text-cyan-400 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveConfigItem({
+                            type: "pageState",
+                            id: st.id,
+                            nodeId,
+                            sectionId: section.id,
+                          });
+                        }}
+                        title="Click to configure state variable"
                       >
-                        = {typeof st.defaultValue === "object" ? JSON.stringify(st.defaultValue) : String(st.defaultValue)}
+                        {st.name}
                       </span>
-                    )}
+                      <span className="text-[7px] px-1 py-0.2 rounded bg-secondary text-muted-foreground/80 border border-border/40 shrink-0">
+                        {st.type}
+                      </span>
+                      {st.renderConfig?.component && st.renderConfig.component !== "text" && (
+                        <span className="text-[7px] px-1 py-0.2 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">
+                          {st.renderConfig.component}
+                        </span>
+                      )}
+                      {st.renderConfig?.enabled === false && (
+                        <span className="text-[7px] px-1 py-0.2 rounded bg-muted/60 text-muted-foreground/60 border border-border/30 shrink-0" title="Hidden from UI">
+                          hidden
+                        </span>
+                      )}
+                      {st.storeName && (
+                        <span className="text-[7px] px-1 py-0.2 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 shrink-0 truncate max-w-[65px]">
+                          {st.storeName}
+                        </span>
+                      )}
+                      {st.defaultValue !== undefined && st.defaultValue !== "" && (
+                        <span
+                          className="text-[7px] text-muted-foreground/60 truncate max-w-[50px]"
+                          title={String(st.defaultValue)}
+                        >
+                          = {typeof st.defaultValue === "object" ? JSON.stringify(st.defaultValue) : String(st.defaultValue)}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Hover action buttons */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity shrink-0 ml-1">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveConfigItem({
+                            type: "pageState",
+                            id: st.id,
+                            nodeId,
+                            sectionId: section.id,
+                          });
+                        }}
+                        className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                        title="Configure state variable rendering"
+                      >
+                        <Settings size={10} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteState(st.id)}
+                        className="p-0.5 rounded hover:bg-destructive/15 text-muted-foreground hover:text-destructive cursor-pointer transition-colors"
+                        title="Remove state object"
+                      >
+                        <Trash2 size={10} />
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Hover action buttons */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity shrink-0 ml-1">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveConfigItem({
-                          type: "pageState",
-                          id: st.id,
-                          nodeId,
-                          sectionId: section.id,
-                        });
-                      }}
-                      className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                      title="Configure state variable rendering"
-                    >
-                      <Settings size={10} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteState(st.id)}
-                      className="p-0.5 rounded hover:bg-destructive/15 text-muted-foreground hover:text-destructive cursor-pointer transition-colors"
-                      title="Remove state object"
-                    >
-                      <Trash2 size={10} />
-                    </button>
-                  </div>
+                  {/* Item-level Event Actions for Arrays */}
+                  {isArrayState && (
+                    <div className="ml-3 pl-2 border-l-2 border-violet-500/30 flex flex-col gap-1 py-0.5">
+                      <div className="flex items-center justify-between text-[8px]">
+                        <div className="flex items-center gap-1 text-violet-400 font-medium">
+                          <Zap size={9} className="text-violet-400" />
+                          <span>Item Events ({itemActions.length})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleAddItemEvent(st.id, st.name)}
+                          className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-violet-500/15 hover:bg-violet-500/25 text-violet-600 dark:text-violet-400 border border-violet-500/30 text-[7.5px] font-semibold transition-colors cursor-pointer"
+                          title={`Add item click action for each item in ${st.name}`}
+                        >
+                          <Plus size={8} />
+                          <span>Add Item Event</span>
+                        </button>
+                      </div>
+
+                      {itemActions.length > 0 && (
+                        <div className="flex flex-col gap-0.5">
+                          {itemActions.map((act) => (
+                            <div
+                              key={act.id}
+                              className="flex items-center justify-between px-1.5 py-0.5 rounded bg-violet-500/5 border border-violet-500/20 text-[8px] hover:bg-violet-500/10 transition-colors"
+                            >
+                              <div
+                                className="flex items-center gap-1 truncate cursor-pointer flex-1"
+                                onClick={() =>
+                                  setActiveConfigItem({
+                                    type: "pageEvent",
+                                    id: act.id,
+                                    nodeId,
+                                    sectionId: section.id,
+                                  })
+                                }
+                              >
+                                <span className="font-semibold text-foreground/90 truncate">
+                                  {act.name || "Item Click"}
+                                </span>
+                                <span className="text-[7px] px-1 py-0 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30 font-mono">
+                                  {act.event || "click"}
+                                </span>
+                                {act.itemContextFields?.[0] && (
+                                  <span className="text-[7px] text-muted-foreground/70 font-mono">
+                                    [{act.itemContextFields[0]}]
+                                  </span>
+                                )}
+                                {act.url && (
+                                  <span className="text-[7px] text-emerald-500 truncate max-w-[80px]">
+                                    → {act.url}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-0.5 shrink-0 ml-1">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setActiveConfigItem({
+                                      type: "pageEvent",
+                                      id: act.id,
+                                      nodeId,
+                                      sectionId: section.id,
+                                    })
+                                  }
+                                  className="p-0.5 rounded hover:bg-violet-500/20 text-muted-foreground hover:text-foreground cursor-pointer"
+                                  title="Configure item action"
+                                >
+                                  <Settings size={9} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteItemEvent(act.id)}
+                                  className="p-0.5 rounded hover:bg-destructive/15 text-muted-foreground hover:text-destructive cursor-pointer"
+                                  title="Remove item action"
+                                >
+                                  <Trash2 size={9} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

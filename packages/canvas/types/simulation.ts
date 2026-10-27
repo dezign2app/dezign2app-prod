@@ -233,6 +233,9 @@ export interface PageStateObject {
   fieldId?: string;
   description?: string;
   renderConfig?: StateRenderConfig;
+  itemEvents?: UIEventItem[];
+  itemKeyField?: string;
+  itemSchema?: Array<{ name: string; type: string }>;
 }
 
 export type ComponentBindingType =
@@ -584,6 +587,10 @@ export type UIEventItem = {
     stopOnError?: boolean;
     maxRounds?: number;
   };
+  // Item-scoped event for array state fields
+  scope?: "section" | "item";
+  itemSourceStateId?: string;
+  itemContextFields?: string[];
 };
 
 /** A global simulation scenario. */

@@ -1471,6 +1471,63 @@ describe("compileNextjsV16SectionState", () => {
     expect(code).toContain('<Link href="/admin/audit" className="text-xs">');
     expect(code).toContain('<span>Audit Logs</span>');
   });
+
+  it("compiles array-type state objects with item-scoped click actions into mapped list with onTrigger context", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-item-events",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/messages",
+        appSlug: "chat-app",
+        sections: [
+          {
+            id: "sec-chat",
+            name: "Chat Section",
+            renderMode: "client",
+            loadStrategy: "eager",
+            stateObjects: [
+              {
+                id: "st-messages",
+                name: "messages",
+                type: "array",
+                defaultValue: [],
+                renderConfig: {
+                  enabled: true,
+                  component: "badge",
+                },
+              },
+            ],
+            actions: [
+              {
+                id: "act-item-click",
+                name: "messageDetailClick",
+                event: "click",
+                url: "/api/messages/detail",
+                method: "POST",
+                scope: "item",
+                itemSourceStateId: "st-messages",
+                itemContextFields: ["id"],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([webPageNode]);
+    const file = result.files.find((f) => f.filename.includes("ChatSection.tsx"));
+    expect(file).toBeDefined();
+    const code = file!.content;
+
+    // Must map over dynamic messages array
+    expect(code).toContain("Array.isArray(messages) && (messages || []).map((item: any, idx: number) =>");
+    // Must generate item-level onTrigger with { id: item?.id ?? item }
+    expect(code).toContain('onTrigger?.("messageDetailClick", "click", "/api/messages/detail", "POST", false, undefined, undefined, { id: item?.id ?? item })');
+    // Must render Badge component for items
+    expect(code).toContain("<Badge key={item?.id ?? idx}");
+  });
 });
 
 

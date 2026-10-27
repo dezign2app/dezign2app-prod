@@ -177,6 +177,7 @@ export function generateSectionComponent(
   }
 
   const isActionBound = (c: EventComponentMeta) => {
+    if (c.eventItem?.scope === "item") return true;
     if (c.eventItem?.id && boundActionIds.has(c.eventItem.id)) return true;
     if (boundActionNames.has(c.eventName.trim().toLowerCase())) return true;
     const baseName = c.componentName.replace(/Action$/i, "").trim().toLowerCase();
@@ -719,6 +720,68 @@ export default ${sectionCompName};
             clickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", "${actUrl}", "${actMethod}")}`;
           } else if (cfg?.clickAction === "navigate" && cfg.targetRoute) {
             clickAttr = ` onClick={() => { window.location.href = "${cfg.targetRoute}"; }}`;
+          }
+
+          const isArrayState =
+            st.type === "array" ||
+            st.type?.endsWith("[]") ||
+            st.type?.includes("[]");
+          const itemActions = (section.actions || []).filter(
+            (act) => act.scope === "item" && act.itemSourceStateId === st.id,
+          );
+          const primaryItemAct =
+            itemActions[0] ||
+            (cfg?.clickAction === "trigger_event" && cfg.targetActionId
+              ? (section.actions || []).find(
+                  (a) => a.id === cfg.targetActionId && a.scope === "item",
+                )
+              : undefined);
+
+          if (isArrayState && primaryItemAct) {
+            const keyField = primaryItemAct.itemContextFields?.[0] || "id";
+            const actName = primaryItemAct.name || "itemClick";
+            const actEvent = primaryItemAct.event || "click";
+            const actUrl = primaryItemAct.url || "";
+            const actMethod = primaryItemAct.method || "POST";
+            const itemClickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", "${actUrl}", "${actMethod}", false, undefined, undefined, { ${keyField}: item?.${keyField} ?? item })}`;
+
+            if (comp === "badge") {
+              neededShadcnImports.add('import { Badge } from "@workspace/ui/components/badge";');
+              return `          {Array.isArray(${varName}) && (${varName} || []).map((item: any, idx: number) => (
+            <Badge key={item?.${keyField} ?? idx} variant="${variant}" className="text-xs cursor-pointer"${itemClickAttr}>
+              {showDebugState && <span className="text-muted-foreground mr-1">${labelInline}</span>}
+              {typeof item === "object" ? (item?.name || item?.title || item?.label || item?.${keyField} || JSON.stringify(item)) : String(item)}
+            </Badge>
+          ))}`;
+            }
+            if (comp === "button") {
+              neededShadcnImports.add('import { Button } from "@workspace/ui/components/button";');
+              const btnSize = props?.buttonSize || "sm";
+              const disabledAttr = resolveDisabledAttr(props);
+              return `          {Array.isArray(${varName}) && (${varName} || []).map((item: any, idx: number) => (
+            <Button key={item?.${keyField} ?? idx} variant="${variant}" size="${btnSize}"${disabledAttr} className="cursor-pointer"${itemClickAttr}>
+              {showDebugState && <>{${isStoreLabel ? `String(${labelVar})` : `"${staticLabel}"`}}: </>}
+              {typeof item === "object" ? (item?.name || item?.title || item?.label || item?.${keyField} || JSON.stringify(item)) : String(item)}
+            </Button>
+          ))}`;
+            }
+            if (comp === "card") {
+              const cardTitle = isStoreLabel ? `{String(${labelVar})}` : (props?.titleBinding || staticLabel);
+              return `          {Array.isArray(${varName}) && (${varName} || []).map((item: any, idx: number) => (
+            <div key={item?.${keyField} ?? idx} className="p-3 rounded-lg border bg-card text-card-foreground shadow-xs cursor-pointer hover:border-primary/50 transition-colors"${itemClickAttr}>
+              {showDebugState && <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">${cardTitle}</div>}
+              <div className="text-sm font-bold mt-0.5 font-mono">
+                {typeof item === "object" ? (item?.title || item?.name || item?.label || item?.${keyField} || JSON.stringify(item)) : String(item)}
+              </div>
+            </div>
+          ))}`;
+            }
+            return `          {Array.isArray(${varName}) && (${varName} || []).map((item: any, idx: number) => (
+            <div key={item?.${keyField} ?? idx} className="text-xs px-2.5 py-1 rounded bg-secondary/50 border border-border text-foreground font-mono cursor-pointer hover:bg-secondary transition-colors"${itemClickAttr}>
+              {showDebugState && <span className="text-muted-foreground">${labelInline}</span>}
+              {typeof item === "object" ? (item?.name || item?.title || item?.label || item?.${keyField} || JSON.stringify(item)) : String(item)}
+            </div>
+          ))}`;
           }
 
           if (comp === "badge") {

@@ -600,8 +600,10 @@ export const storageOperationBindingConvexValidator = v.object({
 // UI Event Item Validator
 export const webPageEventConvexValidator = v.object({
   id: v.optional(v.string()),
-  name: v.string(),
+  name: v.optional(v.string()),
   event: v.optional(v.string()),
+  url: v.optional(v.string()),
+  method: v.optional(v.string()),
   schema: v.optional(v.string()),
   navigationType: v.optional(v.union(v.literal("link"), v.literal("router"))),
   navigationCondition: v.optional(
@@ -617,6 +619,20 @@ export const webPageEventConvexValidator = v.object({
   conditionCode: v.optional(v.string()),
   targetNodeId: v.optional(v.string()),
   targetEndpointId: v.optional(v.string()),
+  targetServiceId: v.optional(v.string()),
+  serviceNodeId: v.optional(v.string()),
+  sourceServiceNodeId: v.optional(v.string()),
+  sourceItemName: v.optional(v.string()),
+  sourceEventId: v.optional(v.string()),
+  sourceServiceLabel: v.optional(v.string()),
+  endpointId: v.optional(v.string()),
+  targetEventId: v.optional(v.string()),
+  eventId: v.optional(v.string()),
+  isLangGraph: v.optional(v.boolean()),
+  langGraphTargetNodeId: v.optional(v.string()),
+  type: v.optional(v.string()),
+  order: v.optional(v.number()),
+  payloadExpr: v.optional(v.string()),
   headers: v.optional(v.array(backendParameterValidator)),
   pathParams: v.optional(v.array(backendParameterValidator)),
   queryParams: v.optional(v.array(backendParameterValidator)),
@@ -638,6 +654,9 @@ export const webPageEventConvexValidator = v.object({
   storeActionBindings: v.optional(v.array(storeActionBindingConvexValidator)),
   storageOperationBinding: v.optional(storageOperationBindingConvexValidator),
   actionSteps: v.optional(v.array(v.any())),
+  scope: v.optional(v.union(v.literal("section"), v.literal("item"))),
+  itemSourceStateId: v.optional(v.string()),
+  itemContextFields: v.optional(v.array(v.string())),
 });
 
 // Page State Object Validator
@@ -652,6 +671,13 @@ export const pageStateObjectConvexValidator = v.object({
   fieldId: v.optional(v.string()),
   description: v.optional(v.string()),
   renderConfig: v.optional(v.any()),
+  itemKeyField: v.optional(v.string()),
+  itemSchema: v.optional(v.array(v.any())),
+  itemEvents: v.optional(v.array(v.any())),
+  isArray: v.optional(v.boolean()),
+  scope: v.optional(v.string()),
+  order: v.optional(v.number()),
+  suggestedComponent: v.optional(v.string()),
 });
 
 // Component Element Binding Validator (Multi-Component Shadcn Support)
@@ -713,19 +739,7 @@ export const pageSectionConvexValidator = v.object({
     ),
   ),
   actions: v.array(webPageEventConvexValidator),
-  states: v.optional(
-    v.array(
-      v.object({
-        id: v.string(),
-        name: v.string(),
-        type: v.string(),
-        defaultValue: v.optional(
-          v.union(v.string(), v.number(), v.boolean(), v.null()),
-        ),
-        description: v.optional(v.string()),
-      }),
-    ),
-  ),
+  states: v.optional(v.array(v.any())),
   stateObjects: v.optional(v.array(pageStateObjectConvexValidator)),
   componentBindings: v.optional(
     v.array(sectionComponentBindingConvexValidator),
@@ -735,6 +749,19 @@ export const pageSectionConvexValidator = v.object({
   libraries: v.optional(v.array(v.string())),
   images: v.optional(v.array(v.string())),
   primaryImageUrl: v.optional(v.string()),
+  title: v.optional(v.string()),
+  order: v.optional(v.number()),
+  icon: v.optional(v.string()),
+  badge: v.optional(v.string()),
+  color: v.optional(v.string()),
+  style: v.optional(v.any()),
+  position: v.optional(v.any()),
+  width: v.optional(v.number()),
+  height: v.optional(v.number()),
+  customProps: v.optional(v.any()),
+  componentType: v.optional(v.string()),
+  components: v.optional(v.any()),
+  subSections: v.optional(v.any()),
 });
 
 // Protection Rule Validator
@@ -810,6 +837,17 @@ export const realtimeConnectionConvexValidator = v.object({
   langGraphStreamingFields: v.optional(v.array(v.string())),
   langGraphStreamIncludeReasoning: v.optional(v.boolean()),
   langGraphTargetNodeId: v.optional(v.string()),
+  targetNodeId: v.optional(v.string()),
+  targetEndpointId: v.optional(v.string()),
+  targetServiceId: v.optional(v.string()),
+  serviceNodeId: v.optional(v.string()),
+  url: v.optional(v.string()),
+  method: v.optional(v.string()),
+  name: v.optional(v.string()),
+  headers: v.optional(v.array(backendParameterValidator)),
+  pathParams: v.optional(v.array(backendParameterValidator)),
+  queryParams: v.optional(v.array(backendParameterValidator)),
+  requestBody: v.optional(backendRequestBodyValidator),
 });
 
 // Web Page Node Data Validator
@@ -863,6 +901,9 @@ export const webPageConvexDataValidator = v.object({
   route: v.optional(v.string()),
   targetServerId: v.optional(v.string()),
   targetRouteId: v.optional(v.string()),
+  targetServiceId: v.optional(v.string()),
+  targetServiceName: v.optional(v.string()),
+  serviceNodeId: v.optional(v.string()),
   pageSourceCode: v.optional(v.string()),
   aiEditing: v.optional(v.boolean()),
   headers: v.optional(v.array(backendParameterValidator)),
@@ -893,6 +934,19 @@ export const webPageConvexDataValidator = v.object({
   ),
   autoGeneratePresignEndpoint: v.optional(v.boolean()),
   presignEndpointId: v.optional(v.string()),
+
+  // UI state tracking & routes
+  endpoints: v.optional(v.array(v.any())),
+  routeGroups: v.optional(v.array(v.any())),
+  routes: v.optional(v.array(v.any())),
+  activeSectionId: v.optional(v.string()),
+  selectedSectionId: v.optional(v.string()),
+  selectedActionId: v.optional(v.string()),
+  apiRoutes: v.optional(v.array(v.any())),
+  apiEndpoints: v.optional(v.array(v.any())),
+  mockData: v.optional(v.any()),
+  theme: v.optional(v.any()),
+  metadata: v.optional(v.any()),
 });
 
 export const backendWebPageDataValidator = webPageConvexDataValidator;
