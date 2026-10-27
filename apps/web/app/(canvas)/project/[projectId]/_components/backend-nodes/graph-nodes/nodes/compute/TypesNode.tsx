@@ -167,7 +167,7 @@ export const TypesNode = ({
         { id: `f-${Date.now()}-2`, name: "name", type: "string", required: true, isArray: false },
       ],
     };
-    const updated = [...rawTypesList, newType];
+    const updated = [newType, ...rawTypesList];
     updateNode(id, {
       data: {
         ...data,
