@@ -5,9 +5,9 @@ import { Handle, Position } from "@xyflow/react";
 import { Settings, Trash, ArrowUpRight, Lock } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import {
-  CANVAS_HANDLE_CLASS,
-  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
-  CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
+  CANVAS_ROW_HANDLE_CLASS,
+  CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+  CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS,
 } from "@workspace/canvas/constants";
 import type { TypeRowProps } from "./types";
 
@@ -51,13 +51,14 @@ export const TypeRow = React.memo(function TypeRow({
         position={Position.Left}
         id={`type-in-${item.id}`}
         className={cn(
-          CANVAS_HANDLE_CLASS,
-          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
-          "!border-2 !border-background z-20 transition-all",
+          CANVAS_ROW_HANDLE_CLASS,
+          CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+          "!border-2 !border-background z-20 transition-all hover:scale-125",
           incoming || item.extendedFrom
-            ? "!bg-purple-400 !border-purple-200 !opacity-100 ring-2 ring-purple-500/30"
-            : "opacity-0 group-hover/type:opacity-100 hover:scale-125",
-          isPackageNode ? "!bg-emerald-400 hover:!bg-emerald-300" : "!bg-indigo-400 hover:!bg-indigo-300",
+            ? "!bg-purple-400 !border-purple-200 ring-2 ring-purple-500/30"
+            : isPackageNode
+              ? "!bg-emerald-400 hover:!bg-emerald-300"
+              : "!bg-indigo-400 hover:!bg-indigo-300",
         )}
         style={{ top: "50%", transform: "translateY(-50%)" }}
         title={`Input Handle: ${item.name}`}
@@ -69,13 +70,14 @@ export const TypeRow = React.memo(function TypeRow({
         position={Position.Right}
         id={`type-out-${item.id}`}
         className={cn(
-          CANVAS_HANDLE_CLASS,
-          CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
-          "!border-2 !border-background z-20 transition-all",
+          CANVAS_ROW_HANDLE_CLASS,
+          CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS,
+          "!border-2 !border-background z-20 transition-all hover:scale-125",
           outgoing
-            ? "!bg-purple-400 !border-purple-200 !opacity-100 ring-2 ring-purple-500/30"
-            : "opacity-0 group-hover/type:opacity-100 hover:scale-125",
-          isPackageNode ? "!bg-emerald-400 hover:!bg-emerald-300" : "!bg-indigo-400 hover:!bg-indigo-300",
+            ? "!bg-purple-400 !border-purple-200 ring-2 ring-purple-500/30"
+            : isPackageNode
+              ? "!bg-emerald-400 hover:!bg-emerald-300"
+              : "!bg-indigo-400 hover:!bg-indigo-300",
         )}
         style={{ top: "50%", transform: "translateY(-50%)" }}
         title={`Output Handle: ${item.name}`}

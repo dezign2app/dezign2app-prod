@@ -167,7 +167,7 @@ export const TypesNode = ({
         { id: `f-${Date.now()}-2`, name: "name", type: "string", required: true, isArray: false },
       ],
     };
-    const updated = [...rawTypesList, newType];
+    const updated = [newType, ...rawTypesList];
     updateNode(id, {
       data: {
         ...data,
@@ -334,7 +334,7 @@ export const TypesNode = ({
                 ? "!bg-sky-400"
                 : "!bg-indigo-400",
         )}
-        style={{ top: "24px" }}
+        style={{ top: "24px", transform: "translateY(-50%)" }}
         title="Incoming Type Reference"
       />
       <Handle
@@ -353,7 +353,7 @@ export const TypesNode = ({
                 ? "!bg-sky-400"
                 : "!bg-indigo-400",
         )}
-        style={{ top: "24px" }}
+        style={{ top: "24px", transform: "translateY(-50%)" }}
         title="Outgoing Type Reference"
       />
 

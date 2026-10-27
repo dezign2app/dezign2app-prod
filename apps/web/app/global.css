@@ -36,11 +36,12 @@
   --canvas-handle-size: 14px;
 }
 
-.react-flow__handle:not(.opacity-0) {
-  width: var(--canvas-handle-size);
-  height: var(--canvas-handle-size);
-  min-width: var(--canvas-handle-size);
-  min-height: var(--canvas-handle-size);
+.react-flow__node .react-flow__handle,
+.react-flow__handle {
+  width: var(--canvas-handle-size, 14px);
+  height: var(--canvas-handle-size, 14px);
+  min-width: var(--canvas-handle-size, 14px);
+  min-height: var(--canvas-handle-size, 14px);
   border-radius: 9999px;
   transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }

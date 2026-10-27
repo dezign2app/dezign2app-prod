@@ -153,7 +153,7 @@ export const TypesConfig: React.FC<TypesConfigProps> = ({
         { id: `f-${Date.now()}-2`, name: "name", type: "string", required: true, isArray: false },
       ],
     };
-    updateTypesList([...types, newType]);
+    updateTypesList([newType, ...types]);
     setActiveTypeId(newId);
   }, [types, updateTypesList]);
 

@@ -43,7 +43,7 @@ export const CANVAS_NODE_HANDLE_OFFSET = -7;
 export const CANVAS_NODE_HANDLE_OFFSET_PX = -7;
 
 /** Tailwind class for node header handle dimensions (14px = 3.5rem / 4) */
-export const CANVAS_NODE_HANDLE_CLASS = "w-3.5 h-3.5";
+export const CANVAS_NODE_HANDLE_CLASS = "!w-3.5 !h-3.5";
 
 /** Tailwind positioning offset classes to center 14px handles over card borders */
 export const CANVAS_NODE_HANDLE_LEFT_OFFSET_CLASS = "-left-[7px]";
@@ -53,7 +53,7 @@ export const CANVAS_NODE_HANDLE_BOTTOM_OFFSET_CLASS = "-bottom-[7px]";
 
 /** Base classes recommended for node header handles */
 export const CANVAS_NODE_HANDLE_BASE_CLASS =
-  "w-3.5 h-3.5 border-2 border-background transition-all hover:scale-125 z-10";
+  "!w-3.5 !h-3.5 border-2 border-background transition-all hover:scale-125 z-10";
 
 
 // =============================================================================
@@ -73,7 +73,7 @@ export const CANVAS_ROW_HANDLE_OFFSET = -7;
 export const CANVAS_ROW_HANDLE_OFFSET_PX = -7;
 
 /** Tailwind class for row-level handle dimensions (14px = 3.5rem / 4) */
-export const CANVAS_ROW_HANDLE_CLASS = "w-3.5 h-3.5";
+export const CANVAS_ROW_HANDLE_CLASS = "!w-3.5 !h-3.5";
 
 /** Tailwind positioning offset classes to center 14px handles over card borders */
 export const CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS = "-left-[7px]";
@@ -83,7 +83,7 @@ export const CANVAS_ROW_HANDLE_BOTTOM_OFFSET_CLASS = "-bottom-[7px]";
 
 /** Base classes recommended for row-level handles */
 export const CANVAS_ROW_HANDLE_BASE_CLASS =
-  "w-3.5 h-3.5 border-2 border-background transition-all hover:scale-125 z-10";
+  "!w-3.5 !h-3.5 border-2 border-background transition-all hover:scale-125 z-10";
 
 
 // =============================================================================
@@ -101,7 +101,7 @@ export const CANVAS_COMPACT_HANDLE_OFFSET = -6;
 export const CANVAS_COMPACT_HANDLE_OFFSET_PX = -6;
 
 /** Tailwind class for compact handle dimensions (12px = 3rem / 4) */
-export const CANVAS_COMPACT_HANDLE_CLASS = "w-3 h-3";
+export const CANVAS_COMPACT_HANDLE_CLASS = "!w-3 !h-3";
 
 /** Tailwind positioning offset classes to center 12px handles over card borders */
 export const CANVAS_COMPACT_HANDLE_LEFT_OFFSET_CLASS = "-left-[6px]";
@@ -111,7 +111,7 @@ export const CANVAS_COMPACT_HANDLE_BOTTOM_OFFSET_CLASS = "-bottom-[6px]";
 
 /** Base classes recommended for compact handles */
 export const CANVAS_COMPACT_HANDLE_BASE_CLASS =
-  "w-3 h-3 border-2 border-background transition-all hover:scale-125 z-10";
+  "!w-3 !h-3 border-2 border-background transition-all hover:scale-125 z-10";
 
 
 // =============================================================================
