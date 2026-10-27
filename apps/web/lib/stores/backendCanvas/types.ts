@@ -49,7 +49,11 @@ export type {
   CanvasSnapshotState,
 };
 
-
+export interface SyncServiceTypesSummary {
+  success: boolean;
+  typesCount: number;
+  nodeLabel: string;
+}
 
 export interface BackendCanvasState {
   projectId: string | null;
@@ -119,6 +123,7 @@ export interface BackendCanvasState {
   deleteNodes: (ids: string[]) => void;
   requestDeleteNode: (id: string) => void;
   requestDeleteNodes: (ids: string[]) => void;
+  syncServiceTypes: (serviceId: string) => SyncServiceTypesSummary;
   addEdge: (edge: Omit<BackendEdge, "fractionalIndex">) => void;
   updateEdge: (id: string, changes: Partial<BackendEdge>) => void;
   deleteEdge: (id: string) => void;

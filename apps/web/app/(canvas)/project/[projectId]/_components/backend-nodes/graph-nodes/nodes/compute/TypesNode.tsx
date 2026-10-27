@@ -235,6 +235,26 @@ export const TypesNode = ({
       data.types?.some((t) => t.id.startsWith("type-entity-")),
   );
 
+  const isServiceDerived = Boolean(
+    data.isServiceEndpointSchemas ||
+      Boolean(data.sourceServiceId) ||
+      id.startsWith("types-service-"),
+  );
+
+  const sourceServiceId =
+    data.sourceServiceId ||
+    (id.startsWith("types-service-") ? id.replace("types-service-", "") : undefined);
+
+  const sourceServiceNode = useMemo(() => {
+    if (!sourceServiceId) return undefined;
+    return allNodes.find((n) => n.id === sourceServiceId && n.type === "service");
+  }, [allNodes, sourceServiceId]);
+
+  const sourceServiceName =
+    data.sourceServiceName ||
+    sourceServiceNode?.data?.label ||
+    "Service";
+
   const sourceEntityId = isConsolidated
     ? undefined
     : data.sourceEntityId ||
@@ -290,7 +310,9 @@ export const TypesNode = ({
             ? "border-indigo-500 shadow-indigo-500/20 ring-1 ring-indigo-500/30"
             : isPackageNode
               ? "border-emerald-500/50 hover:border-emerald-400 hover:shadow-lg"
-              : "border-border/80 hover:border-indigo-500/50 hover:shadow-lg",
+              : isServiceDerived
+                ? "border-sky-500/50 hover:border-sky-400 hover:shadow-lg"
+                : "border-border/80 hover:border-indigo-500/50 hover:shadow-lg",
         borderClass,
       )}
       onDoubleClick={handleOpenConfig}
@@ -304,7 +326,13 @@ export const TypesNode = ({
           CANVAS_HANDLE_CLASS,
           CANVAS_HANDLE_LEFT_OFFSET_CLASS,
           "!border-2 !border-background hover:scale-125 transition-all",
-          hasInstallError ? "!bg-red-500" : isPackageNode ? "!bg-emerald-400" : "!bg-indigo-400",
+          hasInstallError
+            ? "!bg-red-500"
+            : isPackageNode
+              ? "!bg-emerald-400"
+              : isServiceDerived
+                ? "!bg-sky-400"
+                : "!bg-indigo-400",
         )}
         style={{ top: "24px" }}
         title="Incoming Type Reference"
@@ -317,7 +345,13 @@ export const TypesNode = ({
           CANVAS_HANDLE_CLASS,
           CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
           "!border-2 !border-background hover:scale-125 transition-all",
-          hasInstallError ? "!bg-red-500" : isPackageNode ? "!bg-emerald-400" : "!bg-indigo-400",
+          hasInstallError
+            ? "!bg-red-500"
+            : isPackageNode
+              ? "!bg-emerald-400"
+              : isServiceDerived
+                ? "!bg-sky-400"
+                : "!bg-indigo-400",
         )}
         style={{ top: "24px" }}
         title="Outgoing Type Reference"
@@ -332,6 +366,8 @@ export const TypesNode = ({
         isEditing={isEditing}
         setIsEditing={setIsEditing}
         isPackageNode={isPackageNode}
+        isServiceDerived={isServiceDerived}
+        sourceServiceName={sourceServiceName}
         hasInstallError={hasInstallError}
         isRefreshing={isRefreshing}
         totalCount={totalCount}

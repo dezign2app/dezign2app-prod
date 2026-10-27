@@ -1,6 +1,6 @@
 import { BackendNode } from "@/types/canvas";
 import { applyNodeChanges, NodeChange } from "@xyflow/react";
-import { BackendCanvasState } from "../types";
+import { BackendCanvasState, SyncServiceTypesSummary } from "../types";
 import {
   isSchemaNodeType,
   prepareNodeForAddition,
@@ -9,6 +9,9 @@ import {
   syncEntityRenameReferences,
   syncNodeDropdownEdges,
   executeNodeDeletion,
+  isNodeDerivedFromService,
+  buildServiceTypesNodeAndEdge,
+  syncServiceTypesNode,
 } from "../node";
 
 export interface NodeSlice {
@@ -34,6 +37,7 @@ export interface NodeSlice {
   deleteNodes: (ids: string[]) => void;
   requestDeleteNode: (id: string) => void;
   requestDeleteNodes: (ids: string[]) => void;
+  syncServiceTypes: (serviceId: string) => SyncServiceTypesSummary;
 }
 
 export const createNodeSlice = (
@@ -220,6 +224,36 @@ export const createNodeSlice = (
           }
         : {}),
     };
+
+    // 3. Synchronize service label changes to companion TypesNode
+    if (
+      updated.type === "service" &&
+      changes.data &&
+      "label" in changes.data &&
+      changes.data.label &&
+      changes.data.label !== updatedNode.data?.label
+    ) {
+      const companionNode = nextNodes.find(
+        (n) => n.type === "types" && isNodeDerivedFromService(n, id),
+      );
+      if (companionNode) {
+        const serviceEndpoints = get().endpoints.filter((e) => e.nodeId === id);
+        const companionRes = buildServiceTypesNodeAndEdge(
+          updated,
+          serviceEndpoints,
+          nextNodes,
+          edgeSync.edgesChanged ? edgeSync.nextEdges : get().edges,
+        );
+        nextNodes = nextNodes.map((n) =>
+          n.id === companionRes.typesNode.id ? companionRes.typesNode : n,
+        );
+        update.nodes = nextNodes;
+        update.pendingNodeUpserts = [
+          ...(update.pendingNodeUpserts || []),
+          companionRes.typesNode,
+        ];
+      }
+    }
     set(update);
   },
 
@@ -246,5 +280,50 @@ export const createNodeSlice = (
     if (nodes.length > 0) {
       set({ nodesPendingDeletion: nodes });
     }
+  },
+
+  syncServiceTypes: (serviceId: string): SyncServiceTypesSummary => {
+    const state = get();
+    const serviceNode = state.nodes.find(
+      (n) => n.id === serviceId && n.type === "service",
+    );
+    if (!serviceNode) {
+      return { success: false, typesCount: 0, nodeLabel: "" };
+    }
+
+    const syncRes = syncServiceTypesNode(
+      serviceId,
+      state.nodes,
+      state.edges,
+      state.endpoints,
+    );
+
+    const update: Partial<BackendCanvasState> = {
+      nodes: syncRes.nodes,
+      edges: syncRes.edges,
+    };
+
+    if (syncRes.updatedTypesNode) {
+      update.pendingNodeUpserts = [
+        ...state.pendingNodeUpserts,
+        syncRes.updatedTypesNode,
+      ];
+    }
+    if (syncRes.newEdge) {
+      update.pendingEdgeUpserts = [
+        ...state.pendingEdgeUpserts,
+        syncRes.newEdge,
+      ];
+    }
+
+    set(update);
+    const typesCount = syncRes.updatedTypesNode?.data?.types?.length ?? 0;
+    const nodeLabel = serviceNode.data?.label || "Service";
+
+    return {
+      success: true,
+      typesCount,
+      nodeLabel,
+    };
   },
 });

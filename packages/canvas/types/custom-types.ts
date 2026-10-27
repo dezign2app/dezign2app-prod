@@ -52,7 +52,7 @@ export interface CanvasTypesNodeData {
   isInstalled?: boolean;
   installError?: string;
   isReadOnly?: boolean;
-  /** ID of the EntityNode this TypesNode was auto-generated from. Used for idempotent refresh. */
+  // Entity-derived type synchronization tracking
   sourceEntityId?: string;
   sourceEntityName?: string;
   isEntitySchemas?: boolean;
@@ -64,5 +64,10 @@ export interface CanvasTypesNodeData {
     affectedNodes: { id: string; name: string; type: string }[];
     dismissed?: boolean;
   };
+  // Service-derived endpoint type synchronization tracking
+  sourceServiceId?: string;
+  sourceServiceName?: string;
+  isServiceEndpointSchemas?: boolean;
+  serviceUpdatedAt?: number;
 }
 

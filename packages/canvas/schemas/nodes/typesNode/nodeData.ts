@@ -64,6 +64,12 @@ export const typesNodeDataSchema = baseNodeDataSchema
     entityUpdatedAt: z.number().optional(),
     entitySyncWarning: entitySyncWarningSchema.optional(),
     isEntitySchemas: z.boolean().optional(),
+
+    // Service-derived endpoint type synchronization tracking
+    sourceServiceId: z.string().optional(),
+    sourceServiceName: z.string().optional(),
+    isServiceEndpointSchemas: z.boolean().optional(),
+    serviceUpdatedAt: z.number().optional(),
   })
   .passthrough();
 

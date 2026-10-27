@@ -425,6 +425,8 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
         !n.data?.isEntitySchemas &&
         !n.data?.isExtended &&
         !n.data?.isPackageNode &&
+        !n.data?.isServiceEndpointSchemas &&
+        !n.id.startsWith("types-service-") &&
         (Boolean(n.data?.sourceEntityId) ||
           n.id.startsWith("types-from-entity-") ||
           n.data?.types?.some((t) => t.id.startsWith("type-entity-"))),

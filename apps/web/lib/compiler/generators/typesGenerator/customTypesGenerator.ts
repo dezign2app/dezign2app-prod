@@ -51,6 +51,12 @@ export function generateCustomTypesModule(
       tNode.data?.sourceEntityId,
     );
 
+    const isServiceDerivedNode = Boolean(
+      tNode.data?.isServiceEndpointSchemas ||
+      tNode.id.startsWith("types-service-") ||
+      tNode.data?.sourceServiceId,
+    );
+
     const nodeLabel = tNode.data?.label || "Custom Types";
     const isRaw = tNode.data?.definitionMode === "raw";
     const rawCode = tNode.data?.rawTypeScript;
@@ -62,6 +68,17 @@ export function generateCustomTypesModule(
         (item) =>
           !item.id?.startsWith("type-entity-") &&
           !item.description?.startsWith("Auto-generated TypeScript interface from"),
+      );
+    }
+
+    // Filter out auto-derived endpoint schemas from custom.ts since service route generator already exports them
+    if (isServiceDerivedNode) {
+      typesList = typesList.filter(
+        (item) =>
+          !item.id?.startsWith("type-endpoint-") &&
+          !item.description?.includes("Success response (200 OK)") &&
+          !item.description?.includes("Request payload for") &&
+          !item.description?.includes("Error response for"),
       );
     }
 
