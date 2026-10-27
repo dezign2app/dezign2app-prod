@@ -180,26 +180,13 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
 
                     {elType === "input" && (
                       <div className="space-y-1">
-                        {showLabel ? (
-                          <div className="flex items-center justify-between">
-                            <Label className="text-[10px] font-medium text-foreground">{labelText}</Label>
-                            {el.valueStateName && (
-                              <span className="text-[9px] font-mono text-cyan-600 dark:text-cyan-400">
-                                {el.valueStoreName ? `${el.valueStoreName}.` : ""}{el.valueStateName}
-                              </span>
-                            )}
-                          </div>
-                        ) : el.valueStateName ? (
-                          <div className="flex items-center justify-end">
-                            <span className="text-[9px] font-mono text-cyan-600 dark:text-cyan-400">
-                              {el.valueStoreName ? `${el.valueStoreName}.` : ""}{el.valueStateName}
-                            </span>
-                          </div>
-                        ) : null}
+                        {showLabel && (
+                          <Label className="text-[10px] font-medium text-foreground">{labelText}</Label>
+                        )}
                         <Input
                           type={elProps.inputType || el.propMappings?.inputType || "text"}
                           placeholder={elProps.placeholder || el.placeholder || `Enter ${labelText}...`}
-                          defaultValue={el.valueStateName ? `${el.valueStateName}Value` : ""}
+                          defaultValue=""
                           onClick={(e) => e.stopPropagation()}
                           className="h-8 text-xs font-mono bg-background"
                         />
@@ -208,16 +195,9 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
 
                     {elType === "switch" && (
                       <div className="flex items-center justify-between p-1.5 rounded-lg bg-muted/20 border border-border/40">
-                        <div className="flex flex-col">
-                          {showLabel && (
-                            <Label className="text-xs font-medium cursor-pointer">{labelText}</Label>
-                          )}
-                          {el.valueStateName && (
-                            <span className="text-[9px] font-mono text-cyan-600 dark:text-cyan-400">
-                              {el.valueStoreName ? `${el.valueStoreName}.` : ""}{el.valueStateName}
-                            </span>
-                          )}
-                        </div>
+                        {showLabel && (
+                          <Label className="text-xs font-medium cursor-pointer">{labelText}</Label>
+                        )}
                         <Switch onClick={(e) => e.stopPropagation()} />
                       </div>
                     )}
@@ -230,11 +210,6 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
                             <Label className="text-xs font-medium cursor-pointer">{labelText}</Label>
                           )}
                         </div>
-                        {el.valueStateName && (
-                          <span className="text-[9px] font-mono text-cyan-600 dark:text-cyan-400">
-                            {el.valueStoreName ? `${el.valueStoreName}.` : ""}{el.valueStateName}
-                          </span>
-                        )}
                       </div>
                     )}
 
