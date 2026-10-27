@@ -318,17 +318,21 @@ export const ComponentSelector: React.FC<ComponentSelectorProps> = React.memo(({
                     </Popover>
                   )}
 
-                  {/* Remove Element Button (if > 1) */}
-                  {elements.length > 1 && onDeleteElement && (
+                  {/* Remove Element Button */}
+                  {onDeleteElement && (
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => onDeleteElement(el.id)}
-                      className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer"
-                      title="Remove component"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteElement(el.id);
+                      }}
+                      className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-1 cursor-pointer transition-colors"
+                      title={elements.length > 1 ? "Remove component" : "Delete component"}
                     >
-                      <Trash2 size={13} />
+                      <Trash2 size={12} className="shrink-0" />
+                      <span className="text-[11px] font-medium">Delete</span>
                     </Button>
                   )}
                 </div>
@@ -500,15 +504,30 @@ export const ComponentSelector: React.FC<ComponentSelectorProps> = React.memo(({
                   <span className="text-[11px] text-muted-foreground truncate">{selectedOption.description}</span>
                 </div>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setComboboxOpen(true)}
-                className="h-7 text-xs border-cyan-500/30 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/10 cursor-pointer shrink-0"
-              >
-                Change
-              </Button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setComboboxOpen(true)}
+                  className="h-7 text-xs border-cyan-500/30 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/10 cursor-pointer"
+                >
+                  Change
+                </Button>
+                {onDeleteElement && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onDeleteElement(activeElementId || "")}
+                    className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-1 cursor-pointer transition-colors"
+                    title="Delete component"
+                  >
+                    <Trash2 size={12} className="shrink-0" />
+                    <span className="text-[11px] font-medium">Delete</span>
+                  </Button>
+                )}
+              </div>
             </div>
           )}
         </>
