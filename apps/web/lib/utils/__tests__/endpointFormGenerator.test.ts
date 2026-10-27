@@ -317,8 +317,8 @@ describe("endpointFormGenerator", () => {
       expect(fields.find((f) => f.name === "version")?.type).toBe("string");
     });
 
-    it("extracts streaming response fields from langgraph_invoke pipeline step with SSE", () => {
-      const ep: Endpoint = {
+    it("extracts streaming response fields from langgraph_invoke pipeline step with SSE (only enabled fields)", () => {
+      const epWithReasoning: Endpoint = {
         id: "ep-send-msg",
         name: "send-message/:id",
         type: "POST",
@@ -334,13 +334,77 @@ describe("endpointFormGenerator", () => {
         ],
       };
 
-      const fields = extractEndpointResponseFields(ep);
-      expect(fields.length).toBeGreaterThanOrEqual(5);
+      const fields = extractEndpointResponseFields(epWithReasoning);
+      expect(fields.map((f) => f.name)).toEqual(["content", "reasoning"]);
       expect(fields.find((f) => f.name === "content")?.type).toBe("string");
-      expect(fields.find((f) => f.name === "tokens")?.type).toBe("string[]");
-      expect(fields.find((f) => f.name === "streamed")?.type).toBe("boolean");
       expect(fields.find((f) => f.name === "reasoning")?.type).toBe("string");
-      expect(fields.find((f) => f.name === "threadId")?.type).toBe("string");
+      expect(fields.find((f) => f.name === "statusText")).toBeUndefined();
+      expect(fields.find((f) => f.name === "streamed")).toBeUndefined();
+    });
+
+    it("omits reasoning and statusText when langGraphStreamIncludeReasoning is false or undefined", () => {
+      const epDefault: Endpoint = {
+        id: "ep-send-msg-no-reasoning",
+        name: "send-message/:id",
+        type: "POST",
+        pipelineSteps: [
+          {
+            id: "step-1",
+            name: "AgentInvocation",
+            type: "langgraph_invoke",
+            langGraphStreamingEnabled: true,
+            langGraphStreamingProtocol: "sse",
+            langGraphStreamIncludeReasoning: false,
+          },
+        ],
+      };
+
+      const fields = extractEndpointResponseFields(epDefault);
+      expect(fields.map((f) => f.name)).toEqual(["content"]);
+      expect(fields.find((f) => f.name === "reasoning")).toBeUndefined();
+      expect(fields.find((f) => f.name === "statusText")).toBeUndefined();
+    });
+
+    it("extracts only selected streaming fields when langGraphStreamingFields is specified", () => {
+      const epCustomFields: Endpoint = {
+        id: "ep-send-msg-custom",
+        name: "send-message/:id",
+        type: "POST",
+        pipelineSteps: [
+          {
+            id: "step-1",
+            name: "AgentInvocation",
+            type: "langgraph_invoke",
+            langGraphStreamingEnabled: true,
+            langGraphStreamingProtocol: "sse",
+            langGraphStreamingFields: ["summary", "sentiment"],
+          },
+        ],
+      };
+
+      const fields = extractEndpointResponseFields(epCustomFields);
+      expect(fields.map((f) => f.name)).toEqual(["summary", "sentiment"]);
+    });
+
+    it("extracts updates and values stream modes when enabled", () => {
+      const epMultiMode: Endpoint = {
+        id: "ep-send-msg-multi",
+        name: "send-message/:id",
+        type: "POST",
+        pipelineSteps: [
+          {
+            id: "step-1",
+            name: "AgentInvocation",
+            type: "langgraph_invoke",
+            langGraphStreamingEnabled: true,
+            langGraphStreamingProtocol: "sse",
+            langGraphStreamModes: ["messages", "updates", "values"],
+          },
+        ],
+      };
+
+      const fields = extractEndpointResponseFields(epMultiMode);
+      expect(fields.map((f) => f.name)).toEqual(["content", "updates", "values"]);
     });
 
     it("extracts buffered response fields from langgraph_invoke pipeline step when not streaming", () => {
@@ -359,9 +423,8 @@ describe("endpointFormGenerator", () => {
       };
 
       const fields = extractEndpointResponseFields(ep);
+      expect(fields.map((f) => f.name)).toEqual(["response"]);
       expect(fields.find((f) => f.name === "response")?.type).toBe("string");
-      expect(fields.find((f) => f.name === "threadId")?.type).toBe("string");
-      expect(fields.find((f) => f.name === "messages")?.type).toBe("array");
     });
   });
 

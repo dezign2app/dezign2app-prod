@@ -500,7 +500,6 @@ export interface ${interfaceName} {
   values?: Record<string, unknown>;
   threadId?: string;
   streamed: true;
-  statusText?: string;
   raw?: string;
 }
 
