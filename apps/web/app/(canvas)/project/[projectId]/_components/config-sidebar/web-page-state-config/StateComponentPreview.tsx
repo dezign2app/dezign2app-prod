@@ -23,6 +23,30 @@ import { Avatar, AvatarFallback } from "@workspace/ui/components/avatar";
 import { Skeleton } from "@workspace/ui/components/skeleton";
 import { toast } from "sonner";
 
+const toValidButtonVariant = (
+  val?: string,
+): "default" | "destructive" | "outline" | "secondary" | "ghost" | "link" => {
+  if (
+    val === "destructive" ||
+    val === "outline" ||
+    val === "secondary" ||
+    val === "ghost" ||
+    val === "link"
+  ) {
+    return val;
+  }
+  return "default";
+};
+
+const toValidBadgeVariant = (
+  val?: string,
+): "default" | "secondary" | "destructive" | "outline" => {
+  if (val === "secondary" || val === "destructive" || val === "outline") {
+    return val;
+  }
+  return "secondary";
+};
+
 export interface StateComponentPreviewProps {
   currentComponent: StateRenderComponent;
   currentVariant: NonNullable<StateRenderConfig["variant"]>;
@@ -121,6 +145,9 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
               {elements!.map((el) => {
                 const elType = el.elementType || "input";
                 const isActive = el.id === activeElementId;
+                const elProps = (isActive ? propMappings : el.propMappings) || {};
+                const showLabel = elProps.hasLabel !== false;
+                const labelText = elProps.labelBinding || el.label || el.name;
 
                 return (
                   <div
@@ -135,7 +162,7 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
                   >
                     {elType === "button" && (
                       <Button
-                        variant={(el.variant as any) || "default"}
+                        variant={toValidButtonVariant(el.variant)}
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -153,17 +180,25 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
 
                     {elType === "input" && (
                       <div className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-[10px] font-medium text-foreground">{el.label || el.name}</Label>
-                          {el.valueStateName && (
+                        {showLabel ? (
+                          <div className="flex items-center justify-between">
+                            <Label className="text-[10px] font-medium text-foreground">{labelText}</Label>
+                            {el.valueStateName && (
+                              <span className="text-[9px] font-mono text-cyan-600 dark:text-cyan-400">
+                                {el.valueStoreName ? `${el.valueStoreName}.` : ""}{el.valueStateName}
+                              </span>
+                            )}
+                          </div>
+                        ) : el.valueStateName ? (
+                          <div className="flex items-center justify-end">
                             <span className="text-[9px] font-mono text-cyan-600 dark:text-cyan-400">
                               {el.valueStoreName ? `${el.valueStoreName}.` : ""}{el.valueStateName}
                             </span>
-                          )}
-                        </div>
+                          </div>
+                        ) : null}
                         <Input
-                          type={el.propMappings?.inputType || "text"}
-                          placeholder={el.placeholder || `Enter ${el.label || el.name}...`}
+                          type={elProps.inputType || el.propMappings?.inputType || "text"}
+                          placeholder={elProps.placeholder || el.placeholder || `Enter ${labelText}...`}
                           defaultValue={el.valueStateName ? `${el.valueStateName}Value` : ""}
                           onClick={(e) => e.stopPropagation()}
                           className="h-8 text-xs font-mono bg-background"
@@ -174,7 +209,9 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
                     {elType === "switch" && (
                       <div className="flex items-center justify-between p-1.5 rounded-lg bg-muted/20 border border-border/40">
                         <div className="flex flex-col">
-                          <Label className="text-xs font-medium cursor-pointer">{el.label || el.name}</Label>
+                          {showLabel && (
+                            <Label className="text-xs font-medium cursor-pointer">{labelText}</Label>
+                          )}
                           {el.valueStateName && (
                             <span className="text-[9px] font-mono text-cyan-600 dark:text-cyan-400">
                               {el.valueStoreName ? `${el.valueStoreName}.` : ""}{el.valueStateName}
@@ -189,7 +226,9 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
                       <div className="flex items-center justify-between p-1">
                         <div className="flex items-center gap-2">
                           <Checkbox onClick={(e) => e.stopPropagation()} />
-                          <Label className="text-xs font-medium cursor-pointer">{el.label || el.name}</Label>
+                          {showLabel && (
+                            <Label className="text-xs font-medium cursor-pointer">{labelText}</Label>
+                          )}
                         </div>
                         {el.valueStateName && (
                           <span className="text-[9px] font-mono text-cyan-600 dark:text-cyan-400">
@@ -202,7 +241,7 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
                     {elType === "badge" && (
                       <div className="flex items-center justify-between p-1">
                         <span className="text-xs text-muted-foreground">{el.label || el.name}:</span>
-                        <Badge variant={(el.variant as any) || "secondary"} className="text-xs font-mono">
+                        <Badge variant={toValidBadgeVariant(el.variant)} className="text-xs font-mono">
                           {el.valueStateName || "Badge"}
                         </Badge>
                       </div>
@@ -347,7 +386,7 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
             {propMappings.hasLabel !== false ? (
               <div className="flex items-center justify-between">
                 <Label className="text-[11px] font-medium text-foreground/90">
-                  {propMappings.labelBinding || displayLabel}
+                  {propMappings.labelBinding || labelToRender || displayLabel}
                 </Label>
                 <div className="flex items-center gap-1">
                   <span className="text-[9px] font-mono text-cyan-500 bg-cyan-500/10 px-1 py-0.2 rounded border border-cyan-500/20">
@@ -362,17 +401,21 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-end gap-1">
-                <span className="text-[9px] font-mono text-cyan-500 bg-cyan-500/10 px-1 py-0.2 rounded border border-cyan-500/20">
-                  type="{propMappings.inputType || "text"}"
-                </span>
-                {propMappings.debounceUpdate && (
-                  <span className="text-[9px] font-mono text-indigo-400 bg-indigo-500/10 px-1 py-0.2 rounded border border-indigo-500/20 flex items-center gap-0.5">
-                    <Timer size={9} />
-                    {propMappings.debounceMs ?? 300}ms
-                  </span>
-                )}
-              </div>
+              (Boolean(propMappings.inputType && propMappings.inputType !== "text") || Boolean(propMappings.debounceUpdate)) ? (
+                <div className="flex items-center justify-end gap-1">
+                  {propMappings.inputType && propMappings.inputType !== "text" && (
+                    <span className="text-[9px] font-mono text-cyan-500 bg-cyan-500/10 px-1 py-0.2 rounded border border-cyan-500/20">
+                      type="{propMappings.inputType}"
+                    </span>
+                  )}
+                  {propMappings.debounceUpdate && (
+                    <span className="text-[9px] font-mono text-indigo-400 bg-indigo-500/10 px-1 py-0.2 rounded border border-indigo-500/20 flex items-center gap-0.5">
+                      <Timer size={9} />
+                      {propMappings.debounceMs ?? 300}ms
+                    </span>
+                  )}
+                </div>
+              ) : null
             )}
 
             {/* Input Element */}

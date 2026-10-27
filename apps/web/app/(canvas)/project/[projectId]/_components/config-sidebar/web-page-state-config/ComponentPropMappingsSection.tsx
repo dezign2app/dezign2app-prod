@@ -128,7 +128,7 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
 
     (actualStoreNodes || []).forEach((n) => {
       const sName = n.data?.storeName || n.data?.label || "Store";
-      const fields = (n.data?.fields || []).map((f: any) => ({
+      const fields = (n.data?.fields || []).map((f: { id: string; name: string; type?: string }) => ({
         id: f.id,
         name: f.name,
         type: f.type,
