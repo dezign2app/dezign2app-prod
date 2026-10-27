@@ -39,6 +39,7 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const addEndpoint = useBackendCanvasStore((s) => s.addEndpoint);
   const addEvent = useBackendCanvasStore((s) => s.addEvent);
   const updateEvent = useBackendCanvasStore((s) => s.updateEvent);
+  const deleteEvent = useBackendCanvasStore((s) => s.deleteEvent);
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const syncServiceTypes = useBackendCanvasStore((s) => s.syncServiceTypes);
   const [isSyncingTypes, setIsSyncingTypes] = useState(false);

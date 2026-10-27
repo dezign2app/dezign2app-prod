@@ -150,6 +150,12 @@ export function computeNodeDeletionDiff(
     addIdentityProvider: () => {},
     updateIdentityProvider: () => {},
     deleteIdentityProvider: () => {},
+    syncServiceTypes: () => ({
+      success: false,
+      serviceId: "",
+      nodeLabel: "",
+      typesCount: 0,
+    }),
     setNodesAndEdges: () => {},
     setNodesPendingDeletion: () => {},
     clearPending: () => {},
