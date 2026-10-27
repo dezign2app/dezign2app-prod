@@ -349,6 +349,9 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         propMappings: updatedProps,
       };
 
+      if (changes.labelBinding !== undefined) {
+        topLevelUpdates.label = changes.labelBinding;
+      }
       if (changes.valueBinding !== undefined) {
         topLevelUpdates.valueStateName = changes.valueBinding;
       }

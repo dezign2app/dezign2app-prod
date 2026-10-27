@@ -1,4 +1,4 @@
-import { PageSection } from "@workspace/canvas/types";
+import { PageSection, ComponentPropMappings } from "@workspace/canvas/types";
 import { EventComponentMeta } from "./eventGenerators";
 
 export interface SectionMeta {
@@ -845,6 +845,7 @@ export default ${sectionCompName};
       actionName?: string;
       triggerEvent?: string;
       description?: string;
+      propMappings?: ComponentPropMappings;
     },
     isChild: boolean = false,
   ): string => {
@@ -876,7 +877,7 @@ export default ${sectionCompName};
 
     if (item.type === "input") {
       neededShadcnImports.add('import { Input } from "@workspace/ui/components/input";');
-      const ph = item.placeholder || item.label || "Enter text...";
+      const ph = item.propMappings?.placeholder || item.placeholder || item.label || "Enter text...";
       if (valVar && hasSetter) {
         let changeAttr = ` onChange={(e) => ${setterVar}(e.target.value)}`;
         if (hasAction) {
@@ -986,6 +987,7 @@ export default ${sectionCompName};
                 actionName: el.actionName,
                 triggerEvent: el.triggerEvent,
                 description: el.description,
+                propMappings: el.propMappings,
               }, true)}`)
               .join("\n");
 
@@ -1008,6 +1010,7 @@ export default ${sectionCompName};
             actionName: comp.actionName,
             triggerEvent: comp.triggerEvent,
             description: comp.description,
+            propMappings: comp.propMappings,
           }, false)}`;
         })
         .join("\n")}\n        </div>`

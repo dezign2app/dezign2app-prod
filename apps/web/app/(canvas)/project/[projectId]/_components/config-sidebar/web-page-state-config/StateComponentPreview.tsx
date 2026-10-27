@@ -344,9 +344,25 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
 
         {currentComponent === "input" && (
           <div className="w-full max-w-xs flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-[11px] text-muted-foreground">{displayLabel}</Label>
-              <div className="flex items-center gap-1">
+            {propMappings.hasLabel !== false ? (
+              <div className="flex items-center justify-between">
+                <Label className="text-[11px] font-medium text-foreground/90">
+                  {propMappings.labelBinding || displayLabel}
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-[9px] font-mono text-cyan-500 bg-cyan-500/10 px-1 py-0.2 rounded border border-cyan-500/20">
+                    type="{propMappings.inputType || "text"}"
+                  </span>
+                  {propMappings.debounceUpdate && (
+                    <span className="text-[9px] font-mono text-indigo-400 bg-indigo-500/10 px-1 py-0.2 rounded border border-indigo-500/20 flex items-center gap-0.5">
+                      <Timer size={9} />
+                      {propMappings.debounceMs ?? 300}ms
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-end gap-1">
                 <span className="text-[9px] font-mono text-cyan-500 bg-cyan-500/10 px-1 py-0.2 rounded border border-cyan-500/20">
                   type="{propMappings.inputType || "text"}"
                 </span>
@@ -357,7 +373,7 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
                   </span>
                 )}
               </div>
-            </div>
+            )}
 
             {/* Input Element */}
             {(() => {

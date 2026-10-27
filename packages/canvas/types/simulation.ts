@@ -99,7 +99,12 @@ export interface ComponentPropMappings {
   checkedStoreName?: string;
   checkedMode?: "store_var" | "inline" | "expression";
 
-  // Input UX & Placeholder
+  // Input UX, Label & Placeholder
+  hasLabel?: boolean;
+  labelBinding?: string;
+  labelMode?: "store_var" | "inline" | "expression";
+  labelStoreId?: string;
+  labelStoreName?: string;
   placeholder?: string;
   placeholderMode?: "store_var" | "inline" | "expression";
   placeholderStoreId?: string;

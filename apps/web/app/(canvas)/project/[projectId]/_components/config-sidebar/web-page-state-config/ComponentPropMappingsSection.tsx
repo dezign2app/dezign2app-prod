@@ -19,6 +19,7 @@ import {
   Plus,
   ToggleLeft,
   SquareCheck,
+  Tag,
 } from "lucide-react";
 import { StateRenderComponent, ComponentPropMappings, UIEventItem, BackendNode } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -253,7 +254,64 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
             }}
           />
 
-          {/* 2. Input Type */}
+          {/* 2. Input Field Label (with Enable/Disable switch & StateStore mapping) */}
+          {(() => {
+            const isLabelEnabled = propMappings.hasLabel !== false;
+            return (
+              <div className="flex flex-col gap-2 p-2.5 rounded-xl bg-background/80 border border-border/40">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Tag size={12} className="text-primary" />
+                    <Label htmlFor="input-label-toggle" className="text-[11px] font-semibold text-foreground cursor-pointer flex items-center gap-1">
+                      <span>Input Field Label</span>
+                      <code className="font-mono text-[10px] text-cyan-500 font-medium">label</code>
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] text-muted-foreground font-mono">
+                      {isLabelEnabled ? "Enabled" : "Hidden"}
+                    </span>
+                    <Switch
+                      id="input-label-toggle"
+                      checked={isLabelEnabled}
+                      onCheckedChange={(checked) => {
+                        onUpdatePropMapping({
+                          hasLabel: checked,
+                          ...(checked && !propMappings.labelBinding ? { labelBinding: displayLabel } : {}),
+                        });
+                      }}
+                      className="scale-80 origin-right"
+                    />
+                  </div>
+                </div>
+
+                {isLabelEnabled && (
+                  <StateStoreVariablePicker
+                    label="Label Text / Mapping"
+                    propName="label"
+                    valueBinding={propMappings.labelBinding ?? displayLabel}
+                    storeName={propMappings.labelStoreName}
+                    storeId={propMappings.labelStoreId}
+                    mode={propMappings.labelMode}
+                    stateStores={stateStores}
+                    placeholder={displayLabel || "Input Label"}
+                    description="Text or dynamic StateStore variable displayed above the input field."
+                    onChange={(res) => {
+                      onUpdatePropMapping({
+                        labelBinding: res.valueBinding,
+                        labelStoreName: res.storeName,
+                        labelStoreId: res.storeId,
+                        labelMode: res.mode,
+                        hasLabel: true,
+                      });
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })()}
+
+          {/* 3. Input Type */}
           <div className="flex flex-col gap-1.5">
             <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
               <span>Input Type</span>
