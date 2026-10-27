@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Server, ChevronDown, Settings, AlertTriangle, AlertCircle, KeyRound } from "lucide-react";
+import { Server, ChevronDown, Settings, AlertTriangle, AlertCircle, KeyRound, RefreshCw } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -41,6 +41,35 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateEvent = useBackendCanvasStore((s) => s.updateEvent);
   const deleteEvent = useBackendCanvasStore((s) => s.deleteEvent);
   const nodes = useBackendCanvasStore((s) => s.nodes);
+  const syncServiceTypes = useBackendCanvasStore((s) => s.syncServiceTypes);
+  const [isSyncingTypes, setIsSyncingTypes] = useState(false);
+
+  const companionTypesNode = nodes.find(
+    (n) =>
+      n.type === "types" &&
+      (n.data?.sourceServiceId === id ||
+        (n.data?.isServiceEndpointSchemas && n.data?.targetServiceId === id)),
+  );
+  const serviceTypesCount = companionTypesNode?.data?.types?.length || 0;
+
+  const handleSyncTypes = (
+    e: React.MouseEvent<HTMLButtonElement | HTMLDivElement>,
+  ): void => {
+    e.stopPropagation();
+    setIsSyncingTypes(true);
+    const result = syncServiceTypes(id);
+    setTimeout(() => {
+      setIsSyncingTypes(false);
+    }, 600);
+
+    if (result.success) {
+      toast.success(
+        `Synchronized ${result.typesCount} endpoint contract type${result.typesCount === 1 ? "" : "s"} for ${result.nodeLabel}`,
+      );
+    } else {
+      toast.error("Unable to synchronize endpoint types for this service");
+    }
+  };
 
   const simulation = useSimulationNodeState(id);
   const borderClass = getSimulationNodeBorderClass(
@@ -203,11 +232,37 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
                 {(data.envVars?.length || 0)} env
               </Badge>
             )}
+            {serviceTypesCount > 0 && (
+              <Badge
+                variant="outline"
+                className="text-[9px] px-1 py-0 h-4 font-mono font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30 flex items-center gap-0.5 cursor-pointer hover:bg-sky-500/20 transition-colors"
+                title={`${serviceTypesCount} endpoint contract type${serviceTypesCount === 1 ? "" : "s"} synchronized. Click to re-sync.`}
+                onClick={handleSyncTypes}
+              >
+                <RefreshCw size={8} className={cn(isSyncingTypes && "animate-spin")} />
+                {serviceTypesCount} types
+              </Badge>
+            )}
           </div>
         }
         rightElement={
           <div className="flex items-center gap-1">
             <button
+              type="button"
+              onClick={handleSyncTypes}
+              className={cn(
+                "p-1 rounded hover:bg-sky-500/10 dark:hover:bg-sky-500/20 text-muted-foreground hover:text-sky-500 dark:hover:text-sky-400 transition-all cursor-pointer flex items-center justify-center text-[10px]",
+                isSyncingTypes && "text-sky-500 dark:text-sky-400 bg-sky-500/10",
+              )}
+              title="Sync Endpoint Contract Types to Canvas"
+            >
+              <RefreshCw
+                size={12}
+                className={cn(isSyncingTypes && "animate-spin text-sky-500 dark:text-sky-400")}
+              />
+            </button>
+            <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 useBackendCanvasStore.getState().setActiveConfigItem({

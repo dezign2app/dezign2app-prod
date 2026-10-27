@@ -293,6 +293,20 @@ export function resolveCascadeDeletedNodeIds(
           }
         }
 
+        // 3b. Companion TypesNode derived from a deleted service
+        if (
+          Boolean(node.data?.isServiceEndpointSchemas) ||
+          node.id.startsWith("types-service-") ||
+          Boolean(node.data?.sourceServiceId)
+        ) {
+          const serviceId = node.data?.sourceServiceId || node.id.replace("types-service-", "");
+          if (allIdsSet.has(serviceId)) {
+            allIdsSet.add(node.id);
+            addedNew = true;
+            continue;
+          }
+        }
+
         // 4. Extended TypesNode extending a deleted TypesNode
         if (
           node.data?.extendedFromNodeId &&

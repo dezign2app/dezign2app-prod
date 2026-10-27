@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Braces, Package, Settings, Trash, Plus, RefreshCw } from "lucide-react";
+import { Braces, Package, Settings, Trash, Plus, RefreshCw, Network } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import { LocalInput } from "../../../common/LocalInput";
 import type { TypesNodeHeaderProps } from "./types";
@@ -14,6 +14,8 @@ export const TypesNodeHeader: React.FC<TypesNodeHeaderProps> = ({
   isEditing,
   setIsEditing,
   isPackageNode,
+  isServiceDerived,
+  sourceServiceName,
   hasInstallError,
   isRefreshing,
   totalCount,
@@ -37,10 +39,18 @@ export const TypesNodeHeader: React.FC<TypesNodeHeaderProps> = ({
               ? "bg-red-500/15 text-red-500 border-red-500/30"
               : isPackageNode
                 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
-                : "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30",
+                : isServiceDerived
+                  ? "bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30"
+                  : "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30",
           )}
         >
-          {isPackageNode ? <Package size={15} /> : <Braces size={15} />}
+          {isPackageNode ? (
+            <Package size={15} />
+          ) : isServiceDerived ? (
+            <Network size={15} />
+          ) : (
+            <Braces size={15} />
+          )}
         </div>
 
         <div className="flex flex-col min-w-0 flex-1">
@@ -52,10 +62,16 @@ export const TypesNodeHeader: React.FC<TypesNodeHeaderProps> = ({
                   ? "text-red-500"
                   : isPackageNode
                     ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-indigo-600 dark:text-indigo-400",
+                    : isServiceDerived
+                      ? "text-sky-600 dark:text-sky-400"
+                      : "text-indigo-600 dark:text-indigo-400",
               )}
             >
-              {isPackageNode ? "Package Types" : "Custom Types"}
+              {isServiceDerived
+                ? "API Types"
+                : isPackageNode
+                  ? "Package Types"
+                  : "Custom Types"}
             </span>
 
             {!isPackageNode && (
@@ -80,6 +96,12 @@ export const TypesNodeHeader: React.FC<TypesNodeHeaderProps> = ({
             {isPackageNode && (
               <span className="text-[7px] font-mono px-1 py-0.2 rounded font-medium bg-emerald-500/15 text-emerald-400">
                 {data.packageName || "PKG"}
+              </span>
+            )}
+
+            {isServiceDerived && (
+              <span className="text-[7px] font-mono px-1 py-0.2 rounded font-medium bg-sky-500/15 text-sky-400">
+                {sourceServiceName || "SERVICE"}
               </span>
             )}
 

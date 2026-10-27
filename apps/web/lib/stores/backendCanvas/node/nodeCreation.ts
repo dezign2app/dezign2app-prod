@@ -17,6 +17,7 @@ import {
   mapColumnsToTypeFields,
   buildCompanionTypesNodeAndEdge,
 } from "./nodeEntitySync";
+import { buildServiceTypesNodeAndEdge } from "./serviceEndpointTypesSync";
 import { createDefaultHealthEndpoint } from "@/lib/utils/healthCheckEndpoint";
 
 /**
@@ -333,6 +334,33 @@ export function prepareNodeForAddition(
     if (!nextEdges.some((e) => e.id === companionRes.typesEdge.id)) {
       nextEdges = [...nextEdges, companionRes.typesEdge];
       nextPendingEdges = [...nextPendingEdges, companionRes.typesEdge];
+    }
+  }
+
+  // 8. Auto-generate companion TypesNode for service endpoints if not skipped
+  if (node.type === "service" && !node.data?.skipTypesNode) {
+    const serviceEndpoints = nextEndpoints.filter((e) => e.nodeId === node.id);
+    const serviceCompanionRes = buildServiceTypesNodeAndEdge(
+      node,
+      serviceEndpoints,
+      nextNodes,
+      nextEdges,
+    );
+    if (serviceCompanionRes.isExistingNode) {
+      nextNodes = nextNodes.map((n) =>
+        n.id === serviceCompanionRes.typesNode.id ? serviceCompanionRes.typesNode : n,
+      );
+      nextPendingNodes = [
+        ...nextPendingNodes.filter((n) => n.id !== serviceCompanionRes.typesNode.id),
+        serviceCompanionRes.typesNode,
+      ];
+    } else {
+      nextNodes = [...nextNodes, serviceCompanionRes.typesNode];
+      nextPendingNodes = [...nextPendingNodes, serviceCompanionRes.typesNode];
+    }
+    if (!nextEdges.some((e) => e.id === serviceCompanionRes.typesEdge.id)) {
+      nextEdges = [...nextEdges, serviceCompanionRes.typesEdge];
+      nextPendingEdges = [...nextPendingEdges, serviceCompanionRes.typesEdge];
     }
   }
 

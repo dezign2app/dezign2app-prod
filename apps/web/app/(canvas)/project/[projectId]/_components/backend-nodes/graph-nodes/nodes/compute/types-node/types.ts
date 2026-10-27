@@ -21,6 +21,8 @@ export interface TypesNodeHeaderProps {
   isEditing: boolean;
   setIsEditing: (editing: boolean) => void;
   isPackageNode: boolean;
+  isServiceDerived?: boolean;
+  sourceServiceName?: string;
   hasInstallError: boolean;
   isRefreshing: boolean;
   totalCount: number;

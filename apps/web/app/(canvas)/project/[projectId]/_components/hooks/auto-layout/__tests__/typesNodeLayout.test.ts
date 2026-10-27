@@ -308,4 +308,84 @@ describe("typesNodeLayout - Auto-Layout for TypesNode", () => {
     expect(transChange.sourcePosition).toBe("right");
     expect(transChange.targetPosition).toBe("left");
   });
+
+  it("aligns entity types in Column 1 and service types in Column 2 side-by-side", () => {
+    const nodes: LayoutNode[] = [
+      {
+        id: "types-entity-schemas",
+        type: "types",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "Entity Types",
+          isEntitySchemas: true,
+          types: [{ id: "type-entity-user", name: "User", kind: "interface" }],
+        },
+      },
+      {
+        id: "types-service-conversations",
+        type: "types",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "Conversations Types",
+          isServiceEndpointSchemas: true,
+          sourceServiceId: "srv-conversations",
+          types: [
+            {
+              id: "type-endpoint-1",
+              name: "ConversationsGetMessagesResponse",
+              kind: "interface",
+            },
+          ],
+        },
+      },
+      {
+        id: "types-service-auth",
+        type: "types",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "Auth Types",
+          isServiceEndpointSchemas: true,
+          sourceServiceId: "srv-auth",
+          types: [
+            {
+              id: "type-endpoint-2",
+              name: "AuthLoginResponse",
+              kind: "interface",
+            },
+          ],
+        },
+      },
+    ];
+
+    let appliedChanges: PositionNodeChange[] = [];
+    const onNodesChange = (changes: PositionNodeChange[]) => {
+      appliedChanges = changes;
+    };
+    const fitView = vi.fn();
+
+    performGraphLayout({
+      nodes,
+      edges: [],
+      onNodesChange,
+      fitView,
+      direction: "LR",
+    });
+
+    const posMap = new Map(appliedChanges.map((c) => [c.id, c.position]));
+    const entityPos = posMap.get("types-entity-schemas")!;
+    const convPos = posMap.get("types-service-conversations")!;
+    const authPos = posMap.get("types-service-auth")!;
+
+    // 1. Entity Types is in Column 1 (x: 60)
+    expect(entityPos.x).toBe(60);
+    expect(entityPos.y).toBe(60);
+
+    // 2. Service Types are in Column 2 (x: 410 = 60 + 270 + 80)
+    expect(convPos.x).toBe(410);
+    expect(authPos.x).toBe(410);
+
+    // 3. Service Types are stacked vertically in Column 2
+    expect(convPos.y).toBe(60);
+    expect(authPos.y).toBeGreaterThan(convPos.y);
+  });
 });

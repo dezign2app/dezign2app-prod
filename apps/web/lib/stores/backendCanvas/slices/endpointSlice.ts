@@ -9,6 +9,7 @@ import {
 } from "../types";
 import { syncConfiguredEventEdge } from "../edgeSync";
 import { getLastIndex } from "../utils";
+import { syncServiceTypesNode } from "../node/serviceEndpointTypesSync";
 
 export interface EndpointSlice {
   endpoints: EndpointWithNode[];
@@ -38,9 +39,24 @@ export const createEndpointSlice = (
       name: endpoint.name ? sanitizeEndpointRoute(endpoint.name) : endpoint.name,
       nodeId,
     };
+    const newEndpoints = [...get().endpoints, newEndpoint];
+    const syncRes = syncServiceTypesNode(
+      nodeId,
+      get().nodes,
+      get().edges,
+      newEndpoints,
+    );
     set({
-      endpoints: [...get().endpoints, newEndpoint],
+      endpoints: newEndpoints,
       pendingEndpointUpserts: [...get().pendingEndpointUpserts, newEndpoint],
+      nodes: syncRes.nodes,
+      edges: syncRes.edges,
+      pendingNodeUpserts: syncRes.updatedTypesNode
+        ? [...get().pendingNodeUpserts, syncRes.updatedTypesNode]
+        : get().pendingNodeUpserts,
+      pendingEdgeUpserts: syncRes.newEdge
+        ? [...get().pendingEdgeUpserts, syncRes.newEdge]
+        : get().pendingEdgeUpserts,
     });
   },
 
@@ -220,13 +236,26 @@ export const createEndpointSlice = (
         });
       }
 
+      const syncRes = syncServiceTypesNode(
+        updated.nodeId,
+        get().nodes,
+        nextEdges,
+        next,
+      );
+
       set({
         endpoints: next,
         events: nextEvents,
         pendingEventRemovals,
-        edges: nextEdges,
+        edges: syncRes.edges,
+        nodes: syncRes.nodes,
         pendingEndpointUpserts: [...get().pendingEndpointUpserts, updated],
-        pendingEdgeUpserts: [...get().pendingEdgeUpserts, ...addedEdges],
+        pendingNodeUpserts: syncRes.updatedTypesNode
+          ? [...get().pendingNodeUpserts, syncRes.updatedTypesNode]
+          : get().pendingNodeUpserts,
+        pendingEdgeUpserts: syncRes.newEdge
+          ? [...get().pendingEdgeUpserts, ...addedEdges, syncRes.newEdge]
+          : [...get().pendingEdgeUpserts, ...addedEdges],
         pendingEdgeRemovals: [...get().pendingEdgeRemovals, ...removedEdgeIds],
       });
     }
@@ -278,11 +307,22 @@ export const createEndpointSlice = (
         return node;
       });
 
+      const remainingEndpoints = get().endpoints.filter((e) => e.id !== id);
+      const syncRes = syncServiceTypesNode(
+        endpoint.nodeId,
+        nextNodes,
+        nextEdges,
+        remainingEndpoints,
+      );
+
       set({
-        endpoints: get().endpoints.filter((e) => e.id !== id),
-        edges: nextEdges,
+        endpoints: remainingEndpoints,
+        edges: syncRes.edges,
+        nodes: syncRes.nodes,
+        pendingNodeUpserts: syncRes.updatedTypesNode
+          ? [...get().pendingNodeUpserts, syncRes.updatedTypesNode]
+          : get().pendingNodeUpserts,
         pendingEdgeRemovals: [...get().pendingEdgeRemovals, ...removedEdgeIds],
-        nodes: nextNodes,
         activeConfigItem: active?.id === id ? null : active,
         pendingEndpointRemovals: [
           ...get().pendingEndpointRemovals,

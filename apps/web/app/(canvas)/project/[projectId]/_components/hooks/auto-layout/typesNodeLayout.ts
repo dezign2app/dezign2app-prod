@@ -14,11 +14,13 @@ export interface TypesNodeLayoutParams {
 }
 
 /**
- * Positions TypesNode (package types, custom data contracts, extended types)
+ * Positions TypesNode (entity types, service endpoint contracts, package types, extended types)
  * and Transformer definition nodes in a dedicated "away" area along the left canvas margin:
  *
- *  - Column 1 (x: 60): Base types (packages, standalone custom contracts)
- *  - Column 2 (x: 380): Extended types aligned with their parent base types
+ *  - Column 1: Entity Types (database entity schemas)
+ *  - Column 2: Service Types (service endpoint request/response contracts)
+ *  - Column 3: Package / Standalone Custom Types
+ *  - Next Column: Extended Types aligned with their parent base types
  *  - Column next to Types: Transformer definition nodes floating beside the types nodes
  *  - Main architecture graph is shifted right so it cleanly begins after the Types & Transformer section.
  */
@@ -40,14 +42,12 @@ export function layoutTypesNodes({
   let typesRight = startMarginX;
 
   if (typesNodes.length > 0) {
-    // 1. Identify base vs extended types nodes
+    // 1. Identify extended types nodes vs base types categories
     const isExtendedNode = (node: LayoutNode): boolean => {
-      const data = node.data as
-        | { isExtended?: boolean; extendedFromNodeId?: string }
-        | undefined;
+      const data = node.data;
       if (
-        data?.isExtended ||
-        (data?.extendedFromNodeId && typesNodeIds.has(data.extendedFromNodeId))
+        Boolean(data?.isExtended) ||
+        Boolean(data?.extendedFromNodeId && typesNodeIds.has(data.extendedFromNodeId))
       ) {
         return true;
       }
@@ -57,7 +57,7 @@ export function layoutTypesNodes({
     };
 
     const getParentBaseId = (node: LayoutNode): string | undefined => {
-      const data = node.data as { extendedFromNodeId?: string } | undefined;
+      const data = node.data;
       if (data?.extendedFromNodeId && typesNodeIds.has(data.extendedFromNodeId)) {
         return data.extendedFromNodeId;
       }
@@ -67,50 +67,106 @@ export function layoutTypesNodes({
       return incomingEdge?.source;
     };
 
-    const baseNodes: LayoutNode[] = [];
+    const isEntityTypesNode = (node: LayoutNode): boolean => {
+      const data = node.data;
+      return (
+        node.id === "types-entity-schemas" ||
+        Boolean(data?.isEntitySchemas) ||
+        Boolean(data?.sourceEntityId) ||
+        data?.label === "Entity Types" ||
+        Boolean(data?.types?.some((t) => t.id.startsWith("type-entity-")))
+      );
+    };
+
+    const isServiceTypesNode = (node: LayoutNode): boolean => {
+      const data = node.data;
+      return (
+        Boolean(data?.isServiceEndpointSchemas) ||
+        node.id.startsWith("types-service-") ||
+        Boolean(data?.sourceServiceId) ||
+        Boolean(data?.types?.some((t) => t.id.startsWith("type-endpoint-")))
+      );
+    };
+
     const extendedNodes: LayoutNode[] = [];
+    const entityTypesNodes: LayoutNode[] = [];
+    const serviceTypesNodes: LayoutNode[] = [];
+    const packageOrOtherNodes: LayoutNode[] = [];
 
     typesNodes.forEach((node) => {
       if (isExtendedNode(node)) {
         extendedNodes.push(node);
+      } else if (isEntityTypesNode(node)) {
+        entityTypesNodes.push(node);
+      } else if (isServiceTypesNode(node)) {
+        serviceTypesNodes.push(node);
       } else {
-        baseNodes.push(node);
+        packageOrOtherNodes.push(node);
       }
     });
 
     // Fallback: If all are categorized as extended without any base, treat all as base
-    if (baseNodes.length === 0 && extendedNodes.length > 0) {
-      baseNodes.push(...extendedNodes.splice(0, extendedNodes.length));
+    if (
+      entityTypesNodes.length === 0 &&
+      serviceTypesNodes.length === 0 &&
+      packageOrOtherNodes.length === 0 &&
+      extendedNodes.length > 0
+    ) {
+      packageOrOtherNodes.push(...extendedNodes.splice(0, extendedNodes.length));
     }
 
-    // 2. Layout Column 1 (Base Types)
-    let curCol1Y = startMarginY;
-    let col1Width = 270;
+    interface TypesColumnGroup {
+      category: "entity" | "service" | "package";
+      nodes: LayoutNode[];
+    }
 
-    baseNodes.forEach((node) => {
-      const dims = getNodeDimensions(node);
-      if (dims.width > col1Width) {
-        col1Width = dims.width;
-      }
-      positionsMap.set(node.id, {
-        x: startMarginX,
-        y: curCol1Y,
+    const columnGroups: TypesColumnGroup[] = [];
+    if (entityTypesNodes.length > 0) {
+      columnGroups.push({ category: "entity", nodes: entityTypesNodes });
+    }
+    if (serviceTypesNodes.length > 0) {
+      columnGroups.push({ category: "service", nodes: serviceTypesNodes });
+    }
+    if (packageOrOtherNodes.length > 0) {
+      columnGroups.push({ category: "package", nodes: packageOrOtherNodes });
+    }
+
+    // 2. Layout Base Types Columns (Entity Types in one column, Service Types in one column, Package/Other in another)
+    let curColX = startMarginX;
+    const allBaseNodes: LayoutNode[] = [];
+
+    columnGroups.forEach((group) => {
+      let curColY = startMarginY;
+      let colWidth = 270;
+
+      group.nodes.forEach((node) => {
+        allBaseNodes.push(node);
+        const dims = getNodeDimensions(node);
+        if (dims.width > colWidth) {
+          colWidth = dims.width;
+        }
+        positionsMap.set(node.id, {
+          x: curColX,
+          y: curColY,
+        });
+        curColY += dims.height + rowGap;
       });
-      curCol1Y += dims.height + rowGap;
+
+      curColX += colWidth + columnGap;
     });
 
-    typesRight = startMarginX + col1Width;
+    typesRight = curColX > startMarginX ? curColX - columnGap : startMarginX;
 
-    // 3. Layout Column 2 (Extended Types)
+    // 3. Layout Column for Extended Types (placed to the right of base types columns)
     if (extendedNodes.length > 0) {
-      const col2X = startMarginX + col1Width + columnGap;
-      let col2Width = 270;
-      let curCol2Y = startMarginY;
+      const extColX = curColX;
+      let extColWidth = 270;
+      let curExtY = startMarginY;
 
       // Place extended nodes grouped next to their parent base node
       const placedExtIds = new Set<string>();
 
-      baseNodes.forEach((baseNode) => {
+      allBaseNodes.forEach((baseNode) => {
         const children = extendedNodes.filter(
           (ext) => getParentBaseId(ext) === baseNode.id,
         );
@@ -119,22 +175,22 @@ export function layoutTypesNodes({
             x: startMarginX,
             y: startMarginY,
           };
-          let extY = Math.max(curCol2Y, parentPos.y);
+          let extY = Math.max(curExtY, parentPos.y);
 
           children.forEach((child) => {
             const dims = getNodeDimensions(child);
-            if (dims.width > col2Width) {
-              col2Width = dims.width;
+            if (dims.width > extColWidth) {
+              extColWidth = dims.width;
             }
             positionsMap.set(child.id, {
-              x: col2X,
+              x: extColX,
               y: extY,
             });
             placedExtIds.add(child.id);
             extY += dims.height + rowGap;
           });
 
-          curCol2Y = extY;
+          curExtY = extY;
         }
       });
 
@@ -142,18 +198,18 @@ export function layoutTypesNodes({
       extendedNodes.forEach((node) => {
         if (!placedExtIds.has(node.id)) {
           const dims = getNodeDimensions(node);
-          if (dims.width > col2Width) {
-            col2Width = dims.width;
+          if (dims.width > extColWidth) {
+            extColWidth = dims.width;
           }
           positionsMap.set(node.id, {
-            x: col2X,
-            y: curCol2Y,
+            x: extColX,
+            y: curExtY,
           });
-          curCol2Y += dims.height + rowGap;
+          curExtY += dims.height + rowGap;
         }
       });
 
-      typesRight = col2X + col2Width;
+      typesRight = extColX + extColWidth;
     }
   }
 
