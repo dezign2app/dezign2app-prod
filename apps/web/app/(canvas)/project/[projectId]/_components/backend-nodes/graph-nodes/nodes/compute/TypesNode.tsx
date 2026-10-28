@@ -559,7 +559,7 @@ export function ensureNavItemTypeOnCanvas(
   // 3. Otherwise, create a brand-new dedicated "App Types" node (completely separate from Entity Types)
   const newTypesNodeId = `types-app-${Date.now()}`;
   const pos = referencePosition || { x: 480, y: 100 };
-  const newTypesNode: BackendNode = {
+  const newTypesNode: Omit<BackendNode, "fractionalIndex"> = {
     id: newTypesNodeId,
     type: "types",
     position: { x: pos.x, y: pos.y },

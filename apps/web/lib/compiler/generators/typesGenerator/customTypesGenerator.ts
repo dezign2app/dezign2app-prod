@@ -16,6 +16,14 @@ export function sanitizeCustomTypeString(rawType: string): string {
   return trimmed;
 }
 
+export function formatFieldType(rawType: string, isArray?: boolean): string {
+  const isArr = Boolean(isArray || rawType?.endsWith("[]"));
+  const base = sanitizeCustomTypeString((rawType || "string").replace(/\[\]$/, ""));
+  if (!isArr) return base;
+  const needsParens = (base.includes("|") || base.includes("&")) && !base.startsWith("(");
+  return needsParens ? `(${base})[]` : `${base}[]`;
+}
+
 export interface CustomTypesModuleResult {
   file?: CompiledFile;
   exportStatement?: string;
@@ -123,9 +131,7 @@ export function generateCustomTypesModule(
           const omittedFields = inheritedFields.filter((f) => f.isOmitted);
 
           const bodyLines = addedFields.map((f) => {
-            const isArr = Boolean(f.isArray || f.type?.endsWith("[]"));
-            const base = sanitizeCustomTypeString((f.type || "string").replace(/\[\]$/, ""));
-            const finalType = isArr ? `${base}[]` : base;
+            const finalType = formatFieldType(f.type, f.isArray);
             return `  ${f.name}${f.required === false ? "?" : ""}: ${finalType};`;
           });
 
@@ -164,27 +170,29 @@ export function generateCustomTypesModule(
             customTypesCode += `export enum ${itemName} {}\n\n`;
           }
         } else if (item.kind === "type") {
-          if (item.typeAliasValue) {
+          if (item.typeAliasValue !== undefined) {
             const cleanAlias = sanitizeCustomTypeString(item.typeAliasValue);
             customTypesCode += `export type ${itemName} = ${cleanAlias};\n\n`;
           } else {
             const fields = item.fields || [];
-            const fieldLines = fields
-              .map((f) => {
-                const isArr = Boolean(f.isArray || f.type?.endsWith("[]"));
-                const base = sanitizeCustomTypeString((f.type || "string").replace(/\[\]$/, ""));
-                const finalType = isArr ? `${base}[]` : base;
-                return `  ${f.name}${f.required === false ? "?" : ""}: ${finalType};`;
-              })
-              .join("\n");
-            customTypesCode += `export type ${itemName} = {\n${fieldLines}\n};\n\n`;
+            const allUnnamed = fields.length > 0 && fields.every((f) => !f.name || !f.name.trim());
+            if (allUnnamed) {
+              const parts = fields.map((f) => formatFieldType(f.type, f.isArray));
+              customTypesCode += `export type ${itemName} = ${parts.join(" | ")};\n\n`;
+            } else {
+              const fieldLines = fields
+                .map((f) => {
+                  const finalType = formatFieldType(f.type, f.isArray);
+                  return `  ${f.name}${f.required === false ? "?" : ""}: ${finalType};`;
+                })
+                .join("\n");
+              customTypesCode += `export type ${itemName} = {\n${fieldLines}\n};\n\n`;
+            }
           }
         } else if (item.kind === "function") {
           const params = (item.fields || [])
             .map((f) => {
-              const isArr = Boolean(f.isArray || f.type?.endsWith("[]"));
-              const base = sanitizeCustomTypeString((f.type || "string").replace(/\[\]$/, ""));
-              const finalType = isArr ? `${base}[]` : base;
+              const finalType = formatFieldType(f.type, f.isArray);
               const opt = f.required === false ? "?" : "";
               return `${f.name || "arg"}${opt}: ${finalType}`;
             })
@@ -199,9 +207,7 @@ export function generateCustomTypesModule(
           } else {
             const fieldLines = fields
               .map((f) => {
-                const isArr = Boolean(f.isArray || f.type?.endsWith("[]"));
-                const base = sanitizeCustomTypeString((f.type || "string").replace(/\[\]$/, ""));
-                const finalType = isArr ? `${base}[]` : base;
+                const finalType = formatFieldType(f.type, f.isArray);
                 return `  ${f.name}${f.required === false ? "?" : ""}: ${finalType};`;
               })
               .join("\n");

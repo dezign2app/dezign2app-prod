@@ -3,7 +3,7 @@ import type { CustomTypeItem, CustomTypeField } from "@workspace/canvas/types";
 /** Renders one field line for an interface/type body. */
 function renderFieldLine(f: CustomTypeField): string {
   const isArr = Boolean(f.isArray || f.type?.endsWith("[]"));
-  const base = (f.type || "string").replace(/\[\]$/, "");
+  const base = (f.type || "string").replace(/\[\]$/, "").trim();
   let finalType: string;
   if (base === "enum") {
     const vals =
@@ -12,7 +12,9 @@ function renderFieldLine(f: CustomTypeField): string {
         : `"value1" | "value2"`;
     finalType = isArr ? `(${vals})[]` : vals;
   } else {
-    finalType = isArr ? `${base}[]` : base;
+    // If the base type is a union (e.g. Type1 | Type2) or intersection and is array, wrap in parentheses
+    const needsParens = isArr && (base.includes("|") || base.includes("&")) && !base.startsWith("(");
+    finalType = isArr ? (needsParens ? `(${base})[]` : `${base}[]`) : base;
   }
   const opt = f.required === false ? "?" : "";
   const comment = f.description ? ` // ${f.description}` : "";
@@ -61,16 +63,27 @@ export function generateTypePreviewCode(currentType: CustomTypeItem): string {
     return currentType.rawCode.trim() + "\n";
   }
 
-  // For alias types with no parsed fields but a typeAliasValue
+  // For alias types with a typeAliasValue or when kind is type and no fields are defined
   if (
     currentType.kind === "type" &&
-    (!currentType.fields || currentType.fields.length === 0) &&
-    currentType.typeAliasValue
+    (currentType.typeAliasValue !== undefined || (!currentType.fields || currentType.fields.length === 0))
   ) {
-    return `${desc}export type ${currentType.name} = ${currentType.typeAliasValue};\n`;
+    const val = currentType.typeAliasValue?.trim() || "any";
+    return `${desc}export type ${currentType.name} = ${val};\n`;
   }
 
   const allFields = currentType.fields || [];
+
+  // For kind === "type" where all fields are unnamed type references (e.g. Type1 | Type2)
+  if (currentType.kind === "type" && allFields.length > 0 && allFields.every((f) => !f.name || !f.name.trim())) {
+    const parts = allFields.map((f) => {
+      const isArr = Boolean(f.isArray || f.type?.endsWith("[]"));
+      const base = (f.type || "string").replace(/\[\]$/, "").trim();
+      const needsParens = isArr && (base.includes("|") || base.includes("&")) && !base.startsWith("(");
+      return isArr ? (needsParens ? `(${base})[]` : `${base}[]`) : base;
+    });
+    return `${desc}export type ${currentType.name} = ${parts.join(" | ")};\n`;
+  }
 
   // ── Extended type: emit proper extends / intersection syntax ──────────────
   if (currentType.extendedFrom) {

@@ -17,9 +17,9 @@ import { useBufferedInput } from "@/lib/hooks/useBufferedInput";
 import { ReadOnlyPackageContractBanner } from "./PackageTypesBanner";
 import { EnumTypeEditor } from "./EnumTypeEditor";
 import { FunctionTypeEditor } from "./FunctionTypeEditor";
+import { PropertiesEditor } from "./PropertiesEditor";
 import { TypePropertyRow } from "./TypePropertyRow";
 import { TypePreviewSection } from "./TypePreviewSection";
-import { TypeCombobox } from "../TypeCombobox";
 import type { TypeEditorFormProps } from "./types";
 import type { CustomTypeField, CustomTypeKind } from "@workspace/canvas/types";
 
@@ -251,14 +251,6 @@ export const TypeEditorForm: React.FC<TypeEditorFormProps> = ({
   );
 
   // ── Extended-type: omit management ──────────────────────────────────────
-  // We store omitted field IDs by removing the inherited field from the fields array
-  // (previewer detects absence of inherited fields to emit Omit<>).
-  // But to keep UX clean we show them as "omitted" toggles.
-  // We derive omittedIds from fields that have isInherited=true and are absent
-  // vs what was originally cloned. Instead, we store omitted state on the field
-  // by keeping a virtual flag: keep the field in the array but mark isOmitted.
-  // Actually simpler: we keep the field in the array with isInherited=true and
-  // a new isOmitted flag — preview/compiler skips omitted inherited fields.
   const isExtended = Boolean(currentType.extendedFrom);
 
   const inheritedFields = (currentType.fields || []).filter((f) => f.isInherited);
@@ -366,7 +358,7 @@ export const TypeEditorForm: React.FC<TypeEditorFormProps> = ({
               ? "Define a fixed set of string constants."
               : isExtended
                 ? `Extends ${currentType.extendedFrom}. Omit inherited fields or add new ones below.`
-                : "Configure flat object schema properties and reference reusable custom types."}
+                : "Configure object properties, reference custom types, or combine types with | and &."}
         </span>
       </div>
 
@@ -415,49 +407,15 @@ export const TypeEditorForm: React.FC<TypeEditorFormProps> = ({
           onDeleteAddedField={handleDeleteField}
         />
       ) : (
-        /* ── Normal (non-extended) properties editor ── */
-        <div className="flex flex-col gap-3 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Properties ({(currentType.fields || []).length})
-              </span>
-              {otherCustomTypes.length > 0 && (
-                <span className="text-[10px] text-indigo-400 font-mono flex items-center gap-1">
-                  <Sparkles size={11} /> {otherCustomTypes.length} custom types
-                </span>
-              )}
-            </div>
-            {!currentType.isReadOnly && (
-              <Button
-                size="sm"
-                variant="secondary"
-                className="h-7 text-[10px] gap-1 rounded-full px-3"
-                onClick={handleAddField}
-              >
-                <Plus size={12} /> Add Property
-              </Button>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-2.5 mt-1">
-            {(currentType.fields || []).map((f) => (
-              <TypePropertyRow
-                key={f.id}
-                field={f}
-                otherCustomTypes={otherCustomTypes}
-                readOnly={Boolean(currentType.isReadOnly)}
-                onUpdate={(updates) => handleUpdateField(f.id, updates)}
-                onDelete={() => handleDeleteField(f.id)}
-              />
-            ))}
-            {(currentType.fields || []).length === 0 && (
-              <span className="text-xs text-muted-foreground/60 italic py-2">
-                No properties defined yet. Click &quot;Add Property&quot; above.
-              </span>
-            )}
-          </div>
-        </div>
+        /* ── Properties editor (clean, unified visual editor for interface and type) ── */
+        <PropertiesEditor
+          currentType={currentType}
+          otherCustomTypes={otherCustomTypes}
+          onAddField={handleAddField}
+          onUpdateField={handleUpdateField}
+          onDeleteField={handleDeleteField}
+          onUpdateCurrentType={onUpdateCurrentType}
+        />
       )}
 
       {/* Generated TypeScript Preview Section */}

@@ -83,6 +83,7 @@ export const StateStoreNode = ({
   const addEdge = useBackendCanvasStore((s) => s.addEdge);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
+  const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
   const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,

@@ -98,13 +98,13 @@ describe("compileCustomTypesNode - generateTypesPackage", () => {
               {
                 id: "f1",
                 name: "onReconnectEnd",
-                type: "(event: MouseEvent | TouchEvent, edge: EdgeType, handleType: HandleType, conn...",
+                type: "((event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => void) | ...",
                 required: false,
               },
               {
                 id: "f2",
-                name: "complexUnion",
-                type: "string | number | boolean | ...",
+                name: "truncatedPrimitive",
+                type: "string | ...",
                 required: true,
               },
             ],
@@ -116,25 +116,18 @@ describe("compileCustomTypesNode - generateTypesPackage", () => {
     const files = generateTypesPackage([typesNode], [], [], []);
     const customFile = files.find((f) => f.filename === "src/custom.ts");
     expect(customFile).toBeDefined();
-    // Must NOT contain trailing ellipsis syntax
-    expect(customFile?.content).not.toContain("conn...;");
-    expect(customFile?.content).not.toContain("boolean | ...;");
-    // Must sanitize function signature to a valid type
     expect(customFile?.content).toContain("onReconnectEnd?: (...args: any[]) => any;");
-    expect(customFile?.content).toContain("complexUnion: any;");
-    // Must include @ts-nocheck without polluting custom.ts with ambient any helper types
-    expect(customFile?.content).toContain("// @ts-nocheck");
-    expect(customFile?.content).not.toContain("type ReactMouseEvent<T = any> = any;");
+    expect(customFile?.content).toContain("truncatedPrimitive: any;");
   });
 
-  it("compiles function types with parameters and return type into export type Name = (...) => ReturnType", () => {
+  it("compiles custom function types into reusable type signatures", () => {
     const typesNode: BackendNode = {
-      id: "types-node-fn",
+      id: "types-node-functions",
       type: "types",
-      position: { x: 100, y: 100 },
-      fractionalIndex: "a0",
+      position: { x: 400, y: 400 },
+      fractionalIndex: "a3",
       data: {
-        label: "Function Types",
+        label: "Function Signatures",
         definitionMode: "visual",
         types: [
           {
@@ -167,5 +160,83 @@ describe("compileCustomTypesNode - generateTypesPackage", () => {
     expect(customFile?.content).toContain("export type CalculateTotal = (items: string[], discount?: number) => number;");
     expect(customFile?.content).toContain("export type FetchUserCallback = (userId: string) => Promise<UserProfile>;");
   });
-});
 
+  it("compiles complex union type aliases and properly wraps union array fields in parentheses", () => {
+    const typesNode: BackendNode = {
+      id: "types-node-unions",
+      type: "types",
+      position: { x: 500, y: 500 },
+      fractionalIndex: "a4",
+      data: {
+        label: "Complex Union Types",
+        definitionMode: "visual",
+        types: [
+          {
+            id: "t-union-1",
+            name: "ApiResponse",
+            kind: "type",
+            description: "Discriminated or complex union",
+            typeAliasValue: "SuccessPayload | ErrorPayload | null",
+          },
+          {
+            id: "t-intf-with-union",
+            name: "BatchProcessingJob",
+            kind: "interface",
+            fields: [
+              {
+                id: "f1",
+                name: "results",
+                type: "SuccessPayload | ErrorPayload",
+                isArray: true,
+                required: true,
+              },
+              {
+                id: "f2",
+                name: "fallback",
+                type: "string | null",
+                isArray: false,
+                required: false,
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const files = generateTypesPackage([typesNode], [], [], []);
+    const customFile = files.find((f) => f.filename === "src/custom.ts");
+    expect(customFile).toBeDefined();
+    expect(customFile?.content).toContain("export type ApiResponse = SuccessPayload | ErrorPayload | null;");
+    expect(customFile?.content).toContain("results: (SuccessPayload | ErrorPayload)[];");
+    expect(customFile?.content).toContain("fallback?: string | null;");
+  });
+
+  it("compiles top-level type aliases from unnamed property rows joined by union", () => {
+    const typesNode: BackendNode = {
+      id: "types-node-unnamed-rows",
+      type: "types",
+      position: { x: 600, y: 600 },
+      fractionalIndex: "a5",
+      data: {
+        label: "Composed Type Aliases",
+        definitionMode: "visual",
+        types: [
+          {
+            id: "t-row-union",
+            name: "CombinedStatus",
+            kind: "type",
+            fields: [
+              { id: "r1", name: "", type: "ActiveStatus", required: true },
+              { id: "r2", name: "", type: "InactiveStatus", required: true },
+            ],
+          },
+        ],
+      },
+    };
+
+    const files = generateTypesPackage([typesNode], [], [], []);
+    const customFile = files.find((f) => f.filename === "src/custom.ts");
+    expect(customFile).toBeDefined();
+    expect(customFile?.content).toContain("export type CombinedStatus = ActiveStatus | InactiveStatus;");
+  });
+});

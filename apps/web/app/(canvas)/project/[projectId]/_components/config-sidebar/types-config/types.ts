@@ -14,6 +14,8 @@ export interface TypePropertyRowProps {
   field: CustomTypeField;
   otherCustomTypes: string[];
   readOnly?: boolean;
+  isSelected?: boolean;
+  onSelect?: () => void;
   onUpdate: (updates: Partial<CustomTypeField>) => void;
   onDelete: () => void;
 }
@@ -48,6 +50,7 @@ export interface PropertiesEditorProps {
   onAddField: () => void;
   onUpdateField: (fieldId: string, updates: Partial<CustomTypeField>) => void;
   onDeleteField: (fieldId: string) => void;
+  onUpdateCurrentType?: (updates: Partial<CustomTypeItem>) => void;
 }
 
 export interface TypePreviewSectionProps {
