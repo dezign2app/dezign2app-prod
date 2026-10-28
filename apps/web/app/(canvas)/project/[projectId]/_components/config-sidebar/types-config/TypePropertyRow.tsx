@@ -101,7 +101,7 @@ export const TypePropertyRow = React.memo(
 
     const handleAddUnionPart = () => {
       if (readOnly) return;
-      const fallback = otherCustomTypes[0] || "string";
+      const fallback = "string";
       const nextParts = [...unionParts, fallback];
       const joined = nextParts.join(" | ");
       onUpdate({

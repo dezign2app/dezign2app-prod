@@ -5,7 +5,6 @@ import { Button } from "@workspace/ui/components/button";
 import { TypePropertyRow } from "./TypePropertyRow";
 import { Plus, Sparkles } from "lucide-react";
 import type { PropertiesEditorProps } from "./types";
-import type { CustomTypeField } from "@workspace/canvas/types";
 
 export const PropertiesEditor: React.FC<PropertiesEditorProps> = ({
   currentType,
@@ -17,38 +16,6 @@ export const PropertiesEditor: React.FC<PropertiesEditorProps> = ({
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
 
   const fields = currentType.fields || [];
-  const selectedField = fields.find((f) => f.id === selectedFieldId) || fields[fields.length - 1];
-
-  const handleAddUnionToProperty = () => {
-    const fallbackType = otherCustomTypes[0] || "string";
-    if (!selectedField) {
-      // If no properties exist, create an initial one
-      onAddField();
-      return;
-    }
-    const currentRaw = (selectedField.type || "string").replace(/\[\]$/, "").trim();
-    const isArr = Boolean(selectedField.isArray || selectedField.type?.endsWith("[]"));
-    const nextType = `${currentRaw} | ${fallbackType}`;
-    onUpdateField(selectedField.id, {
-      type: isArr ? `(${nextType})[]` : nextType,
-      isArray: isArr,
-    });
-  };
-
-  const handleAddIntersectionToProperty = () => {
-    const fallbackType = otherCustomTypes[0] || "string";
-    if (!selectedField) {
-      onAddField();
-      return;
-    }
-    const currentRaw = (selectedField.type || "string").replace(/\[\]$/, "").trim();
-    const isArr = Boolean(selectedField.isArray || selectedField.type?.endsWith("[]"));
-    const nextType = `${currentRaw} & ${fallbackType}`;
-    onUpdateField(selectedField.id, {
-      type: isArr ? `(${nextType})[]` : nextType,
-      isArray: isArr,
-    });
-  };
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
@@ -101,9 +68,9 @@ export const PropertiesEditor: React.FC<PropertiesEditorProps> = ({
         )}
       </div>
 
-      {/* Action Buttons Directly Below Properties */}
+      {/* Action Button Directly Below Properties */}
       {!currentType.isReadOnly && (
-        <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-border/50">
+        <div className="flex items-center gap-2 pt-3 border-t border-border/50">
           <Button
             type="button"
             size="sm"
@@ -112,42 +79,6 @@ export const PropertiesEditor: React.FC<PropertiesEditorProps> = ({
             onClick={onAddField}
           >
             <Plus size={12} /> Add Property
-          </Button>
-
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs font-mono font-semibold gap-1.5 px-3 cursor-pointer hover:bg-primary/10 hover:text-primary border-dashed"
-            onClick={handleAddUnionToProperty}
-            title={
-              selectedField
-                ? `Append union (|) to "${selectedField.name || 'property'}"`
-                : "Add union (|)"
-            }
-          >
-            <span className="text-primary font-bold">|</span>
-            <span>
-              {selectedField?.name ? `Add Union (|) to "${selectedField.name}"` : "Add Union (|)"}
-            </span>
-          </Button>
-
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs font-mono font-semibold gap-1.5 px-3 cursor-pointer hover:bg-primary/10 hover:text-primary border-dashed"
-            onClick={handleAddIntersectionToProperty}
-            title={
-              selectedField
-                ? `Append intersection (&) to "${selectedField.name || 'property'}"`
-                : "Add intersection (&)"
-            }
-          >
-            <span className="text-primary font-bold">&</span>
-            <span>
-              {selectedField?.name ? `Add Intersection (&) to "${selectedField.name}"` : "Add Intersection (&)"}
-            </span>
           </Button>
         </div>
       )}
