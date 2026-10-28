@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   Combobox,
   ComboboxInput,
@@ -9,12 +9,13 @@ import {
   ComboboxItem,
   ComboboxEmpty,
 } from "@workspace/ui/components/combobox";
+import { Button } from "@workspace/ui/components/button";
 import {
   useAvailableCanvasTypes,
   AvailableTypeItem,
 } from "@/lib/hooks/useAvailableCanvasTypes";
 import type { BackendNode } from "@/types/canvas";
-import { Braces, Package, Code2, Database } from "lucide-react";
+import { Braces, Package, Code2, Database, Plus } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 
 export interface TypeComboboxProps {
@@ -31,7 +32,7 @@ export interface TypeComboboxProps {
 
 /**
  * Searchable Combobox using the official @workspace/ui Combobox (Base UI) pattern
- * as documented at https://ui.shadcn.com/docs/components/base/combobox.
+ * Supports predefined types as well as arbitrary custom & union expressions (e.g. Type1 | Type2).
  */
 export const TypeCombobox: React.FC<TypeComboboxProps> = ({
   value,
@@ -50,34 +51,60 @@ export const TypeCombobox: React.FC<TypeComboboxProps> = ({
     extraTypes,
   });
 
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    setQuery("");
+  }, [value]);
+
   // Map for fast metadata lookup (category, kind, packageSource, sourceLabel)
   const typeMetaMap = useMemo(() => {
     return new Map(allTypes.map((t) => [t.name, t]));
   }, [allTypes]);
 
-  // Ensure current value is included in list even if not in standard types
+  // Ensure current value and any active custom query are included in items list
   const allTypeNames = useMemo(() => {
     const names = allTypes.map((t) => t.name);
-    if (value && !names.includes(value)) {
-      return [value, ...names];
+    const result: string[] = [];
+
+    const trimmedQuery = query.trim();
+    if (trimmedQuery && !names.includes(trimmedQuery) && trimmedQuery !== value) {
+      result.push(trimmedQuery);
     }
-    return names;
-  }, [allTypes, value]);
+
+    if (value && !names.includes(value)) {
+      result.push(value);
+    }
+
+    result.push(...names);
+    return Array.from(new Set(result));
+  }, [allTypes, value, query]);
+
+  const handleSelect = (nextVal: string | null) => {
+    if (typeof nextVal === "string" && nextVal.trim()) {
+      onValueChange(nextVal.trim());
+      setQuery("");
+    }
+  };
 
   return (
     <div className="relative nodrag" onClick={(e) => e.stopPropagation()}>
       <Combobox
         items={allTypeNames}
         value={value || "string"}
-        onValueChange={(nextVal) => {
-          if (typeof nextVal === "string" && nextVal.trim()) {
-            onValueChange(nextVal.trim());
-          }
-        }}
+        onValueChange={handleSelect}
+        inputValue={query}
+        onInputValueChange={setQuery}
       >
         <ComboboxInput
           disabled={disabled}
           placeholder={placeholder}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && query.trim()) {
+              e.preventDefault();
+              handleSelect(query.trim());
+            }
+          }}
           className={cn(
             "h-7 w-[140px] text-xs font-mono nodrag bg-secondary/50 border-none shadow-none focus-visible:ring-1",
             className,
@@ -88,8 +115,19 @@ export const TypeCombobox: React.FC<TypeComboboxProps> = ({
           align="start"
           sideOffset={4}
         >
-          <ComboboxEmpty className="py-4 text-center text-xs text-muted-foreground">
-            No matching types found.
+          <ComboboxEmpty className="py-3 px-2 text-center text-xs text-muted-foreground flex flex-col items-center gap-1.5">
+            <span>No matching preset types.</span>
+            {query.trim() && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="h-6 text-[10px] font-mono gap-1 rounded-full px-2.5 cursor-pointer hover:bg-primary/20 hover:text-primary transition-colors"
+                onClick={() => handleSelect(query.trim())}
+              >
+                <Plus size={11} /> Use custom &quot;{query.trim()}&quot;
+              </Button>
+            )}
           </ComboboxEmpty>
           <ComboboxList className="max-h-72 overflow-y-auto no-scrollbar p-1 bg-popover text-popover-foreground hide-scrollbar">
             {(typeName: string) => {
@@ -97,7 +135,8 @@ export const TypeCombobox: React.FC<TypeComboboxProps> = ({
               const isCustom = meta?.category === "custom";
               const isPackage = meta?.category === "package";
               const isDatabase = meta?.category === "database";
-              const isPrimitive = !meta || meta.category === "primitive";
+              const isPrimitive = meta?.category === "primitive";
+              const isCustomUserTyped = !meta && typeName !== "enum";
               const displayLabel = isDatabase ? (meta?.sourceLabel || typeName) : typeName;
 
               return (
@@ -118,6 +157,9 @@ export const TypeCombobox: React.FC<TypeComboboxProps> = ({
                     )}
                     {isPrimitive && (
                       <Code2 className="size-3 text-muted-foreground/70 shrink-0" />
+                    )}
+                    {isCustomUserTyped && (
+                      <Plus className="size-3 text-primary shrink-0" />
                     )}
                     <span className="truncate font-medium">{displayLabel}</span>
 
@@ -140,6 +182,11 @@ export const TypeCombobox: React.FC<TypeComboboxProps> = ({
                     {typeName === "enum" && (
                       <span className="text-[9px] font-sans px-1 py-0.2 rounded bg-purple-500/10 text-purple-400 shrink-0">
                         fixed values
+                      </span>
+                    )}
+                    {isCustomUserTyped && (
+                      <span className="text-[9px] font-sans px-1 py-0.2 rounded bg-primary/10 text-primary font-bold shrink-0">
+                        custom
                       </span>
                     )}
                   </div>

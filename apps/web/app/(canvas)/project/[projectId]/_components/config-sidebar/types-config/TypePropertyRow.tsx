@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
 import { TypeCombobox } from "../TypeCombobox";
@@ -10,7 +10,15 @@ import { useBufferedInput } from "@/lib/hooks/useBufferedInput";
 import type { TypePropertyRowProps } from "./types";
 
 export const TypePropertyRow = React.memo(
-  ({ field, otherCustomTypes, readOnly, onUpdate, onDelete }: TypePropertyRowProps) => {
+  ({
+    field,
+    otherCustomTypes,
+    readOnly,
+    isSelected = false,
+    onSelect,
+    onUpdate,
+    onDelete,
+  }: TypePropertyRowProps) => {
     const nameBuffer = useBufferedInput(
       field.name || "",
       useCallback((name: string) => onUpdate({ name }), [onUpdate]),
@@ -31,20 +39,30 @@ export const TypePropertyRow = React.memo(
     const isFieldArray = Boolean(
       field.isArray || field.type?.endsWith("[]"),
     );
-    const baseType = (field.type || "string").replace(/\[\]$/, "");
+    const baseType = (field.type || "string").replace(/\[\]$/, "").trim();
+
+    // Parse union parts: e.g. "Type1 | Type2 | null"
+    const unionParts = useMemo(() => {
+      const unparenthesized = baseType.startsWith("(") && baseType.endsWith(")")
+        ? baseType.slice(1, -1)
+        : baseType;
+      const parts = unparenthesized.split(/\s*\|\s*/).map((p) => p.trim()).filter(Boolean);
+      return parts.length > 0 ? parts : [baseType || "string"];
+    }, [baseType]);
 
     const toggleArray = () => {
       if (readOnly) return;
       if (isFieldArray) {
         onUpdate({ type: baseType, isArray: false });
       } else {
-        onUpdate({ type: `${baseType}[]`, isArray: true });
+        const needsParens = unionParts.length > 1 && !baseType.startsWith("(");
+        onUpdate({ type: needsParens ? `(${baseType})[]` : `${baseType}[]`, isArray: true });
       }
     };
 
-    const handleTypeChange = (selectedBase: string) => {
+    const handleSingleTypeChange = (selectedBase: string) => {
       if (readOnly) return;
-      const cleanBase = selectedBase.replace(/\[\]$/, "");
+      const cleanBase = selectedBase.replace(/\[\]$/, "").trim();
       const newType = isFieldArray ? `${cleanBase}[]` : cleanBase;
       onUpdate({
         type: newType,
@@ -52,6 +70,43 @@ export const TypePropertyRow = React.memo(
         ...(cleanBase === "enum" && (!field.enumValues || field.enumValues.length === 0)
           ? { enumValues: [] }
           : {}),
+      });
+    };
+
+    const handleUnionPartChange = (idx: number, newPart: string) => {
+      if (readOnly) return;
+      const nextParts = [...unionParts];
+      nextParts[idx] = newPart.trim();
+      const joined = nextParts.join(" | ");
+      onUpdate({
+        type: isFieldArray ? `(${joined})[]` : joined,
+        isArray: isFieldArray,
+      });
+    };
+
+    const handleRemoveUnionPart = (idx: number) => {
+      if (readOnly) return;
+      const nextParts = unionParts.filter((_, i) => i !== idx);
+      const joined = nextParts.join(" | ");
+      const finalType = isFieldArray
+        ? nextParts.length > 1
+          ? `(${joined})[]`
+          : `${joined}[]`
+        : joined;
+      onUpdate({
+        type: finalType,
+        isArray: isFieldArray,
+      });
+    };
+
+    const handleAddUnionPart = () => {
+      if (readOnly) return;
+      const fallback = otherCustomTypes[0] || "string";
+      const nextParts = [...unionParts, fallback];
+      const joined = nextParts.join(" | ");
+      onUpdate({
+        type: isFieldArray ? `(${joined})[]` : joined,
+        isArray: isFieldArray,
       });
     };
 
@@ -83,33 +138,106 @@ export const TypePropertyRow = React.memo(
     );
 
     return (
-      <div className="flex flex-col gap-2 rounded-lg border bg-background/50 p-2.5 relative group/param transition-all hover:border-primary/30 hover:shadow-sm">
-        <div className="flex items-center gap-2">
+      <div
+        className={cn(
+          "flex flex-col gap-2 rounded-lg border bg-background/50 p-2.5 relative group/param transition-all cursor-pointer",
+          isSelected
+            ? "border-primary/70 ring-2 ring-primary/25 bg-background shadow-sm"
+            : "hover:border-primary/30 hover:shadow-sm",
+        )}
+        onClick={onSelect}
+      >
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Property Name Input */}
           {readOnly ? (
-            <span className="h-7 text-xs flex-1 font-mono font-semibold flex items-center px-1 text-foreground">
-              {field.name}
+            <span className="h-7 text-xs font-mono font-semibold flex items-center px-1 text-foreground min-w-[80px]">
+              {field.name || "(unnamed)"}
             </span>
           ) : (
             <Input
-              className="h-7 text-xs flex-1 nodrag bg-background font-mono border-none shadow-none focus-visible:ring-1 placeholder:font-sans"
-              placeholder="Property name"
+              className="h-7 text-xs w-[130px] shrink-0 nodrag bg-background font-mono border-none shadow-none focus-visible:ring-1 placeholder:font-sans placeholder:text-muted-foreground/50"
+              placeholder="property name"
               value={nameBuffer.value}
               onChange={(e) => nameBuffer.onChange(e.target.value)}
               onBlur={nameBuffer.flush}
             />
           )}
 
-          {/* Type Select or Read-only badge */}
+          {/* Type Selectors: Handles single type or multi-part union */}
           {readOnly ? (
             <span className="h-7 px-2.5 flex items-center text-xs font-mono bg-secondary/50 rounded text-foreground font-medium">
               {field.type}
             </span>
-          ) : (
+          ) : unionParts.length <= 1 ? (
+            /* Single type combobox */
             <TypeCombobox
               value={baseType}
-              onValueChange={handleTypeChange}
-              className="w-[150px]"
+              onValueChange={handleSingleTypeChange}
+              className="w-[140px]"
             />
+          ) : (
+            /* Multi-part union selectors connected by | */
+            <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
+              {unionParts.map((part, idx) => (
+                <div key={idx} className="flex items-center gap-1 bg-secondary/30 rounded-md p-0.5 border border-border/40">
+                  {idx > 0 && (
+                    <span className="font-mono text-xs font-bold text-primary px-0.5 select-none">
+                      |
+                    </span>
+                  )}
+                  <TypeCombobox
+                    value={part}
+                    onValueChange={(val) => handleUnionPartChange(idx, val)}
+                    className="w-[120px] h-6 text-[11px]"
+                  />
+                  {unionParts.length > 1 && !readOnly && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveUnionPart(idx);
+                      }}
+                      className="text-muted-foreground/50 hover:text-destructive p-0.5 rounded cursor-pointer transition-colors"
+                      title="Remove this union type"
+                    >
+                      <X size={11} />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {!readOnly && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  title="Add another type to this union"
+                  className="h-6 px-1.5 font-mono text-[11px] font-bold rounded-full bg-secondary/60 text-primary hover:bg-primary/20 border border-border/40 cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAddUnionPart();
+                  }}
+                >
+                  + |
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Inline Union | button (available when not already a multi-union) */}
+          {!readOnly && unionParts.length <= 1 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              title="Add union type (|) to this property"
+              className="h-7 px-2 font-mono text-xs font-bold nodrag rounded-full transition-all cursor-pointer bg-secondary/60 text-muted-foreground/80 hover:bg-primary/20 hover:text-primary border border-border/40"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAddUnionPart();
+              }}
+            >
+              |
+            </Button>
           )}
 
           {/* Array [] toggle button */}
@@ -124,12 +252,15 @@ export const TypePropertyRow = React.memo(
                   : "Single type (click to make array [])"
               }
               className={cn(
-                "h-7 px-3 font-mono text-xs font-bold nodrag rounded-full transition-all cursor-pointer",
+                "h-7 px-2.5 font-mono text-xs font-bold nodrag rounded-full transition-all cursor-pointer",
                 isFieldArray
                   ? "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 ring-1 ring-primary/30"
                   : "bg-secondary/60 text-muted-foreground/80 hover:bg-secondary hover:text-foreground border border-border/40",
               )}
-              onClick={toggleArray}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleArray();
+              }}
             >
               []
             </Button>
@@ -147,12 +278,15 @@ export const TypePropertyRow = React.memo(
                   : "Required (click to make optional ?)"
               }
               className={cn(
-                "h-7 px-2.5 font-mono text-xs font-bold nodrag rounded-full transition-all cursor-pointer",
+                "h-7 px-2 font-mono text-xs font-bold nodrag rounded-full transition-all cursor-pointer",
                 field.required === false
                   ? "bg-amber-500/20 text-amber-500 border border-amber-500/40 shadow-xs"
                   : "bg-secondary/60 text-muted-foreground/80 hover:bg-secondary hover:text-foreground border border-border/40",
               )}
-              onClick={() => onUpdate({ required: field.required === false ? true : false })}
+              onClick={(e) => {
+                e.stopPropagation();
+                onUpdate({ required: field.required === false ? true : false });
+              }}
             >
               ?
             </Button>
@@ -164,8 +298,11 @@ export const TypePropertyRow = React.memo(
               size="icon"
               variant="ghost"
               title="Add Description"
-              className="h-7 w-7 opacity-0 group-hover/param:opacity-100 text-muted-foreground hover:bg-secondary shrink-0 transition-all rounded-full"
-              onClick={() => onUpdate({ description: "" })}
+              className="h-7 w-7 opacity-0 group-hover/param:opacity-100 text-muted-foreground hover:bg-secondary shrink-0 transition-all rounded-full cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                onUpdate({ description: "" });
+              }}
             >
               <Text size={14} />
             </Button>
@@ -176,8 +313,11 @@ export const TypePropertyRow = React.memo(
             <Button
               size="icon"
               variant="ghost"
-              className="h-7 w-7 opacity-0 group-hover/param:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0 transition-all rounded-full"
-              onClick={onDelete}
+              className="h-7 w-7 opacity-0 group-hover/param:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0 transition-all rounded-full cursor-pointer ml-auto"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
             >
               <Trash size={14} />
             </Button>
