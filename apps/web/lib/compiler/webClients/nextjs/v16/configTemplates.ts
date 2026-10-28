@@ -78,6 +78,12 @@ export function generateProjectConfigFiles(
         paths: {
           "@/*": ["./*"],
           "@workspace/ui/*": ["../../packages/ui/src/*"],
+          ...(hasDb
+            ? {
+                "@workspace/db/*": ["../../packages/db/*"],
+                "@workspace/db": ["../../packages/db/index.ts"],
+              }
+            : {}),
         },
         declaration: false,
         declarationMap: false,

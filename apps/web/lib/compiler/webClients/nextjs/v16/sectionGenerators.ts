@@ -1076,7 +1076,7 @@ export default ${sectionCompName};
                   <SidebarGroupContent>
                     <SidebarMenu>
                       {(${activeNavVar} || []).map((navItem, idx: number) => {
-                        const NavIcon = [LayoutDashboard, BarChart2, Folder, Settings][idx % 4];
+                        const NavIcon = ([LayoutDashboard, BarChart2, Folder, Settings][idx % 4]) ?? Folder;
                         return (
                           <SidebarMenuItem key={navItem?.id || idx}>
                             <SidebarMenuButton asChild tooltip={navItem?.name}>
