@@ -367,8 +367,18 @@ export const SectionActionRow = ({
       (e.source === nodeId && e.sourceHandle === `events-${action.id}`),
   );
 
+  const parentSection = sections.find((s) => s.id === sectionId);
+  const sourceState = action.itemSourceStateId
+    ? parentSection?.stateObjects?.find((st) => st.id === action.itemSourceStateId)
+    : undefined;
+
   return (
-    <div className="flex flex-col px-3 py-1.5 border-b border-border/40 text-xs relative group/row hover:bg-secondary/20 nodrag">
+    <div
+      className={cn(
+        "flex flex-col px-3 py-1.5 border-b border-border/40 text-xs relative group/row hover:bg-secondary/20 nodrag",
+        action.scope === "item" && "border-l-2 border-l-violet-500 bg-violet-500/[0.03]",
+      )}
+    >
       {/* Right outgoing event handle */}
       <Handle
         type="source"
@@ -443,6 +453,20 @@ export const SectionActionRow = ({
           style={{ top: "50%" }}
           title="webrtc (in): Wire from WebRTC connection"
         />
+      ) : action.scope === "item" ? (
+        <Handle
+          type="target"
+          position={Position.Left}
+          id={`event-in-${action.id}`}
+          className={cn(
+            CANVAS_ROW_HANDLE_CLASS,
+            CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+            "!border-2 !border-background !bg-violet-500 transition-all",
+            isActionConnected && CANVAS_HANDLE_CONNECTED_CLASS,
+          )}
+          style={{ top: "50%" }}
+          title={`${action.name || "item action"} (in): Item-scoped click event${sourceState ? ` for ${sourceState.name}[]` : ""}`}
+        />
       ) : (
         <Handle
           type="target"
@@ -513,6 +537,51 @@ export const SectionActionRow = ({
               </SelectContent>
             </Select>
           </div>
+
+          <div className="flex items-center gap-1.5 px-0.5 pt-0.5">
+            <input
+              type="checkbox"
+              id={`item-scope-${action.id}`}
+              checked={action.scope === "item"}
+              onChange={(e) => {
+                const isItem = e.target.checked;
+                const nextScope: UIEventItem["scope"] = isItem ? "item" : "section";
+                const defaultStateId = parentSection?.stateObjects?.[0]?.id;
+                const updated = sections.map((s) =>
+                  s.id === sectionId
+                    ? {
+                        ...s,
+                        actions: (s.actions || []).map((a) =>
+                          a.id === action.id
+                            ? {
+                                ...a,
+                                scope: nextScope,
+                                itemSourceStateId: isItem
+                                  ? a.itemSourceStateId || defaultStateId
+                                  : undefined,
+                                itemContextFields: isItem
+                                  ? a.itemContextFields || ["id"]
+                                  : undefined,
+                              }
+                            : a,
+                        ),
+                      }
+                    : s,
+                );
+                updateSections(updated);
+              }}
+              className="h-3 w-3 rounded cursor-pointer accent-violet-500"
+            />
+            <label
+              htmlFor={`item-scope-${action.id}`}
+              className="text-[9px] text-muted-foreground cursor-pointer select-none flex items-center gap-1"
+            >
+              <span>Array item action</span>
+              {action.scope === "item" && sourceState && (
+                <span className="text-violet-400 font-mono">({sourceState.name}[])</span>
+              )}
+            </label>
+          </div>
         </div>
       ) : (
         <div
@@ -527,6 +596,11 @@ export const SectionActionRow = ({
         >
           <div className="flex flex-col gap-1 overflow-hidden">
             <div className="flex items-center gap-1.5 truncate">
+              {action.scope === "item" && (
+                <span className="text-[7.5px] px-1 py-0.2 rounded bg-violet-500/15 text-violet-400 border border-violet-500/30 font-semibold shrink-0">
+                  {sourceState ? `${sourceState.name}[]` : "item"}
+                </span>
+              )}
               <span className="font-medium text-xs truncate">{action.name}</span>
               {getEventBadge()}
             </div>

@@ -3,6 +3,7 @@ import {
   compileUiPackage,
   compileUiManifests,
   compileUiStyles,
+  compileUiHooks,
   compileFormComponents,
   compileDisplayComponents,
   compileOverlayComponents,
@@ -26,6 +27,14 @@ describe("compileUiPackage (modular)", () => {
     const filenames = styles.map((f) => f.filename);
     expect(filenames).toContain("src/lib/utils.ts");
     expect(filenames).toContain("src/styles/globals.css");
+  });
+
+  it("compiles hooks correctly", () => {
+    const hooks = compileUiHooks();
+    expect(hooks).toHaveLength(1);
+    const filenames = hooks.map((f) => f.filename);
+    expect(filenames).toContain("src/hooks/use-mobile.ts");
+    expect(hooks[0]!.content).toContain("export function useIsMobile()");
   });
 
   it("compiles form components correctly", () => {
@@ -67,6 +76,7 @@ describe("compileUiPackage (modular)", () => {
     expect(filenames).toContain("src/components/dropdown-menu.tsx");
     expect(filenames).toContain("src/components/scroll-area.tsx");
     expect(filenames).toContain("src/components/accordion.tsx");
+    expect(filenames).toContain("src/components/sidebar.tsx");
   });
 
   it("compiles all UI components via aggregator", () => {
@@ -128,6 +138,7 @@ describe("compileUiPackage (modular)", () => {
       "src/components/scroll-area.tsx",
       "src/components/slider.tsx",
       "src/components/accordion.tsx",
+      "src/components/sidebar.tsx",
     ];
 
     for (const compPath of requiredComponents) {
@@ -141,5 +152,10 @@ describe("compileUiPackage (modular)", () => {
     const checkbox = files.find((f) => f.filename === "src/components/checkbox.tsx");
     expect(checkbox!.content).toContain('import { Checkbox as CheckboxPrimitive } from "radix-ui"');
     expect(checkbox!.content).toContain("export { Checkbox }");
+
+    // 5. Verify hooks are included
+    const useMobile = files.find((f) => f.filename === "src/hooks/use-mobile.ts");
+    expect(useMobile, "Missing src/hooks/use-mobile.ts").toBeDefined();
+    expect(useMobile!.content).toContain("export function useIsMobile()");
   });
 });

@@ -64,7 +64,8 @@ export type StateRenderComponent =
   | "skeleton"
   | "table"
   | "code"
-  | "text";
+  | "text"
+  | "sidebar";
 
 export interface ComponentPropMappings {
   // Input
@@ -175,6 +176,22 @@ export interface ComponentPropMappings {
   skeletonWidth?: string;
   skeletonHeight?: string;
 
+  // Sidebar
+  sidebarTitle?: string;
+  sidebarNavMode?: "static" | "dynamic";
+  sidebarNavBinding?: string;
+  sidebarNavStoreId?: string;
+  sidebarNavStoreName?: string;
+  sidebarStaticItems?: Array<{
+    id: string;
+    name: string;
+    link: string;
+    icon?: string;
+    badge?: string;
+  }>;
+  sidebarCollapsible?: "offcanvas" | "icon" | "none";
+  sidebarVariant?: "sidebar" | "floating" | "inset";
+
   // Custom props
   customProps?: Record<string, string>;
 }
@@ -216,6 +233,9 @@ export interface PageStateObject {
   fieldId?: string;
   description?: string;
   renderConfig?: StateRenderConfig;
+  itemEvents?: UIEventItem[];
+  itemKeyField?: string;
+  itemSchema?: Array<{ name: string; type: string }>;
 }
 
 export type ComponentBindingType =
@@ -229,6 +249,7 @@ export type ComponentBindingType =
   | "table"
   | "form"
   | "select"
+  | "sidebar"
   | (string & {});
 
 export interface ComponentElementBinding {
@@ -566,6 +587,10 @@ export type UIEventItem = {
     stopOnError?: boolean;
     maxRounds?: number;
   };
+  // Item-scoped event for array state fields
+  scope?: "section" | "item";
+  itemSourceStateId?: string;
+  itemContextFields?: string[];
 };
 
 /** A global simulation scenario. */

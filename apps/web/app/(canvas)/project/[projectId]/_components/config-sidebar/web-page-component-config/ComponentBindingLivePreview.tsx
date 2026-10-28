@@ -13,6 +13,7 @@ import {
   Loader2,
   LayoutGrid,
   ChevronDown,
+  PanelLeft,
 } from "lucide-react";
 import { ComponentBindingType, JSONValue } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
@@ -425,6 +426,71 @@ export const ComponentBindingLivePreview: React.FC<ComponentBindingLivePreviewPr
                 <span className="text-xs text-muted-foreground font-mono">({displayLabel} loading...)</span>
               </div>
             )}
+
+            {/* 13. SIDEBAR */}
+            {componentType === "sidebar" && (() => {
+              const items = Array.isArray(sampleValue) && sampleValue.length > 0
+                ? sampleValue
+                : [
+                    { id: "nav-1", name: "Dashboard", link: "/dashboard" },
+                    { id: "nav-2", name: "Analytics", link: "/analytics" },
+                    { id: "nav-3", name: "Projects", link: "/projects" },
+                    { id: "nav-4", name: "Settings", link: "/settings" },
+                  ];
+
+              return (
+                <div className="w-full max-w-xs rounded-xl border border-border/80 bg-card text-card-foreground shadow-sm overflow-hidden flex flex-col text-xs">
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-border/60 bg-muted/30">
+                    <div className="flex items-center gap-2">
+                      <div className="h-5 w-5 rounded bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold text-[10px]">
+                        <PanelLeft size={12} />
+                      </div>
+                      <span className="font-semibold text-xs text-foreground truncate max-w-[140px]">
+                        {displayLabel}
+                      </span>
+                    </div>
+                    <Badge variant="outline" className="text-[8px] font-mono px-1 py-0">
+                      sidebar
+                    </Badge>
+                  </div>
+                  <div className="p-2 flex flex-col gap-1">
+                    {items.map((item: any, idx: number) => {
+                      const isActive = idx === 0;
+                      return (
+                        <div
+                          key={item.id || idx}
+                          onClick={() => {
+                            if (!simulatedDisabled) {
+                              toast.info(`Clicked "${item.name || item.link}"`);
+                              if (actionId) onSimulateAction?.();
+                            }
+                          }}
+                          className={cn(
+                            "flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-colors text-xs cursor-pointer",
+                            isActive
+                              ? "bg-purple-600 text-white font-medium"
+                              : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                            simulatedDisabled && "opacity-50 pointer-events-none"
+                          )}
+                        >
+                          <span className="truncate">{item.name || `Link ${idx + 1}`}</span>
+                          <span className={cn(
+                            "text-[9px] font-mono",
+                            isActive ? "text-purple-100" : "text-muted-foreground/60"
+                          )}>
+                            {item.link || "#"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="px-3 py-1.5 border-t border-border/40 bg-muted/20 text-[9px] text-muted-foreground flex items-center justify-between font-mono">
+                    <span>{valueStateName ? `{${valueStateName}}` : "Static/Default"}</span>
+                    <span>{items.length} items</span>
+                  </div>
+                </div>
+              );
+            })()}
           </>
         )}
       </CardContent>

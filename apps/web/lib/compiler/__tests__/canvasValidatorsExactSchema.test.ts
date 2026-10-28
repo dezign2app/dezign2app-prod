@@ -1483,6 +1483,111 @@ describe("Convex canvasValidators exact schema", () => {
     expect(webPageConvexDataValidator.fields.graphPosition).toBeDefined();
     expect(webPageConvexDataValidator.fields.realtimeConnections).toBeDefined();
   });
+
+  it("validates webPage node data with array item actions, itemEvents, and itemContextFields in Zod and Convex validators", async () => {
+    const { webPageDataSchema } = await import("@workspace/canvas/schemas");
+    const { webPageConvexDataValidator, webPageEventConvexValidator, pageStateObjectConvexValidator, pageSectionConvexValidator } = await import(
+      "../../../../../packages/backend/convex/schema/canvasValidators"
+    );
+
+    const userPayload = {
+      isLayout: false,
+      label: "/chat/[id]",
+      pathParams: [{ id: "param-id", name: "id", required: true, type: "string" }],
+      position: { x: 2401.0, y: 145.13888925893298 },
+      realtimeConnections: [
+        {
+          id: "step-langgraph-1792659298445-sb5z",
+          protocol: "SSE" as const,
+          description: "send-message/:id",
+          eventName: "send-message/:id",
+          sourceEventId: "ubifohs",
+          sourceItemName: "send-message/:id",
+          sourceItemType: "endpoint" as const,
+          sourceServiceLabel: "Conversations",
+          sourceServiceNodeId: "c3f60469-228a-4a1e-b5cd-3484a0d8e86b",
+          actionSteps: [
+            {
+              id: "step-1792961454450-di5qk",
+              order: 1.0,
+              stateKey: "stateVar",
+              stateTargetKind: "local" as const,
+              stateUpdateType: "set",
+              stateValueSource: { kind: "literal" as const, value: "" },
+              type: "state_mutation" as const,
+            },
+          ],
+        },
+      ],
+      sections: [
+        {
+          id: "sec-chat",
+          name: "ChatSection",
+          actions: [
+            {
+              id: "evt-item-1792918032760",
+              name: "messagesItemClick",
+              event: "click",
+              scope: "item" as const,
+              itemSourceStateId: "state-messages-123",
+              itemContextFields: ["id"],
+              url: "/api/chat/message",
+              method: "POST",
+              actionSteps: [
+                {
+                  edgeId: "edge-action-evt-1792918032760-3a2f7f5a-79a8-4b4c-8937-73d876fb53b1-1792990642511",
+                  id: "step-1792990642516-crlvm",
+                  order: 1.0,
+                  stateActionName: "set",
+                  stateKey: "message",
+                  stateReducerName: "message_reducer",
+                  stateStoreNodeId: "3a2f7f5a-79a8-4b4c-8937-73d876fb53b1",
+                  stateTargetFieldId: "b6f9a896-0242-4c70-ad2d-54f10f5274ae",
+                  stateTargetKind: "store" as const,
+                  stateUpdateType: "set",
+                  stateValueSource: { kind: "literal" as const, value: "" },
+                  type: "state_mutation" as const,
+                },
+              ],
+            },
+          ],
+          stateObjects: [
+            {
+              id: "state-messages-123",
+              name: "messages",
+              type: "Message[]",
+              defaultValue: [],
+              itemKeyField: "id",
+              itemSchema: [{ name: "id", type: "string" }, { name: "content", type: "string" }],
+              itemEvents: [
+                {
+                  id: "evt-item-1792918032760",
+                  name: "messagesItemClick",
+                  event: "click",
+                  scope: "item" as const,
+                  itemSourceStateId: "state-messages-123",
+                  itemContextFields: ["id"],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const parsed = webPageDataSchema.safeParse(userPayload);
+    expect(parsed.success).toBe(true);
+
+    expect(webPageEventConvexValidator.fields.scope).toBeDefined();
+    expect(webPageEventConvexValidator.fields.itemSourceStateId).toBeDefined();
+    expect(webPageEventConvexValidator.fields.itemContextFields).toBeDefined();
+    expect(webPageEventConvexValidator.fields.url).toBeDefined();
+    expect(webPageEventConvexValidator.fields.method).toBeDefined();
+    expect(pageStateObjectConvexValidator.fields.itemKeyField).toBeDefined();
+    expect(pageStateObjectConvexValidator.fields.itemSchema).toBeDefined();
+    expect(pageStateObjectConvexValidator.fields.itemEvents).toBeDefined();
+    expect(pageSectionConvexValidator.fields.states).toBeDefined();
+  });
 });
 
 

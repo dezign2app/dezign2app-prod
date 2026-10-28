@@ -177,6 +177,7 @@ export function generateSectionComponent(
   }
 
   const isActionBound = (c: EventComponentMeta) => {
+    if (c.eventItem?.scope === "item") return true;
     if (c.eventItem?.id && boundActionIds.has(c.eventItem.id)) return true;
     if (boundActionNames.has(c.eventName.trim().toLowerCase())) return true;
     const baseName = c.componentName.replace(/Action$/i, "").trim().toLowerCase();
@@ -269,7 +270,10 @@ export function generateSectionComponent(
 
   const componentStoreNames = (section.componentBindings || []).flatMap((comp) => {
     const list: string[] = [];
-    const valStore = comp.valueStoreName || findStoreNameForState(comp.valueStateName, comp.valueStateId);
+    const valStore =
+      comp.propMappings?.sidebarNavStoreName ||
+      comp.valueStoreName ||
+      findStoreNameForState(comp.valueStateName, comp.valueStateId);
     if (valStore) list.push(valStore);
     const disStore = comp.disabledStoreName || findStoreNameForState(comp.disabledStateName);
     if (disStore) list.push(disStore);
@@ -586,10 +590,12 @@ export function generateSectionComponent(
   };
 
   (section.componentBindings || []).forEach((comp) => {
+    const valState = comp.propMappings?.sidebarNavBinding || comp.valueStateName;
+    const valStore = comp.propMappings?.sidebarNavStoreName || comp.valueStoreName;
     processComponentBindingState({
-      valueStateName: comp.valueStateName,
+      valueStateName: valState,
       valueStateId: comp.valueStateId,
-      valueStoreName: comp.valueStoreName,
+      valueStoreName: valStore,
       disabledStateName: comp.disabledStateName,
       disabledStoreName: comp.disabledStoreName,
       loadingStateName: comp.loadingStateName,
@@ -714,6 +720,68 @@ export default ${sectionCompName};
             clickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", "${actUrl}", "${actMethod}")}`;
           } else if (cfg?.clickAction === "navigate" && cfg.targetRoute) {
             clickAttr = ` onClick={() => { window.location.href = "${cfg.targetRoute}"; }}`;
+          }
+
+          const isArrayState =
+            st.type === "array" ||
+            st.type?.endsWith("[]") ||
+            st.type?.includes("[]");
+          const itemActions = (section.actions || []).filter(
+            (act) => act.scope === "item" && act.itemSourceStateId === st.id,
+          );
+          const primaryItemAct =
+            itemActions[0] ||
+            (cfg?.clickAction === "trigger_event" && cfg.targetActionId
+              ? (section.actions || []).find(
+                  (a) => a.id === cfg.targetActionId && a.scope === "item",
+                )
+              : undefined);
+
+          if (isArrayState && primaryItemAct) {
+            const keyField = primaryItemAct.itemContextFields?.[0] || "id";
+            const actName = primaryItemAct.name || "itemClick";
+            const actEvent = primaryItemAct.event || "click";
+            const actUrl = primaryItemAct.url || "";
+            const actMethod = primaryItemAct.method || "POST";
+            const itemClickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", "${actUrl}", "${actMethod}", false, undefined, undefined, { ${keyField}: item?.${keyField} ?? item })}`;
+
+            if (comp === "badge") {
+              neededShadcnImports.add('import { Badge } from "@workspace/ui/components/badge";');
+              return `          {Array.isArray(${varName}) && (${varName} || []).map((item: any, idx: number) => (
+            <Badge key={item?.${keyField} ?? idx} variant="${variant}" className="text-xs cursor-pointer"${itemClickAttr}>
+              {showDebugState && <span className="text-muted-foreground mr-1">${labelInline}</span>}
+              {typeof item === "object" ? (item?.name || item?.title || item?.label || item?.${keyField} || JSON.stringify(item)) : String(item)}
+            </Badge>
+          ))}`;
+            }
+            if (comp === "button") {
+              neededShadcnImports.add('import { Button } from "@workspace/ui/components/button";');
+              const btnSize = props?.buttonSize || "sm";
+              const disabledAttr = resolveDisabledAttr(props);
+              return `          {Array.isArray(${varName}) && (${varName} || []).map((item: any, idx: number) => (
+            <Button key={item?.${keyField} ?? idx} variant="${variant}" size="${btnSize}"${disabledAttr} className="cursor-pointer"${itemClickAttr}>
+              {showDebugState && <>{${isStoreLabel ? `String(${labelVar})` : `"${staticLabel}"`}}: </>}
+              {typeof item === "object" ? (item?.name || item?.title || item?.label || item?.${keyField} || JSON.stringify(item)) : String(item)}
+            </Button>
+          ))}`;
+            }
+            if (comp === "card") {
+              const cardTitle = isStoreLabel ? `{String(${labelVar})}` : (props?.titleBinding || staticLabel);
+              return `          {Array.isArray(${varName}) && (${varName} || []).map((item: any, idx: number) => (
+            <div key={item?.${keyField} ?? idx} className="p-3 rounded-lg border bg-card text-card-foreground shadow-xs cursor-pointer hover:border-primary/50 transition-colors"${itemClickAttr}>
+              {showDebugState && <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">${cardTitle}</div>}
+              <div className="text-sm font-bold mt-0.5 font-mono">
+                {typeof item === "object" ? (item?.title || item?.name || item?.label || item?.${keyField} || JSON.stringify(item)) : String(item)}
+              </div>
+            </div>
+          ))}`;
+            }
+            return `          {Array.isArray(${varName}) && (${varName} || []).map((item: any, idx: number) => (
+            <div key={item?.${keyField} ?? idx} className="text-xs px-2.5 py-1 rounded bg-secondary/50 border border-border text-foreground font-mono cursor-pointer hover:bg-secondary transition-colors"${itemClickAttr}>
+              {showDebugState && <span className="text-muted-foreground">${labelInline}</span>}
+              {typeof item === "object" ? (item?.name || item?.title || item?.label || item?.${keyField} || JSON.stringify(item)) : String(item)}
+            </div>
+          ))}`;
           }
 
           if (comp === "badge") {
@@ -960,6 +1028,380 @@ export default ${sectionCompName};
         return `<Textarea key="${item.id}" placeholder="${ph}" value={String(${valVar} ?? "")} onChange={(e) => ${setterVar}(e.target.value)}${disabledAttr} className="text-xs max-w-sm" />`;
       }
       return `<Textarea key="${item.id}" placeholder="${ph}"${disabledAttr} className="text-xs max-w-sm" />`;
+    }
+
+    if (item.type === "sidebar") {
+      neededShadcnImports.add(
+        'import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@workspace/ui/components/sidebar";',
+      );
+      neededShadcnImports.add('import Link from "next/link";');
+
+      const title = item.propMappings?.sidebarTitle || item.label || item.name || "App";
+      const collapsible = item.propMappings?.sidebarCollapsible || "offcanvas";
+      const variant = item.propMappings?.sidebarVariant || "sidebar";
+      const navMode = item.propMappings?.sidebarNavMode || "dynamic";
+      const activeNavVar = item.propMappings?.sidebarNavBinding
+        ? toCamelCase(item.propMappings.sidebarNavBinding)
+        : valVar;
+
+      if (navMode === "dynamic" && activeNavVar) {
+        return `<div key="${item.id}" className="w-full max-w-xs border rounded-lg overflow-hidden bg-card text-card-foreground">
+            <SidebarProvider>
+              <Sidebar collapsible="${collapsible}" variant="${variant}" className="w-full">
+                <SidebarHeader className="p-3 border-b text-xs font-bold">${title}</SidebarHeader>
+                <SidebarContent>
+                  <SidebarGroup>
+                    <SidebarGroupLabel className="text-[10px]">Navigation</SidebarGroupLabel>
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        {(${activeNavVar} || []).map((navItem, idx: number) => (
+                          <SidebarMenuItem key={navItem?.id || idx}>
+                            <SidebarMenuButton asChild tooltip={navItem?.name}>
+                              <Link href={navItem?.link || "#"} className="text-xs">
+                                <span>{navItem?.name || "Nav"}</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        ))}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </SidebarGroup>
+                </SidebarContent>
+              </Sidebar>
+            </SidebarProvider>
+          </div>`;
+      }
+
+      const staticItems =
+        item.propMappings?.sidebarStaticItems && item.propMappings.sidebarStaticItems.length > 0
+          ? item.propMappings.sidebarStaticItems
+          : [
+              { id: "nav-1", name: "Dashboard", link: "/dashboard" },
+              { id: "nav-2", name: "Settings", link: "/settings" },
+            ];
+
+      const staticItemsJsx = staticItems
+        .map(
+          (sItem) => `                        <SidebarMenuItem key="${sItem.id}">
+                          <SidebarMenuButton asChild tooltip="${sItem.name}">
+                            <Link href="${sItem.link || "#"}" className="text-xs">
+                              <span>${sItem.name}</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>`,
+        )
+        .join("\n");
+
+      return `<div key="${item.id}" className="w-full max-w-xs border rounded-lg overflow-hidden bg-card text-card-foreground">
+            <SidebarProvider>
+              <Sidebar collapsible="${collapsible}" variant="${variant}" className="w-full">
+                <SidebarHeader className="p-3 border-b text-xs font-bold">${title}</SidebarHeader>
+                <SidebarContent>
+                  <SidebarGroup>
+                    <SidebarGroupLabel className="text-[10px]">Navigation</SidebarGroupLabel>
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+${staticItemsJsx}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </SidebarGroup>
+                </SidebarContent>
+              </Sidebar>
+            </SidebarProvider>
+          </div>`;
+    }
+
+    if (item.type === "select") {
+      neededShadcnImports.add('import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@workspace/ui/components/select";');
+      if (valVar && hasSetter) {
+        return `<Select key="${item.id}" value={String(${valVar} ?? "")} onValueChange={(val) => ${setterVar}(val)}${disabledAttr}>
+            <SelectTrigger className="h-8 text-xs max-w-xs">
+              <SelectValue placeholder="${item.placeholder || labelText}" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="opt-1" className="text-xs">${labelText} 1</SelectItem>
+              <SelectItem value="opt-2" className="text-xs">${labelText} 2</SelectItem>
+            </SelectContent>
+          </Select>`;
+      }
+      return `<Select key="${item.id}"${valVar ? ` defaultValue={String(${valVar} ?? "")}` : ""}${disabledAttr}>
+          <SelectTrigger className="h-8 text-xs max-w-xs">
+            <SelectValue placeholder="${item.placeholder || labelText}" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="opt-1" className="text-xs">${labelText} 1</SelectItem>
+            <SelectItem value="opt-2" className="text-xs">${labelText} 2</SelectItem>
+          </SelectContent>
+        </Select>`;
+    }
+
+    if (item.type === "slider") {
+      neededShadcnImports.add('import { Slider } from "@workspace/ui/components/slider";');
+      const valNum = valVar ? `Number(${valVar}) || 50` : "50";
+      return `<div key="${item.id}" className="flex flex-col gap-1 min-w-[140px] text-xs">
+          <span>${labelText}: {String(${valVar ? `${valVar} ?? 50` : "50"})}</span>
+          <Slider defaultValue={[${valNum}]} max={100} step={1}${disabledAttr} />
+        </div>`;
+    }
+
+    if (item.type === "radio-group") {
+      neededShadcnImports.add('import { RadioGroup, RadioGroupItem } from "@workspace/ui/components/radio-group";');
+      neededShadcnImports.add('import { Label } from "@workspace/ui/components/label";');
+      return `<RadioGroup key="${item.id}" defaultValue="r1" className="flex items-center gap-3 text-xs"${disabledAttr}>
+          <div className="flex items-center gap-1.5">
+            <RadioGroupItem value="r1" id="${item.id}-r1" />
+            <Label htmlFor="${item.id}-r1" className="text-xs">${labelText}</Label>
+          </div>
+        </RadioGroup>`;
+    }
+
+    if (item.type === "tabs") {
+      neededShadcnImports.add('import { Tabs, TabsList, TabsTrigger, TabsContent } from "@workspace/ui/components/tabs";');
+      const descText = item.description || "Details tab content";
+      return `<Tabs key="${item.id}" defaultValue="tab-1" className="w-full">
+          <TabsList>
+            <TabsTrigger value="tab-1" className="text-xs">${labelText}</TabsTrigger>
+            <TabsTrigger value="tab-2" className="text-xs">Details</TabsTrigger>
+          </TabsList>
+          <TabsContent value="tab-1" className="text-xs text-muted-foreground pt-2">
+            {valVar ? (typeof ${valVar} === "object" ? JSON.stringify(${valVar}) : String(${valVar})) : "Overview tab content"}
+          </TabsContent>
+          <TabsContent value="tab-2" className="text-xs text-muted-foreground pt-2">
+            ${descText}
+          </TabsContent>
+        </Tabs>`;
+    }
+
+    if (item.type === "accordion") {
+      neededShadcnImports.add('import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@workspace/ui/components/accordion";');
+      const descText = item.description || "Accordion details";
+      return `<Accordion key="${item.id}" type="single" collapsible className="w-full">
+          <AccordionItem value="${item.id}">
+            <AccordionTrigger className="text-xs font-semibold">${labelText}</AccordionTrigger>
+            <AccordionContent className="text-xs text-muted-foreground">
+              {valVar ? (typeof ${valVar} === "object" ? JSON.stringify(${valVar}) : String(${valVar})) : "${descText}"}
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>`;
+    }
+
+    if (item.type === "dialog") {
+      neededShadcnImports.add('import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@workspace/ui/components/dialog";');
+      neededShadcnImports.add('import { Button } from "@workspace/ui/components/button";');
+      const descText = item.description || "Dialog content and details";
+      return `<Dialog key="${item.id}">
+          <DialogTrigger asChild>
+            <Button variant="${item.variant || "outline"}" size="sm"${disabledAttr}>${labelText}</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-sm font-semibold">${labelText}</DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                {valVar ? (typeof ${valVar} === "object" ? JSON.stringify(${valVar}) : String(${valVar})) : "${descText}"}
+              </DialogDescription>
+            </DialogHeader>
+          </DialogContent>
+        </Dialog>`;
+    }
+
+    if (item.type === "sheet" || item.type === "drawer") {
+      neededShadcnImports.add('import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@workspace/ui/components/sheet";');
+      neededShadcnImports.add('import { Button } from "@workspace/ui/components/button";');
+      const descText = item.description || "Drawer panel content and options";
+      return `<Sheet key="${item.id}">
+          <SheetTrigger asChild>
+            <Button variant="${item.variant || "outline"}" size="sm"${disabledAttr}>${labelText}</Button>
+          </SheetTrigger>
+          <SheetContent>
+            <SheetHeader>
+              <SheetTitle className="text-sm font-semibold">${labelText}</SheetTitle>
+              <SheetDescription className="text-xs text-muted-foreground">
+                {valVar ? (typeof ${valVar} === "object" ? JSON.stringify(${valVar}) : String(${valVar})) : "${descText}"}
+              </SheetDescription>
+            </SheetHeader>
+          </SheetContent>
+        </Sheet>`;
+    }
+
+    if (item.type === "popover") {
+      neededShadcnImports.add('import { Popover, PopoverTrigger, PopoverContent } from "@workspace/ui/components/popover";');
+      neededShadcnImports.add('import { Button } from "@workspace/ui/components/button";');
+      const descText = item.description || "Popover details and context";
+      return `<Popover key="${item.id}">
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm"${disabledAttr}>${labelText}</Button>
+          </PopoverTrigger>
+          <PopoverContent className="text-xs p-3">
+            <div className="font-semibold mb-1">${labelText}</div>
+            <div className="text-muted-foreground">{valVar ? (typeof ${valVar} === "object" ? JSON.stringify(${valVar}) : String(${valVar})) : "${descText}"}</div>
+          </PopoverContent>
+        </Popover>`;
+    }
+
+    if (item.type === "tooltip") {
+      neededShadcnImports.add('import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@workspace/ui/components/tooltip";');
+      neededShadcnImports.add('import { Button } from "@workspace/ui/components/button";');
+      return `<TooltipProvider key="${item.id}">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="sm"${disabledAttr}${clickAttr}>${labelText}</Button>
+            </TooltipTrigger>
+            <TooltipContent className="text-xs">
+              <span>{valVar ? (typeof ${valVar} === "object" ? JSON.stringify(${valVar}) : String(${valVar})) : "${labelText}"}</span>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>`;
+    }
+
+    if (item.type === "dropdown-menu") {
+      neededShadcnImports.add('import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@workspace/ui/components/dropdown-menu";');
+      neededShadcnImports.add('import { Button } from "@workspace/ui/components/button";');
+      return `<DropdownMenu key="${item.id}">
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm"${disabledAttr}>${labelText} ▾</Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="text-xs">
+            <DropdownMenuItem className="text-xs"${clickAttr}>${labelText} Action</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>`;
+    }
+
+    if (item.type === "separator") {
+      neededShadcnImports.add('import { Separator } from "@workspace/ui/components/separator";');
+      return `<Separator key="${item.id}" className="my-2" />`;
+    }
+
+    if (item.type === "scroll-area") {
+      neededShadcnImports.add('import { ScrollArea } from "@workspace/ui/components/scroll-area";');
+      const descText = item.description || "Scrollable container content";
+      return `<ScrollArea key="${item.id}" className="h-32 w-full rounded-md border p-2 text-xs">
+          <div className="font-semibold mb-1">${labelText}</div>
+          <div className="text-muted-foreground">{valVar ? (typeof ${valVar} === "object" ? JSON.stringify(${valVar}) : String(${valVar})) : "${descText}"}</div>
+        </ScrollArea>`;
+    }
+
+    if (item.type === "breadcrumb") {
+      neededShadcnImports.add('import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbPage, BreadcrumbSeparator } from "@workspace/ui/components/breadcrumb";');
+      neededShadcnImports.add('import Link from "next/link";');
+      return `<Breadcrumb key="${item.id}">
+          <BreadcrumbList className="text-xs">
+            <BreadcrumbItem><BreadcrumbLink asChild><Link href="/">Home</Link></BreadcrumbLink></BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem><BreadcrumbPage className="text-xs font-medium">${labelText}</BreadcrumbPage></BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>`;
+    }
+
+    if (item.type === "alert-dialog") {
+      neededShadcnImports.add('import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@workspace/ui/components/alert-dialog";');
+      neededShadcnImports.add('import { Button } from "@workspace/ui/components/button";');
+      const descText = item.description || "Confirm this action.";
+      return `<AlertDialog key="${item.id}">
+          <AlertDialogTrigger asChild>
+            <Button variant="${item.variant || "outline"}" size="sm"${disabledAttr}>${labelText}</Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-sm font-semibold">${labelText}</AlertDialogTitle>
+              <AlertDialogDescription className="text-xs text-muted-foreground">
+                {valVar ? (typeof ${valVar} === "object" ? JSON.stringify(${valVar}) : String(${valVar})) : "${descText}"}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="text-xs">Cancel</AlertDialogCancel>
+              <AlertDialogAction className="text-xs"${clickAttr}>Continue</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>`;
+    }
+
+    if (item.type === "collapsible") {
+      neededShadcnImports.add('import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@workspace/ui/components/collapsible";');
+      neededShadcnImports.add('import { Button } from "@workspace/ui/components/button";');
+      const descText = item.description || "Collapsible content and options";
+      return `<Collapsible key="${item.id}" className="w-full">
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm" className="text-xs justify-between w-full">${labelText} ▾</Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="text-xs text-muted-foreground pt-1 px-2">
+            {valVar ? (typeof ${valVar} === "object" ? JSON.stringify(${valVar}) : String(${valVar})) : "${descText}"}
+          </CollapsibleContent>
+        </Collapsible>`;
+    }
+
+    if (item.type === "spinner") {
+      neededShadcnImports.add('import { Spinner } from "@workspace/ui/components/spinner";');
+      return `<div key="${item.id}" className="flex items-center gap-2 text-xs text-muted-foreground"><Spinner className="size-4" /><span>${labelText}</span></div>`;
+    }
+
+    if (item.type === "toggle") {
+      neededShadcnImports.add('import { Toggle } from "@workspace/ui/components/toggle";');
+      return `<Toggle key="${item.id}" size="sm" aria-label="${labelText}"${disabledAttr}${clickAttr}>${labelText}</Toggle>`;
+    }
+
+    if (item.type === "toggle-group") {
+      neededShadcnImports.add('import { ToggleGroup, ToggleGroupItem } from "@workspace/ui/components/toggle-group";');
+      return `<ToggleGroup key="${item.id}" type="single" size="sm"${disabledAttr}>
+          <ToggleGroupItem value="item-1" className="text-xs">${labelText}</ToggleGroupItem>
+          <ToggleGroupItem value="item-2" className="text-xs">Option 2</ToggleGroupItem>
+        </ToggleGroup>`;
+    }
+
+    if (item.type === "table") {
+      neededShadcnImports.add('import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@workspace/ui/components/table";');
+      return `<Table key="${item.id}" className="text-xs">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs">${labelText}</TableHead>
+              <TableHead className="text-xs">Value</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell className="text-xs font-medium">${labelText}</TableCell>
+              <TableCell className="text-xs">{valVar ? (typeof ${valVar} === "object" ? JSON.stringify(${valVar}) : String(${valVar})) : "Data"}</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>`;
+    }
+
+    if (item.type === "aspect-ratio") {
+      neededShadcnImports.add('import { AspectRatio } from "@workspace/ui/components/aspect-ratio";');
+      return `<div key="${item.id}" className="w-full max-w-[200px] overflow-hidden rounded-md border"><AspectRatio ratio={16 / 9} className="bg-muted flex items-center justify-center text-xs text-muted-foreground">${labelText}</AspectRatio></div>`;
+    }
+
+    if (item.type === "calendar") {
+      neededShadcnImports.add('import { Calendar } from "@workspace/ui/components/calendar";');
+      return `<Calendar key="${item.id}" mode="single" className="rounded-md border shadow-xs text-xs" />`;
+    }
+
+    if (item.type === "kbd") {
+      neededShadcnImports.add('import { Kbd } from "@workspace/ui/components/kbd";');
+      return `<Kbd key="${item.id}" className="text-xs">${labelText}</Kbd>`;
+    }
+
+    if (item.type === "empty") {
+      neededShadcnImports.add('import { Empty, EmptyTitle, EmptyDescription } from "@workspace/ui/components/empty";');
+      const descText = item.description || "No data available";
+      return `<Empty key="${item.id}" className="p-4 border rounded-lg text-center"><EmptyTitle className="text-xs font-semibold">${labelText}</EmptyTitle><EmptyDescription className="text-xs text-muted-foreground">${descText}</EmptyDescription></Empty>`;
+    }
+
+    if (item.type === "item") {
+      neededShadcnImports.add('import { Item, ItemContent, ItemTitle, ItemDescription } from "@workspace/ui/components/item";');
+      const descText = item.description || "";
+      return `<Item key="${item.id}" className="p-2 border rounded-md"><ItemContent><ItemTitle className="text-xs font-semibold">${labelText}</ItemTitle><ItemDescription className="text-xs text-muted-foreground">${descText}</ItemDescription></ItemContent></Item>`;
+    }
+
+    if (item.type === "field") {
+      neededShadcnImports.add('import { Field, FieldLabel, FieldDescription } from "@workspace/ui/components/field";');
+      neededShadcnImports.add('import { Input } from "@workspace/ui/components/input";');
+      const descText = item.description || "";
+      return `<Field key="${item.id}" className="gap-1"><FieldLabel className="text-xs">${labelText}</FieldLabel><Input placeholder="${item.placeholder || labelText}" className="h-8 text-xs max-w-xs" /><FieldDescription className="text-[10px] text-muted-foreground">${descText}</FieldDescription></Field>`;
+    }
+
+    if (item.type === "pagination") {
+      neededShadcnImports.add('import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from "@workspace/ui/components/pagination";');
+      return `<Pagination key="${item.id}"><PaginationContent><PaginationItem><PaginationPrevious href="#" className="text-xs" /></PaginationItem><PaginationItem><PaginationLink href="#" isActive className="text-xs">1</PaginationLink></PaginationItem><PaginationItem><PaginationNext href="#" className="text-xs" /></PaginationItem></PaginationContent></Pagination>`;
     }
 
     // Default fallback

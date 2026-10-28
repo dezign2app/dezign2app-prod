@@ -169,7 +169,15 @@ export function generateZustandStore(
       if (f.type?.endsWith("[]")) {
         rawTs = f.type;
       } else if (f.type === "array") {
-        rawTs = "unknown[]";
+        if (
+          f.name === "navItems" ||
+          (typeof f.defaultValue === "string" && f.defaultValue.includes('"link"') && f.defaultValue.includes('"name"')) ||
+          (Array.isArray(f.defaultValue) && f.defaultValue.some((it) => typeof it === "object" && it !== null && ("name" in it || "link" in it)))
+        ) {
+          rawTs = "{ id?: string; name?: string; link?: string; icon?: string }[]";
+        } else {
+          rawTs = "unknown[]";
+        }
       } else {
         const base = mapFieldTypeToTs(f.type);
         rawTs = base === "unknown" ? "unknown[]" : `${base}[]`;
@@ -228,11 +236,17 @@ export function generateZustandStore(
     const fPascal = toPascalCase(f.name);
     let itemTsType = "string";
     if (isArrayField(f)) {
-      itemTsType = f.type.endsWith("[]")
-        ? f.type.slice(0, -2)
-        : f.type === "array"
-        ? "unknown"
-        : "unknown";
+      if (f.type.endsWith("[]")) {
+        itemTsType = f.type.slice(0, -2);
+      } else if (
+        f.name === "navItems" ||
+        (typeof f.defaultValue === "string" && f.defaultValue.includes('"link"') && f.defaultValue.includes('"name"')) ||
+        (Array.isArray(f.defaultValue) && f.defaultValue.some((it) => typeof it === "object" && it !== null && ("name" in it || "link" in it)))
+      ) {
+        itemTsType = "{ id?: string; name?: string; link?: string; icon?: string }";
+      } else {
+        itemTsType = "unknown";
+      }
     } else if (f.type === "string") {
       itemTsType = "string";
     } else {
@@ -333,7 +347,13 @@ export function generateZustandStore(
   const prependLines = activePrependFields.map((f) => {
     const fPascal = toPascalCase(f.name);
     const itemTsType = isArrayField(f)
-      ? (f.type.endsWith("[]") ? f.type.slice(0, -2) : "unknown")
+      ? (f.type.endsWith("[]")
+          ? f.type.slice(0, -2)
+          : (f.name === "navItems" ||
+             (typeof f.defaultValue === "string" && f.defaultValue.includes('"link"') && f.defaultValue.includes('"name"')) ||
+             (Array.isArray(f.defaultValue) && f.defaultValue.some((it) => typeof it === "object" && it !== null && ("name" in it || "link" in it))))
+            ? "{ id?: string; name?: string; link?: string; icon?: string }"
+            : "unknown")
       : "string";
     return `  prepend${fPascal}: (item?: ${itemTsType}) => void;`;
   });
@@ -635,7 +655,7 @@ ${payloadPrep}
     if (isStringField(f)) {
       return `  append${fPascal}: (item = "") => set((s) => ({ ${fName}: (s.${fName} || "") + String(item ?? "") })),`;
     }
-    return `  append${fPascal}: (item) => set((s) => ({ ${fName}: Array.isArray(s.${fName}) ? (item !== undefined ? [...s.${fName}, item] : s.${fName}) : (typeof s.${fName} === "string" ? (s.${fName} || "") + String(item ?? "") : (item !== undefined ? [item] : [])) })),`;
+    return `  append${fPascal}: (item) => set((s) => ({ ${fName}: Array.isArray(s.${fName}) ? (item !== undefined ? [...s.${fName}, item] : s.${fName}) : (item !== undefined ? [item] : []) })),`;
   });
 
   const popImpls = activePopFields.map((f) => {

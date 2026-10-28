@@ -19,6 +19,7 @@ import { isStorageRefNode } from "@/lib/stores/backendCanvas/edge/utils";
 import { Label } from "@workspace/ui/components/label";
 import { Input } from "@workspace/ui/components/input";
 import { Badge } from "@workspace/ui/components/badge";
+import { Checkbox } from "@workspace/ui/components/checkbox";
 import {
   Select,
   SelectContent,
@@ -114,6 +115,13 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
   const [wsConfig, setWsConfig] = useState(item?.wsConfig || {});
   const [webRtcConfig, setWebRtcConfig] = useState(item?.webRtcConfig || {});
   const [pollingConfig, setPollingConfig] = useState(item?.pollingConfig || {});
+  const [itemKeyField, setItemKeyField] = useState(
+    item?.itemContextFields?.[0] || "id",
+  );
+  const [selectedStateId, setSelectedStateId] = useState<string>(
+    item?.itemSourceStateId || "",
+  );
+  const [customStateName, setCustomStateName] = useState<string>("");
 
   useEffect(() => {
     if (item) {
@@ -128,6 +136,8 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
       setWsConfig(item.wsConfig || {});
       setWebRtcConfig(item.webRtcConfig || {});
       setPollingConfig(item.pollingConfig || {});
+      setItemKeyField(item.itemContextFields?.[0] || "id");
+      setSelectedStateId(item.itemSourceStateId || "");
     }
   }, [item]);
 
@@ -322,6 +332,43 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
   const isWebsocket = eventType === "websocket";
   const isWebrtc = eventType === "webrtc";
   const isPolling = eventType === "polling";
+  const sourceState = item?.itemSourceStateId
+    ? parentSection?.stateObjects?.find(
+        (st) => st.id === item.itemSourceStateId || st.name === item.itemSourceStateId,
+      )
+    : undefined;
+
+  const isItemScoped = item?.scope === "item";
+  const sectionStateObjects = parentSection?.stateObjects || [];
+  const arrayStateObjects = sectionStateObjects.filter(
+    (st) => st.type === "array" || st.type?.endsWith("[]") || st.type?.includes("[]"),
+  );
+  const eligibleStates = arrayStateObjects.length > 0 ? arrayStateObjects : sectionStateObjects;
+
+  const handleToggleItemScoped = (checked: boolean) => {
+    if (checked) {
+      const defaultState = eligibleStates.find((st) => st.id === selectedStateId) || eligibleStates[0];
+      const defaultStateId = defaultState?.id || selectedStateId || "";
+      setSelectedStateId(defaultStateId);
+      updateActionInParent({
+        scope: "item",
+        itemSourceStateId: defaultStateId,
+        itemContextFields: [itemKeyField || "id"],
+      });
+    } else {
+      updateActionInParent({
+        scope: "section",
+        itemSourceStateId: undefined,
+      });
+    }
+  };
+
+  const handleSelectTargetState = (stateId: string) => {
+    setSelectedStateId(stateId);
+    updateActionInParent({
+      itemSourceStateId: stateId,
+    });
+  };
 
   return (
     <div className="flex flex-col gap-5 font-sans">
@@ -337,6 +384,11 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
               <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 uppercase">
                 {eventType}
               </Badge>
+              {isItemScoped && (
+                <Badge variant="secondary" className="text-[10px] font-mono px-1.5 py-0 bg-violet-500/15 text-violet-400 border border-violet-500/30">
+                  Item Scoped
+                </Badge>
+              )}
             </div>
           </div>
           {parentSection?.name ? (
@@ -383,6 +435,108 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
               placeholder="e.g. submitOrder, fetchUserProfile"
             />
           </div>
+        </div>
+
+        {/* Checkbox for Array Item Action */}
+        <div className="pt-2.5 border-t border-border/40 flex flex-col gap-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="is-item-scoped"
+                checked={isItemScoped}
+                onCheckedChange={(checked) => {
+                  handleToggleItemScoped(Boolean(checked));
+                }}
+              />
+              <label
+                htmlFor="is-item-scoped"
+                className="text-xs font-medium cursor-pointer select-none text-foreground flex items-center gap-1.5"
+              >
+                <span>Trigger per Array Item</span>
+                <span className="text-[10px] text-muted-foreground font-normal">
+                  (attach action to individual array items)
+                </span>
+              </label>
+            </div>
+            {isItemScoped && (
+              <Badge variant="outline" className="text-[9px] font-mono border-violet-500/40 text-violet-300">
+                {sourceState?.name ? `${sourceState.name}[]` : "array item"}
+              </Badge>
+            )}
+          </div>
+
+          {isItemScoped && (
+            <div className="p-3 rounded-lg border border-violet-500/30 bg-violet-500/[0.04] flex flex-col gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="flex flex-col gap-1">
+                  <Label className="text-[10px] font-medium text-muted-foreground">
+                    Target Array State
+                  </Label>
+                  {eligibleStates.length > 0 ? (
+                    <Select
+                      value={selectedStateId || eligibleStates[0]?.id || ""}
+                      onValueChange={(val) => handleSelectTargetState(val)}
+                    >
+                      <SelectTrigger className="h-7 text-xs font-mono bg-background">
+                        <SelectValue placeholder="Select target state" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {eligibleStates.map((st) => (
+                          <SelectItem key={st.id} value={st.id} className="text-xs font-mono">
+                            {st.name} ({st.type})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      className="h-7 text-xs font-mono bg-background"
+                      placeholder="e.g. messages, items"
+                      value={customStateName}
+                      onChange={(e) => setCustomStateName(e.target.value)}
+                      onBlur={() => {
+                        const cleaned = customStateName.trim();
+                        if (cleaned) {
+                          updateActionInParent({ itemSourceStateId: cleaned });
+                        }
+                      }}
+                    />
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <Label className="text-[10px] font-medium text-muted-foreground">
+                    Item Context Identifier Key
+                  </Label>
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      className="h-7 text-xs font-mono bg-background"
+                      placeholder="e.g. id, uuid, slug"
+                      value={itemKeyField}
+                      onChange={(e) => setItemKeyField(e.target.value)}
+                      onBlur={() => {
+                        const cleaned = itemKeyField.trim() || "id";
+                        setItemKeyField(cleaned);
+                        updateActionInParent({ itemContextFields: [cleaned] });
+                      }}
+                    />
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap font-mono">
+                      item.{itemKeyField || "id"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-[10px] text-muted-foreground leading-relaxed">
+                Clicking an item in{" "}
+                <span className="font-semibold text-foreground font-mono">
+                  {sourceState?.name || "the array"}
+                </span>{" "}
+                triggers this action and passes{" "}
+                <code className="text-violet-400 font-mono">&#123; {itemKeyField || "id"}: item.{itemKeyField || "id"} &#125;</code> into the request.
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
