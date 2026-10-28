@@ -521,7 +521,10 @@ export const StateStoreNode = ({
             data.fields.map((f) => {
               const isDupe = duplicateFieldIds.has(f.id);
               const isEditingField = editingFieldId === f.id;
-              const isCustomType = availableCustomTypes.some((t) => t.name === f.type);
+              const cleanFieldBaseType = (f.type || "").replace(/\[\]$/, "").trim();
+              const isCustomType = availableCustomTypes.some(
+                (t) => t.name === f.type || t.name === cleanFieldBaseType,
+              );
               const supportedActions = f.actions && f.actions.length > 0
                 ? f.actions
                 : getSupportedActionsForType(f.type, f.isArray);
@@ -592,7 +595,10 @@ export const StateStoreNode = ({
                       <TwoStepTypeSelector
                         value={f.type}
                         onValueChange={(newType) => {
-                          const isCustom = availableCustomTypes.some((t) => t.name === newType);
+                          const cleanNewType = newType.replace(/\[\]$/, "").trim();
+                          const isCustom = availableCustomTypes.some(
+                            (t) => t.name === newType || t.name === cleanNewType,
+                          );
                           const patch: Partial<GlobalStoreField> = {
                             type: newType,
                             actions: getSupportedActionsForType(isCustom ? "object" : newType, f.isArray),
@@ -699,11 +705,7 @@ export const StateStoreNode = ({
                       <span>{supportedActions.length} actions</span>
                     </Badge>
 
-                    {f.defaultValue !== undefined && f.defaultValue !== "" && (
-                      <span className="text-[7.5px] text-muted-foreground/60 truncate font-mono">
-                        = {typeof f.defaultValue === "object" ? JSON.stringify(f.defaultValue) : String(f.defaultValue)}
-                      </span>
-                    )}
+
                   </div>
 
                   <div className="flex items-center gap-0.5 ml-1 shrink-0">

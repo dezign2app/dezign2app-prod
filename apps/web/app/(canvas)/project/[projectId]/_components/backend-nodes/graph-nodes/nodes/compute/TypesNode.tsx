@@ -426,3 +426,74 @@ export const TypesNode = ({
     </div>
   );
 };
+
+
+/**
+ * Standard Navigation item type definition used for sidebar and navigation components.
+ */
+export const NAV_ITEM_CUSTOM_TYPE: CustomTypeItem = {
+  id: "type-nav-item",
+  name: "NavItem",
+  kind: "interface",
+  description: "Navigation item definition for sidebar and menus",
+  fields: [
+    { id: "f-nav-id", name: "id", type: "string", required: true, isArray: false, description: "Unique item key" },
+    { id: "f-nav-name", name: "name", type: "string", required: true, isArray: false, description: "Menu label" },
+    { id: "f-nav-link", name: "link", type: "string", required: true, isArray: false, description: "Route URL path" },
+    { id: "f-nav-icon", name: "icon", type: "string", required: false, isArray: false, description: "Lucide icon name" },
+  ],
+};
+
+/**
+ * Ensures a TypesNode exists on the canvas containing the NavItem interface.
+ * If a custom TypesNode exists, appends NavItem if not present.
+ * If no TypesNode exists, adds a new TypesNode to the canvas.
+ * Returns the TypesNode ID and the CustomTypeItem.
+ */
+export function ensureNavItemTypeOnCanvas(
+  referencePosition?: { x: number; y: number },
+): { typesNodeId: string; typeItem: CustomTypeItem } {
+  const store = useBackendCanvasStore.getState();
+  const currentNodes = store.nodes;
+
+  const existingTypesNode =
+    currentNodes.find(
+      (n) =>
+        n.type === "types" &&
+        !n.data?.isEntitySchemas &&
+        !n.data?.isServiceEndpointSchemas &&
+        !n.data?.isPackageNode,
+    ) || currentNodes.find((n) => n.type === "types");
+
+  if (existingTypesNode) {
+    const currentTypes: CustomTypeItem[] = existingTypesNode.data?.types || [];
+    const existingNavItem = currentTypes.find((t) => t.name === "NavItem");
+    if (existingNavItem) {
+      return { typesNodeId: existingTypesNode.id, typeItem: existingNavItem };
+    }
+    const updatedTypes = [...currentTypes, NAV_ITEM_CUSTOM_TYPE];
+    store.updateNode(existingTypesNode.id, {
+      data: {
+        ...existingTypesNode.data,
+        types: updatedTypes,
+      },
+    });
+    return { typesNodeId: existingTypesNode.id, typeItem: NAV_ITEM_CUSTOM_TYPE };
+  }
+
+  const newTypesNodeId = `types-${Date.now()}`;
+  const pos = referencePosition || { x: 480, y: 100 };
+  const newTypesNode: BackendNode = {
+    id: newTypesNodeId,
+    type: "types",
+    position: { x: pos.x, y: pos.y },
+    selected: false,
+    data: {
+      label: "App Types",
+      scope: "global",
+      types: [NAV_ITEM_CUSTOM_TYPE],
+    },
+  };
+  store.addNode(newTypesNode);
+  return { typesNodeId: newTypesNodeId, typeItem: NAV_ITEM_CUSTOM_TYPE };
+}
