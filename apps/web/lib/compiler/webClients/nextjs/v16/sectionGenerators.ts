@@ -1038,6 +1038,8 @@ export default ${sectionCompName};
 
       const collapsible = item.propMappings?.sidebarCollapsible || "offcanvas";
       const variant = item.propMappings?.sidebarVariant || "sidebar";
+      const side = item.propMappings?.sidebarSide;
+      const sideAttr = side ? ` side="${side}"` : "";
       const navMode = item.propMappings?.sidebarNavMode || "dynamic";
       const activeNavVar = item.propMappings?.sidebarNavBinding
         ? toCamelCase(item.propMappings.sidebarNavBinding)
@@ -1045,7 +1047,7 @@ export default ${sectionCompName};
 
       if (navMode === "dynamic" && activeNavVar) {
         return `<SidebarProvider key="${item.id}" className="min-h-0 w-auto">
-            <Sidebar collapsible="${collapsible}" variant="${variant}">
+            <Sidebar${sideAttr} collapsible="${collapsible}" variant="${variant}">
               <SidebarContent>
                 <SidebarGroup>
                   <SidebarGroupLabel className="text-[10px]">Navigation</SidebarGroupLabel>
@@ -1089,7 +1091,7 @@ export default ${sectionCompName};
         .join("\n");
 
       return `<SidebarProvider key="${item.id}" className="min-h-0 w-auto">
-            <Sidebar collapsible="${collapsible}" variant="${variant}">
+            <Sidebar${sideAttr} collapsible="${collapsible}" variant="${variant}">
               <SidebarContent>
                 <SidebarGroup>
                   <SidebarGroupLabel className="text-[10px]">Navigation</SidebarGroupLabel>

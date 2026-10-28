@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Sparkles, MousePointerClick, AlertTriangle, Timer, X, Check, PanelLeft } from "lucide-react";
+import { Sparkles, MousePointerClick, AlertTriangle, Timer, X, Check, PanelLeft, PanelLeftClose, PanelLeftOpen, LayoutDashboard, BarChart2, Folder, Settings, Menu } from "lucide-react";
 import {
   StateRenderComponent,
   StateRenderConfig,
@@ -93,6 +93,10 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
 }) => {
   const labelToRender = customLabel?.trim() || "";
   const isMultiElement = Boolean(elements && elements.length > 1);
+
+  // Live interactive state for Input component preview
+  // Live interactive state for Sidebar preview
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // Live interactive state for Input component preview
   const [liveInputValue, setLiveInputValue] = useState<string>(String(formattedPreviewValue ?? ""));
@@ -621,46 +625,194 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
               ];
 
           const variant = propMappings.sidebarVariant || "sidebar";
+          const side = propMappings.sidebarSide || "left";
+          const collapsible = propMappings.sidebarCollapsible || "offcanvas";
+          const title = propMappings.sidebarTitle ?? "Dezign App";
+
+          const isCollapsed = collapsible !== "none" && !sidebarOpen;
+          const isIconMode = collapsible === "icon" && isCollapsed;
+          const isOffcanvasClosed = collapsible === "offcanvas" && isCollapsed;
+
+          const navIcons = [LayoutDashboard, BarChart2, Folder, Settings];
 
           return (
-            <div className="w-full flex justify-center py-1">
-              <SidebarProvider className="min-h-0 w-auto">
-                <Sidebar collapsible="none" variant={variant} className="w-56 border rounded-lg overflow-hidden bg-sidebar shadow-xs">
-                  <SidebarContent>
-                    <SidebarGroup>
-                      <SidebarGroupLabel className="text-[10px]">Navigation</SidebarGroupLabel>
-                      <SidebarGroupContent>
-                        <SidebarMenu>
-                          {items.map((item: any, idx: number) => {
-                            const isActive = idx === 0;
-                            return (
-                              <SidebarMenuItem key={item.id || idx}>
-                                <SidebarMenuButton
-                                  asChild
-                                  tooltip={item.name}
-                                  isActive={isActive}
-                                  onClick={() => {
-                                    toast.info(`Simulated route: ${item.link || item.name}`);
-                                  }}
+            <div className="w-full flex flex-col gap-2.5">
+              {/* Interactive Collapsible Mode Toolbar */}
+              <div className="flex items-center justify-between px-1 text-[10px]">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground font-medium">Mode:</span>
+                  {collapsible === "icon" && (
+                    <Badge variant="outline" className="text-[9px] font-mono px-1.5 py-0 bg-cyan-500/10 text-cyan-500 border-cyan-500/20">
+                      Icon Rail (Collapsible)
+                    </Badge>
+                  )}
+                  {collapsible === "offcanvas" && (
+                    <Badge variant="outline" className="text-[9px] font-mono px-1.5 py-0 bg-amber-500/10 text-amber-500 border-amber-500/20">
+                      Offcanvas (Mobile Drawer)
+                    </Badge>
+                  )}
+                  {collapsible === "none" && (
+                    <Badge variant="outline" className="text-[9px] font-mono px-1.5 py-0 text-muted-foreground border-border/50">
+                      Fixed (Non-Collapsible)
+                    </Badge>
+                  )}
+                </div>
+
+                {collapsible !== "none" && (
+                  <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-md border border-border/40">
+                    <button
+                      type="button"
+                      onClick={() => setSidebarOpen(true)}
+                      className={cn(
+                        "px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors cursor-pointer",
+                        sidebarOpen
+                          ? "bg-background text-foreground shadow-2xs font-semibold"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      Expanded
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSidebarOpen(false)}
+                      className={cn(
+                        "px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors cursor-pointer",
+                        !sidebarOpen
+                          ? "bg-background text-foreground shadow-2xs font-semibold"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {collapsible === "icon" ? "Icon Rail" : "Drawer Closed"}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Sidebar View Container */}
+              <div className={`w-full flex py-1 ${side === "right" ? "justify-end" : "justify-start"}`}>
+                {isOffcanvasClosed ? (
+                  /* Offcanvas Closed State Placeholder with Trigger */
+                  <div className="w-full flex items-center justify-between p-3 rounded-lg border border-dashed border-border/70 bg-muted/20">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSidebarOpen(true)}
+                        className="h-7 text-xs font-medium cursor-pointer shadow-2xs gap-1.5"
+                      >
+                        <Menu size={13} />
+                        <span>Toggle Sidebar</span>
+                      </Button>
+                      <span className="text-[11px] text-muted-foreground">
+                        Sidebar is hidden off-screen (Drawer Closed)
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <SidebarProvider className="min-h-0 w-auto">
+                    <Sidebar
+                      collapsible="none"
+                      variant={variant}
+                      side={side}
+                      className={cn(
+                        "border overflow-hidden bg-sidebar shadow-xs transition-all duration-200",
+                        isIconMode ? "w-14" : "w-56",
+                        variant === "floating"
+                          ? "rounded-xl m-1.5 shadow-md border-border/80"
+                          : variant === "inset"
+                          ? "rounded-lg border-dashed"
+                          : "rounded-lg"
+                      )}
+                    >
+                      <SidebarContent>
+                        {/* Sidebar Header & Toggle */}
+                        <div className="flex items-center justify-between px-2.5 py-2 border-b border-border/40">
+                          {!isIconMode ? (
+                            <>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <PanelLeft size={13} className="text-primary shrink-0" />
+                                <span className="text-xs font-semibold truncate text-foreground">
+                                  {title}
+                                </span>
+                              </div>
+                              {collapsible !== "none" && (
+                                <button
+                                  type="button"
+                                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                                  title="Toggle Sidebar"
+                                  className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer"
                                 >
-                                  <a href={item.link || "#"} className="text-xs">
-                                    <span>{item.name || `Nav ${idx + 1}`}</span>
-                                  </a>
-                                </SidebarMenuButton>
-                              </SidebarMenuItem>
-                            );
-                          })}
-                        </SidebarMenu>
-                      </SidebarGroupContent>
-                    </SidebarGroup>
-                  </SidebarContent>
-                </Sidebar>
-              </SidebarProvider>
+                                  <PanelLeftClose size={12} />
+                                </button>
+                              )}
+                            </>
+                          ) : (
+                            <div className="w-full flex justify-center">
+                              <button
+                                type="button"
+                                onClick={() => setSidebarOpen(true)}
+                                title="Expand Sidebar"
+                                className="p-1 rounded text-primary hover:bg-muted/60 transition-colors cursor-pointer"
+                              >
+                                <PanelLeftOpen size={13} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        <SidebarGroup>
+                          {!isIconMode && (
+                            <SidebarGroupLabel className="text-[10px] flex items-center justify-between">
+                              <span>Navigation</span>
+                              <span className="text-[8px] font-mono text-muted-foreground uppercase">
+                                {side} · {variant}
+                              </span>
+                            </SidebarGroupLabel>
+                          )}
+                          <SidebarGroupContent>
+                            <SidebarMenu className={isIconMode ? "items-center" : ""}>
+                              {items.map((item: any, idx: number) => {
+                                const isActive = idx === 0;
+                                const NavIcon = navIcons[idx % navIcons.length];
+                                return (
+                                  <SidebarMenuItem key={item.id || idx}>
+                                    <SidebarMenuButton
+                                      asChild
+                                      tooltip={item.name}
+                                      isActive={isActive}
+                                      onClick={() => {
+                                        toast.info(`Simulated route: ${item.link || item.name}`);
+                                      }}
+                                    >
+                                      <a
+                                        href={item.link || "#"}
+                                        className={cn(
+                                          "text-xs flex items-center gap-2",
+                                          isIconMode && "justify-center p-1.5"
+                                        )}
+                                        title={item.name}
+                                      >
+                                        <NavIcon size={14} className="shrink-0" />
+                                        {!isIconMode && <span>{item.name || `Nav ${idx + 1}`}</span>}
+                                      </a>
+                                    </SidebarMenuButton>
+                                  </SidebarMenuItem>
+                                );
+                              })}
+                            </SidebarMenu>
+                          </SidebarGroupContent>
+                        </SidebarGroup>
+                      </SidebarContent>
+                    </Sidebar>
+                  </SidebarProvider>
+                )}
+              </div>
             </div>
           );
         })()}
 
-        {currentClickAction !== "none" && (
+                {currentClickAction !== "none" && (
           <div className="mt-3 flex items-center gap-1 text-[10px] text-muted-foreground/80">
             <MousePointerClick size={10} className="text-cyan-500" />
             <span>Click to test interactive action ({currentClickAction})</span>
