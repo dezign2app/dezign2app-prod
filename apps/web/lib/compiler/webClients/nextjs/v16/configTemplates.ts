@@ -192,7 +192,19 @@ export default nextConfig;
     {
       filename: "app/globals.css",
       language: "css",
-      content: `@import "@workspace/ui/globals.css";\n`,
+      content: `@import "@workspace/ui/globals.css";
+
+@theme inline {
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+}
+`,
     },
   ];
 }

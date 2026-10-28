@@ -58,6 +58,14 @@ const toValidBadgeVariant = (
   return "secondary";
 };
 
+interface SidebarPreviewItem {
+  id?: string;
+  name?: string;
+  link?: string;
+  icon?: string;
+  badge?: string;
+}
+
 export interface StateComponentPreviewProps {
   currentComponent: StateRenderComponent;
   currentVariant: NonNullable<StateRenderConfig["variant"]>;
@@ -611,18 +619,36 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
 
         {currentComponent === "sidebar" && (() => {
           const navMode = propMappings.sidebarNavMode || "dynamic";
-          const rawItems = navMode === "dynamic"
-            ? (Array.isArray(sampleValue) ? sampleValue : propMappings.sidebarStaticItems)
-            : propMappings.sidebarStaticItems;
+          const defaultItems: SidebarPreviewItem[] = [
+            { id: "nav-1", name: "Dashboard", link: "/dashboard" },
+            { id: "nav-2", name: "Analytics", link: "/analytics" },
+            { id: "nav-3", name: "Projects", link: "/projects" },
+            { id: "nav-4", name: "Settings", link: "/settings" },
+          ];
 
-          const items = Array.isArray(rawItems) && rawItems.length > 0
-            ? rawItems
-            : [
-                { id: "nav-1", name: "Dashboard", link: "/dashboard" },
-                { id: "nav-2", name: "Analytics", link: "/analytics" },
-                { id: "nav-3", name: "Projects", link: "/projects" },
-                { id: "nav-4", name: "Settings", link: "/settings" },
-              ];
+          const parseSidebarItem = (val: JSONValue): SidebarPreviewItem | null => {
+            if (typeof val === "object" && val !== null && !Array.isArray(val)) {
+              const id = typeof val.id === "string" ? val.id : undefined;
+              const name = typeof val.name === "string" ? val.name : (typeof val.label === "string" ? val.label : (typeof val.title === "string" ? val.title : undefined));
+              const link = typeof val.link === "string" ? val.link : (typeof val.href === "string" ? val.href : (typeof val.url === "string" ? val.url : undefined));
+              const icon = typeof val.icon === "string" ? val.icon : undefined;
+              const badge = typeof val.badge === "string" ? val.badge : undefined;
+              return { id, name, link, icon, badge };
+            }
+            return null;
+          };
+
+          const dynamicItems: SidebarPreviewItem[] = Array.isArray(sampleValue)
+            ? sampleValue.map(parseSidebarItem).filter((i): i is SidebarPreviewItem => i !== null)
+            : [];
+
+          const staticItems: SidebarPreviewItem[] = propMappings.sidebarStaticItems || [];
+
+          const rawItems = navMode === "dynamic"
+            ? (dynamicItems.length > 0 ? dynamicItems : staticItems)
+            : staticItems;
+
+          const items: SidebarPreviewItem[] = rawItems.length > 0 ? rawItems : defaultItems;
 
           const variant = propMappings.sidebarVariant || "sidebar";
           const side = propMappings.sidebarSide || "left";
@@ -716,7 +742,7 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
                       variant={variant}
                       side={side}
                       className={cn(
-                        "border overflow-hidden bg-sidebar shadow-xs transition-all duration-200",
+                        "border relative bg-sidebar shadow-xs transition-all duration-200",
                         isIconMode ? "w-14" : "w-56",
                         variant === "floating"
                           ? "rounded-xl m-1.5 shadow-md border-border/80"
@@ -726,40 +752,32 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
                       )}
                     >
                       <SidebarContent>
-                        {/* Sidebar Header & Toggle */}
+                        {/* Sidebar Header */}
                         <div className="flex items-center justify-between px-2.5 py-2 border-b border-border/40">
-                          {!isIconMode ? (
-                            <>
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <PanelLeft size={13} className="text-primary shrink-0" />
-                                <span className="text-xs font-semibold truncate text-foreground">
-                                  {title}
-                                </span>
-                              </div>
-                              {collapsible !== "none" && (
-                                <button
-                                  type="button"
-                                  onClick={() => setSidebarOpen(!sidebarOpen)}
-                                  title="Toggle Sidebar"
-                                  className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer"
-                                >
-                                  <PanelLeftClose size={12} />
-                                </button>
-                              )}
-                            </>
-                          ) : (
-                            <div className="w-full flex justify-center">
-                              <button
-                                type="button"
-                                onClick={() => setSidebarOpen(true)}
-                                title="Expand Sidebar"
-                                className="p-1 rounded text-primary hover:bg-muted/60 transition-colors cursor-pointer"
-                              >
-                                <PanelLeftOpen size={13} />
-                              </button>
-                            </div>
-                          )}
+                          <div className={cn("flex items-center gap-1.5 min-w-0", isIconMode && "justify-center w-full")}>
+                            <PanelLeft size={13} className="text-primary shrink-0" />
+                            {!isIconMode && (
+                              <span className="text-xs font-semibold truncate text-foreground">
+                                {title}
+                              </span>
+                            )}
+                          </div>
                         </div>
+
+                        {/* Floating Toggle Button outside sidebar edge */}
+                        {collapsible !== "none" && (
+                          <button
+                            type="button"
+                            onClick={() => setSidebarOpen(!sidebarOpen)}
+                            title={sidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
+                            className={cn(
+                              "absolute top-3.5 z-30 h-5 w-5 rounded-full border border-border/80 bg-background shadow-xs hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition-transform duration-150 hover:scale-105",
+                              side === "right" ? "-left-2.5" : "-right-2.5"
+                            )}
+                          >
+                            {sidebarOpen ? <PanelLeftClose size={10} /> : <PanelLeftOpen size={10} />}
+                          </button>
+                        )}
 
                         <SidebarGroup>
                           {!isIconMode && (
@@ -772,9 +790,9 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
                           )}
                           <SidebarGroupContent>
                             <SidebarMenu className={isIconMode ? "items-center" : ""}>
-                              {items.map((item: any, idx: number) => {
+                              {items.map((item: SidebarPreviewItem, idx: number) => {
                                 const isActive = idx === 0;
-                                const NavIcon = navIcons[idx % navIcons.length];
+                                const NavIcon = (navIcons[idx % navIcons.length]) ?? Folder;
                                 return (
                                   <SidebarMenuItem key={item.id || idx}>
                                     <SidebarMenuButton

@@ -859,7 +859,7 @@ export function generatePageAndComponentFiles({
         renderMode: sec.renderMode,
         actions: secActionMetas,
         hasSidebar: (sec.componentBindings || []).some(
-          (cb) => cb.componentType === "sidebar" || (cb as any).type === "sidebar",
+          (cb) => cb.componentType === "sidebar",
         ),
       });
     });

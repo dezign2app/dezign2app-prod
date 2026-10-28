@@ -8,6 +8,7 @@ export interface SectionMeta {
   componentName: string;
   renderMode?: "server" | "client";
   actions?: EventComponentMeta[];
+  hasSidebar?: boolean;
 }
 
 const CLIENT_ONLY_PACKAGES = new Set([
@@ -644,7 +645,7 @@ export function generateSectionComponent(
 
   if (isNavOnly) {
     const hasSidebarBinding = (section.componentBindings || []).some(
-    (cb) => cb.componentType === "sidebar" || (cb as any).type === "sidebar",
+    (cb) => cb.componentType === "sidebar",
   );
 
   return `${isClient ? `"use client";\n\n` : ""}${reactImport}
@@ -1060,14 +1061,11 @@ export default ${sectionCompName};
         return `<SidebarProvider key="${item.id}" className="min-h-0 w-auto">
             <Sidebar${sideAttr} collapsible="${collapsible}" variant="${variant}">
               <SidebarHeader className="border-b border-sidebar-border px-3 py-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <PanelLeft className="size-4 text-primary shrink-0" />
-                    <span className="text-sm font-semibold truncate text-sidebar-foreground">
-                      ${title}
-                    </span>
-                  </div>
-                  <SidebarTrigger className="h-7 w-7 text-sidebar-foreground" />
+                <div className="flex items-center gap-2 min-w-0">
+                  <PanelLeft className="size-4 text-primary shrink-0" />
+                  <span className="text-sm font-semibold truncate group-data-[collapsible=icon]:hidden text-sidebar-foreground">
+                    ${title}
+                  </span>
                 </div>
               </SidebarHeader>
               <SidebarContent>
@@ -1079,9 +1077,9 @@ export default ${sectionCompName};
                         const NavIcon = ([LayoutDashboard, BarChart2, Folder, Settings][idx % 4]) ?? Folder;
                         return (
                           <SidebarMenuItem key={navItem?.id || idx}>
-                            <SidebarMenuButton asChild tooltip={navItem?.name}>
+                            <SidebarMenuButton asChild tooltip={navItem?.name} className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
                               <Link href={navItem?.link || "#"} className="text-xs">
-                                <NavIcon className="size-3.5 shrink-0 mr-2 inline-block" />
+                                <NavIcon className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
                                 <span>{navItem?.name || "Nav"}</span>
                               </Link>
                             </SidebarMenuButton>
@@ -1092,6 +1090,7 @@ export default ${sectionCompName};
                   </SidebarGroupContent>
                 </SidebarGroup>
               </SidebarContent>
+              <SidebarTrigger className="absolute -right-3.5 top-3.5 z-20 h-6 w-6 rounded-full border border-sidebar-border bg-background shadow-xs hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex items-center justify-center text-sidebar-foreground cursor-pointer transition-transform duration-150 group-data-[side=right]:-left-3.5 group-data-[side=right]:right-auto hover:scale-105" />
               <SidebarRail />
             </Sidebar>
           </SidebarProvider>`;
@@ -1111,9 +1110,9 @@ export default ${sectionCompName};
           (sItem, sIdx) => {
             const IconComp = navIconNames[sIdx % navIconNames.length];
             return `                      <SidebarMenuItem key="${sItem.id}">
-                        <SidebarMenuButton asChild tooltip="${sItem.name}">
+                        <SidebarMenuButton asChild tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
                           <Link href="${sItem.link || "#"}" className="text-xs">
-                            <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block" />
+                            <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
                             <span>${sItem.name}</span>
                           </Link>
                         </SidebarMenuButton>
@@ -1125,14 +1124,11 @@ export default ${sectionCompName};
       return `<SidebarProvider key="${item.id}" className="min-h-0 w-auto">
             <Sidebar${sideAttr} collapsible="${collapsible}" variant="${variant}">
               <SidebarHeader className="border-b border-sidebar-border px-3 py-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <PanelLeft className="size-4 text-primary shrink-0" />
-                    <span className="text-sm font-semibold truncate text-sidebar-foreground">
-                      ${title}
-                    </span>
-                  </div>
-                  <SidebarTrigger className="h-7 w-7 text-sidebar-foreground" />
+                <div className="flex items-center gap-2 min-w-0">
+                  <PanelLeft className="size-4 text-primary shrink-0" />
+                  <span className="text-sm font-semibold truncate group-data-[collapsible=icon]:hidden text-sidebar-foreground">
+                    ${title}
+                  </span>
                 </div>
               </SidebarHeader>
               <SidebarContent>
@@ -1145,6 +1141,7 @@ ${staticItemsJsx}
                   </SidebarGroupContent>
                 </SidebarGroup>
               </SidebarContent>
+              <SidebarTrigger className="absolute -right-3.5 top-3.5 z-20 h-6 w-6 rounded-full border border-sidebar-border bg-background shadow-xs hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex items-center justify-center text-sidebar-foreground cursor-pointer transition-transform duration-150 group-data-[side=right]:-left-3.5 group-data-[side=right]:right-auto hover:scale-105" />
               <SidebarRail />
             </Sidebar>
           </SidebarProvider>`;
@@ -1523,7 +1520,7 @@ ${staticItemsJsx}
     );
   }
   const hasSidebarBinding = (section.componentBindings || []).some(
-    (cb) => cb.componentType === "sidebar" || (cb as any).type === "sidebar",
+    (cb) => cb.componentType === "sidebar",
   );
   const contentJsx = contentParts.filter(Boolean).join("\n");
 
