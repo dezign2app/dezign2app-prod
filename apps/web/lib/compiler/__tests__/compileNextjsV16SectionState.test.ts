@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { BackendEdge, BackendNode } from "@/types/canvas";
 import { compileNextjsV16WebClient } from "../webClients/nextjs/v16";
+import { compileWebPageNodes } from "../compileWebPageNode";
 
 describe("compileNextjsV16SectionState", () => {
   it("generates typed useState hooks in client section components when section.states are present", () => {
@@ -1403,7 +1404,7 @@ describe("compileNextjsV16SectionState", () => {
     expect(code).toContain('<SidebarHeader className="p-3 border-b text-xs font-bold">Acme Console</SidebarHeader>');
 
     // Must map over dynamic navItems
-    expect(code).toContain("(navItems || []).map((navItem: any, idx: number) =>");
+    expect(code).toContain("(navItems || []).map((navItem, idx: number) =>");
     expect(code).toContain("<Link href={navItem?.link || \"#\"} className=\"text-xs\">");
     expect(code).toContain("<span>{navItem?.name || \"Nav\"}</span>");
   });
@@ -1527,6 +1528,77 @@ describe("compileNextjsV16SectionState", () => {
     expect(code).toContain('onTrigger?.("messageDetailClick", "click", "/api/messages/detail", "POST", false, undefined, undefined, { id: item?.id ?? item })');
     // Must render Badge component for items
     expect(code).toContain("<Badge key={item?.id ?? idx}");
+  });
+
+  it("compileWebPageNodes compiles chat [id] page with sidebar section, @workspace/ui path mapping, and dependencies", () => {
+    const chatWebPageNode: BackendNode = {
+      id: "node-page-chat-id",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/chat/[id]",
+        path: "/chat/[id]",
+        appSlug: "web",
+        sections: [
+          {
+            id: "sec-main",
+            name: "Main Section",
+            renderMode: "client",
+            loadStrategy: "eager",
+            actions: [],
+            stateObjects: [],
+            componentBindings: [
+              {
+                id: "comp-sidebar",
+                name: "MainSidebar",
+                componentType: "sidebar",
+                label: "Chat Navigation",
+                propMappings: {
+                  sidebarTitle: "Chat App",
+                  sidebarNavMode: "static",
+                  sidebarCollapsible: "offcanvas",
+                  sidebarVariant: "sidebar",
+                  sidebarStaticItems: [
+                    { id: "nav-inbox", name: "Inbox", link: "/chat" },
+                    { id: "nav-starred", name: "Starred", link: "/chat/starred" },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileWebPageNodes([chatWebPageNode], [], [], [chatWebPageNode], []);
+    
+    // 1. Verify tsconfig.json has @workspace/ui/* path mapping
+    const tsconfigFile = result.files.find((f) => f.filename === "tsconfig.json");
+    expect(tsconfigFile).toBeDefined();
+    const tsconfigJson = JSON.parse(tsconfigFile!.content);
+    expect(tsconfigJson.compilerOptions.paths["@workspace/ui/*"]).toEqual(["../../packages/ui/src/*"]);
+    expect(tsconfigJson.include).toContain("next.config.ts");
+
+    // 2. Verify package.json dependencies
+    const pkgFile = result.files.find((f) => f.filename === "package.json");
+    expect(pkgFile).toBeDefined();
+    const pkgJson = JSON.parse(pkgFile!.content);
+    expect(pkgJson.dependencies["@workspace/ui"]).toBe("workspace:*");
+    expect(pkgJson.dependencies["@hugeicons/react"]).toBe("^1.1.2");
+    expect(pkgJson.dependencies["@hugeicons/core-free-icons"]).toBe("^3.0.0");
+    expect(pkgJson.dependencies["class-variance-authority"]).toBe("^0.7.1");
+    expect(pkgJson.dependencies["radix-ui"]).toBe("^1.4.3");
+
+    // 3. Verify MainSection.tsx is generated properly
+    const mainSecFile = result.files.find((f) => f.filename.includes("MainSection.tsx"));
+    expect(mainSecFile).toBeDefined();
+    expect(mainSecFile!.filename).toContain("main-section/MainSection.tsx");
+    expect(mainSecFile!.content).toContain('import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@workspace/ui/components/sidebar";');
+    expect(mainSecFile!.content).toContain('import Link from "next/link";');
+    expect(mainSecFile!.content).toContain('<SidebarHeader className="p-3 border-b text-xs font-bold">Chat App</SidebarHeader>');
+    expect(mainSecFile!.content).toContain('<Link href="/chat" className="text-xs">');
+    expect(mainSecFile!.content).toContain('<span>Inbox</span>');
   });
 });
 
