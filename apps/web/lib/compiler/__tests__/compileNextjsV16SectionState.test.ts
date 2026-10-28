@@ -1644,6 +1644,15 @@ describe("compileNextjsV16SectionState", () => {
     expect(mainSecFile!.content).toContain('import Link from "next/link";');
     expect(mainSecFile!.content).toContain('<Link href="/chat" className="text-xs">');
     expect(mainSecFile!.content).toContain('<span>Inbox</span>');
+    expect(mainSecFile!.content).toContain('<SidebarHeader');
+    expect(mainSecFile!.content).toContain('<SidebarTrigger');
+    expect(mainSecFile!.content).toContain('<SidebarRail />');
+
+    // 4. Verify page.tsx uses flex sidebar layout instead of centered stack
+    const pageFile = result.files.find((f) => f.filename.endsWith("page.tsx"));
+    expect(pageFile).toBeDefined();
+    expect(pageFile!.content).toContain('<div className="min-h-screen bg-background text-foreground flex w-full">');
+    expect(pageFile!.content).toContain('<MainSection');
   });
 });
 

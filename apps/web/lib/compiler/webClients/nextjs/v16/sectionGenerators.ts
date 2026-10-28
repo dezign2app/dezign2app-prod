@@ -643,7 +643,11 @@ export function generateSectionComponent(
   ].filter(Boolean).join("\n");
 
   if (isNavOnly) {
-    return `${isClient ? `"use client";\n\n` : ""}${reactImport}
+    const hasSidebarBinding = (section.componentBindings || []).some(
+    (cb) => cb.componentType === "sidebar" || (cb as any).type === "sidebar",
+  );
+
+  return `${isClient ? `"use client";\n\n` : ""}${reactImport}
 ${libraryImports}${storeImports ? `${storeImports}\n` : ""}${actionImports ? `${actionImports}\n` : ""}export interface ${sectionCompName}Props {
   onTrigger?: (
     eventName: string,
@@ -1034,13 +1038,20 @@ export default ${sectionCompName};
       neededShadcnImports.add(
         'import { SidebarProvider, Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@workspace/ui/components/sidebar";',
       );
+      neededShadcnImports.add(
+        'import { SidebarHeader, SidebarTrigger, SidebarRail } from "@workspace/ui/components/sidebar";',
+      );
       neededShadcnImports.add('import Link from "next/link";');
+      neededShadcnImports.add(
+        'import { PanelLeft, LayoutDashboard, BarChart2, Folder, Settings } from "lucide-react";',
+      );
 
       const collapsible = item.propMappings?.sidebarCollapsible || "offcanvas";
       const variant = item.propMappings?.sidebarVariant || "sidebar";
       const side = item.propMappings?.sidebarSide;
       const sideAttr = side ? ` side="${side}"` : "";
       const navMode = item.propMappings?.sidebarNavMode || "dynamic";
+      const title = item.propMappings?.sidebarTitle || "Dezign App";
       const activeNavVar = item.propMappings?.sidebarNavBinding
         ? toCamelCase(item.propMappings.sidebarNavBinding)
         : valVar;
@@ -1048,24 +1059,40 @@ export default ${sectionCompName};
       if (navMode === "dynamic" && activeNavVar) {
         return `<SidebarProvider key="${item.id}" className="min-h-0 w-auto">
             <Sidebar${sideAttr} collapsible="${collapsible}" variant="${variant}">
+              <SidebarHeader className="border-b border-sidebar-border px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <PanelLeft className="size-4 text-primary shrink-0" />
+                    <span className="text-sm font-semibold truncate text-sidebar-foreground">
+                      ${title}
+                    </span>
+                  </div>
+                  <SidebarTrigger className="h-7 w-7 text-sidebar-foreground" />
+                </div>
+              </SidebarHeader>
               <SidebarContent>
                 <SidebarGroup>
                   <SidebarGroupLabel className="text-[10px]">Navigation</SidebarGroupLabel>
                   <SidebarGroupContent>
                     <SidebarMenu>
-                      {(${activeNavVar} || []).map((navItem, idx: number) => (
-                        <SidebarMenuItem key={navItem?.id || idx}>
-                          <SidebarMenuButton asChild tooltip={navItem?.name}>
-                            <Link href={navItem?.link || "#"} className="text-xs">
-                              <span>{navItem?.name || "Nav"}</span>
-                            </Link>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      ))}
+                      {(${activeNavVar} || []).map((navItem, idx: number) => {
+                        const NavIcon = [LayoutDashboard, BarChart2, Folder, Settings][idx % 4];
+                        return (
+                          <SidebarMenuItem key={navItem?.id || idx}>
+                            <SidebarMenuButton asChild tooltip={navItem?.name}>
+                              <Link href={navItem?.link || "#"} className="text-xs">
+                                <NavIcon className="size-3.5 shrink-0 mr-2 inline-block" />
+                                <span>{navItem?.name || "Nav"}</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        );
+                      })}
                     </SidebarMenu>
                   </SidebarGroupContent>
                 </SidebarGroup>
               </SidebarContent>
+              <SidebarRail />
             </Sidebar>
           </SidebarProvider>`;
       }
@@ -1078,20 +1105,36 @@ export default ${sectionCompName};
               { id: "nav-2", name: "Settings", link: "/settings" },
             ];
 
+      const navIconNames = ["LayoutDashboard", "BarChart2", "Folder", "Settings"];
       const staticItemsJsx = staticItems
         .map(
-          (sItem) => `                      <SidebarMenuItem key="${sItem.id}">
+          (sItem, sIdx) => {
+            const IconComp = navIconNames[sIdx % navIconNames.length];
+            return `                      <SidebarMenuItem key="${sItem.id}">
                         <SidebarMenuButton asChild tooltip="${sItem.name}">
                           <Link href="${sItem.link || "#"}" className="text-xs">
+                            <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block" />
                             <span>${sItem.name}</span>
                           </Link>
                         </SidebarMenuButton>
-                      </SidebarMenuItem>`,
+                      </SidebarMenuItem>`;
+          },
         )
         .join("\n");
 
       return `<SidebarProvider key="${item.id}" className="min-h-0 w-auto">
             <Sidebar${sideAttr} collapsible="${collapsible}" variant="${variant}">
+              <SidebarHeader className="border-b border-sidebar-border px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <PanelLeft className="size-4 text-primary shrink-0" />
+                    <span className="text-sm font-semibold truncate text-sidebar-foreground">
+                      ${title}
+                    </span>
+                  </div>
+                  <SidebarTrigger className="h-7 w-7 text-sidebar-foreground" />
+                </div>
+              </SidebarHeader>
               <SidebarContent>
                 <SidebarGroup>
                   <SidebarGroupLabel className="text-[10px]">Navigation</SidebarGroupLabel>
@@ -1102,6 +1145,7 @@ ${staticItemsJsx}
                   </SidebarGroupContent>
                 </SidebarGroup>
               </SidebarContent>
+              <SidebarRail />
             </Sidebar>
           </SidebarProvider>`;
     }
@@ -1478,6 +1522,9 @@ ${staticItemsJsx}
         .join("\n")}\n        </div>`,
     );
   }
+  const hasSidebarBinding = (section.componentBindings || []).some(
+    (cb) => cb.componentType === "sidebar" || (cb as any).type === "sidebar",
+  );
   const contentJsx = contentParts.filter(Boolean).join("\n");
 
   return `${isClient ? `"use client";\n\n` : ""}${reactImport}
@@ -1496,7 +1543,7 @@ ${extraComponentImports ? `${extraComponentImports}\n` : ""}${toastImport}${libr
 
 export function ${sectionCompName}({ onTrigger }: ${sectionCompName}Props) {
 ${combinedSetupLines ? `${combinedSetupLines}\n\n` : ""}  return (
-    <div className="w-full space-y-4">
+    <div className="${hasSidebarBinding ? "shrink-0" : "w-full space-y-4"}">
 ${contentJsx}
     </div>
   );
