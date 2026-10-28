@@ -304,15 +304,39 @@ export const StateStoreNode = ({
       if (!baseTypeName || ["string", "number", "boolean", "array", "object", "any"].includes(baseTypeName.toLowerCase())) {
         return;
       }
-      const typesNode = allNodes.find(
+      const matchingNodes = allNodes.filter(
         (n) => n.type === "types" && (n.data?.types || []).some((t: CustomTypeItem) => t.name === baseTypeName),
       );
+      if (matchingNodes.length === 0) return;
+
+      // Prefer general/App Types nodes over Entity Types or specialized schemas
+      const typesNode =
+        matchingNodes.find((n) => {
+          const d = n.data;
+          const isEntityOrService =
+            n.id === "types-entity-schemas" ||
+            d?.isEntitySchemas ||
+            d?.label === "Entity Types" ||
+            Boolean(d?.sourceEntityId) ||
+            Boolean(d?.isServiceEndpointSchemas);
+          return !isEntityOrService;
+        }) || matchingNodes[0];
       if (!typesNode) return;
+
       const typeItem = (typesNode.data?.types || []).find((t: CustomTypeItem) => t.name === baseTypeName);
       if (!typeItem) return;
 
       const expectedSourceHandle = `type-out-${typeItem.id}`;
       const expectedTargetHandle = `store-field-in-${f.id}`;
+
+      // Clean up any stale edge connecting to this field from an erroneous Entity Types node
+      const staleEdges = edges.filter(
+        (e) =>
+          e.target === id &&
+          e.targetHandle === expectedTargetHandle &&
+          e.source !== typesNode.id,
+      );
+      staleEdges.forEach((e) => deleteEdge(e.id));
 
       const edgeExists = edges.some(
         (e) =>
