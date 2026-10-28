@@ -304,15 +304,39 @@ export const StateStoreNode = ({
       if (!baseTypeName || ["string", "number", "boolean", "array", "object", "any"].includes(baseTypeName.toLowerCase())) {
         return;
       }
-      const typesNode = allNodes.find(
+      const matchingNodes = allNodes.filter(
         (n) => n.type === "types" && (n.data?.types || []).some((t: CustomTypeItem) => t.name === baseTypeName),
       );
+      if (matchingNodes.length === 0) return;
+
+      // Prefer general/App Types nodes over Entity Types or specialized schemas
+      const typesNode =
+        matchingNodes.find((n) => {
+          const d = n.data;
+          const isEntityOrService =
+            n.id === "types-entity-schemas" ||
+            d?.isEntitySchemas ||
+            d?.label === "Entity Types" ||
+            Boolean(d?.sourceEntityId) ||
+            Boolean(d?.isServiceEndpointSchemas);
+          return !isEntityOrService;
+        }) || matchingNodes[0];
       if (!typesNode) return;
+
       const typeItem = (typesNode.data?.types || []).find((t: CustomTypeItem) => t.name === baseTypeName);
       if (!typeItem) return;
 
       const expectedSourceHandle = `type-out-${typeItem.id}`;
       const expectedTargetHandle = `store-field-in-${f.id}`;
+
+      // Clean up any stale edge connecting to this field from an erroneous Entity Types node
+      const staleEdges = edges.filter(
+        (e) =>
+          e.target === id &&
+          e.targetHandle === expectedTargetHandle &&
+          e.source !== typesNode.id,
+      );
+      staleEdges.forEach((e) => deleteEdge(e.id));
 
       const edgeExists = edges.some(
         (e) =>
@@ -521,7 +545,10 @@ export const StateStoreNode = ({
             data.fields.map((f) => {
               const isDupe = duplicateFieldIds.has(f.id);
               const isEditingField = editingFieldId === f.id;
-              const isCustomType = availableCustomTypes.some((t) => t.name === f.type);
+              const cleanFieldBaseType = (f.type || "").replace(/\[\]$/, "").trim();
+              const isCustomType = availableCustomTypes.some(
+                (t) => t.name === f.type || t.name === cleanFieldBaseType,
+              );
               const supportedActions = f.actions && f.actions.length > 0
                 ? f.actions
                 : getSupportedActionsForType(f.type, f.isArray);
@@ -592,7 +619,10 @@ export const StateStoreNode = ({
                       <TwoStepTypeSelector
                         value={f.type}
                         onValueChange={(newType) => {
-                          const isCustom = availableCustomTypes.some((t) => t.name === newType);
+                          const cleanNewType = newType.replace(/\[\]$/, "").trim();
+                          const isCustom = availableCustomTypes.some(
+                            (t) => t.name === newType || t.name === cleanNewType,
+                          );
                           const patch: Partial<GlobalStoreField> = {
                             type: newType,
                             actions: getSupportedActionsForType(isCustom ? "object" : newType, f.isArray),
@@ -699,11 +729,7 @@ export const StateStoreNode = ({
                       <span>{supportedActions.length} actions</span>
                     </Badge>
 
-                    {f.defaultValue !== undefined && f.defaultValue !== "" && (
-                      <span className="text-[7.5px] text-muted-foreground/60 truncate font-mono">
-                        = {typeof f.defaultValue === "object" ? JSON.stringify(f.defaultValue) : String(f.defaultValue)}
-                      </span>
-                    )}
+
                   </div>
 
                   <div className="flex items-center gap-0.5 ml-1 shrink-0">

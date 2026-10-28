@@ -35,6 +35,7 @@ import { Button } from "@workspace/ui/components/button";
 import { Separator } from "@workspace/ui/components/separator";
 import { toast } from "sonner";
 import { toPascalCase } from "@/lib/utils";
+import { ensureNavItemTypeOnCanvas } from "../backend-nodes/graph-nodes/nodes/compute/TypesNode";
 import { Badge } from "@workspace/ui/components/badge";
 import { Sparkles } from "lucide-react";
 
@@ -712,7 +713,8 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
 
   const handleCreateNavStateVariable = useCallback(
     (preferredStoreId?: string) => {
-      const currentNodes = useBackendCanvasStore.getState().nodes;
+      const storeState = useBackendCanvasStore.getState();
+      const currentNodes = storeState.nodes;
       const currentStores = currentNodes.filter((n) => n.type === "state_store");
 
       let targetStore = preferredStoreId
@@ -726,30 +728,41 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         { id: "nav-4", name: "Settings", link: "/settings", icon: "Settings" },
       ];
 
+      const parentPos = parentNode?.position || { x: 100, y: 100 };
+      const storePos = targetStore?.position || { x: parentPos.x + 380, y: parentPos.y };
+
+      // Ensure TypesNode exists on canvas with typed NavItem interface
+      const { typesNodeId, typeItem } = ensureNavItemTypeOnCanvas({
+        x: storePos.x,
+        y: Math.max(20, storePos.y - 260),
+      });
+
       let storeIdToUse = targetStore?.id;
       let storeNameToUse = targetStore?.data?.label || targetStore?.data?.storeName || "AppStore";
+      let navFieldId = `f-nav-${Date.now()}`;
 
       if (!targetStore) {
         const newStoreId = `store-${Date.now()}`;
         storeIdToUse = newStoreId;
         storeNameToUse = "AppStore";
 
-        const parentPos = parentNode?.position || { x: 100, y: 100 };
         const newStoreNode = {
           id: newStoreId,
           type: "state_store" as const,
-          position: { x: parentPos.x + 380, y: parentPos.y },
+          position: { x: storePos.x, y: storePos.y },
           data: {
             label: "AppStore",
             storeName: "AppStore",
             description: "Global Application Navigation & State Store",
             fields: [
               {
-                id: `f-${Date.now()}`,
+                id: navFieldId,
                 name: "navItems",
-                type: "array",
+                type: "NavItem[]",
                 isArray: true,
                 defaultValue: defaultItems,
+                reducer: "navItems_reducer",
+                actions: ["set", "append", "pop", "remove", "reset"],
                 description: "Sidebar navigation menu items",
               },
             ],
@@ -760,21 +773,77 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         addNode(newStoreNode);
       } else {
         const existingFields = targetStore.data?.fields || [];
-        const hasNavItems = existingFields.some((f: any) => f.name === "navItems");
+        const existingNavField = existingFields.find((f: any) => f.name === "navItems");
 
-        if (!hasNavItems) {
+        if (!existingNavField) {
           const newField = {
-            id: `f-${Date.now()}`,
+            id: navFieldId,
             name: "navItems",
-            type: "array",
+            type: "NavItem[]",
             isArray: true,
             defaultValue: defaultItems,
+            reducer: "navItems_reducer",
+            actions: ["set", "append", "pop", "remove", "reset"],
             description: "Sidebar navigation menu items",
           };
           updateNode(targetStore.id, {
             data: {
               ...targetStore.data,
               fields: [...existingFields, newField],
+            },
+          });
+        } else {
+          navFieldId = existingNavField.id;
+          // Upgrade generic array type to typed NavItem[]
+          const updatedFields = existingFields.map((f: any) => {
+            if (f.name === "navItems") {
+              return {
+                ...f,
+                type: "NavItem[]",
+                isArray: true,
+                defaultValue: f.defaultValue && Array.isArray(f.defaultValue) && f.defaultValue.length > 0
+                  ? f.defaultValue
+                  : defaultItems,
+                reducer: f.reducer || "navItems_reducer",
+                actions: f.actions || ["set", "append", "pop", "remove", "reset"],
+              };
+            }
+            return f;
+          });
+          updateNode(targetStore.id, {
+            data: {
+              ...targetStore.data,
+              fields: updatedFields,
+            },
+          });
+        }
+      }
+
+      // Auto-wire type-reference edge between TypesNode and StateStoreNode
+      if (typesNodeId && storeIdToUse && navFieldId) {
+        const expectedSourceHandle = `type-out-${typeItem.id}`;
+        const expectedTargetHandle = `store-field-in-${navFieldId}`;
+        const edgeId = `edge-type-${typesNodeId}-${typeItem.id}-${storeIdToUse}-${navFieldId}`;
+        const currentEdges = storeState.edges;
+        const edgeExists = currentEdges.some(
+          (e) =>
+            e.source === typesNodeId &&
+            e.target === storeIdToUse &&
+            e.sourceHandle === expectedSourceHandle &&
+            e.targetHandle === expectedTargetHandle,
+        );
+        if (!edgeExists) {
+          storeState.addEdge({
+            id: edgeId,
+            source: typesNodeId,
+            target: storeIdToUse,
+            sourceHandle: expectedSourceHandle,
+            targetHandle: expectedTargetHandle,
+            type: "type-reference",
+            data: {
+              label: typeItem.name,
+              isTypeReference: true,
+              baseTypeName: typeItem.name,
             },
           });
         }
@@ -791,7 +860,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         valueMode: "store_var",
       });
 
-      toast.success(`Provisioned and bound "navItems" state in ${storeNameToUse}!`);
+      toast.success(`Provisioned NavItem[] type and bound "navItems" state in ${storeNameToUse}!`);
     },
     [parentNode, addNode, updateNode, handleUpdateActivePropMapping],
   );

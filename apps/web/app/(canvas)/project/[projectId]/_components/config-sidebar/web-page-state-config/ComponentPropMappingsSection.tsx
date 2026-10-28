@@ -1562,7 +1562,7 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
                         ⚡ Quick-Create "navItems" Variable
                       </div>
                       <div className="text-[11px] text-muted-foreground">
-                        Auto-provisions typed array schema with sample routes in your State Store
+                        Auto-provisions NavItem[] typed schema with sample routes in your State Store & TypesNode
                       </div>
                     </div>
                   </div>
@@ -1588,7 +1588,7 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
                   stateStores={stateStores}
                   expectedType="any"
                   placeholder="navItems"
-                  description="StateStore array variable containing navigation items."
+                  description="StateStore variable containing navigation items (NavItem[])."
                   onChange={(res) => {
                     onUpdatePropMapping({
                       sidebarNavBinding: res.valueBinding,

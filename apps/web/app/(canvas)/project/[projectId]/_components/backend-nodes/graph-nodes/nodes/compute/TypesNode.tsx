@@ -426,3 +426,150 @@ export const TypesNode = ({
     </div>
   );
 };
+
+
+/**
+ * Standard Navigation item type definition used for sidebar and navigation components.
+ */
+export const NAV_ITEM_CUSTOM_TYPE: CustomTypeItem = {
+  id: "type-nav-item",
+  name: "NavItem",
+  kind: "interface",
+  description: "Navigation item definition for sidebar and menus",
+  fields: [
+    { id: "f-nav-id", name: "id", type: "string", required: true, isArray: false, description: "Unique item key" },
+    { id: "f-nav-name", name: "name", type: "string", required: true, isArray: false, description: "Menu label" },
+    { id: "f-nav-link", name: "link", type: "string", required: true, isArray: false, description: "Route URL path" },
+    { id: "f-nav-icon", name: "icon", type: "string", required: false, isArray: false, description: "Lucide icon name" },
+  ],
+};
+
+/**
+ * Identifies if a TypesNode is reserved for specialized auto-synced schemas:
+ * - Entity Types (generated from Database tables)
+ * - Service Endpoint Types (generated from Backend endpoints)
+ * - Package Types (generated from npm node_modules)
+ *
+ * General / UI / Application types (like NavItem) must NEVER be added to specialized nodes.
+ */
+export function isSpecializedTypesNode(node: BackendNode): boolean {
+  if (node.type !== "types") return true;
+  const d = node.data;
+  if (!d) return false;
+
+  // 1. Entity Types
+  if (
+    node.id === "types-entity-schemas" ||
+    node.id.startsWith("types-entity-") ||
+    Boolean(d.isEntitySchemas) ||
+    d.label === "Entity Types" ||
+    Boolean(d.sourceEntityId) ||
+    Boolean(d.sourceEntityName) ||
+    (Array.isArray(d.types) && d.types.some((t: CustomTypeItem) => t.id?.startsWith("type-entity-")))
+  ) {
+    return true;
+  }
+
+  // 2. Service Endpoint Types
+  if (
+    node.id.startsWith("types-service-") ||
+    Boolean(d.isServiceEndpointSchemas) ||
+    Boolean(d.sourceServiceId) ||
+    Boolean(d.sourceServiceName) ||
+    (Array.isArray(d.types) && d.types.some((t: CustomTypeItem) => t.id?.startsWith("type-endpoint-")))
+  ) {
+    return true;
+  }
+
+  // 3. Package Types
+  if (
+    Boolean(d.isPackageNode) ||
+    Boolean(d.packageName) ||
+    (Array.isArray(d.packageSources) && d.packageSources.length > 0 && !d.isExtended)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Ensures a dedicated general TypesNode (e.g. "App Types") exists on the canvas containing the NavItem interface.
+ * Strictly avoids entity schemas, service endpoint types, or package types.
+ * Automatically purges NavItem from Entity Types or any specialized nodes if it was erroneously placed there.
+ * Returns the TypesNode ID and the CustomTypeItem.
+ */
+export function ensureNavItemTypeOnCanvas(
+  referencePosition?: { x: number; y: number },
+): { typesNodeId: string; typeItem: CustomTypeItem } {
+  const store = useBackendCanvasStore.getState();
+  const currentNodes = store.nodes;
+
+  // 1. Purge NavItem from any specialized types nodes (e.g. Entity Types) if present
+  currentNodes.forEach((n) => {
+    if (n.type === "types" && isSpecializedTypesNode(n)) {
+      const typesList = n.data?.types || [];
+      const hasBogusNavItem = typesList.some(
+        (t: CustomTypeItem) => t.name === "NavItem" || t.id === "type-nav-item",
+      );
+      if (hasBogusNavItem) {
+        const cleanedTypes = typesList.filter(
+          (t: CustomTypeItem) => t.name !== "NavItem" && t.id !== "type-nav-item",
+        );
+        store.updateNode(n.id, {
+          data: {
+            ...n.data,
+            types: cleanedTypes,
+          },
+        });
+        // Disconnect any edge between this specialized types node and stores for NavItem
+        const edgesToRemove = store.edges.filter(
+          (e) =>
+            e.source === n.id &&
+            (e.sourceHandle === "type-out-type-nav-item" ||
+              e.data?.label === "NavItem" ||
+              e.data?.baseTypeName === "NavItem"),
+        );
+        edgesToRemove.forEach((e) => store.deleteEdge(e.id));
+      }
+    }
+  });
+
+  // 2. Find an existing general (non-specialized) TypesNode (such as "App Types")
+  const existingGeneralTypesNode = currentNodes.find(
+    (n) => n.type === "types" && !isSpecializedTypesNode(n),
+  );
+
+  if (existingGeneralTypesNode) {
+    const currentTypes: CustomTypeItem[] = existingGeneralTypesNode.data?.types || [];
+    const existingNavItem = currentTypes.find((t) => t.name === "NavItem");
+    if (existingNavItem) {
+      return { typesNodeId: existingGeneralTypesNode.id, typeItem: existingNavItem };
+    }
+    const updatedTypes = [...currentTypes, NAV_ITEM_CUSTOM_TYPE];
+    store.updateNode(existingGeneralTypesNode.id, {
+      data: {
+        ...existingGeneralTypesNode.data,
+        types: updatedTypes,
+      },
+    });
+    return { typesNodeId: existingGeneralTypesNode.id, typeItem: NAV_ITEM_CUSTOM_TYPE };
+  }
+
+  // 3. Otherwise, create a brand-new dedicated "App Types" node (completely separate from Entity Types)
+  const newTypesNodeId = `types-app-${Date.now()}`;
+  const pos = referencePosition || { x: 480, y: 100 };
+  const newTypesNode: BackendNode = {
+    id: newTypesNodeId,
+    type: "types",
+    position: { x: pos.x, y: pos.y },
+    selected: false,
+    data: {
+      label: "App Types",
+      scope: "global",
+      types: [NAV_ITEM_CUSTOM_TYPE],
+    },
+  };
+  store.addNode(newTypesNode);
+  return { typesNodeId: newTypesNodeId, typeItem: NAV_ITEM_CUSTOM_TYPE };
+}
