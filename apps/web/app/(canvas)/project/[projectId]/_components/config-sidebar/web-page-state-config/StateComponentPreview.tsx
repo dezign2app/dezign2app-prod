@@ -742,7 +742,7 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
                       variant={variant}
                       side={side}
                       className={cn(
-                        "border relative bg-sidebar shadow-xs transition-all duration-200",
+                        "border relative bg-sidebar shadow-xs transition-all duration-200 hover:border-sidebar-ring/50",
                         isIconMode ? "w-14" : "w-56",
                         variant === "floating"
                           ? "rounded-xl m-1.5 shadow-md border-border/80"

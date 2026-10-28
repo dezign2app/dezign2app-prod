@@ -1090,7 +1090,7 @@ export default ${sectionCompName};
                   </SidebarGroupContent>
                 </SidebarGroup>
               </SidebarContent>
-              <SidebarTrigger className="absolute -right-3.5 top-3.5 z-20 h-6 w-6 rounded-full border border-sidebar-border bg-background shadow-xs hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex items-center justify-center text-sidebar-foreground cursor-pointer transition-transform duration-150 group-data-[side=right]:-left-3.5 group-data-[side=right]:right-auto hover:scale-105" />
+              <SidebarTrigger className="absolute -right-3.5 top-3.5 z-20 h-6 w-6 rounded-full border border-sidebar-border bg-background shadow-xs hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex items-center justify-center text-sidebar-foreground cursor-pointer transition-all duration-200 group-data-[side=right]:-left-3.5 group-data-[side=right]:right-auto hover:scale-105 group-data-[state=collapsed]:group-data-[collapsible=offcanvas]:translate-x-4 group-data-[side=right]:group-data-[state=collapsed]:group-data-[collapsible=offcanvas]:-translate-x-4" />
               <SidebarRail />
             </Sidebar>
           </SidebarProvider>`;
@@ -1141,7 +1141,7 @@ ${staticItemsJsx}
                   </SidebarGroupContent>
                 </SidebarGroup>
               </SidebarContent>
-              <SidebarTrigger className="absolute -right-3.5 top-3.5 z-20 h-6 w-6 rounded-full border border-sidebar-border bg-background shadow-xs hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex items-center justify-center text-sidebar-foreground cursor-pointer transition-transform duration-150 group-data-[side=right]:-left-3.5 group-data-[side=right]:right-auto hover:scale-105" />
+              <SidebarTrigger className="absolute -right-3.5 top-3.5 z-20 h-6 w-6 rounded-full border border-sidebar-border bg-background shadow-xs hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex items-center justify-center text-sidebar-foreground cursor-pointer transition-all duration-200 group-data-[side=right]:-left-3.5 group-data-[side=right]:right-auto hover:scale-105 group-data-[state=collapsed]:group-data-[collapsible=offcanvas]:translate-x-4 group-data-[side=right]:group-data-[state=collapsed]:group-data-[collapsible=offcanvas]:-translate-x-4" />
               <SidebarRail />
             </Sidebar>
           </SidebarProvider>`;
