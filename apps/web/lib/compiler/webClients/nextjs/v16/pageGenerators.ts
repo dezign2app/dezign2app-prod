@@ -178,6 +178,33 @@ ${hasLogsSection ? `${triggerLogsSectionJsx}` : ""}      </div>
   }
 
   const namedTypeDecl = pageLoadDataTypeDecl ? `${pageLoadDataTypeDecl}\n\n` : "";
+  const sidebarSection = sectionsMeta.find((s) => s.hasSidebar);
+  const hasSidebar = Boolean(sidebarSection);
+
+  if (hasSidebar && sidebarSection) {
+    const sidebarJsx = `      <${sidebarSection.componentName}${hasApiActions ? " onTrigger={handleTriggerAction}" : ""} />`;
+    const contentSections = sectionsMeta.filter((s) => !s.hasSidebar);
+    const contentSectionsJsx = contentSections
+      .map((s) => `          <${s.componentName}${hasApiActions ? " onTrigger={handleTriggerAction}" : ""} />`)
+      .join("\n\n");
+
+    return `"use client";
+
+${reactImport}
+${uiImports.join("\n")}${uiImports.length > 0 ? "\n" : ""}${storeImports ? `${storeImports}\n` : ""}${allImports ? `${allImports}\n` : ""}${jsonValueTypeDecl}${namedTypeDecl}export default function ${pageMeta.componentName}() {
+${pageLoadStateJsx}${mediaStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${sseEffectsJsx}${wsEffectsJsx}${webrtcEffectsJsx}${triggerHandlerJsx}  return (
+    <div className="min-h-screen bg-background text-foreground flex w-full">
+${sidebarJsx}
+      <main className="flex-1 min-w-0 p-6 md:p-10 space-y-8">
+        <div className="max-w-5xl space-y-8">
+${pageLoadSectionJsx}${mediaSectionJsx}${contentSectionsJsx ? `          {/* Page Content Sections */}\n${contentSectionsJsx}\n` : ""}${triggerLogsSectionJsx}        </div>
+      </main>
+    </div>
+  );
+}
+`;
+  }
+
 
   return `"use client";
 

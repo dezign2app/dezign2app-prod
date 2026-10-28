@@ -858,6 +858,9 @@ export function generatePageAndComponentFiles({
         componentName: secCompName,
         renderMode: sec.renderMode,
         actions: secActionMetas,
+        hasSidebar: (sec.componentBindings || []).some(
+          (cb) => cb.componentType === "sidebar",
+        ),
       });
     });
 

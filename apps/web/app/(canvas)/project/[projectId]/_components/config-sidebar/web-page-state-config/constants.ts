@@ -166,3 +166,6 @@ export const isSidebarCollapsible = (val: string): val is NonNullable<ComponentP
 
 export const isSidebarVariant = (val: string): val is NonNullable<ComponentPropMappings["sidebarVariant"]> =>
   val === "sidebar" || val === "floating" || val === "inset";
+
+export const isSidebarSide = (val: string): val is NonNullable<ComponentPropMappings["sidebarSide"]> =>
+  val === "left" || val === "right";

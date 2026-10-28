@@ -1471,6 +1471,54 @@ describe("compileNextjsV16SectionState", () => {
     expect(code).toContain('<span>Audit Logs</span>');
   });
 
+  it("compiles sidebar with custom side (right) and floating variant", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-sidebar-floating-right",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/dashboard",
+        appSlug: "dashboard-app",
+        sections: [
+          {
+            id: "sec-dash-nav",
+            name: "Dashboard Nav",
+            renderMode: "client",
+            loadStrategy: "eager",
+            actions: [],
+            stateObjects: [],
+            componentBindings: [
+              {
+                id: "comp-floating-sidebar",
+                name: "RightSidebar",
+                componentType: "sidebar",
+                label: "Right Sidebar",
+                propMappings: {
+                  sidebarTitle: "Tools",
+                  sidebarNavMode: "static",
+                  sidebarCollapsible: "icon",
+                  sidebarVariant: "floating",
+                  sidebarSide: "right",
+                  sidebarStaticItems: [
+                    { id: "tool-1", name: "Inspector", link: "/inspector" },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([webPageNode]);
+    const file = result.files.find((f) => f.filename.includes("DashboardNavSection.tsx"));
+    expect(file).toBeDefined();
+    const code = file!.content;
+
+    expect(code).toContain('<Sidebar side="right" collapsible="icon" variant="floating">');
+  });
+
   it("compiles array-type state objects with item-scoped click actions into mapped list with onTrigger context", () => {
     const webPageNode: BackendNode = {
       id: "node-page-item-events",
@@ -1596,6 +1644,15 @@ describe("compileNextjsV16SectionState", () => {
     expect(mainSecFile!.content).toContain('import Link from "next/link";');
     expect(mainSecFile!.content).toContain('<Link href="/chat" className="text-xs">');
     expect(mainSecFile!.content).toContain('<span>Inbox</span>');
+    expect(mainSecFile!.content).toContain('<SidebarHeader');
+    expect(mainSecFile!.content).toContain('<SidebarTrigger');
+    expect(mainSecFile!.content).toContain('<SidebarRail />');
+
+    // 4. Verify page.tsx uses flex sidebar layout instead of centered stack
+    const pageFile = result.files.find((f) => f.filename.endsWith("page.tsx"));
+    expect(pageFile).toBeDefined();
+    expect(pageFile!.content).toContain('<div className="min-h-screen bg-background text-foreground flex w-full">');
+    expect(pageFile!.content).toContain('<MainSection');
   });
 });
 

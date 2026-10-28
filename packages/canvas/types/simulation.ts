@@ -191,6 +191,7 @@ export interface ComponentPropMappings {
   }>;
   sidebarCollapsible?: "offcanvas" | "icon" | "none";
   sidebarVariant?: "sidebar" | "floating" | "inset";
+  sidebarSide?: "left" | "right";
 
   // Custom props
   customProps?: Record<string, string>;

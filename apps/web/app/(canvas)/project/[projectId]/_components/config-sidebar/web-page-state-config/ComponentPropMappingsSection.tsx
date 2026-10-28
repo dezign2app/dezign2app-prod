@@ -21,6 +21,7 @@ import {
   SquareCheck,
   Tag,
   PanelLeft,
+  PanelRight,
   LayoutDashboard,
   Trash2,
   ExternalLink,
@@ -47,6 +48,7 @@ import {
   isOnChangeMode,
   isSidebarCollapsible,
   isSidebarVariant,
+  isSidebarSide,
 } from "./constants";
 import { StateStoreVariablePicker } from "./StateStoreVariablePicker";
 
@@ -1469,48 +1471,102 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
               />
             </div>
 
-            {/* Layout & Behavior Selectors (Collapsible & Variant) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div className="space-y-1">
-                <Label className="text-[10px] text-muted-foreground">Collapsible Mode</Label>
-                <Select
-                  value={propMappings.sidebarCollapsible || "offcanvas"}
-                  onValueChange={(val) => {
-                    if (isSidebarCollapsible(val)) {
-                      onUpdatePropMapping({ sidebarCollapsible: val });
-                    }
-                  }}
-                >
-                  <SelectTrigger className="h-7 text-[11px] bg-background">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="offcanvas" className="text-xs">Offcanvas (Mobile Drawer)</SelectItem>
-                    <SelectItem value="icon" className="text-xs">Icon Rail (Collapse)</SelectItem>
-                    <SelectItem value="none" className="text-xs">None (Fixed width)</SelectItem>
-                  </SelectContent>
-                </Select>
+            {/* Layout & Behavior Selectors (Side, Variant, Collapsible) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-[10px] font-medium text-foreground flex items-center gap-1.5">
+                  <SlidersHorizontal size={11} className="text-primary" />
+                  <span>Layout & Shadcn Variants</span>
+                </Label>
+                <code className="text-[9px] font-mono text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded border border-border/40">
+                  {`<Sidebar side="${propMappings.sidebarSide || "left"}" variant="${propMappings.sidebarVariant || "sidebar"}" collapsible="${propMappings.sidebarCollapsible || "offcanvas"}" />`}
+                </code>
               </div>
 
-              <div className="space-y-1">
-                <Label className="text-[10px] text-muted-foreground">Sidebar Variant</Label>
-                <Select
-                  value={propMappings.sidebarVariant || "sidebar"}
-                  onValueChange={(val) => {
-                    if (isSidebarVariant(val)) {
-                      onUpdatePropMapping({ sidebarVariant: val });
-                    }
-                  }}
-                >
-                  <SelectTrigger className="h-7 text-[11px] bg-background">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="sidebar" className="text-xs">Standard Sidebar</SelectItem>
-                    <SelectItem value="floating" className="text-xs">Floating Card</SelectItem>
-                    <SelectItem value="inset" className="text-xs">Inset Panel</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {/* 1. Placement / Side */}
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground flex items-center justify-between">
+                    <span>Position / Side</span>
+                    <span className="font-mono text-[9px] text-cyan-500">side</span>
+                  </Label>
+                  <Select
+                    value={propMappings.sidebarSide || "left"}
+                    onValueChange={(val) => {
+                      if (isSidebarSide(val)) {
+                        onUpdatePropMapping({ sidebarSide: val });
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-7 text-[11px] bg-background">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="left" className="text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <PanelLeft size={12} className="text-muted-foreground" />
+                          <span>Left (Default)</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="right" className="text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <PanelRight size={12} className="text-muted-foreground" />
+                          <span>Right (Docked)</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* 2. Visual Variant */}
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground flex items-center justify-between">
+                    <span>Visual Variant</span>
+                    <span className="font-mono text-[9px] text-cyan-500">variant</span>
+                  </Label>
+                  <Select
+                    value={propMappings.sidebarVariant || "sidebar"}
+                    onValueChange={(val) => {
+                      if (isSidebarVariant(val)) {
+                        onUpdatePropMapping({ sidebarVariant: val });
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-7 text-[11px] bg-background">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sidebar" className="text-xs">Standard (sidebar)</SelectItem>
+                      <SelectItem value="floating" className="text-xs">Floating Card (floating)</SelectItem>
+                      <SelectItem value="inset" className="text-xs">Inset Panel (inset)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* 3. Collapsible Mode */}
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground flex items-center justify-between">
+                    <span>Collapsible Mode</span>
+                    <span className="font-mono text-[9px] text-cyan-500">collapsible</span>
+                  </Label>
+                  <Select
+                    value={propMappings.sidebarCollapsible || "offcanvas"}
+                    onValueChange={(val) => {
+                      if (isSidebarCollapsible(val)) {
+                        onUpdatePropMapping({ sidebarCollapsible: val });
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-7 text-[11px] bg-background">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="offcanvas" className="text-xs">Offcanvas (Drawer)</SelectItem>
+                      <SelectItem value="icon" className="text-xs">Icon Rail (Rail)</SelectItem>
+                      <SelectItem value="none" className="text-xs">None (Fixed)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
