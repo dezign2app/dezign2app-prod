@@ -21,6 +21,17 @@ import { Label } from "@workspace/ui/components/label";
 import { Alert, AlertDescription } from "@workspace/ui/components/alert";
 import { Avatar, AvatarFallback } from "@workspace/ui/components/avatar";
 import { Skeleton } from "@workspace/ui/components/skeleton";
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+} from "@workspace/ui/components/sidebar";
 import { toast } from "sonner";
 
 const toValidButtonVariant = (
@@ -603,81 +614,48 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
           const items = Array.isArray(rawItems) && rawItems.length > 0
             ? rawItems
             : [
-                { id: "nav-1", name: "Dashboard", link: "/dashboard", icon: "LayoutDashboard" },
-                { id: "nav-2", name: "Analytics", link: "/analytics", icon: "BarChart3" },
-                { id: "nav-3", name: "Projects", link: "/projects", icon: "Folder" },
-                { id: "nav-4", name: "Settings", link: "/settings", icon: "Settings" },
+                { id: "nav-1", name: "Dashboard", link: "/dashboard" },
+                { id: "nav-2", name: "Analytics", link: "/analytics" },
+                { id: "nav-3", name: "Projects", link: "/projects" },
+                { id: "nav-4", name: "Settings", link: "/settings" },
               ];
 
-          const title = propMappings.sidebarTitle || displayLabel || "Dezign App";
-          const collapsible = propMappings.sidebarCollapsible || "offcanvas";
           const variant = propMappings.sidebarVariant || "sidebar";
 
           return (
-            <div className="w-full max-w-xs rounded-xl border border-border/80 bg-card text-card-foreground shadow-sm overflow-hidden flex flex-col text-xs font-sans">
-              {/* Sidebar Header */}
-              <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-border/60 bg-muted/30">
-                <div className="flex items-center gap-2">
-                  <div className="h-5 w-5 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[10px]">
-                    <PanelLeft size={12} />
-                  </div>
-                  <span className="font-semibold text-xs text-foreground truncate max-w-[130px]">
-                    {title}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Badge variant="outline" className="text-[8px] font-mono px-1 py-0">
-                    {variant}
-                  </Badge>
-                  <Badge variant="secondary" className="text-[8px] font-mono px-1 py-0 bg-primary/10 text-primary">
-                    {collapsible}
-                  </Badge>
-                </div>
-              </div>
-
-              {/* Sidebar Menu Group */}
-              <div className="p-2 flex flex-col gap-1">
-                <div className="px-2 py-1 text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Menu
-                </div>
-                {items.map((item: any, idx: number) => {
-                  const isActive = idx === 0;
-                  return (
-                    <button
-                      key={item.id || idx}
-                      type="button"
-                      onClick={() => {
-                        toast.info(`Simulated route: ${item.link || item.name}`);
-                      }}
-                      className={cn(
-                        "flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors cursor-pointer text-xs",
-                        isActive
-                          ? "bg-primary text-primary-foreground font-medium shadow-2xs"
-                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                      )}
-                    >
-                      <div className="flex items-center gap-2 truncate">
-                        <span className="font-mono text-[10px] opacity-70">#</span>
-                        <span className="truncate">{item.name || `Nav ${idx + 1}`}</span>
-                      </div>
-                      <span className={cn(
-                        "text-[9px] font-mono truncate max-w-[70px]",
-                        isActive ? "text-primary-foreground/80" : "text-muted-foreground/60"
-                      )}>
-                        {item.link || "#"}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Sidebar Footer */}
-              <div className="mt-auto px-3 py-2 border-t border-border/50 bg-muted/20 flex items-center justify-between text-[10px] text-muted-foreground">
-                <span className="font-mono">
-                  {navMode === "dynamic" ? "⚡ Dynamic Store" : "Static Nav"}
-                </span>
-                <span className="font-mono">{items.length} links</span>
-              </div>
+            <div className="w-full flex justify-center py-1">
+              <SidebarProvider className="min-h-0 w-auto">
+                <Sidebar collapsible="none" variant={variant} className="w-56 border rounded-lg overflow-hidden bg-sidebar shadow-xs">
+                  <SidebarContent>
+                    <SidebarGroup>
+                      <SidebarGroupLabel className="text-[10px]">Navigation</SidebarGroupLabel>
+                      <SidebarGroupContent>
+                        <SidebarMenu>
+                          {items.map((item: any, idx: number) => {
+                            const isActive = idx === 0;
+                            return (
+                              <SidebarMenuItem key={item.id || idx}>
+                                <SidebarMenuButton
+                                  asChild
+                                  tooltip={item.name}
+                                  isActive={isActive}
+                                  onClick={() => {
+                                    toast.info(`Simulated route: ${item.link || item.name}`);
+                                  }}
+                                >
+                                  <a href={item.link || "#"} className="text-xs">
+                                    <span>{item.name || `Nav ${idx + 1}`}</span>
+                                  </a>
+                                </SidebarMenuButton>
+                              </SidebarMenuItem>
+                            );
+                          })}
+                        </SidebarMenu>
+                      </SidebarGroupContent>
+                    </SidebarGroup>
+                  </SidebarContent>
+                </Sidebar>
+              </SidebarProvider>
             </div>
           );
         })()}

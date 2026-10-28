@@ -993,9 +993,9 @@ export default ${sectionCompName};
 
     if (item.type === "card") {
       if (valVar) {
-        return `<div key="${item.id}" className="p-3 rounded-lg border bg-card text-card-foreground shadow-xs${clickAttr ? " cursor-pointer" : ""}"${clickAttr}>\n            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">${labelText}</div>\n            <div className="text-sm font-bold mt-0.5 font-mono">{typeof ${valVar} === "object" ? JSON.stringify(${valVar}) : String(${valVar})}</div>\n          </div>`;
+        return `<div key="${item.id}" className="text-sm font-bold font-mono${clickAttr ? " cursor-pointer" : ""}"${clickAttr}>{typeof ${valVar} === "object" ? JSON.stringify(${valVar}) : String(${valVar})}</div>`;
       }
-      return `<div key="${item.id}" className="p-3 rounded-lg border bg-card text-card-foreground shadow-xs${clickAttr ? " cursor-pointer" : ""}"${clickAttr}>\n            <div className="text-xs font-semibold text-card-foreground">${labelText}</div>\n          </div>`;
+      return `<div key="${item.id}" className="text-xs font-semibold text-card-foreground${clickAttr ? " cursor-pointer" : ""}"${clickAttr}>${labelText}</div>`;
     }
 
     if (item.type === "progress") {
@@ -1032,11 +1032,10 @@ export default ${sectionCompName};
 
     if (item.type === "sidebar") {
       neededShadcnImports.add(
-        'import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@workspace/ui/components/sidebar";',
+        'import { SidebarProvider, Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@workspace/ui/components/sidebar";',
       );
       neededShadcnImports.add('import Link from "next/link";');
 
-      const title = item.propMappings?.sidebarTitle || item.label || item.name || "App";
       const collapsible = item.propMappings?.sidebarCollapsible || "offcanvas";
       const variant = item.propMappings?.sidebarVariant || "sidebar";
       const navMode = item.propMappings?.sidebarNavMode || "dynamic";
@@ -1045,31 +1044,28 @@ export default ${sectionCompName};
         : valVar;
 
       if (navMode === "dynamic" && activeNavVar) {
-        return `<div key="${item.id}" className="w-full max-w-xs border rounded-lg overflow-hidden bg-card text-card-foreground">
-            <SidebarProvider>
-              <Sidebar collapsible="${collapsible}" variant="${variant}" className="w-full">
-                <SidebarHeader className="p-3 border-b text-xs font-bold">${title}</SidebarHeader>
-                <SidebarContent>
-                  <SidebarGroup>
-                    <SidebarGroupLabel className="text-[10px]">Navigation</SidebarGroupLabel>
-                    <SidebarGroupContent>
-                      <SidebarMenu>
-                        {(${activeNavVar} || []).map((navItem, idx: number) => (
-                          <SidebarMenuItem key={navItem?.id || idx}>
-                            <SidebarMenuButton asChild tooltip={navItem?.name}>
-                              <Link href={navItem?.link || "#"} className="text-xs">
-                                <span>{navItem?.name || "Nav"}</span>
-                              </Link>
-                            </SidebarMenuButton>
-                          </SidebarMenuItem>
-                        ))}
-                      </SidebarMenu>
-                    </SidebarGroupContent>
-                  </SidebarGroup>
-                </SidebarContent>
-              </Sidebar>
-            </SidebarProvider>
-          </div>`;
+        return `<SidebarProvider key="${item.id}" className="min-h-0 w-auto">
+            <Sidebar collapsible="${collapsible}" variant="${variant}">
+              <SidebarContent>
+                <SidebarGroup>
+                  <SidebarGroupLabel className="text-[10px]">Navigation</SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {(${activeNavVar} || []).map((navItem, idx: number) => (
+                        <SidebarMenuItem key={navItem?.id || idx}>
+                          <SidebarMenuButton asChild tooltip={navItem?.name}>
+                            <Link href={navItem?.link || "#"} className="text-xs">
+                              <span>{navItem?.name || "Nav"}</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      ))}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </SidebarContent>
+            </Sidebar>
+          </SidebarProvider>`;
       }
 
       const staticItems =
@@ -1082,33 +1078,30 @@ export default ${sectionCompName};
 
       const staticItemsJsx = staticItems
         .map(
-          (sItem) => `                        <SidebarMenuItem key="${sItem.id}">
-                          <SidebarMenuButton asChild tooltip="${sItem.name}">
-                            <Link href="${sItem.link || "#"}" className="text-xs">
-                              <span>${sItem.name}</span>
-                            </Link>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>`,
+          (sItem) => `                      <SidebarMenuItem key="${sItem.id}">
+                        <SidebarMenuButton asChild tooltip="${sItem.name}">
+                          <Link href="${sItem.link || "#"}" className="text-xs">
+                            <span>${sItem.name}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>`,
         )
         .join("\n");
 
-      return `<div key="${item.id}" className="w-full max-w-xs border rounded-lg overflow-hidden bg-card text-card-foreground">
-            <SidebarProvider>
-              <Sidebar collapsible="${collapsible}" variant="${variant}" className="w-full">
-                <SidebarHeader className="p-3 border-b text-xs font-bold">${title}</SidebarHeader>
-                <SidebarContent>
-                  <SidebarGroup>
-                    <SidebarGroupLabel className="text-[10px]">Navigation</SidebarGroupLabel>
-                    <SidebarGroupContent>
-                      <SidebarMenu>
+      return `<SidebarProvider key="${item.id}" className="min-h-0 w-auto">
+            <Sidebar collapsible="${collapsible}" variant="${variant}">
+              <SidebarContent>
+                <SidebarGroup>
+                  <SidebarGroupLabel className="text-[10px]">Navigation</SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
 ${staticItemsJsx}
-                      </SidebarMenu>
-                    </SidebarGroupContent>
-                  </SidebarGroup>
-                </SidebarContent>
-              </Sidebar>
-            </SidebarProvider>
-          </div>`;
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </SidebarContent>
+            </Sidebar>
+          </SidebarProvider>`;
     }
 
     if (item.type === "select") {
@@ -1412,68 +1405,80 @@ ${staticItemsJsx}
   };
 
   const componentBindingsJsx = hasComponentBindings
-    ? `\n        <div className="flex flex-wrap items-center gap-2.5">\n${(section.componentBindings || [])
+    ? (section.componentBindings || [])
         .map((comp) => {
           if (comp.elements && comp.elements.length > 0) {
-            const childElementsJsx = comp.elements
-              .map((el) => `              ${renderComponentItem({
-                id: el.id,
-                name: el.name,
-                type: el.elementType || "input",
-                label: el.label,
-                placeholder: el.placeholder,
-                variant: el.variant,
-                valueStateName: el.valueStateName,
-                disabledStateName: el.disabledStateName,
-                actionId: el.actionId,
-                actionName: el.actionName,
-                triggerEvent: el.triggerEvent,
-                description: el.description,
-                propMappings: el.propMappings,
-              }, true)}`)
-              .join("\n");
+            const childElements = comp.elements.map((el) =>
+              renderComponentItem(
+                {
+                  id: el.id,
+                  name: el.name,
+                  type: el.elementType || "input",
+                  label: el.label,
+                  placeholder: el.placeholder,
+                  variant: el.variant,
+                  valueStateName: el.valueStateName,
+                  disabledStateName: el.disabledStateName,
+                  actionId: el.actionId,
+                  actionName: el.actionName,
+                  triggerEvent: el.triggerEvent,
+                  description: el.description,
+                  propMappings: el.propMappings,
+                },
+                true,
+              ),
+            );
 
-            const descJsx = comp.description
-              ? `\n            <div className="text-[10px] text-muted-foreground">${comp.description}</div>`
-              : "";
+            if (childElements.length === 1) {
+              return `        ${childElements[0]}`;
+            }
 
-            return `          <div key="${comp.id}" className="flex flex-col gap-2 p-3 rounded-lg border bg-card text-card-foreground shadow-xs">\n            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">${comp.label || comp.name}</div>${descJsx}\n            <div className="flex flex-wrap items-center gap-2">\n${childElementsJsx}\n            </div>\n          </div>`;
+            return `        <div key="${comp.id}" className="flex flex-wrap items-center gap-2">\n${childElements
+              .map((el) => `          ${el}`)
+              .join("\n")}\n        </div>`;
           }
 
-          return `          ${renderComponentItem({
-            id: comp.id,
-            name: comp.name,
-            type: comp.componentType || "button",
-            label: comp.label,
-            variant: comp.variant,
-            valueStateName: comp.valueStateName,
-            disabledStateName: comp.disabledStateName,
-            actionId: comp.actionId,
-            actionName: comp.actionName,
-            triggerEvent: comp.triggerEvent,
-            description: comp.description,
-            propMappings: comp.propMappings,
-          }, false)}`;
+          return `        ${renderComponentItem(
+            {
+              id: comp.id,
+              name: comp.name,
+              type: comp.componentType || "button",
+              label: comp.label,
+              variant: comp.variant,
+              valueStateName: comp.valueStateName,
+              disabledStateName: comp.disabledStateName,
+              actionId: comp.actionId,
+              actionName: comp.actionName,
+              triggerEvent: comp.triggerEvent,
+              description: comp.description,
+              propMappings: comp.propMappings,
+            },
+            false,
+          )}`;
         })
-        .join("\n")}\n        </div>`
+        .join("\n")
     : "";
 
   const extraComponentImports = Array.from(neededShadcnImports).join("\n");
   const toastImport = needsToast ? `import { toast } from "sonner";\n` : "";
 
-  const hasContent = hasUnmappedActions || hasUnmappedStateObjects || hasComponentBindings;
-  let contentJsx = "";
-  if (hasContent) {
-    const actionsPart = hasUnmappedActions
-      ? `\n        <div className="flex flex-wrap gap-3${hasComponentBindings || hasUnmappedStateObjects ? " mt-3" : ""}">\n${unmappedEventComponents
-          .map((c) => `          <${c.componentName} onTrigger={onTrigger} />`)
-          .join("\n")}\n        </div>`
-      : "";
-    contentJsx = `\n      <CardContent>${componentBindingsJsx}${stateObjectsJsx}${actionsPart}\n      </CardContent>`;
+  const contentParts: string[] = [];
+  if (hasComponentBindings && componentBindingsJsx) {
+    contentParts.push(componentBindingsJsx);
   }
+  if (hasUnmappedStateObjects && stateObjectsJsx) {
+    contentParts.push(stateObjectsJsx);
+  }
+  if (hasUnmappedActions) {
+    contentParts.push(
+      `        <div className="flex flex-wrap gap-3">\n${unmappedEventComponents
+        .map((c) => `          <${c.componentName} onTrigger={onTrigger} />`)
+        .join("\n")}\n        </div>`,
+    );
+  }
+  const contentJsx = contentParts.filter(Boolean).join("\n");
 
   return `${isClient ? `"use client";\n\n` : ""}${reactImport}
-import { Card, CardHeader, CardTitle${section.description ? ", CardDescription" : ""}${hasContent ? ", CardContent" : ""} } from "@workspace/ui/components/card";
 ${extraComponentImports ? `${extraComponentImports}\n` : ""}${toastImport}${libraryImports}${storeImports ? `${storeImports}\n` : ""}${actionImports ? `${actionImports}\n` : ""}export interface ${sectionCompName}Props {
   onTrigger?: (
     eventName: string,
@@ -1489,11 +1494,9 @@ ${extraComponentImports ? `${extraComponentImports}\n` : ""}${toastImport}${libr
 
 export function ${sectionCompName}({ onTrigger }: ${sectionCompName}Props) {
 ${combinedSetupLines ? `${combinedSetupLines}\n\n` : ""}  return (
-    <Card className="border-border shadow-sm">
-      <CardHeader>
-        <CardTitle className="text-lg font-bold text-card-foreground">${section.name || "Section"}</CardTitle>${descriptionJsx}
-      </CardHeader>${contentJsx}
-    </Card>
+    <div className="w-full space-y-4">
+${contentJsx}
+    </div>
   );
 }
 

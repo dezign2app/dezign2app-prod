@@ -207,8 +207,8 @@ describe("compileNextjsV16SectionState", () => {
     // Specific field selectors
     expect(code).toContain("const items = useCartStore((s) => s.items);");
     expect(code).toContain("const totalPrice = useCartStore((s) => s.totalPrice);");
-    // State rendered in CardContent
-    expect(code).toContain("<CardContent>");
+    // State rendered in section root
+    expect(code).toContain('<div className="w-full space-y-4">');
     expect(code).toContain("items:");
     expect(code).toContain("totalPrice:");
   });
@@ -480,7 +480,7 @@ describe("compileNextjsV16SectionState", () => {
     expect(ordersCode).toContain("process.env.NEXT_PUBLIC_ENABLE_DEBUG_UI?.trim().toLowerCase() === \"true\"");
     expect(ordersCode).toContain('{showDebugState && <span className="text-muted-foreground">orderCount: </span>}');
     expect(ordersCode).toContain('String(orderCount)');
-    expect(ordersCode).toContain("<CardContent>");
+    expect(ordersCode).toContain('<div className="w-full space-y-4">');
     expect(ordersCode).toContain("<RefreshAction");
 
     // 2. Verify MetricsOnlySection renders state values in CardContent and guards variable name prefix
@@ -491,7 +491,7 @@ describe("compileNextjsV16SectionState", () => {
     expect(metricsCode).toContain("const showDebugState =");
     expect(metricsCode).toContain('{showDebugState && <span className="text-muted-foreground">revenue: </span>}');
     expect(metricsCode).toContain('String(revenue)');
-    expect(metricsCode).toContain("<CardContent>");
+    expect(metricsCode).toContain('<div className="w-full space-y-4">');
 
     // 3. Verify .env and .env.example contain debug toggles
     const envFile = result.files.find((f) => f.filename === ".env");
@@ -1395,13 +1395,13 @@ describe("compileNextjsV16SectionState", () => {
 
     // Must import Shadcn sidebar primitives and Link
     expect(code).toContain(
-      'import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@workspace/ui/components/sidebar";',
+      'import { SidebarProvider, Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@workspace/ui/components/sidebar";',
     );
     expect(code).toContain('import Link from "next/link";');
 
     // Must render Sidebar with configured title, collapsible, and variant
-    expect(code).toContain('<Sidebar collapsible="icon" variant="inset" className="w-full">');
-    expect(code).toContain('<SidebarHeader className="p-3 border-b text-xs font-bold">Acme Console</SidebarHeader>');
+    expect(code).toContain('<Sidebar collapsible="icon" variant="inset">');
+    expect(code).toContain('<SidebarProvider key="comp-app-sidebar" className="min-h-0 w-auto">');
 
     // Must map over dynamic navItems
     expect(code).toContain("(navItems || []).map((navItem, idx: number) =>");
@@ -1457,12 +1457,10 @@ describe("compileNextjsV16SectionState", () => {
 
     // Must import Shadcn sidebar primitives
     expect(code).toContain(
-      'import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@workspace/ui/components/sidebar";',
+      'import { SidebarProvider, Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@workspace/ui/components/sidebar";',
     );
     expect(code).toContain('import Link from "next/link";');
 
-    // Must render title
-    expect(code).toContain('<SidebarHeader className="p-3 border-b text-xs font-bold">Admin Portal</SidebarHeader>');
 
     // Must render each static item
     expect(code).toContain('<Link href="/admin/users" className="text-xs">');
@@ -1594,9 +1592,8 @@ describe("compileNextjsV16SectionState", () => {
     const mainSecFile = result.files.find((f) => f.filename.includes("MainSection.tsx"));
     expect(mainSecFile).toBeDefined();
     expect(mainSecFile!.filename).toContain("main-section/MainSection.tsx");
-    expect(mainSecFile!.content).toContain('import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@workspace/ui/components/sidebar";');
+    expect(mainSecFile!.content).toContain('import { SidebarProvider, Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@workspace/ui/components/sidebar";');
     expect(mainSecFile!.content).toContain('import Link from "next/link";');
-    expect(mainSecFile!.content).toContain('<SidebarHeader className="p-3 border-b text-xs font-bold">Chat App</SidebarHeader>');
     expect(mainSecFile!.content).toContain('<Link href="/chat" className="text-xs">');
     expect(mainSecFile!.content).toContain('<span>Inbox</span>');
   });
