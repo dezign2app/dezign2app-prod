@@ -228,6 +228,7 @@ export interface CanvasWebPageNodeData {
   isAuthPage?: boolean;
   isRoot?: boolean;
   isLayout?: boolean;
+  layoutSidebarInitialized?: boolean;
   authNodeId?: string;
   zoneId?: string;
   useZoneDefault?: boolean;

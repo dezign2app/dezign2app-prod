@@ -19,6 +19,7 @@ import {
   Search,
   X,
   Pencil,
+  PanelLeft,
 } from "lucide-react";
 import {
   PageSection,
@@ -47,6 +48,7 @@ const COMPONENT_ICON_MAP: Record<string, React.ElementType> = {
   table: Table,
   badge: BadgeAlert,
   select: ChevronDownSquare,
+  sidebar: PanelLeft,
 };
 
 export const SectionComponentBindingsList: React.FC<SectionComponentBindingsListProps> = ({

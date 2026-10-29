@@ -129,6 +129,7 @@ export interface CanvasServiceNodeData {
 
   isRoot?: boolean;
   isLayout?: boolean;
+  layoutSidebarInitialized?: boolean;
   isAuthPage?: boolean;
   routeGroup?: string;
   routeGroups?: {

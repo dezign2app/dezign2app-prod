@@ -293,6 +293,22 @@ export const WebAppNode = ({
     }
 
     const isPublic = targetZone.accessType === "public" || targetZone.id === "zone-public";
+    const defaultNavItems = connectedPages
+      .filter((p) => !p.data?.isLayout && p.data?.label?.trim().toLowerCase() !== "layout")
+      .map((p, idx) => {
+        const raw = p.data?.label || p.data?.path || `Page ${idx + 1}`;
+        const clean = raw.replace(/^\//, "");
+        const name = clean ? clean.charAt(0).toUpperCase() + clean.slice(1) : "Home";
+        const link = raw.startsWith("/") ? raw : `/${raw}`;
+        return { id: `nav-${idx + 1}`, name, link };
+      });
+    const sidebarNavItems =
+      defaultNavItems.length > 0
+        ? defaultNavItems
+        : [
+            { id: "nav-1", name: "Dashboard", link: "/dashboard" },
+            { id: "nav-2", name: "Settings", link: "/settings" },
+          ];
     const defaultDesc = isPublic
       ? "Public layout with top navigation bar, logo, and auth links"
       : "Protected app layout with sidebar navigation, user profile, and session check";
@@ -307,6 +323,7 @@ export const WebAppNode = ({
       data: {
         label: "layout",
         isLayout: true,
+        layoutSidebarInitialized: true,
         description: targetZone.layoutDescription || defaultDesc,
         useZoneDefault: true,
         zoneId: targetZone.id,
@@ -314,6 +331,24 @@ export const WebAppNode = ({
           {
             id: `sec-nav-${Date.now()}`,
             name: isPublic ? "Header Navigation" : "App Sidebar Navigation",
+            componentBindings: isPublic
+              ? []
+              : [
+                  {
+                    id: `comp-sidebar-${Date.now()}`,
+                    name: "AppSidebar",
+                    label: "AppSidebar",
+                    componentType: "sidebar",
+                    variant: "default",
+                    propMappings: {
+                      sidebarTitle: targetZone.name || "App Navigation",
+                      sidebarNavMode: "static",
+                      sidebarCollapsible: "icon",
+                      sidebarVariant: "sidebar",
+                      sidebarStaticItems: sidebarNavItems,
+                    },
+                  },
+                ],
             renderMode: "server",
             loadStrategy: "eager",
             actions: [],
@@ -321,6 +356,7 @@ export const WebAppNode = ({
           {
             id: `sec-children-${Date.now()}`,
             name: "Page Content ({children})",
+            componentBindings: [],
             renderMode: "server",
             loadStrategy: "eager",
             actions: [],
