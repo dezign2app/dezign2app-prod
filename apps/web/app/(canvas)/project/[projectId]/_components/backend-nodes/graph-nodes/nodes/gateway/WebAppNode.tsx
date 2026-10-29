@@ -309,6 +309,15 @@ export const WebAppNode = ({
             { id: "nav-1", name: "Dashboard", link: "/dashboard" },
             { id: "nav-2", name: "Settings", link: "/settings" },
           ];
+    const topbarNavItems =
+      defaultNavItems.length > 0
+        ? defaultNavItems
+        : [
+            { id: "nav-1", name: "Home", link: "/" },
+            { id: "nav-2", name: "Features", link: "/features" },
+            { id: "nav-3", name: "Pricing", link: "/pricing" },
+            { id: "nav-4", name: "About", link: "/about" },
+          ];
     const defaultDesc = isPublic
       ? "Public layout with top navigation bar, logo, and auth links"
       : "Protected app layout with sidebar navigation, user profile, and session check";
@@ -324,6 +333,7 @@ export const WebAppNode = ({
         label: "layout",
         isLayout: true,
         layoutSidebarInitialized: true,
+        layoutTopbarInitialized: true,
         description: targetZone.layoutDescription || defaultDesc,
         useZoneDefault: true,
         zoneId: targetZone.id,
@@ -332,7 +342,26 @@ export const WebAppNode = ({
             id: `sec-nav-${Date.now()}`,
             name: isPublic ? "Header Navigation" : "App Sidebar Navigation",
             componentBindings: isPublic
-              ? []
+              ? [
+                  {
+                    id: `comp-topbar-${Date.now()}`,
+                    name: "AppTopbar",
+                    label: "AppTopbar",
+                    componentType: "topbar",
+                    variant: "default",
+                    propMappings: {
+                      topbarTitle: targetZone.name || "Dezign App",
+                      topbarNavMode: "static",
+                      topbarSticky: true,
+                      showAuthButtons: true,
+                      signInText: "Sign In",
+                      signInLink: "/login",
+                      registerText: "Register",
+                      registerLink: "/register",
+                      topbarStaticItems: topbarNavItems,
+                    },
+                  },
+                ]
               : [
                   {
                     id: `comp-sidebar-${Date.now()}`,

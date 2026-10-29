@@ -14,6 +14,7 @@ import {
   LayoutGrid,
   ChevronDown,
   PanelLeft,
+  PanelTop,
 } from "lucide-react";
 import { ComponentBindingType, JSONValue } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
@@ -487,6 +488,89 @@ export const ComponentBindingLivePreview: React.FC<ComponentBindingLivePreviewPr
                   <div className="px-3 py-1.5 border-t border-border/40 bg-muted/20 text-[9px] text-muted-foreground flex items-center justify-between font-mono">
                     <span>{valueStateName ? `{${valueStateName}}` : "Static/Default"}</span>
                     <span>{items.length} items</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* 14. TOPBAR */}
+            {componentType === "topbar" && (() => {
+              const items = Array.isArray(sampleValue) && sampleValue.length > 0
+                ? sampleValue
+                : [
+                    { id: "nav-1", name: "Home", link: "/" },
+                    { id: "nav-2", name: "Features", link: "/features" },
+                    { id: "nav-3", name: "Pricing", link: "/pricing" },
+                    { id: "nav-4", name: "About", link: "/about" },
+                  ];
+
+              return (
+                <div className="w-full max-w-sm rounded-xl border border-border/80 bg-card text-card-foreground shadow-sm overflow-hidden flex flex-col text-xs">
+                  {/* Top Bar Navigation Preview */}
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-border/60 bg-muted/40 gap-2">
+                    <div className="flex items-center gap-1.5 font-bold text-xs text-foreground truncate shrink-0">
+                      <PanelTop size={13} className="text-primary shrink-0" />
+                      <span>{displayLabel || "Dezign App"}</span>
+                    </div>
+
+                    {/* Nav Links */}
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+                      {items.slice(0, 3).map((item: any, idx: number) => (
+                        <span
+                          key={item.id || idx}
+                          onClick={() => {
+                            if (!simulatedDisabled) {
+                              toast.info(`Clicked "${item.name || item.link}"`);
+                              if (actionId) onSimulateAction?.();
+                            }
+                          }}
+                          className={cn(
+                            "text-[10px] text-muted-foreground hover:text-foreground cursor-pointer transition-colors px-1 py-0.5 rounded",
+                            idx === 0 && "font-semibold text-foreground",
+                            simulatedDisabled && "opacity-50 pointer-events-none"
+                          )}
+                        >
+                          {item.name || `Link ${idx + 1}`}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Auth Buttons */}
+                    <div className="flex items-center gap-1 shrink-0 ml-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={simulatedDisabled}
+                        onClick={() => {
+                          toast.info("Navigating to Sign In (/login)...");
+                          if (actionId) onSimulateAction?.();
+                        }}
+                        className="h-6 px-1.5 text-[10px] font-medium cursor-pointer"
+                      >
+                        Sign In
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={simulatedDisabled}
+                        onClick={() => {
+                          toast.info("Navigating to Register (/register)...");
+                          if (actionId) onSimulateAction?.();
+                        }}
+                        className="h-6 px-2 text-[10px] font-medium cursor-pointer shadow-xs"
+                      >
+                        Register
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="px-3 py-1.5 bg-muted/20 text-[9px] text-muted-foreground flex items-center justify-between font-mono">
+                    <span className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                      Public Layout Navigation
+                    </span>
+                    <span>{items.length} links + Auth CTAs</span>
                   </div>
                 </div>
               );

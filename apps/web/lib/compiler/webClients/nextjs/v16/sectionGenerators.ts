@@ -1149,6 +1149,63 @@ ${staticItemsJsx}
           </SidebarProvider>`;
     }
 
+    if (item.type === "topbar") {
+      neededShadcnImports.add('import Link from "next/link";');
+      neededShadcnImports.add('import { Button } from "@workspace/ui/components/button";');
+      neededShadcnImports.add('import { Layers } from "lucide-react";');
+
+      const title = item.propMappings?.topbarTitle || "Dezign App";
+      const sticky = item.propMappings?.topbarSticky ?? true;
+      const showAuth = item.propMappings?.showAuthButtons ?? true;
+      const signInText = item.propMappings?.signInText || "Sign In";
+      const signInLink = item.propMappings?.signInLink || "/login";
+      const registerText = item.propMappings?.registerText || "Register";
+      const registerLink = item.propMappings?.registerLink || "/register";
+
+      const staticItems =
+        item.propMappings?.topbarStaticItems && item.propMappings.topbarStaticItems.length > 0
+          ? item.propMappings.topbarStaticItems
+          : item.propMappings?.sidebarStaticItems && item.propMappings.sidebarStaticItems.length > 0
+          ? item.propMappings.sidebarStaticItems
+          : [
+              { id: "nav-1", name: "Home", link: "/" },
+              { id: "nav-2", name: "Features", link: "/features" },
+              { id: "nav-3", name: "Pricing", link: "/pricing" },
+              { id: "nav-4", name: "About", link: "/about" },
+            ];
+
+      const navLinksJsx = staticItems
+        .map((sItem) => {
+          const resolvedHref = resolveSidebarItemHref(sItem);
+          return `            <Link key="${sItem.id}" href="${resolvedHref}" className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">${sItem.name}</Link>`;
+        })
+        .join("\n");
+
+      const authButtonsJsx = showAuth
+        ? `          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" asChild className="text-xs h-8">
+              <Link href="${signInLink}">${signInText}</Link>
+            </Button>
+            <Button size="sm" asChild className="text-xs h-8">
+              <Link href="${registerLink}">${registerText}</Link>
+            </Button>
+          </div>`
+        : "";
+
+      return `<header key="${item.id}" className="${sticky ? "sticky top-0 z-50 " : ""}w-full border-b border-border bg-background/80 backdrop-blur px-6 py-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          <Link href="/" className="flex items-center gap-2 font-bold text-sm tracking-tight text-foreground hover:opacity-90 transition-opacity">
+            <Layers className="size-4 text-primary" />
+            <span>${title}</span>
+          </Link>
+          <nav className="flex items-center gap-6">
+${navLinksJsx}
+          </nav>
+${authButtonsJsx}
+        </div>
+      </header>`;
+    }
+
     if (item.type === "select") {
       neededShadcnImports.add('import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@workspace/ui/components/select";');
       if (valVar && hasSetter) {

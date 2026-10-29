@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Sparkles, MousePointerClick, AlertTriangle, Timer, X, Check, PanelLeft, PanelLeftClose, PanelLeftOpen, LayoutDashboard, BarChart2, Folder, Settings, Menu } from "lucide-react";
+import { Sparkles, MousePointerClick, AlertTriangle, Timer, X, Check, PanelLeft, PanelTop, PanelLeftClose, PanelLeftOpen, LayoutDashboard, BarChart2, Folder, Settings, Menu } from "lucide-react";
 import {
   StateRenderComponent,
   StateRenderConfig,
@@ -825,6 +825,73 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
                     </Sidebar>
                   </SidebarProvider>
                 )}
+              </div>
+            </div>
+          );
+        })()}
+
+        {currentComponent === "topbar" && (() => {
+          const title = propMappings.topbarTitle || "Dezign App";
+          const isSticky = propMappings.topbarSticky ?? true;
+          const showAuth = propMappings.showAuthButtons ?? true;
+          const signIn = propMappings.signInText || "Sign In";
+          const register = propMappings.registerText || "Register";
+          const items = propMappings.topbarStaticItems || [
+            { id: "nav-1", name: "Home", link: "/" },
+            { id: "nav-2", name: "Features", link: "/features" },
+            { id: "nav-3", name: "Pricing", link: "/pricing" },
+            { id: "nav-4", name: "About", link: "/about" },
+          ];
+
+          return (
+            <div className="w-full max-w-sm rounded-xl border border-border/80 bg-card text-card-foreground shadow-sm overflow-hidden flex flex-col text-xs">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-border/60 bg-muted/40 gap-2">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-foreground truncate shrink-0">
+                  <PanelTop size={13} className="text-primary shrink-0" />
+                  <span>{title}</span>
+                </div>
+
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+                  {items.slice(0, 3).map((item, idx) => (
+                    <span
+                      key={item.id || idx}
+                      onClick={() => toast.info(`Clicked "${item.name}" link`)}
+                      className="text-[10px] text-muted-foreground hover:text-foreground cursor-pointer transition-colors px-1 py-0.5 rounded font-medium"
+                    >
+                      {item.name}
+                    </span>
+                  ))}
+                </div>
+
+                {showAuth && (
+                  <div className="flex items-center gap-1 shrink-0 ml-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toast.info(`Navigating to ${propMappings.signInLink || "/login"}`)}
+                      className="h-6 px-1.5 text-[10px] font-medium cursor-pointer"
+                    >
+                      {signIn}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => toast.info(`Navigating to ${propMappings.registerLink || "/register"}`)}
+                      className="h-6 px-2 text-[10px] font-medium cursor-pointer shadow-xs"
+                    >
+                      {register}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <div className="px-3 py-1.5 bg-muted/20 text-[9px] text-muted-foreground flex items-center justify-between font-mono">
+                <span className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                  Top Bar Navigation ({isSticky ? "Sticky" : "Static"})
+                </span>
+                <span>{items.length} links</span>
               </div>
             </div>
           );

@@ -129,6 +129,74 @@ export function generateSectionLayout(
     (cb) => cb.componentType === "sidebar",
   );
 
+  const topbarSection = sections.find((s: PageSection) =>
+    (s.componentBindings || []).some(
+      (cb) =>
+        cb.componentType === "topbar" ||
+        cb.name?.toLowerCase().includes("topbar") ||
+        cb.label?.toLowerCase().includes("topbar"),
+    ),
+  );
+  const topbarComp = topbarSection?.componentBindings?.find(
+    (cb) =>
+      cb.componentType === "topbar" ||
+      cb.name?.toLowerCase().includes("topbar") ||
+      cb.label?.toLowerCase().includes("topbar"),
+  );
+
+  const topbarSticky = topbarComp?.propMappings?.topbarSticky ?? true;
+  const topbarTitle =
+    topbarComp?.propMappings?.topbarTitle ||
+    slugToComponentName(groupName).replace(/Page$/, "") ||
+    "Dezign App";
+  const showAuthButtons = topbarComp?.propMappings?.showAuthButtons ?? true;
+  const signInText = topbarComp?.propMappings?.signInText || "Sign In";
+  const signInLink = topbarComp?.propMappings?.signInLink || "/login";
+  const registerText = topbarComp?.propMappings?.registerText || "Register";
+  const registerLink = topbarComp?.propMappings?.registerLink || "/register";
+
+  const topbarStaticItems =
+    topbarComp?.propMappings?.topbarStaticItems &&
+    topbarComp.propMappings.topbarStaticItems.length > 0
+      ? topbarComp.propMappings.topbarStaticItems
+      : topbarComp?.propMappings?.sidebarStaticItems &&
+        topbarComp.propMappings.sidebarStaticItems.length > 0
+      ? topbarComp.propMappings.sidebarStaticItems
+      : [
+          { id: "nav-1", name: "Home", link: "/" },
+          { id: "nav-2", name: "Features", link: "/features" },
+          { id: "nav-3", name: "Pricing", link: "/pricing" },
+          { id: "nav-4", name: "About", link: "/about" },
+        ];
+
+  const topbarItemsJsx = topbarStaticItems
+    .map((sItem) => {
+      const resolvedHref = resolveSidebarItemHref(sItem);
+      return `          <Link
+            key="${sItem.id}"
+            href="${resolvedHref}"
+            className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            ${sItem.name}
+          </Link>`;
+    })
+    .join("\n");
+
+  const authButtonsJsx = showAuthButtons
+    ? `          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" asChild className="text-xs h-8">
+              <Link href="${signInLink}">${signInText}</Link>
+            </Button>
+            <Button size="sm" asChild className="text-xs h-8">
+              <Link href="${registerLink}">${registerText}</Link>
+            </Button>
+          </div>`
+    : "";
+
+  const topbarImports = `import Link from "next/link";
+import { Button } from "@workspace/ui/components/button";
+import { Layers } from "lucide-react";`;
+
   const sidebarCollapsible = sidebarComp?.propMappings?.sidebarCollapsible || "icon";
   const sidebarVariant = sidebarComp?.propMappings?.sidebarVariant || "sidebar";
   const sidebarTitle =
@@ -177,6 +245,12 @@ import {
   SidebarRail,
 } from "@workspace/ui/components/sidebar";
 import { PanelLeft, LayoutDashboard, BarChart2, Folder, Settings } from "lucide-react";`;
+
+  const headerImports = sidebarComp
+    ? `${sidebarImports}\n`
+    : topbarComp
+    ? `${topbarImports}\n`
+    : "";
 
   const sectionsJsx = nonChildrenSections.length > 0
     ? nonChildrenSections
@@ -231,13 +305,31 @@ ${staticItemsJsx}
         </div>
       </div>
     </SidebarProvider>`
+    : topbarComp
+    ? `    <div className="min-h-screen flex flex-col bg-background text-foreground">
+      <header className="${topbarSticky ? "sticky top-0 z-50 " : ""}w-full border-b border-border bg-background/80 backdrop-blur px-6 py-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          <Link href="/" className="flex items-center gap-2 font-bold text-sm tracking-tight text-foreground hover:opacity-90 transition-opacity">
+            <Layers className="size-4 text-primary" />
+            <span>${topbarTitle}</span>
+          </Link>
+          <nav className="flex items-center gap-6">
+${topbarItemsJsx}
+          </nav>
+${authButtonsJsx}
+        </div>
+      </header>
+      <main className="flex-1">
+        {children}
+      </main>
+    </div>`
     : `    <div className="min-h-screen flex flex-col bg-background text-foreground">
 ${sectionsJsx ? `${sectionsJsx}\n` : ""}      <div className="flex-1">{children}</div>
     </div>`;
 
   if (isPublic || !isAuthConnected) {
     return `import React from "react";
-${sidebarComp ? `${sidebarImports}\n` : ""}${descriptionDoc}
+${headerImports}${descriptionDoc}
 export default function ${componentName}({
   children,
 }: {
@@ -285,7 +377,7 @@ ${layoutBodyJsx}
       defaultSignIn;
 
   return `import React from "react";
-${sidebarComp ? `${sidebarImports}\n` : ""}${descriptionDoc}
+${headerImports}${descriptionDoc}
 /**
  * Next.js Protected Section Layout
  * Tier 2 Validation: Deep session verification via requireSession() helper

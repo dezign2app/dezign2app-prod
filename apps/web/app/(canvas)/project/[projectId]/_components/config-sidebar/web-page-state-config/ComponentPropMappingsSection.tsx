@@ -21,6 +21,7 @@ import {
   SquareCheck,
   Tag,
   PanelLeft,
+  PanelTop,
   PanelRight,
   LayoutDashboard,
   Trash2,
@@ -2102,6 +2103,178 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
                 </div>
               </div>
             )}
+          </div>
+        );
+      })()}
+
+      {currentComponent === "topbar" && (() => {
+        const navMode = propMappings.topbarNavMode || "static";
+        const staticItems = propMappings.topbarStaticItems ?? propMappings.sidebarStaticItems ?? [
+          { id: "nav-1", name: "Home", link: "/" },
+          { id: "nav-2", name: "Features", link: "/features" },
+          { id: "nav-3", name: "Pricing", link: "/pricing" },
+          { id: "nav-4", name: "About", link: "/about" },
+        ];
+        const isSticky = propMappings.topbarSticky ?? true;
+        const showAuthButtons = propMappings.showAuthButtons ?? true;
+
+        const handleAddStaticItem = () => {
+          const nextId = `nav-${Date.now()}`;
+          const newItem: SidebarStaticItem = {
+            id: nextId,
+            name: `Page ${staticItems.length + 1}`,
+            link: `/page-${staticItems.length + 1}`,
+          };
+          onUpdatePropMapping({
+            topbarStaticItems: [...staticItems, newItem],
+          });
+        };
+
+        const handleUpdateStaticItem = (id: string, patch: Partial<SidebarStaticItem>) => {
+          const updated = staticItems.map((item) =>
+            item.id === id ? { ...item, ...patch } : item
+          );
+          onUpdatePropMapping({ topbarStaticItems: updated });
+        };
+
+        const handleDeleteStaticItem = (id: string) => {
+          const updated = staticItems.filter((item) => item.id !== id);
+          onUpdatePropMapping({ topbarStaticItems: updated });
+        };
+
+        return (
+          <div className="flex flex-col gap-3.5 p-3.5 rounded-xl bg-muted/20 border border-border/50 text-xs">
+            {/* Header pill / status indicator */}
+            <div className="flex items-center justify-between pb-2 border-b border-border/40 text-[11px]">
+              <div className="flex items-center gap-1.5 font-medium text-foreground">
+                <PanelTop size={13} className="text-primary" />
+                <span>Top Bar Navigation Setup</span>
+              </div>
+              <Badge variant="outline" className="text-[9px] font-mono px-1.5 py-0 text-emerald-500 border-emerald-500/30">
+                Public Layout ({staticItems.length} links)
+              </Badge>
+            </div>
+
+            {/* Topbar Title / Brand */}
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-medium text-foreground flex items-center justify-between">
+                <span>Brand Logo / Header Title</span>
+                <span className="text-[9px] text-muted-foreground font-mono">topbarTitle</span>
+              </Label>
+              <LocalInput
+                value={propMappings.topbarTitle ?? "Dezign App"}
+                onChange={(e) => onUpdatePropMapping({ topbarTitle: e.target.value })}
+                placeholder="Dezign App"
+                className="h-8 text-xs bg-background"
+              />
+            </div>
+
+            {/* Sticky Header Toggle */}
+            <div className="flex items-center justify-between p-2 rounded-lg bg-background/60 border border-border/40">
+              <div className="space-y-0.5">
+                <Label className="text-xs font-medium text-foreground">Sticky Header</Label>
+                <div className="text-[10px] text-muted-foreground">Keep topbar fixed at the top on scroll</div>
+              </div>
+              <Switch
+                checked={isSticky}
+                onCheckedChange={(checked) => onUpdatePropMapping({ topbarSticky: checked })}
+              />
+            </div>
+
+            {/* Sign In & Register Auth Buttons Configuration */}
+            <div className="space-y-2.5 p-3 rounded-xl bg-muted/30 border border-border/40">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <span>Auth Action Buttons</span>
+                    <Badge variant="secondary" className="text-[9px] px-1 py-0">Public</Badge>
+                  </Label>
+                  <div className="text-[10px] text-muted-foreground">Show Sign In and Register CTA buttons on top right</div>
+                </div>
+                <Switch
+                  checked={showAuthButtons}
+                  onCheckedChange={(checked) => onUpdatePropMapping({ showAuthButtons: checked })}
+                />
+              </div>
+
+              {showAuthButtons && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1.5 border-t border-border/30">
+                  {/* Sign In button config */}
+                  <div className="space-y-1.5 p-2 rounded-lg bg-background/70 border border-border/40">
+                    <Label className="text-[10px] font-medium text-muted-foreground">Sign In Button</Label>
+                    <div className="space-y-1">
+                      <LocalInput
+                        value={propMappings.signInText ?? "Sign In"}
+                        onChange={(e) => onUpdatePropMapping({ signInText: e.target.value })}
+                        placeholder="Sign In"
+                        className="h-7 text-xs bg-background"
+                      />
+                      <LocalInput
+                        value={propMappings.signInLink ?? "/login"}
+                        onChange={(e) => onUpdatePropMapping({ signInLink: e.target.value })}
+                        placeholder="/login"
+                        className="h-7 text-[11px] font-mono bg-background text-muted-foreground"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Register button config */}
+                  <div className="space-y-1.5 p-2 rounded-lg bg-background/70 border border-border/40">
+                    <Label className="text-[10px] font-medium text-muted-foreground">Register Button</Label>
+                    <div className="space-y-1">
+                      <LocalInput
+                        value={propMappings.registerText ?? "Register"}
+                        onChange={(e) => onUpdatePropMapping({ registerText: e.target.value })}
+                        placeholder="Register"
+                        className="h-7 text-xs bg-background"
+                      />
+                      <LocalInput
+                        value={propMappings.registerLink ?? "/register"}
+                        onChange={(e) => onUpdatePropMapping({ registerLink: e.target.value })}
+                        placeholder="/register"
+                        className="h-7 text-[11px] font-mono bg-background text-muted-foreground"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Static Navigation Items */}
+            <div className="flex flex-col gap-2.5 pt-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-foreground">Navigation Links ({staticItems.length})</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddStaticItem}
+                  className="h-6 text-[10px] gap-1 px-2 cursor-pointer"
+                >
+                  <Plus size={10} />
+                  <span>Add Link</span>
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                {staticItems.map((item, idx) => (
+                  <SidebarStaticItemRow
+                    key={item.id || idx}
+                    item={item}
+                    idx={idx}
+                    stateStores={stateStores}
+                    onUpdate={(patch) => handleUpdateStaticItem(item.id, patch)}
+                    onDelete={() => handleDeleteStaticItem(item.id)}
+                  />
+                ))}
+
+                {staticItems.length === 0 && (
+                  <div className="p-4 text-center text-xs text-muted-foreground border border-dashed rounded-lg">
+                    No navigation links. Click "+ Add Link" to define your topbar menu.
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         );
       })()}

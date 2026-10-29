@@ -22,6 +22,8 @@ import {
   X,
   Filter,
   Pencil,
+  PanelLeft,
+  PanelTop,
 } from "lucide-react";
 import {
   PageSection,
@@ -56,6 +58,8 @@ const COMPONENT_TYPES: Array<{
   { id: "badge", label: "Badge", icon: BadgeAlert },
   { id: "table", label: "Data Table", icon: Table },
   { id: "select", label: "Select Dropdown", icon: ChevronDownSquare },
+  { id: "sidebar", label: "Sidebar", icon: PanelLeft },
+  { id: "topbar", label: "Top Bar Navigation", icon: PanelTop },
 ];
 
 export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabProps> = ({

@@ -19,6 +19,7 @@ import {
   User,
   Loader2,
   PanelLeft,
+  PanelTop,
 } from "lucide-react";
 import { ComponentBindingType } from "@workspace/canvas";
 import { cn } from "@workspace/ui/lib/utils";
@@ -128,6 +129,13 @@ export const COMPONENT_BINDING_OPTIONS: ComponentTypeOption[] = [
     label: "Sidebar",
     description: "Collapsible vertical navigation panel with static or dynamic links",
     icon: PanelLeft,
+    recommendedFor: ["array", "object[]"],
+  },
+  {
+    id: "topbar",
+    label: "Top Bar Navigation",
+    description: "Header navigation bar with brand logo, links, and auth buttons",
+    icon: PanelTop,
     recommendedFor: ["array", "object[]"],
   },
 ];

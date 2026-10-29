@@ -13,6 +13,7 @@ import {
   Code2,
   Table as TableIcon,
   PanelLeft,
+  PanelTop,
 } from "lucide-react";
 import {
   StateRenderComponent,
@@ -127,6 +128,13 @@ export const COMPONENT_OPTIONS: ComponentOption[] = [
     label: "Sidebar",
     description: "Collapsible vertical navigation panel with static or dynamic links",
     icon: PanelLeft,
+    recommendedFor: ["array", "object"],
+  },
+  {
+    id: "topbar",
+    label: "Top Bar Navigation",
+    description: "Header navigation bar with brand logo, links, and auth buttons",
+    icon: PanelTop,
     recommendedFor: ["array", "object"],
   },
 ];

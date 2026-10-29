@@ -99,6 +99,7 @@ export const ZoneLayoutSection = ({
         label: "layout",
         isLayout: true,
         layoutSidebarInitialized: true,
+        layoutTopbarInitialized: true,
         description:
           currentZone.layoutDescription ||
           `Shared layout wrapper for ${currentZone.name} section (navigation, sidebar & session checks)`,
@@ -107,7 +108,31 @@ export const ZoneLayoutSection = ({
             id: `sec-header-${Date.now()}`,
             name: isPublic ? "Header Navigation" : "App Sidebar Navigation",
             componentBindings: isPublic
-              ? []
+              ? [
+                  {
+                    id: `comp-topbar-${Date.now()}`,
+                    name: "AppTopbar",
+                    label: "AppTopbar",
+                    componentType: "topbar",
+                    variant: "default",
+                    propMappings: {
+                      topbarTitle: currentZone.name || "Dezign App",
+                      topbarNavMode: "static",
+                      topbarSticky: true,
+                      showAuthButtons: true,
+                      signInText: "Sign In",
+                      signInLink: "/login",
+                      registerText: "Register",
+                      registerLink: "/register",
+                      topbarStaticItems: [
+                        { id: "nav-1", name: "Home", link: "/" },
+                        { id: "nav-2", name: "Features", link: "/features" },
+                        { id: "nav-3", name: "Pricing", link: "/pricing" },
+                        { id: "nav-4", name: "About", link: "/about" },
+                      ],
+                    },
+                  },
+                ]
               : [
                   {
                     id: `comp-sidebar-${Date.now()}`,
