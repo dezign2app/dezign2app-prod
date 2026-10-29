@@ -71,20 +71,22 @@ export type StateRenderComponent =
 export interface SidebarStaticItemParam {
   name: string;
   value: string;
-  mode?: "static" | "store_var";
+  mode?: "static" | "store_var" | "route_param" | "query_param";
   storeName?: string;
   storeId?: string;
   storeVar?: string;
+  sourceParamName?: string;
 }
 
 export interface SidebarStaticItemQueryParam {
   id: string;
   key: string;
   value: string;
-  mode?: "static" | "store_var";
+  mode?: "static" | "store_var" | "route_param" | "query_param";
   storeName?: string;
   storeId?: string;
   storeVar?: string;
+  sourceParamName?: string;
 }
 
 export interface SidebarStaticItem {

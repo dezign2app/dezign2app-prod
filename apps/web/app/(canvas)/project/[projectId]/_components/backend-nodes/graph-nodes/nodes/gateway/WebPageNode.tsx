@@ -698,7 +698,26 @@ export const WebPageNode = ({
           const clean = raw.replace(/^\//, "");
           const name = clean ? clean.charAt(0).toUpperCase() + clean.slice(1) : "Home";
           const link = raw.startsWith("/") ? raw : `/${raw}`;
-          return { id: `nav-${idx + 1}`, name, link };
+          const { extractedPathParams, extractedQueryParams } = parseRouteWithQueryParams(link);
+          const pathParams = extractedPathParams.map((ep) => ({
+            name: ep.name,
+            value: "",
+            mode: "route_param" as const,
+            sourceParamName: ep.name,
+          }));
+          const queryParams = extractedQueryParams.map((eq) => ({
+            id: `q-${eq.name}`,
+            key: eq.name,
+            value: eq.defaultValue || "",
+            mode: "static" as const,
+          }));
+          return {
+            id: `nav-${idx + 1}`,
+            name,
+            link,
+            ...(pathParams.length > 0 ? { pathParams } : {}),
+            ...(queryParams.length > 0 ? { queryParams } : {}),
+          };
         });
       }
 

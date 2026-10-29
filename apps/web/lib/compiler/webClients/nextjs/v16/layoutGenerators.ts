@@ -67,8 +67,8 @@ export default function RootLayout({
  */
 export function resolveSidebarItemHref(sItem: {
   link?: string;
-  pathParams?: Array<{ name: string; value: string; mode?: string; storeVar?: string }>;
-  queryParams?: Array<{ key: string; value: string; mode?: string; storeVar?: string }>;
+  pathParams?: Array<{ name: string; value: string; mode?: string; storeVar?: string; sourceParamName?: string }>;
+  queryParams?: Array<{ key: string; value: string; mode?: string; storeVar?: string; sourceParamName?: string }>;
 }): string {
   let link = sItem.link || "#";
   if (link === "#") return link;
@@ -77,7 +77,18 @@ export function resolveSidebarItemHref(sItem: {
   if (sItem.pathParams && sItem.pathParams.length > 0) {
     for (const p of sItem.pathParams) {
       if (p.name) {
-        const replacement = p.value || (p.mode === "store_var" && p.storeVar ? p.storeVar : p.name);
+        let replacement = p.value;
+        if (!replacement) {
+          if (p.mode === "store_var" && p.storeVar) {
+            replacement = p.storeVar;
+          } else if (p.mode === "route_param") {
+            replacement = p.sourceParamName || p.name;
+          } else if (p.mode === "query_param") {
+            replacement = p.sourceParamName || p.name;
+          } else {
+            replacement = p.name;
+          }
+        }
         link = link.replace(new RegExp(`\\[${p.name}\\]`, "g"), encodeURIComponent(replacement));
       }
     }
@@ -92,7 +103,13 @@ export function resolveSidebarItemHref(sItem: {
     if (validParams.length > 0) {
       const queryString = validParams
         .map((q) => {
-          const val = q.value || (q.mode === "store_var" && q.storeVar ? q.storeVar : "");
+          let val = q.value;
+          if (!val) {
+            if (q.mode === "store_var" && q.storeVar) val = q.storeVar;
+            else if (q.mode === "route_param") val = q.sourceParamName || q.key;
+            else if (q.mode === "query_param") val = q.sourceParamName || q.key;
+            else val = "";
+          }
           return `${encodeURIComponent(q.key)}=${encodeURIComponent(val)}`;
         })
         .join("&");
