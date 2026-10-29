@@ -10,6 +10,7 @@ import type {
 } from "@workspace/canvas/types";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
 import type { TestUserPersona } from "@/app/(canvas)/project/[projectId]/_components/test-users/types";
+import { encode as encodeToon } from "@toon-format/toon";
 
 export interface ProjectMetadata {
   id?: string;
@@ -1146,4 +1147,13 @@ export function formatSystemContextForAi(
   const opts = { includeNodeIds: true, ...options };
   const markdown = formatSystemContext(input, opts);
   return stripMarkdownFormatters(markdown);
+}
+
+/**
+ * Serializes the project payload into TOON (Token-Oriented Object Notation) format
+ * (https://github.com/toon-format/toon), significantly reducing token usage in LLM prompts
+ * while preserving full structural fidelity.
+ */
+export function formatSystemContextAsToon(input: ProjectSystemContextInput): string {
+  return encodeToon(input);
 }

@@ -2,13 +2,13 @@ import React, { useState, useCallback } from "react";
 import { Panel } from "@xyflow/react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
-import { LayoutTemplate, RotateCcw, Users, FileJson, Check, Sparkles } from "lucide-react";
+import { LayoutTemplate, RotateCcw, Users, FileJson, Check, Sparkles, Braces } from "lucide-react";
 import { toast } from "sonner";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { useTestUsersStore } from "../test-users/useTestUsersStore";
-import { formatSystemContextForAi } from "@/lib/system-context/formatSystemContext";
+import { formatSystemContextForAi, formatSystemContextAsToon } from "@/lib/system-context/formatSystemContext";
 
 interface TopToolbarPanelProps {
   onLayout: (direction: "LR" | "TB") => void;
@@ -29,6 +29,7 @@ export const TopToolbarPanel: React.FC<TopToolbarPanelProps> = ({
 
   const [copiedJson, setCopiedJson] = useState(false);
   const [copiedAiContext, setCopiedAiContext] = useState(false);
+  const [copiedToon, setCopiedToon] = useState(false);
 
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
@@ -79,6 +80,52 @@ export const TopToolbarPanel: React.FC<TopToolbarPanelProps> = ({
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to copy";
       toast.error("Failed to copy AI context", {
+        description: message,
+      });
+    }
+  }, [effectiveProjectId, projectName, nodes, edges, endpoints, events, identityProviders, personas]);
+
+  const handleCopyToon = useCallback(async () => {
+    try {
+      const projectPayload = {
+        project: {
+          id: effectiveProjectId,
+          name: projectName || "Untitled Project",
+        },
+        nodes,
+        edges,
+        endpoints,
+        events,
+        identityProviders,
+        testUsers: personas,
+      };
+
+      const toonText = formatSystemContextAsToon(projectPayload);
+
+      // Log to browser console so user can directly inspect and explore the TOON text
+      console.log("[Project TOON (Token-Oriented Object Notation)]\n" + toonText);
+
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(toonText);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = toonText;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+
+      setCopiedToon(true);
+      toast.success("TOON format copied to clipboard!", {
+        description: "Token-Oriented Object Notation (TOON) saves context tokens for LLM prompts. Also logged to browser console.",
+      });
+      setTimeout(() => setCopiedToon(false), 2000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to copy";
+      toast.error("Failed to copy TOON format", {
         description: message,
       });
     }
@@ -169,6 +216,21 @@ export const TopToolbarPanel: React.FC<TopToolbarPanelProps> = ({
             <Sparkles className="w-3.5 h-3.5 text-primary" />
           )}
           <span>{copiedAiContext ? "Copied AI Context" : "AI Context"}</span>
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2.5 text-xs text-sidebar-foreground hover:bg-sidebar-accent gap-1.5 transition-colors"
+          onClick={handleCopyToon}
+          title="Copy compact Token-Oriented Object Notation (TOON format: https://github.com/toon-format/toon) for token-efficient LLM prompts to clipboard"
+        >
+          {copiedToon ? (
+            <Check className="w-3.5 h-3.5 text-emerald-500 animate-in zoom-in-50 duration-200" />
+          ) : (
+            <Braces className="w-3.5 h-3.5 text-primary" />
+          )}
+          <span>{copiedToon ? "Copied TOON" : "TOON"}</span>
         </Button>
 
         <Button

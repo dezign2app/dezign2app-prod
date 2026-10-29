@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   formatSystemContext,
   formatSystemContextForAi,
+  formatSystemContextAsToon,
   stripMarkdownFormatters,
   ProjectSystemContextInput,
 } from "../formatSystemContext";
@@ -480,5 +481,56 @@ describe("formatSystemContext", () => {
     expect(cleaned).toContain("Service: auth-service");
     expect(cleaned).toContain("POST /login");
     expect(cleaned).toContain("Calls getUser");
+  });
+
+  it("formatSystemContextAsToon encodes project architecture into compact TOON format", () => {
+    const serviceNode: BackendNode = {
+      id: "node-svc",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Auth Service",
+        port: "3000",
+      },
+    };
+
+    const dbNode: BackendNode = {
+      id: "node-db",
+      type: "database",
+      position: { x: 100, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "Primary DB",
+        dbEngine: "postgres",
+      },
+    };
+
+    const edge: BackendEdge = {
+      id: "edge-1",
+      source: "node-svc",
+      target: "node-db",
+      type: "database-connection",
+      fractionalIndex: "a0",
+    };
+
+    const input: ProjectSystemContextInput = {
+      project: { id: "p-toon", name: "Toon Project" },
+      nodes: [serviceNode, dbNode],
+      edges: [edge],
+    };
+
+    const toonOutput = formatSystemContextAsToon(input);
+
+    // Verify TOON format characteristics
+    expect(toonOutput).toContain("project:");
+    expect(toonOutput).toContain("id: p-toon");
+    expect(toonOutput).toContain("name: Toon Project");
+    expect(toonOutput).toContain("nodes[2]");
+    expect(toonOutput).toContain("edges[1]");
+    expect(toonOutput).toContain("edge-1,node-svc,node-db,database-connection");
+    // Verify TOON is significantly more token-compact than formatted JSON
+    const jsonOutput = JSON.stringify(input, null, 2);
+    expect(toonOutput.length).toBeLessThan(jsonOutput.length);
   });
 });

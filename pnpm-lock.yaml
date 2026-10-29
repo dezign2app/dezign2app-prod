@@ -233,6 +233,9 @@ importers:
       '@stackblitz/sdk':
         specifier: ^1.11.1
         version: 1.11.1
+      '@toon-format/toon':
+        specifier: ^4.4.0
+        version: 4.4.0
       '@types/dagre':
         specifier: ^0.7.54
         version: 0.7.54
@@ -3277,6 +3280,9 @@ packages:
   '@tldraw/validate@5.2.4':
     resolution: {integrity: sha512-hNuRQISI7NNLmQDa7UNI0+cytwsqCVQkywiw/fXf44aFxEefi/PnLJyAtDywD7Mi2RHZ/Yb9pIlJl1HI0bRC0w==}
     engines: {node: '>=22.12.0'}
+
+  '@toon-format/toon@4.4.0':
+    resolution: {integrity: sha512-A6UcsVoWbNdhdLNhJbe6JpRlocmf/DZGG57fur3bd8oQtsjBaKWo2hHbOU2zTuy+byUmLIOyP1xJeitopCZzpQ==}
 
   '@tootallnate/once@2.0.1':
     resolution: {integrity: sha512-HqmEUIGRJ5fSXchkVgR5F7qn48bDBzv0kWj/Kfu5e6uci4UlEeng4331LnBkWffb++Ei3FOVLxo8JJWMFBDMeQ==}
@@ -11831,6 +11837,8 @@ snapshots:
   '@tldraw/validate@5.2.4':
     dependencies:
       '@tldraw/utils': 5.2.4
+
+  '@toon-format/toon@4.4.0': {}
 
   '@tootallnate/once@2.0.1': {}
 
