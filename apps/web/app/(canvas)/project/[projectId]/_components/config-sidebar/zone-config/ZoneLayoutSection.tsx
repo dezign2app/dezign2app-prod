@@ -45,8 +45,7 @@ export const ZoneLayoutSection = ({
   const edges = useBackendCanvasStore((s) => s.edges);
   const addNode = useBackendCanvasStore((s) => s.addNode);
   const addEdge = useBackendCanvasStore((s) => s.addEdge);
-
-  const isLayoutEnabled = currentZone.hasLayout ?? false;
+  const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
   const isPublic = currentZone.accessType === "public" || currentZone.id === "zone-public";
   const groupSlug =
     currentZone.name
@@ -81,15 +80,16 @@ export const ZoneLayoutSection = ({
       )
     : null;
 
+  const isLayoutEnabled = Boolean(connectedLayoutNode);
+
   const handleCreateLayoutNode = () => {
     const newLayoutId = `webPage-layout-${Date.now()}`;
     const baseX = webAppNode?.position?.x ?? 100;
     const baseY = webAppNode?.position?.y ?? 100;
 
-    const newLayoutNode: BackendNode = {
+    const newLayoutNode: Omit<BackendNode, "fractionalIndex"> = {
       id: newLayoutId,
       type: "webPage",
-      fractionalIndex: "a0",
       position: {
         x: baseX + 380,
         y: baseY - 120,
@@ -142,10 +142,25 @@ export const ZoneLayoutSection = ({
   };
 
   const handleToggleLayout = (checked: boolean) => {
-    onUpdateZone({
-      ...currentZone,
-      hasLayout: checked,
-    });
+    if (checked) {
+      if (!connectedLayoutNode) {
+        handleCreateLayoutNode();
+      } else {
+        onUpdateZone({
+          ...currentZone,
+          hasLayout: true,
+        });
+      }
+    } else {
+      if (connectedLayoutNode) {
+        deleteNode(connectedLayoutNode.id);
+      }
+      onUpdateZone({
+        ...currentZone,
+        hasLayout: false,
+      });
+      toast.info(`Layout disabled for ${currentZone.name}`);
+    }
   };
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
