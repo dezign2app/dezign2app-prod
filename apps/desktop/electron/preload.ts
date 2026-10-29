@@ -101,6 +101,7 @@ export interface ElectronAPI {
   /** Silent OS-level network port reachability */
   network: {
     isPortOpen(port: number): Promise<boolean>;
+    killPort(port: number): Promise<{ success: boolean; pids?: number[]; error?: string }>;
   };
 
   /** Native database execution and connection checks */
@@ -206,6 +207,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   network: {
     isPortOpen: (port: number) => ipcRenderer.invoke("network:isPortOpen", port),
+    killPort: (port: number) => ipcRenderer.invoke("network:kill-port", port),
   },
 
   db: {

@@ -114,6 +114,7 @@ export interface ElectronAPI {
 
   network?: {
     isPortOpen(port: number): Promise<boolean>;
+    killPort?(port: number): Promise<{ success: boolean; pids?: number[]; error?: string }>;
   };
 
   db?: {
