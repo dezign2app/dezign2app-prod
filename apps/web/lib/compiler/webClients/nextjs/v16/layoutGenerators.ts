@@ -61,6 +61,48 @@ export default function RootLayout({
 `;
 }
 
+/**
+ * Resolves static sidebar item href by substituting dynamic path parameters
+ * (e.g. /chat/[id] -> /chat/new) and appending configured query parameters (e.g. ?tab=chat).
+ */
+export function resolveSidebarItemHref(sItem: {
+  link?: string;
+  pathParams?: Array<{ name: string; value: string; mode?: string; storeVar?: string }>;
+  queryParams?: Array<{ key: string; value: string; mode?: string; storeVar?: string }>;
+}): string {
+  let link = sItem.link || "#";
+  if (link === "#") return link;
+
+  // Substitute configured path parameters
+  if (sItem.pathParams && sItem.pathParams.length > 0) {
+    for (const p of sItem.pathParams) {
+      if (p.name) {
+        const replacement = p.value || (p.mode === "store_var" && p.storeVar ? p.storeVar : p.name);
+        link = link.replace(new RegExp(`\\[${p.name}\\]`, "g"), encodeURIComponent(replacement));
+      }
+    }
+  }
+
+  // Any remaining unconfigured [param] becomes safe param name
+  link = link.replace(/\[([^\]]+)\]/g, "$1");
+
+  // Append query parameters
+  if (sItem.queryParams && sItem.queryParams.length > 0) {
+    const validParams = sItem.queryParams.filter((q) => q.key && q.key.trim().length > 0);
+    if (validParams.length > 0) {
+      const queryString = validParams
+        .map((q) => {
+          const val = q.value || (q.mode === "store_var" && q.storeVar ? q.storeVar : "");
+          return `${encodeURIComponent(q.key)}=${encodeURIComponent(val)}`;
+        })
+        .join("&");
+      link += (link.includes("?") ? "&" : "?") + queryString;
+    }
+  }
+
+  return link;
+}
+
 export function generateSectionLayout(
   groupName: string,
   isAuthConnected: boolean = true,
@@ -80,6 +122,62 @@ export function generateSectionLayout(
     (s: PageSection) => !s.name?.toLowerCase().includes("children"),
   );
 
+  const sidebarSection = sections.find((s: PageSection) =>
+    (s.componentBindings || []).some((cb) => cb.componentType === "sidebar"),
+  );
+  const sidebarComp = sidebarSection?.componentBindings?.find(
+    (cb) => cb.componentType === "sidebar",
+  );
+
+  const sidebarCollapsible = sidebarComp?.propMappings?.sidebarCollapsible || "icon";
+  const sidebarVariant = sidebarComp?.propMappings?.sidebarVariant || "sidebar";
+  const sidebarTitle =
+    sidebarComp?.propMappings?.sidebarTitle ||
+    slugToComponentName(groupName).replace(/Page$/, "") ||
+    "App Navigation";
+
+  const staticItems =
+    sidebarComp?.propMappings?.sidebarStaticItems &&
+    sidebarComp.propMappings.sidebarStaticItems.length > 0
+      ? sidebarComp.propMappings.sidebarStaticItems
+      : [
+          { id: "nav-1", name: "Dashboard", link: "/dashboard" },
+          { id: "nav-2", name: "Settings", link: "/settings" },
+        ];
+
+  const navIconNames = ["LayoutDashboard", "BarChart2", "Folder", "Settings"];
+  const staticItemsJsx = staticItems
+    .map((sItem, sIdx) => {
+      const IconComp = navIconNames[sIdx % navIconNames.length];
+      const resolvedHref = resolveSidebarItemHref(sItem);
+      return `                      <SidebarMenuItem key="${sItem.id}">
+                        <SidebarMenuButton asChild tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                          <Link href="${resolvedHref}" className="text-xs">
+                            <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
+                            <span>${sItem.name}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>`;
+    })
+    .join("\n");
+
+  const sidebarImports = `import Link from "next/link";
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarTrigger,
+  SidebarRail,
+} from "@workspace/ui/components/sidebar";
+import { PanelLeft, LayoutDashboard, BarChart2, Folder, Settings } from "lucide-react";`;
+
   const sectionsJsx = nonChildrenSections.length > 0
     ? nonChildrenSections
         .map((sec: PageSection) => {
@@ -97,18 +195,56 @@ export function generateSectionLayout(
         .join("\n")
     : "";
 
+  const layoutBodyJsx = sidebarComp
+    ? `    <SidebarProvider className="min-h-screen">
+      <div className="flex min-h-screen w-full bg-background text-foreground">
+        <Sidebar collapsible="${sidebarCollapsible}" variant="${sidebarVariant}">
+          <SidebarHeader className="border-b border-sidebar-border px-3 py-2.5">
+            <div className="flex items-center gap-2 min-w-0">
+              <PanelLeft className="size-4 text-primary shrink-0" />
+              <span className="text-sm font-semibold truncate group-data-[collapsible=icon]:hidden text-sidebar-foreground">
+                ${sidebarTitle}
+              </span>
+            </div>
+          </SidebarHeader>
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-[10px]">Navigation</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+${staticItemsJsx}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
+          <SidebarTrigger className="absolute -right-3.5 top-3.5 z-20 h-6 w-6 rounded-full border border-sidebar-border bg-background shadow-xs hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex items-center justify-center text-sidebar-foreground cursor-pointer transition-all duration-200 group-data-[side=right]:-left-3.5 group-data-[side=right]:right-auto hover:scale-105" />
+          <SidebarRail />
+        </Sidebar>
+        <div className="flex-1 flex flex-col min-w-0">
+          <header className="h-12 border-b border-border flex items-center px-4 gap-2 bg-card/40 backdrop-blur">
+            <SidebarTrigger />
+            <span className="text-xs font-medium text-muted-foreground">${sidebarTitle}</span>
+          </header>
+          <main className="flex-1 p-6 overflow-auto">
+            {children}
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>`
+    : `    <div className="min-h-screen flex flex-col bg-background text-foreground">
+${sectionsJsx ? `${sectionsJsx}\n` : ""}      <div className="flex-1">{children}</div>
+    </div>`;
+
   if (isPublic || !isAuthConnected) {
     return `import React from "react";
-${descriptionDoc}
+${sidebarComp ? `${sidebarImports}\n` : ""}${descriptionDoc}
 export default function ${componentName}({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground">
-${sectionsJsx ? `${sectionsJsx}\n` : ""}      <div className="flex-1">{children}</div>
-    </div>
+${layoutBodyJsx}
   );
 }
 `;
@@ -149,7 +285,7 @@ ${sectionsJsx ? `${sectionsJsx}\n` : ""}      <div className="flex-1">{children}
       defaultSignIn;
 
   return `import React from "react";
-${descriptionDoc}
+${sidebarComp ? `${sidebarImports}\n` : ""}${descriptionDoc}
 /**
  * Next.js Protected Section Layout
  * Tier 2 Validation: Deep session verification via requireSession() helper
@@ -177,9 +313,7 @@ export default async function ${componentName}({
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground">
-${sectionsJsx ? `${sectionsJsx}\n` : ""}      <div className="flex-1">{children}</div>
-    </div>
+${layoutBodyJsx}
   );
 }
 `;

@@ -67,6 +67,35 @@ export type StateRenderComponent =
   | "text"
   | "sidebar";
 
+export interface SidebarStaticItemParam {
+  name: string;
+  value: string;
+  mode?: "static" | "store_var";
+  storeName?: string;
+  storeId?: string;
+  storeVar?: string;
+}
+
+export interface SidebarStaticItemQueryParam {
+  id: string;
+  key: string;
+  value: string;
+  mode?: "static" | "store_var";
+  storeName?: string;
+  storeId?: string;
+  storeVar?: string;
+}
+
+export interface SidebarStaticItem {
+  id: string;
+  name: string;
+  link: string;
+  icon?: string;
+  badge?: string;
+  pathParams?: SidebarStaticItemParam[];
+  queryParams?: SidebarStaticItemQueryParam[];
+}
+
 export interface ComponentPropMappings {
   // Input
   inputType?: "text" | "number" | "password" | "email" | "tel" | "url" | "date" | "search";
@@ -182,13 +211,7 @@ export interface ComponentPropMappings {
   sidebarNavBinding?: string;
   sidebarNavStoreId?: string;
   sidebarNavStoreName?: string;
-  sidebarStaticItems?: Array<{
-    id: string;
-    name: string;
-    link: string;
-    icon?: string;
-    badge?: string;
-  }>;
+  sidebarStaticItems?: Array<SidebarStaticItem>;
   sidebarCollapsible?: "offcanvas" | "icon" | "none";
   sidebarVariant?: "sidebar" | "floating" | "inset";
   sidebarSide?: "left" | "right";

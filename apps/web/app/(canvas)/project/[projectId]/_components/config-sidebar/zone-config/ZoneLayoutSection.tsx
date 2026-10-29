@@ -83,6 +83,7 @@ export const ZoneLayoutSection = ({
   const isLayoutEnabled = Boolean(connectedLayoutNode);
 
   const handleCreateLayoutNode = () => {
+    const isPublic = currentZone.accessType === "public" || currentZone.id === "zone-public";
     const newLayoutId = `webPage-layout-${Date.now()}`;
     const baseX = webAppNode?.position?.x ?? 100;
     const baseY = webAppNode?.position?.y ?? 100;
@@ -97,13 +98,35 @@ export const ZoneLayoutSection = ({
       data: {
         label: "layout",
         isLayout: true,
+        layoutSidebarInitialized: true,
         description:
           currentZone.layoutDescription ||
           `Shared layout wrapper for ${currentZone.name} section (navigation, sidebar & session checks)`,
         sections: [
           {
             id: `sec-header-${Date.now()}`,
-            name: "Header Navigation",
+            name: isPublic ? "Header Navigation" : "App Sidebar Navigation",
+            componentBindings: isPublic
+              ? []
+              : [
+                  {
+                    id: `comp-sidebar-${Date.now()}`,
+                    name: "AppSidebar",
+                    label: "AppSidebar",
+                    componentType: "sidebar",
+                    variant: "default",
+                    propMappings: {
+                      sidebarTitle: currentZone.name || "App Navigation",
+                      sidebarNavMode: "static",
+                      sidebarCollapsible: "icon",
+                      sidebarVariant: "sidebar",
+                      sidebarStaticItems: [
+                        { id: "nav-1", name: "Dashboard", link: "/dashboard" },
+                        { id: "nav-2", name: "Settings", link: "/settings" },
+                      ],
+                    },
+                  },
+                ],
             renderMode: "server",
             loadStrategy: "eager",
             actions: [],
@@ -111,6 +134,7 @@ export const ZoneLayoutSection = ({
           {
             id: `sec-children-${Date.now()}`,
             name: "Page Content ({children})",
+            componentBindings: [],
             renderMode: "server",
             loadStrategy: "eager",
             actions: [],
