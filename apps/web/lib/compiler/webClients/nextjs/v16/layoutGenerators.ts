@@ -61,6 +61,48 @@ export default function RootLayout({
 `;
 }
 
+/**
+ * Resolves static sidebar item href by substituting dynamic path parameters
+ * (e.g. /chat/[id] -> /chat/new) and appending configured query parameters (e.g. ?tab=chat).
+ */
+export function resolveSidebarItemHref(sItem: {
+  link?: string;
+  pathParams?: Array<{ name: string; value: string; mode?: string; storeVar?: string }>;
+  queryParams?: Array<{ key: string; value: string; mode?: string; storeVar?: string }>;
+}): string {
+  let link = sItem.link || "#";
+  if (link === "#") return link;
+
+  // Substitute configured path parameters
+  if (sItem.pathParams && sItem.pathParams.length > 0) {
+    for (const p of sItem.pathParams) {
+      if (p.name) {
+        const replacement = p.value || (p.mode === "store_var" && p.storeVar ? p.storeVar : p.name);
+        link = link.replace(new RegExp(`\\[${p.name}\\]`, "g"), encodeURIComponent(replacement));
+      }
+    }
+  }
+
+  // Any remaining unconfigured [param] becomes safe param name
+  link = link.replace(/\[([^\]]+)\]/g, "$1");
+
+  // Append query parameters
+  if (sItem.queryParams && sItem.queryParams.length > 0) {
+    const validParams = sItem.queryParams.filter((q) => q.key && q.key.trim().length > 0);
+    if (validParams.length > 0) {
+      const queryString = validParams
+        .map((q) => {
+          const val = q.value || (q.mode === "store_var" && q.storeVar ? q.storeVar : "");
+          return `${encodeURIComponent(q.key)}=${encodeURIComponent(val)}`;
+        })
+        .join("&");
+      link += (link.includes("?") ? "&" : "?") + queryString;
+    }
+  }
+
+  return link;
+}
+
 export function generateSectionLayout(
   groupName: string,
   isAuthConnected: boolean = true,
@@ -107,9 +149,10 @@ export function generateSectionLayout(
   const staticItemsJsx = staticItems
     .map((sItem, sIdx) => {
       const IconComp = navIconNames[sIdx % navIconNames.length];
+      const resolvedHref = resolveSidebarItemHref(sItem);
       return `                      <SidebarMenuItem key="${sItem.id}">
                         <SidebarMenuButton asChild tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
-                          <Link href="${sItem.link || "#"}" className="text-xs">
+                          <Link href="${resolvedHref}" className="text-xs">
                             <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
                             <span>${sItem.name}</span>
                           </Link>

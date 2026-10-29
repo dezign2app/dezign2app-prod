@@ -1,5 +1,6 @@
 import { PageSection, ComponentPropMappings } from "@workspace/canvas/types";
 import { EventComponentMeta } from "./eventGenerators";
+import { resolveSidebarItemHref } from "./layoutGenerators";
 
 export interface SectionMeta {
   id: string;
@@ -1109,9 +1110,10 @@ export default ${sectionCompName};
         .map(
           (sItem, sIdx) => {
             const IconComp = navIconNames[sIdx % navIconNames.length];
+            const resolvedHref = resolveSidebarItemHref(sItem);
             return `                      <SidebarMenuItem key="${sItem.id}">
                         <SidebarMenuButton asChild tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
-                          <Link href="${sItem.link || "#"}" className="text-xs">
+                          <Link href="${resolvedHref}" className="text-xs">
                             <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
                             <span>${sItem.name}</span>
                           </Link>
