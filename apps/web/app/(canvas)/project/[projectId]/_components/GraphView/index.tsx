@@ -316,11 +316,24 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
       const isLastActive = node.id === lastActiveNodeId;
       const isActive = isSelected || isDragging || isLastActive;
 
+      const hand = pageHandMap.get(node.id);
       let z = node.type === "webAppGroup" ? -1 : 1;
-      if (isActiveConfig) {
-        z = 1001;
-      } else if (isActive) {
-        z = 1000;
+
+      if (hand?.isStacked) {
+        const isFrontCard = hand.cardIndex === hand.totalCards - 1;
+        if (isActiveConfig) {
+          z = 1001;
+        } else if (isActive && isFrontCard) {
+          z = 1000;
+        } else {
+          z = 10 + hand.cardIndex;
+        }
+      } else {
+        if (isActiveConfig) {
+          z = 1001;
+        } else if (isActive) {
+          z = 1000;
+        }
       }
 
       return {

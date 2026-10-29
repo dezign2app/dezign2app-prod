@@ -248,18 +248,22 @@ export function useZoneHandLayout(
     if (cardIndex !== 0 || !hasMultipleCards || isZoneExpanded || !connectedWebAppNode || !connectedZone) return;
 
     const firstCard = siblingPages[0];
-    const secondCard = siblingPages[1];
-    if (!firstCard?.position || !secondCard?.position) return;
+    if (!firstCard?.position) return;
 
-    const deltaY = secondCard.position.y - firstCard.position.y;
-    const deltaX = secondCard.position.x - firstCard.position.x;
-    const needsAlignment =
-      Math.abs(deltaY - CARD_HEADER_OFFSET_Y) > 5 ||
-      Math.abs(deltaX - CARD_HEADER_OFFSET_X) > 2;
+    const baseX = firstCard.position.x;
+    const baseY = firstCard.position.y;
+
+    const needsAlignment = siblingPages.some((page, idx) => {
+      if (!page.position) return true;
+      const expectedX = baseX + idx * CARD_HEADER_OFFSET_X;
+      const expectedY = baseY + idx * CARD_HEADER_OFFSET_Y;
+      return (
+        Math.abs(page.position.y - expectedY) > 2 ||
+        Math.abs(page.position.x - expectedX) > 2
+      );
+    });
 
     if (needsAlignment) {
-      const baseX = firstCard.position.x;
-      const baseY = firstCard.position.y;
       siblingPages.forEach((page, idx) => {
         updateNode(page.id, {
           position: {
