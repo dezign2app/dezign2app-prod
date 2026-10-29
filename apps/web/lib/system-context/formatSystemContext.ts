@@ -16,6 +16,10 @@ export interface ProjectMetadata {
   name?: string;
 }
 
+export interface FormatSystemContextOptions {
+  includeNodeIds?: boolean;
+}
+
 export interface ProjectSystemContextInput {
   project?: ProjectMetadata;
   nodes: BackendNode[];
@@ -140,7 +144,8 @@ function formatEnvVars(envVars?: Array<{ id?: string; name: string; description?
   return envVars.map((e) => `\`${e.name}\`${e.description ? ` (${e.description})` : ""}`).join(", ");
 }
 
-export function formatSystemContext(input: ProjectSystemContextInput): string {
+export function formatSystemContext(input: ProjectSystemContextInput, options: FormatSystemContextOptions = {}): string {
+  const includeNodeIds = options.includeNodeIds === true;
   const nodeMap = new Map<string, BackendNode>();
   const endpointMap = new Map<string, EndpointWithNode>();
 
@@ -304,10 +309,12 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
     for (const app of webAppNodes) {
       const appName = app.data.appSlug || app.data.label;
       const port = app.data.port || "3000";
-      lines.push(`### WebApp: \`${appName}\` (Port: ${port})`);
+      const appIdStr = includeNodeIds ? ` [Node ID: ${app.id}]` : "";
+      lines.push(`### WebApp: \`${appName}\`${appIdStr} (Port: ${port})`);
 
       if (app.data.authNodeId) {
-        lines.push(`- **Authentication**: Bound to \`${lookup.getLabel(app.data.authNodeId)}\``);
+        const authIdStr = includeNodeIds ? ` [Node ID: ${app.data.authNodeId}]` : "";
+        lines.push(`- **Authentication**: Bound to \`${lookup.getLabel(app.data.authNodeId)}\`${authIdStr}`);
       }
 
       if (app.data.zones && app.data.zones.length > 0) {
@@ -325,7 +332,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
             ruleCond = ` [Rule: ${conditions.op}]`;
           }
           const redirects = zone.rule?.redirects?.default ? ` -> Redirects to ${zone.rule.redirects.default}` : "";
-          lines.push(`  - \`${zone.name}\` (${zone.accessType})${ruleCond}: ${zone.layoutDescription || ""}${redirects}`);
+          const zoneIdStr = includeNodeIds ? ` [Zone ID: ${zone.id}${zone.handleId ? `, Handle: ${zone.handleId}` : ""}]` : "";
+          lines.push(`  - \`${zone.name}\`${zoneIdStr} (${zone.accessType})${ruleCond}: ${zone.layoutDescription || ""}${redirects}`);
         }
       }
 
@@ -339,7 +347,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
           const route = page.data.label || page.data.path || "/";
           const isRoot = page.data.isRoot ? " [Root]" : "";
           const desc = page.data.description ? ` - ${page.data.description}` : "";
-          lines.push(`  - \`${route}\`${isRoot}${desc}`);
+          const pageIdStr = includeNodeIds ? ` [Node ID: ${page.id}]` : "";
+          lines.push(`  - \`${route}\`${pageIdStr}${isRoot}${desc}`);
 
           if (page.data.sections && page.data.sections.length > 0) {
             for (const section of page.data.sections) {
@@ -353,7 +362,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
                         const bindings = step.requestBindings && step.requestBindings.length > 0
                           ? ` [Bindings: ${step.requestBindings.map((b) => `${b.slot} ${b.targetField} <- ${b.source.kind}`).join(", ")}]`
                           : "";
-                        lines.push(`      - Calls API: \`${step.name}\` on \`${targetService}\`${bindings}`);
+                        const svcIdStr = includeNodeIds && step.serviceNodeId ? ` [Node ID: ${step.serviceNodeId}]` : "";
+                        lines.push(`      - Calls API: \`${step.name}\` on \`${targetService}\`${svcIdStr}${bindings}`);
                       } else if (step.type === "navigation") {
                         lines.push(`      - Navigates to: \`${step.targetRoute || "/"}\``);
                       }
@@ -395,7 +405,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
         ? ` [${service.data.techStack}${service.data.techVersion ? ` v${service.data.techVersion}` : ""}]`
         : "";
 
-      lines.push(`### Service: \`${service.data.label}\`${techStackStr}`);
+      const svcIdStr = includeNodeIds ? ` [Node ID: ${service.id}]` : "";
+      lines.push(`### Service: \`${service.data.label}\`${svcIdStr}${techStackStr}`);
       lines.push(`- **Network Protocols**: HTTP Port: \`${port}\` | gRPC: ${grpcStatus}`);
 
       if (service.data.interServiceProtocol) {
@@ -443,7 +454,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
           const method = ep.type || "GET";
           const route = ep.name.startsWith("/") ? ep.name : `/${ep.name}`;
           const authBadge = ep.requireAuth === false ? " [Public]" : ep.requireAuth === true ? " [Protected]" : "";
-          lines.push(`  - \`${method} ${route}\`${authBadge}`);
+          const epIdStr = includeNodeIds ? ` [Endpoint ID: ${ep.id}]` : "";
+          lines.push(`  - \`${method} ${route}\`${epIdStr}${authBadge}`);
 
           if (ep.summary) lines.push(`    - Summary: ${ep.summary}`);
           if (ep.businessLogic) lines.push(`    - Business Logic: ${ep.businessLogic}`);
@@ -481,7 +493,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
                 const targetName = step.langGraphTargetNodeId ? lookup.getLabel(step.langGraphTargetNodeId) : "LangGraph Agent";
                 const mapping = step.langGraphStateMapping ? JSON.stringify(step.langGraphStateMapping) : "{}";
                 const threadSrc = step.langGraphThreadIdSource ? `threadId from ${step.langGraphThreadIdSource}` : "";
-                lines.push(`      ${stepIdx}. \`langgraph_invoke\`: Invokes "${targetName}" (${threadSrc}, stateMapping: ${mapping})`);
+                const targetIdStr = includeNodeIds && step.langGraphTargetNodeId ? ` [Node ID: ${step.langGraphTargetNodeId}]` : "";
+                lines.push(`      ${stepIdx}. \`langgraph_invoke\`: Invokes "${targetName}"${targetIdStr} (${threadSrc}, stateMapping: ${mapping})`);
               } else if (step.type === "db_operation") {
                 const tblName = step.tableNodeId ? lookup.getLabel(step.tableNodeId) : "Database Table";
                 const opName = step.functionRef?.name || step.operationId || step.name;
@@ -489,7 +502,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
                 const bStr = step.inputBindings && step.inputBindings.length > 0
                   ? step.inputBindings.map((b) => `${b.argName} <- ${formatBindingSource(b.source)}`).join(", ")
                   : "";
-                lines.push(`      ${stepIdx}. \`db_operation\`: Calls \`${opName}\` on "${tblName}"${bStr ? ` ({ ${bStr} })` : ""}${outStr}`);
+                const tblIdStr = includeNodeIds && step.tableNodeId ? ` [Node ID: ${step.tableNodeId}]` : "";
+                lines.push(`      ${stepIdx}. \`db_operation\`: Calls \`${opName}\` on "${tblName}"${tblIdStr}${bStr ? ` ({ ${bStr} })` : ""}${outStr}`);
               } else if (step.type === "return_response") {
                 const code = step.statusCode ? `status ${step.statusCode}` : "status 200";
                 const bStr = step.inputBindings && step.inputBindings.length > 0
@@ -515,7 +529,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
     lines.push("## 4. AI & Agent Workflows (LangGraph)");
 
     for (const lg of langGraphNodes) {
-      lines.push(`### Graph: \`${lg.data.label}\``);
+      const lgIdStr = includeNodeIds ? ` [Node ID: ${lg.id}]` : "";
+      lines.push(`### Graph: \`${lg.data.label}\`${lgIdStr}`);
 
       if (lg.data.stateChannels && lg.data.stateChannels.length > 0) {
         lines.push("- **State Channels**:");
@@ -545,7 +560,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
         for (const ag of lg.data.agentDefinitions) {
           const llm = ag.llmConfig;
           const llmStr = llm ? `${llm.provider} / ${llm.model} (temperature: ${llm.temperature})` : "Manual Logic";
-          lines.push(`  - **${ag.name}** (\`${ag.agentId}\`): LLM: ${llmStr}`);
+          const agIdStr = includeNodeIds ? ` [Agent ID: ${ag.agentId || ag.id}]` : "";
+          lines.push(`  - **${ag.name}**${agIdStr} (\`${ag.agentId}\`): LLM: ${llmStr}`);
           if (ag.stateUpdates && ag.stateUpdates.length > 0) {
             for (const su of ag.stateUpdates) {
               lines.push(`    - State Update: channel=\`${su.channelKey}\`, reducer=\`${su.reducer}\`, value="${su.value || ""}"`);
@@ -559,7 +575,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
                 const tblName = step.tableNodeId ? lookup.getLabel(step.tableNodeId) : "Database Table";
                 const opName = step.functionRef?.name || step.operationId || step.name;
                 const outStr = step.outputVariable ? ` -> ${step.outputVariable}` : "";
-                lines.push(`      ${agStepIdx}. \`db_operation\`: Calls \`${opName}\` on "${tblName}"${outStr}`);
+                const tblIdStr = includeNodeIds && step.tableNodeId ? ` [Node ID: ${step.tableNodeId}]` : "";
+                lines.push(`      ${agStepIdx}. \`db_operation\`: Calls \`${opName}\` on "${tblName}"${tblIdStr}${outStr}`);
               } else {
                 lines.push(`      ${agStepIdx}. \`${step.type}\`: ${step.name}`);
               }
@@ -600,7 +617,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
       const fnName = tf.data.functionName || tf.data.label || "Transformer";
       const scope = (tf.data.scope || "global").toUpperCase();
       const asyncStr = tf.data.isAsync ? " [Async]" : "";
-      lines.push(`### Transformer: \`${fnName}\` (${scope}${asyncStr})`);
+      const tfIdStr = includeNodeIds ? ` [Node ID: ${tf.id}]` : "";
+      lines.push(`### Transformer: \`${fnName}\`${tfIdStr} (${scope}${asyncStr})`);
 
       if (tf.data.description) lines.push(`- **Description**: ${tf.data.description}`);
 
@@ -640,7 +658,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
       const version = db.data.lastConnectionStatus?.serverInfo?.version
         ? ` - ${String(db.data.lastConnectionStatus.serverInfo.version)}`
         : "";
-      lines.push(`### Database: \`${db.data.label}\` [${engine}${provider}${version}]`);
+      const dbIdStr = includeNodeIds ? ` [Node ID: ${db.id}]` : "";
+      lines.push(`### Database: \`${db.data.label}\`${dbIdStr} [${engine}${provider}${version}]`);
       if (db.data.host) lines.push(`- Host: \`${db.data.host}:${db.data.port || "5432"}\` | Database: \`${db.data.database || "postgres"}\``);
       if (db.data.sslMode) lines.push(`- **SSL Mode**: \`${db.data.sslMode}\``);
       if (db.data.lastConnectionStatus?.latencyMs !== undefined) {
@@ -671,7 +690,9 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
       for (const table of tables) {
         const tableName = table.data.tableName || table.data.label;
         const desc = table.data.description ? ` - ${table.data.description}` : "";
-        lines.push(`- **\`${tableName}\`**${desc}`);
+        const entParentDb = input.nodes.find((n) => n.id === table.data.databaseId || n.id === table.parentId);
+        const dbRefStr = entParentDb ? (includeNodeIds ? ` [Node ID: ${table.id}, Database: "${entParentDb.data.label || entParentDb.id}" (${entParentDb.id})]` : "") : (includeNodeIds ? ` [Node ID: ${table.id}]` : "");
+        lines.push(`- **\`${tableName}\`**${dbRefStr}${desc}`);
 
         if (table.data.columns && table.data.columns.length > 0) {
           for (const col of table.data.columns) {
@@ -725,7 +746,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
     lines.push("");
     lines.push("## Messaging & Event Streaming");
     for (const msg of messagingNodes) {
-      lines.push(`### Stream / Queue: \`${msg.data.label}\` (Type: ${msg.type})`);
+      const msgIdStr = includeNodeIds ? ` [Node ID: ${msg.id}]` : "";
+      lines.push(`### Stream / Queue: \`${msg.data.label}\`${msgIdStr} (Type: ${msg.type})`);
       if (msg.data.description) lines.push(`- **Description**: ${msg.data.description}`);
       if (msg.data.techStack) lines.push(`- **Engine**: ${msg.data.techStack}`);
       lines.push("");
@@ -738,7 +760,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
     lines.push("");
     lines.push("## Object Storage & File Buckets");
     for (const st of storageNodes) {
-      lines.push(`### Storage: \`${st.data.label}\` (Provider: ${st.data.storageProvider || "S3 Compatible"})`);
+      const stIdStr = includeNodeIds ? ` [Node ID: ${st.id}]` : "";
+      lines.push(`### Storage: \`${st.data.label}\`${stIdStr} (Provider: ${st.data.storageProvider || "S3 Compatible"})`);
       if (st.data.description) lines.push(`- **Description**: ${st.data.description}`);
       if (st.data.bucketName) lines.push(`- **Bucket**: \`${st.data.bucketName}\``);
       if (st.data.buckets && st.data.buckets.length > 0) {
@@ -755,7 +778,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
     lines.push("## Background Workers & Serverless Functions");
     for (const wk of workerNodes) {
       const kind = wk.type === "serverless" ? "Serverless Function" : "Background Worker";
-      lines.push(`### ${kind}: \`${wk.data.label}\``);
+      const wkIdStr = includeNodeIds ? ` [Node ID: ${wk.id}]` : "";
+      lines.push(`### ${kind}: \`${wk.data.label}\`${wkIdStr}`);
       if (wk.data.description) lines.push(`- **Description**: ${wk.data.description}`);
       if (wk.data.runtime) lines.push(`- **Runtime**: ${wk.data.runtime}`);
       if (wk.data.triggerType) lines.push(`- **Trigger**: ${wk.data.triggerType}`);
@@ -770,7 +794,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
     lines.push("");
     lines.push("## Payments & Subscriptions");
     for (const pay of paymentsNodes) {
-      lines.push(`### Payments: \`${pay.data.label}\` (Provider: ${pay.data.provider || "Creem"})`);
+      const payIdStr = includeNodeIds ? ` [Node ID: ${pay.id}]` : "";
+      lines.push(`### Payments: \`${pay.data.label}\`${payIdStr} (Provider: ${pay.data.provider || "Creem"})`);
       if (pay.data.plans && pay.data.plans.length > 0) {
         lines.push("- **Plans**:");
         for (const plan of pay.data.plans) {
@@ -787,7 +812,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
     lines.push("");
     lines.push("## Client State Stores (Zustand & Hooks)");
     for (const store of stateStoreNodes) {
-      lines.push(`### State Store: \`${store.data.label || store.data.name}\``);
+      const storeIdStr = includeNodeIds ? ` [Node ID: ${store.id}]` : "";
+      lines.push(`### State Store: \`${store.data.label || store.data.name}\`${storeIdStr}`);
       if (store.data.fields && store.data.fields.length > 0) {
         const fieldsStr = store.data.fields.map((f) => `${f.name}: ${f.type}`).join(", ");
         lines.push(`- **State Fields**: \`{ ${fieldsStr} }\``);
@@ -807,7 +833,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
     lines.push("## External APIs & 3rd-Party Integrations");
     for (const ext of externalNodes) {
       const url = ext.data.baseUrl || ext.data.url || "";
-      lines.push(`### External API: \`${ext.data.label || ext.data.functionName}\`${url ? ` (${url})` : ""}`);
+      const extIdStr = includeNodeIds ? ` [Node ID: ${ext.id}]` : "";
+      lines.push(`### External API: \`${ext.data.label || ext.data.functionName}\`${extIdStr}${url ? ` (${url})` : ""}`);
       if (ext.data.description) lines.push(`- **Description**: ${ext.data.description}`);
       if (ext.data.authType) lines.push(`- **Auth Type**: ${ext.data.authType}`);
       lines.push("");
@@ -821,7 +848,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
     lines.push("## AI Models & MCP Servers");
     for (const ai of aiNodes) {
       const kind = ai.type === "mcp_server" ? "MCP Server" : "LLM Model";
-      lines.push(`### ${kind}: \`${ai.data.label}\``);
+      const aiIdStr = includeNodeIds ? ` [Node ID: ${ai.id}]` : "";
+      lines.push(`### ${kind}: \`${ai.data.label}\`${aiIdStr}`);
       if (ai.data.model) lines.push(`- **Model**: ${ai.data.model}`);
       if (ai.data.connectionType) lines.push(`- **Connection**: ${ai.data.connectionType}`);
       lines.push("");
@@ -835,7 +863,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
     lines.push("## Canvas Resource References");
     for (const ref of referenceNodes) {
       const target = ref.data.targetServiceId || ref.data.targetEndpointId || ref.data.tableRef || ref.data.transformerRef || "";
-      lines.push(`- **${ref.data.label || ref.id}** (\`${ref.type}\`)${target ? ` -> References \`${target}\`` : ""}`);
+      const refIdStr = includeNodeIds ? ` [Node ID: ${ref.id}]` : "";
+      lines.push(`- **${ref.data.label || ref.id}**${refIdStr} (\`${ref.type}\`)${target ? ` -> References \`${target}\`` : ""}`);
     }
     lines.push("");
   }
@@ -846,7 +875,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
     lines.push("");
     lines.push("## Additional Canvas Nodes");
     for (const ot of otherNodes) {
-      lines.push(`- **${ot.data.label || ot.id}** (Type: \`${ot.type}\`)${ot.data.description ? ` - ${ot.data.description}` : ""}`);
+      const otIdStr = includeNodeIds ? ` [Node ID: ${ot.id}]` : "";
+      lines.push(`- **${ot.data.label || ot.id}**${otIdStr} (Type: \`${ot.type}\`)${ot.data.description ? ` - ${ot.data.description}` : ""}`);
     }
     lines.push("");
   }
@@ -872,54 +902,96 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
       const targetLabel = targetNode ? lookup.getLabel(edge.target) : edge.target;
 
       if (edge.type === "foreign-key") {
-        let fkDetail = `${sourceLabel} -> ${targetLabel}`;
+        let fkDetail = includeNodeIds
+          ? `${sourceLabel} [Node ID: ${edge.source}] -> ${targetLabel} [Node ID: ${edge.target}] (Edge ID: ${edge.id})`
+          : `${sourceLabel} -> ${targetLabel}`;
         if (targetNode?.data.columns) {
           for (const col of targetNode.data.columns) {
             if (col.references && col.references.table === (sourceNode?.data.tableName || sourceNode?.data.label)) {
-              fkDetail = `\`${targetLabel}.${col.name}\` -> \`${sourceLabel}.${col.references.column}\``;
+              fkDetail = includeNodeIds
+                ? `\`${targetLabel}.${col.name}\` [Node ID: ${edge.target}] -> \`${sourceLabel}.${col.references.column}\` [Node ID: ${edge.source}] (Edge ID: ${edge.id})`
+                : `\`${targetLabel}.${col.name}\` -> \`${sourceLabel}.${col.references.column}\``;
               break;
             }
           }
         }
         foreignKeyFlows.push(`- ${fkDetail}`);
       } else if (edge.type === "identity-connection") {
-        authConnections.push(`- \`${sourceLabel}\` -> \`${targetLabel}\` (Enforces authentication and user session control)`);
+        const idDetail = includeNodeIds
+          ? `\`${sourceLabel}\` [Node ID: ${edge.source}] -> \`${targetLabel}\` [Node ID: ${edge.target}] (Edge ID: ${edge.id})`
+          : `\`${sourceLabel}\` -> \`${targetLabel}\``;
+        authConnections.push(`- ${idDetail} (Enforces authentication and user session control)`);
       } else if (edge.type === "database-connection") {
-        databaseConnections.push(`- \`${sourceLabel}\` -> \`${targetLabel}\``);
+        const idDetail = includeNodeIds
+          ? `Database \`${sourceLabel}\` [Node ID: ${edge.source}] -> Table \`${targetLabel}\` [Node ID: ${edge.target}] (Edge ID: ${edge.id})`
+          : `\`${sourceLabel}\` -> \`${targetLabel}\``;
+        databaseConnections.push(`- ${idDetail}`);
       } else if (edge.type === "type-reference") {
-        typeReferenceFlows.push(`- \`${sourceLabel}\` -> \`${targetLabel}\` (Generates companion TypeScript interface)`);
+        const idDetail = includeNodeIds
+          ? `\`${sourceLabel}\` [Node ID: ${edge.source}] -> \`${targetLabel}\` [Node ID: ${edge.target}] (Edge ID: ${edge.id})`
+          : `\`${sourceLabel}\` -> \`${targetLabel}\``;
+        typeReferenceFlows.push(`- ${idDetail} (Generates companion TypeScript interface)`);
       } else if (edge.type === "connection") {
         if (sourceNode?.type === "webPage" && targetNode?.type === "service") {
           let epName = "API Endpoint";
+          let epId = "";
           if (edge.targetHandle && edge.targetHandle.startsWith("endpoint-in-")) {
-            const epId = edge.targetHandle.replace("endpoint-in-", "");
+            epId = edge.targetHandle.replace("endpoint-in-", "");
             const ep = lookup.getEndpoint(epId);
             if (ep) epName = `${ep.type || "GET"} ${ep.name}`;
           }
-          clientToServiceFlows.push(`- Page \`${sourceLabel}\` -> Service \`${targetLabel}\`: Invokes \`${epName}\``);
+          if (includeNodeIds) {
+            const epInfo = epId ? ` [Endpoint ID: ${epId}]` : "";
+            clientToServiceFlows.push(`- Page \`${sourceLabel}\` [Node ID: ${edge.source}] -> Service \`${targetLabel}\` [Node ID: ${edge.target}]: Invokes \`${epName}\`${epInfo} (Edge ID: ${edge.id}${edge.targetHandle ? `, Target Handle: ${edge.targetHandle}` : ""})`);
+          } else {
+            clientToServiceFlows.push(`- Page \`${sourceLabel}\` -> Service \`${targetLabel}\`: Invokes \`${epName}\``);
+          }
         } else if (sourceNode?.type === "langgraph" && targetNode?.type === "service") {
           let epName = "API Endpoint";
+          let epId = "";
           if (edge.targetHandle && edge.targetHandle.startsWith("endpoint-in-")) {
-            const epId = edge.targetHandle.replace("endpoint-in-", "");
+            epId = edge.targetHandle.replace("endpoint-in-", "");
             const ep = lookup.getEndpoint(epId);
             if (ep) epName = `${ep.type || "POST"} ${ep.name}`;
           }
-          serviceToLangGraphFlows.push(`- Service \`${targetLabel}\` (\`${epName}\`) -> LangGraph \`${sourceLabel}\` (Invoked by route pipeline)`);
+          if (includeNodeIds) {
+            const epInfo = epId ? ` [Endpoint ID: ${epId}]` : "";
+            serviceToLangGraphFlows.push(`- Service \`${targetLabel}\` [Node ID: ${edge.target}] (\`${epName}\`${epInfo}) -> LangGraph \`${sourceLabel}\` [Node ID: ${edge.source}] (Edge ID: ${edge.id}) (Invoked by route pipeline)`);
+          } else {
+            serviceToLangGraphFlows.push(`- Service \`${targetLabel}\` (\`${epName}\`) -> LangGraph \`${sourceLabel}\` (Invoked by route pipeline)`);
+          }
         } else if (sourceNode?.type === "webApp" && targetNode?.type === "webPage") {
-          clientToServiceFlows.push(`- WebApp \`${sourceLabel}\` hosts page \`${targetLabel}\``);
+          if (includeNodeIds) {
+            clientToServiceFlows.push(`- WebApp \`${sourceLabel}\` [Node ID: ${edge.source}] hosts page \`${targetLabel}\` [Node ID: ${edge.target}] (Edge ID: ${edge.id})`);
+          } else {
+            clientToServiceFlows.push(`- WebApp \`${sourceLabel}\` hosts page \`${targetLabel}\``);
+          }
         } else if (sourceNode?.type === "transformer" || edge.sourceHandle === "transformer-out") {
           let targetDetail = `Service \`${targetLabel}\``;
+          let epId = "";
           if (edge.targetHandle && edge.targetHandle.startsWith("endpoint-in-")) {
-            const epId = edge.targetHandle.replace("endpoint-in-", "");
+            epId = edge.targetHandle.replace("endpoint-in-", "");
             const ep = lookup.getEndpoint(epId);
             if (ep) targetDetail = `Endpoint \`${ep.type || "POST"} ${ep.name}\` on \`${targetLabel}\``;
           }
-          clientToServiceFlows.push(`- Transformer \`${sourceLabel}\` -> ${targetDetail} (Data transformation helper)`);
+          if (includeNodeIds) {
+            clientToServiceFlows.push(`- Transformer \`${sourceLabel}\` [Node ID: ${edge.source}] -> ${targetDetail} [Node ID: ${edge.target}] (Edge ID: ${edge.id}) (Data transformation helper)`);
+          } else {
+            clientToServiceFlows.push(`- Transformer \`${sourceLabel}\` -> ${targetDetail} (Data transformation helper)`);
+          }
+        } else {
+          if (includeNodeIds) {
+            otherConnections.push(`- \`${sourceLabel}\` [Node ID: ${edge.source}] -> \`${targetLabel}\` [Node ID: ${edge.target}] (Edge ID: ${edge.id}, Type: ${edge.type})`);
+          } else {
+            otherConnections.push(`- \`${sourceLabel}\` -> \`${targetLabel}\` (type: ${edge.type})`);
+          }
+        }
+      } else {
+        if (includeNodeIds) {
+          otherConnections.push(`- \`${sourceLabel}\` [Node ID: ${edge.source}] -> \`${targetLabel}\` [Node ID: ${edge.target}] (Edge ID: ${edge.id}, Type: ${edge.type})`);
         } else {
           otherConnections.push(`- \`${sourceLabel}\` -> \`${targetLabel}\` (type: ${edge.type})`);
         }
-      } else {
-        otherConnections.push(`- \`${sourceLabel}\` -> \`${targetLabel}\` (type: ${edge.type})`);
       }
     }
 
@@ -973,7 +1045,8 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
     lines.push("## 7. Security, Auth & Test Personas");
 
     for (const auth of authNodes) {
-      lines.push(`### Auth Framework: \`${auth.data.label}\``);
+      const authIdStr = includeNodeIds ? ` [Node ID: ${auth.id}]` : "";
+      lines.push(`### Auth Framework: \`${auth.data.label}\`${authIdStr}`);
       if (auth.data.plugins && auth.data.plugins.length > 0) {
         lines.push(`- **Plugins**: ${auth.data.plugins.join(", ")}`);
       }
@@ -1019,4 +1092,58 @@ export function formatSystemContext(input: ProjectSystemContextInput): string {
   }
 
   return lines.join("\n");
+}
+
+/**
+ * Strips markdown and text formatters (bold **, headers #, list bullets -, backticks `,
+ * dividers ---, italics *, etc.) from formatted text to produce clean plain text
+ * optimized for LLM system prompts and AI context windows.
+ */
+export function stripMarkdownFormatters(markdown: string): string {
+  if (!markdown) return "";
+
+  return (
+    markdown
+      // Normalize line endings
+      .replace(/\r\n/g, "\n")
+      // Remove horizontal rules (---, ***, ___)
+      .replace(/^\s*[-*_]{3,}\s*$/gm, "")
+      // Remove markdown headers (# Title, ## Section, ### Sub)
+      .replace(/^(\s*)#{1,6}\s+/gm, "$1")
+      // Remove list bullet markers (- , * , + ) while preserving hierarchy indentation
+      .replace(/^(\s*)[-*+]\s+/gm, "$1")
+      // Remove bold formatting (**text** or __text__)
+      .replace(/\*\*(.*?)\*\*/g, "$1")
+      .replace(/__(.*?)__/g, "$1")
+      // Remove italic formatting (*text* or _text_)
+      .replace(/\*([^*\n]+)\*/g, "$1")
+      .replace(/(^|\s)_([^_\n]+)_(?=\s|$|[.,;:!?])/g, "$1$2")
+      // Remove inline code backticks (`code` or ```code```)
+      .replace(/`{1,3}(.*?)`{1,3}/g, "$1")
+      // Remove strikethrough (~~text~~)
+      .replace(/~~(.*?)~~/g, "$1")
+      // Remove blockquotes (> quote)
+      .replace(/^(\s*)>\s*/gm, "$1")
+      // Remove markdown links [text](url) -> text (url)
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
+      // Clean any leftover isolated formatting asterisks or backticks
+      .replace(/\*/g, "")
+      .replace(/`/g, "")
+      // Collapse 3 or more consecutive newlines into 2
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
+}
+
+/**
+ * Formats the project system context as clean plain text without markdown formatters
+ * (no **, -, #, backticks, or dividers), ready for ingestion by AI prompts and LLM context windows.
+ */
+export function formatSystemContextForAi(
+  input: ProjectSystemContextInput,
+  options: FormatSystemContextOptions = { includeNodeIds: true }
+): string {
+  const opts = { includeNodeIds: true, ...options };
+  const markdown = formatSystemContext(input, opts);
+  return stripMarkdownFormatters(markdown);
 }

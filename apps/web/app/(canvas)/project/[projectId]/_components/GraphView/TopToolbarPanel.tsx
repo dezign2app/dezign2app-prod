@@ -2,13 +2,13 @@ import React, { useState, useCallback } from "react";
 import { Panel } from "@xyflow/react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
-import { LayoutTemplate, RotateCcw, Users, FileJson, FileText, Check } from "lucide-react";
+import { LayoutTemplate, RotateCcw, Users, FileJson, Check, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { useTestUsersStore } from "../test-users/useTestUsersStore";
-import { formatSystemContext } from "@/lib/system-context/formatSystemContext";
+import { formatSystemContextForAi } from "@/lib/system-context/formatSystemContext";
 
 interface TopToolbarPanelProps {
   onLayout: (direction: "LR" | "TB") => void;
@@ -28,7 +28,7 @@ export const TopToolbarPanel: React.FC<TopToolbarPanelProps> = ({
   const paletteWidth = useSidebarStore((s) => s.paletteWidth);
 
   const [copiedJson, setCopiedJson] = useState(false);
-  const [copiedContext, setCopiedContext] = useState(false);
+  const [copiedAiContext, setCopiedAiContext] = useState(false);
 
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
@@ -38,7 +38,7 @@ export const TopToolbarPanel: React.FC<TopToolbarPanelProps> = ({
   const storeProjectId = useBackendCanvasStore((s) => s.projectId);
   const effectiveProjectId = projectId || storeProjectId || "";
 
-  const handleCopySystemContext = useCallback(async () => {
+  const handleCopyAiContext = useCallback(async () => {
     try {
       const projectPayload = {
         project: {
@@ -53,16 +53,16 @@ export const TopToolbarPanel: React.FC<TopToolbarPanelProps> = ({
         testUsers: personas,
       };
 
-      const formattedText = formatSystemContext(projectPayload);
+      const plainText = formatSystemContextForAi(projectPayload, { includeNodeIds: true });
 
-      // Log to browser console so user can directly inspect and explore the readable text
-      console.log("[System Context Markdown]\n" + formattedText);
+      // Log to browser console so user can directly inspect and explore the clean text
+      console.log("[AI System Context (Plain Text)]\n" + plainText);
 
       if (navigator.clipboard) {
-        await navigator.clipboard.writeText(formattedText);
+        await navigator.clipboard.writeText(plainText);
       } else {
         const textarea = document.createElement("textarea");
-        textarea.value = formattedText;
+        textarea.value = plainText;
         textarea.style.position = "fixed";
         textarea.style.opacity = "0";
         document.body.appendChild(textarea);
@@ -71,14 +71,14 @@ export const TopToolbarPanel: React.FC<TopToolbarPanelProps> = ({
         document.body.removeChild(textarea);
       }
 
-      setCopiedContext(true);
-      toast.success("System context copied to clipboard!", {
-        description: "Formatted readable text without repetitive JSON keys. Also logged to browser console.",
+      setCopiedAiContext(true);
+      toast.success("AI context copied to clipboard!", {
+        description: "Clean plain-text system context with technical node IDs and topology details. Also logged to browser console.",
       });
-      setTimeout(() => setCopiedContext(false), 2000);
+      setTimeout(() => setCopiedAiContext(false), 2000);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to copy";
-      toast.error("Failed to copy system context", {
+      toast.error("Failed to copy AI context", {
         description: message,
       });
     }
@@ -160,15 +160,15 @@ export const TopToolbarPanel: React.FC<TopToolbarPanelProps> = ({
           variant="ghost"
           size="sm"
           className="h-7 px-2.5 text-xs text-sidebar-foreground hover:bg-sidebar-accent gap-1.5 transition-colors"
-          onClick={handleCopySystemContext}
-          title="Copy formatted system architecture context (clean readable text without repetitive JSON keys) to clipboard"
+          onClick={handleCopyAiContext}
+          title="Copy clean system architecture context for AI (plain text without **, -, headers, backticks, or other markdown formatters, including technical node IDs and link details) to clipboard"
         >
-          {copiedContext ? (
+          {copiedAiContext ? (
             <Check className="w-3.5 h-3.5 text-emerald-500 animate-in zoom-in-50 duration-200" />
           ) : (
-            <FileText className="w-3.5 h-3.5 text-primary" />
+            <Sparkles className="w-3.5 h-3.5 text-primary" />
           )}
-          <span>{copiedContext ? "Copied Context" : "Copy Context"}</span>
+          <span>{copiedAiContext ? "Copied AI Context" : "AI Context"}</span>
         </Button>
 
         <Button

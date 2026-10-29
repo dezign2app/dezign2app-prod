@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { formatSystemContext, ProjectSystemContextInput } from "../formatSystemContext";
+import {
+  formatSystemContext,
+  formatSystemContextForAi,
+  stripMarkdownFormatters,
+  ProjectSystemContextInput,
+} from "../formatSystemContext";
 import type { BackendNode, BackendEdge } from "@/types/canvas";
 import type { EndpointWithNode } from "@workspace/canvas/types";
 
@@ -366,5 +371,114 @@ describe("formatSystemContext", () => {
     expect(result).toContain('prompt: "Find all conversations that were archived more than 30 days ago"');
     expect(result).toContain("nukeConversations");
     expect(result).toContain("[DISABLED, delete]");
+  });
+
+  it("formats AI context as clean plain text without markdown formatters and includes node IDs and technical details", () => {
+    const webAppNode: BackendNode = {
+      id: "node-webapp-1",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "web",
+        appSlug: "web",
+        port: "3000",
+      },
+    };
+
+    const webPageNode: BackendNode = {
+      id: "node-page-dash-1",
+      type: "webPage",
+      position: { x: 100, y: 100 },
+      fractionalIndex: "a1",
+      data: {
+        label: "/dashboard",
+        appSlug: "web",
+        description: "Dashboard page",
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "node-service-1",
+      type: "service",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a2",
+      data: {
+        label: "Backend Core",
+        port: "8080",
+      },
+    };
+
+    const endpoint: EndpointWithNode = {
+      id: "ep-users",
+      nodeId: "node-service-1",
+      name: "/users",
+      type: "GET",
+      summary: "List users",
+    };
+
+    const edge: BackendEdge = {
+      id: "edge-page-to-svc",
+      source: "node-page-dash-1",
+      target: "node-service-1",
+      targetHandle: "endpoint-in-ep-users",
+      type: "connection",
+      fractionalIndex: "a0",
+    };
+
+    const input: ProjectSystemContextInput = {
+      project: { id: "proj-ai-1", name: "AI App" },
+      nodes: [webAppNode, webPageNode, serviceNode],
+      edges: [edge],
+      endpoints: [endpoint],
+    };
+
+    const aiContext = formatSystemContextForAi(input);
+
+    // Should NOT contain markdown formatters
+    expect(aiContext).not.toContain("**");
+    expect(aiContext).not.toContain("`");
+    expect(aiContext).not.toMatch(/^(\s*)#{1,6}\s+/m);
+    expect(aiContext).not.toMatch(/^(\s*)[-*+]\s+/m);
+    expect(aiContext).not.toMatch(/^\s*[-*_]{3,}\s*$/m);
+
+    // Should include technical node IDs and link details
+    expect(aiContext).toContain("[Node ID: node-webapp-1]");
+    expect(aiContext).toContain("[Node ID: node-page-dash-1]");
+    expect(aiContext).toContain("[Node ID: node-service-1]");
+    expect(aiContext).toContain("[Endpoint ID: ep-users]");
+    expect(aiContext).toContain("Edge ID: edge-page-to-svc");
+    expect(aiContext).toContain("Invokes GET /users");
+  });
+
+  it("stripMarkdownFormatters correctly cleans bold, bullets, backticks, and headers", () => {
+    const raw = `# System Architecture: Test (ID: 123)
+
+## 1. Overview
+- **Web Applications**: 2
+- **Backend Services**: 1
+
+---
+
+### Service: \`auth-service\`
+- **Endpoints**:
+  - \`POST /login\`
+    - Summary: User login
+    - Pipeline:
+      1. \`db_operation\`: Calls \`getUser\`
+`;
+
+    const cleaned = stripMarkdownFormatters(raw);
+
+    expect(cleaned).not.toContain("**");
+    expect(cleaned).not.toContain("`");
+    expect(cleaned).not.toContain("#");
+    expect(cleaned).not.toContain("---");
+    expect(cleaned).not.toMatch(/^(\s*)[-*+]\s+/m);
+    expect(cleaned).toContain("System Architecture: Test (ID: 123)");
+    expect(cleaned).toContain("Web Applications: 2");
+    expect(cleaned).toContain("Service: auth-service");
+    expect(cleaned).toContain("POST /login");
+    expect(cleaned).toContain("Calls getUser");
   });
 });
