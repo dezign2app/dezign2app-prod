@@ -263,10 +263,26 @@ import {
 } from "@workspace/ui/components/sidebar";
 import { PanelLeft, LayoutDashboard, BarChart2, Folder, Settings } from "lucide-react";`;
 
-  const headerImports = sidebarComp
-    ? `${sidebarImports}\n`
-    : topbarComp
-    ? `${topbarImports}\n`
+  let headerImports = "";
+  if (sidebarComp && topbarComp) {
+    headerImports = `${sidebarImports}\nimport { Button } from "@workspace/ui/components/button";\nimport { Layers } from "lucide-react";\n`;
+  } else if (sidebarComp) {
+    headerImports = `${sidebarImports}\n`;
+  } else if (topbarComp) {
+    headerImports = `${topbarImports}\n`;
+  }
+
+  const sidebarTopBarJsx = topbarComp
+    ? `          <header className="${topbarSticky ? "sticky top-0 z-50 " : ""}w-full border-b border-border bg-background/80 backdrop-blur px-6 py-3 flex items-center justify-between gap-4">
+            <Link href="/" className="flex items-center gap-2 font-bold text-sm tracking-tight text-foreground hover:opacity-90 transition-opacity">
+              <Layers className="size-4 text-primary" />
+              <span>${topbarTitle}</span>
+            </Link>
+            <nav className="flex items-center gap-6">
+${topbarItemsJsx}
+            </nav>
+${authButtonsJsx}
+          </header>\n`
     : "";
 
   const sectionsJsx = nonChildrenSections.length > 0
@@ -312,11 +328,7 @@ ${staticItemsJsx}
           <SidebarRail />
         </Sidebar>
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-12 border-b border-border flex items-center px-4 gap-2 bg-card/40 backdrop-blur">
-            <SidebarTrigger />
-            <span className="text-xs font-medium text-muted-foreground">${sidebarTitle}</span>
-          </header>
-          <main className="flex-1 p-6 overflow-auto">
+${sidebarTopBarJsx}          <main className="flex-1 p-6 overflow-auto">
             {children}
           </main>
         </div>
