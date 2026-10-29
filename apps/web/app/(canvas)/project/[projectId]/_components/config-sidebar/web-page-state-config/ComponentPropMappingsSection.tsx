@@ -21,6 +21,7 @@ import {
   SquareCheck,
   Tag,
   PanelLeft,
+  PanelTop,
   PanelRight,
   LayoutDashboard,
   Trash2,
@@ -31,6 +32,7 @@ import {
 } from "lucide-react";
 import { StateRenderComponent, ComponentPropMappings, UIEventItem, BackendNode, SidebarStaticItem, SidebarStaticItemParam, SidebarStaticItemQueryParam } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import { parseRouteWithQueryParams } from "@workspace/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useShallow } from "zustand/react/shallow";
 import { Label } from "@workspace/ui/components/label";
@@ -93,7 +95,39 @@ const SidebarStaticItemRow: React.FC<SidebarStaticItemRowProps> = React.memo(({
   onUpdate,
   onDelete,
 }) => {
-  const [paramsExpanded, setParamsExpanded] = React.useState(true);
+  // Query available route params and query params across all canvas webPage nodes
+  const availableRouteParams = useBackendCanvasStore(
+    useShallow((s) => {
+      const paramsSet = new Set<string>();
+      s.nodes.forEach((n) => {
+        if (n.type === "webPage") {
+          (n.data?.pathParams || []).forEach((p: { name?: string }) => {
+            if (p.name) paramsSet.add(p.name);
+          });
+          const raw = n.data?.route || n.data?.path || n.data?.label || "";
+          const matches = Array.from(raw.matchAll(/\[([^\]]+)\]/g));
+          matches.forEach((m) => {
+            if (m[1]) paramsSet.add(m[1]);
+          });
+        }
+      });
+      return Array.from(paramsSet);
+    }),
+  );
+
+  const availableQueryParams = useBackendCanvasStore(
+    useShallow((s) => {
+      const qSet = new Set<string>();
+      s.nodes.forEach((n) => {
+        if (n.type === "webPage") {
+          (n.data?.queryParams || []).forEach((q: { name?: string }) => {
+            if (q.name) qSet.add(q.name);
+          });
+        }
+      });
+      return Array.from(qSet);
+    }),
+  );
 
   // Detect dynamic segments like [id], [slug], [userId]
   const detectedParamNames: string[] = React.useMemo(() => {
@@ -105,15 +139,96 @@ const SidebarStaticItemRow: React.FC<SidebarStaticItemRowProps> = React.memo(({
   const currentPathParams = item.pathParams || [];
   const currentQueryParams = item.queryParams || [];
 
+  // Automatically detect and reconcile path params and query params when link changes
+  React.useEffect(() => {
+    if (!item.link) return;
+    const { extractedPathParams, extractedQueryParams } = parseRouteWithQueryParams(item.link);
+    const existingPath = item.pathParams || [];
+    const existingQuery = item.queryParams || [];
+
+    const missingPath = extractedPathParams.filter(
+      (ep) => !existingPath.some((p) => p.name === ep.name),
+    );
+    const missingQuery = extractedQueryParams.filter(
+      (eq) => !existingQuery.some((q) => q.key === eq.name),
+    );
+
+    if (missingPath.length > 0 || missingQuery.length > 0) {
+      const nextPath: SidebarStaticItemParam[] = [
+        ...existingPath,
+        ...missingPath.map((ep) => ({
+          name: ep.name,
+          value: "",
+          mode: "route_param" as const,
+          sourceParamName: ep.name,
+        })),
+      ];
+      const nextQuery: SidebarStaticItemQueryParam[] = [
+        ...existingQuery,
+        ...missingQuery.map((eq) => ({
+          id: `q-${eq.name}-${Date.now()}`,
+          key: eq.name,
+          value: eq.defaultValue || "",
+          mode: "static" as const,
+        })),
+      ];
+      onUpdate({
+        pathParams: nextPath,
+        queryParams: nextQuery,
+      });
+    }
+  }, [item.link]);
+
+  const handleLinkChange = (newLink: string) => {
+    const { extractedPathParams, extractedQueryParams } = parseRouteWithQueryParams(newLink);
+
+    const existingPath = item.pathParams || [];
+    const updatedPath: SidebarStaticItemParam[] = extractedPathParams.map((ep) => {
+      const found = existingPath.find((p) => p.name === ep.name);
+      if (found) return found;
+      return {
+        name: ep.name,
+        value: "",
+        mode: "route_param" as const,
+        sourceParamName: ep.name,
+      };
+    });
+
+    const existingQuery = item.queryParams || [];
+    const updatedQuery: SidebarStaticItemQueryParam[] = [...existingQuery];
+    extractedQueryParams.forEach((eq) => {
+      const found = updatedQuery.find((q) => q.key === eq.name);
+      if (found) {
+        if (!found.value && eq.defaultValue) found.value = eq.defaultValue;
+      } else {
+        updatedQuery.push({
+          id: `q-${eq.name}-${Date.now()}`,
+          key: eq.name,
+          value: eq.defaultValue || "",
+          mode: "static" as const,
+        });
+      }
+    });
+
+    onUpdate({
+      link: newLink,
+      pathParams: updatedPath,
+      queryParams: updatedQuery,
+    });
+  };
+
   const handleUpdatePathParam = (paramName: string, patch: Partial<SidebarStaticItemParam>) => {
     const exists = currentPathParams.some((p) => p.name === paramName);
     let updated: SidebarStaticItemParam[];
     if (exists) {
       updated = currentPathParams.map((p) =>
-        p.name === paramName ? { ...p, ...patch } : p
+        p.name === paramName ? { ...p, ...patch } : p,
       );
     } else {
-      updated = [...currentPathParams, { name: paramName, value: "", mode: "static", ...patch }];
+      updated = [
+        ...currentPathParams,
+        { name: paramName, value: "", mode: "route_param", sourceParamName: paramName, ...patch },
+      ];
     }
     onUpdate({ pathParams: updated });
   };
@@ -144,15 +259,35 @@ const SidebarStaticItemRow: React.FC<SidebarStaticItemRowProps> = React.memo(({
     let url = item.link || "/";
     for (const p of currentPathParams) {
       if (p.name) {
-        const rep = (p.mode === "store_var" && p.storeVar ? `$${p.storeVar}` : p.value) || `[${p.name}]`;
+        let rep = p.value;
+        if (!rep) {
+          if (p.mode === "store_var" && p.storeVar) {
+            rep = `$${p.storeVar}`;
+          } else if (p.mode === "route_param") {
+            rep = `:${p.sourceParamName || p.name}`;
+          } else if (p.mode === "query_param") {
+            rep = `?[${p.sourceParamName || p.name}]`;
+          } else {
+            rep = `:${p.name}`;
+          }
+        }
         url = url.replace(new RegExp(`\\[${p.name}\\]`, "g"), rep);
       }
     }
+    // Also normalize any unmatched brackets
+    url = url.replace(/\[([^\]]+)\]/g, ":$1");
+
     const validQueries = currentQueryParams.filter((q) => q.key && q.key.trim().length > 0);
     if (validQueries.length > 0) {
       const qStr = validQueries
         .map((q) => {
-          const v = (q.mode === "store_var" && q.storeVar ? `$${q.storeVar}` : q.value) || "";
+          let v = q.value;
+          if (!v) {
+            if (q.mode === "store_var" && q.storeVar) v = `$${q.storeVar}`;
+            else if (q.mode === "route_param") v = `:${q.sourceParamName || q.key}`;
+            else if (q.mode === "query_param") v = `?[${q.sourceParamName || q.key}]`;
+            else v = "";
+          }
           return `${q.key}=${v}`;
         })
         .join("&");
@@ -199,8 +334,8 @@ const SidebarStaticItemRow: React.FC<SidebarStaticItemRowProps> = React.memo(({
         <span className="text-[10px] font-mono text-muted-foreground shrink-0">url:</span>
         <LocalInput
           value={item.link}
-          onChange={(e) => onUpdate({ link: e.target.value })}
-          placeholder="/route (e.g. /dashboard or /chat/[id])"
+          onChange={(e) => handleLinkChange(e.target.value)}
+          placeholder="/route (e.g. /dashboard or /chat/[id]?tab=chat)"
           className="h-6 text-[11px] font-mono flex-1 bg-muted/20"
         />
         {detectedParamNames.length > 0 && (
@@ -245,9 +380,10 @@ const SidebarStaticItemRow: React.FC<SidebarStaticItemRowProps> = React.memo(({
                   const paramConfig = currentPathParams.find((p) => p.name === paramName) || {
                     name: paramName,
                     value: "",
-                    mode: "static" as const,
+                    mode: "route_param" as const,
+                    sourceParamName: paramName,
                   };
-                  const isStoreMode = paramConfig.mode === "store_var";
+                  const paramMode = paramConfig.mode || "route_param";
 
                   return (
                     <div
@@ -255,47 +391,182 @@ const SidebarStaticItemRow: React.FC<SidebarStaticItemRowProps> = React.memo(({
                       className="p-2 rounded-md bg-background/90 border border-border/40 space-y-1.5"
                     >
                       <div className="flex items-center justify-between text-[10px]">
-                        <span className="font-mono text-primary font-semibold">[{paramName}]</span>
-                        <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded border border-border/30">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-primary font-semibold">[{paramName}]</span>
+                          <Badge variant="outline" className="text-[8px] px-1 py-0 h-3.5 text-muted-foreground border-border/60">
+                            Path Param
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-0.5 bg-muted/60 p-0.5 rounded border border-border/30">
                           <button
                             type="button"
-                            onClick={() => handleUpdatePathParam(paramName, { mode: "static" })}
+                            onClick={() =>
+                              handleUpdatePathParam(paramName, {
+                                mode: "route_param",
+                                sourceParamName: paramConfig.sourceParamName || paramName,
+                              })
+                            }
                             className={cn(
-                              "px-2 py-0.5 rounded text-[9px] font-medium transition-colors cursor-pointer",
-                              !isStoreMode
-                                ? "bg-background text-foreground shadow-2xs font-semibold"
-                                : "text-muted-foreground hover:text-foreground"
+                              "px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors cursor-pointer",
+                              paramMode === "route_param"
+                                ? "bg-primary text-primary-foreground shadow-2xs font-semibold"
+                                : "text-muted-foreground hover:text-foreground",
                             )}
+                            title="Map from URL route parameter (params.id)"
                           >
-                            Static Value
+                            Route Param
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleUpdatePathParam(paramName, {
+                                mode: "query_param",
+                                sourceParamName: paramConfig.sourceParamName || paramName,
+                              })
+                            }
+                            className={cn(
+                              "px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors cursor-pointer",
+                              paramMode === "query_param"
+                                ? "bg-primary text-primary-foreground shadow-2xs font-semibold"
+                                : "text-muted-foreground hover:text-foreground",
+                            )}
+                            title="Map from URL query parameter (searchParams.id)"
+                          >
+                            Query Param
                           </button>
                           <button
                             type="button"
                             onClick={() => handleUpdatePathParam(paramName, { mode: "store_var" })}
                             className={cn(
-                              "px-2 py-0.5 rounded text-[9px] font-medium transition-colors cursor-pointer",
-                              isStoreMode
+                              "px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors cursor-pointer",
+                              paramMode === "store_var"
                                 ? "bg-primary text-primary-foreground shadow-2xs font-semibold"
-                                : "text-muted-foreground hover:text-foreground"
+                                : "text-muted-foreground hover:text-foreground",
                             )}
+                            title="Map from Zustand state store variable"
                           >
                             State Store
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdatePathParam(paramName, { mode: "static" })}
+                            className={cn(
+                              "px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors cursor-pointer",
+                              paramMode === "static"
+                                ? "bg-background text-foreground shadow-2xs font-semibold"
+                                : "text-muted-foreground hover:text-foreground",
+                            )}
+                            title="Use static value"
+                          >
+                            Static
                           </button>
                         </div>
                       </div>
 
-                      {!isStoreMode ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-muted-foreground shrink-0 font-mono">Value:</span>
-                          <LocalInput
-                            value={paramConfig.value || ""}
-                            onChange={(e) => handleUpdatePathParam(paramName, { value: e.target.value })}
-                            placeholder="e.g. new or 123"
-                            className="h-6 text-[10px] font-mono flex-1 bg-muted/20"
-                          />
+                      {/* Mode: Route Param */}
+                      {paramMode === "route_param" && (
+                        <div className="space-y-1.5 pt-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-muted-foreground shrink-0 font-mono">Map from:</span>
+                            <div className="flex items-center gap-1 flex-1">
+                              <span className="text-[10px] font-mono text-primary font-medium shrink-0">params.</span>
+                              {availableRouteParams.length > 0 ? (
+                                <Select
+                                  value={paramConfig.sourceParamName || paramName}
+                                  onValueChange={(val) => handleUpdatePathParam(paramName, { sourceParamName: val })}
+                                >
+                                  <SelectTrigger className="h-6 text-[10px] flex-1 bg-muted/20 font-mono">
+                                    <SelectValue placeholder="Route Param Name" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {availableRouteParams.map((p) => (
+                                      <SelectItem key={p} value={p} className="text-xs font-mono">
+                                        params.{p}
+                                      </SelectItem>
+                                    ))}
+                                    {!availableRouteParams.includes(paramConfig.sourceParamName || paramName) && (
+                                      <SelectItem value={paramConfig.sourceParamName || paramName} className="text-xs font-mono">
+                                        params.{paramConfig.sourceParamName || paramName} (custom)
+                                      </SelectItem>
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <LocalInput
+                                  value={paramConfig.sourceParamName || paramName}
+                                  onChange={(e) => handleUpdatePathParam(paramName, { sourceParamName: e.target.value })}
+                                  placeholder={paramName}
+                                  className="h-6 text-[10px] font-mono flex-1 bg-muted/20"
+                                />
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] text-muted-foreground shrink-0 font-mono">Fallback (if empty):</span>
+                            <LocalInput
+                              value={paramConfig.value || ""}
+                              onChange={(e) => handleUpdatePathParam(paramName, { value: e.target.value })}
+                              placeholder={`e.g. new or 1`}
+                              className="h-5 text-[9px] font-mono flex-1 bg-muted/20"
+                            />
+                          </div>
                         </div>
-                      ) : (
-                        <div className="space-y-1.5">
+                      )}
+
+                      {/* Mode: Query Param */}
+                      {paramMode === "query_param" && (
+                        <div className="space-y-1.5 pt-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-muted-foreground shrink-0 font-mono">Map from:</span>
+                            <div className="flex items-center gap-1 flex-1">
+                              <span className="text-[10px] font-mono text-primary font-medium shrink-0">searchParams.get(</span>
+                              {availableQueryParams.length > 0 ? (
+                                <Select
+                                  value={paramConfig.sourceParamName || paramName}
+                                  onValueChange={(val) => handleUpdatePathParam(paramName, { sourceParamName: val })}
+                                >
+                                  <SelectTrigger className="h-6 text-[10px] flex-1 bg-muted/20 font-mono">
+                                    <SelectValue placeholder="Query Param Name" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {availableQueryParams.map((q) => (
+                                      <SelectItem key={q} value={q} className="text-xs font-mono">
+                                        "{q}"
+                                      </SelectItem>
+                                    ))}
+                                    {!availableQueryParams.includes(paramConfig.sourceParamName || paramName) && (
+                                      <SelectItem value={paramConfig.sourceParamName || paramName} className="text-xs font-mono">
+                                        "{paramConfig.sourceParamName || paramName}" (custom)
+                                      </SelectItem>
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <LocalInput
+                                  value={paramConfig.sourceParamName || paramName}
+                                  onChange={(e) => handleUpdatePathParam(paramName, { sourceParamName: e.target.value })}
+                                  placeholder={paramName}
+                                  className="h-6 text-[10px] font-mono flex-1 bg-muted/20"
+                                />
+                              )}
+                              <span className="text-[10px] font-mono text-primary font-medium shrink-0">)</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] text-muted-foreground shrink-0 font-mono">Fallback (if empty):</span>
+                            <LocalInput
+                              value={paramConfig.value || ""}
+                              onChange={(e) => handleUpdatePathParam(paramName, { value: e.target.value })}
+                              placeholder={`e.g. default`}
+                              className="h-5 text-[9px] font-mono flex-1 bg-muted/20"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Mode: State Store */}
+                      {paramMode === "store_var" && (
+                        <div className="space-y-1.5 pt-0.5">
                           <div className="grid grid-cols-2 gap-1.5">
                             <Select
                               value={paramConfig.storeId || paramConfig.storeName || (stateStores[0]?.id ?? "")}
@@ -329,7 +600,7 @@ const SidebarStaticItemRow: React.FC<SidebarStaticItemRowProps> = React.memo(({
                               <SelectContent>
                                 {(() => {
                                   const st = stateStores.find(
-                                    (s) => s.id === paramConfig.storeId || s.name === paramConfig.storeName
+                                    (s) => s.id === paramConfig.storeId || s.name === paramConfig.storeName,
                                   ) || stateStores[0];
                                   return (st?.fields || []).map((f) => (
                                     <SelectItem key={f.name} value={f.name} className="text-xs font-mono">
@@ -350,6 +621,19 @@ const SidebarStaticItemRow: React.FC<SidebarStaticItemRowProps> = React.memo(({
                               className="h-5 text-[9px] font-mono flex-1 bg-muted/20"
                             />
                           </div>
+                        </div>
+                      )}
+
+                      {/* Mode: Static */}
+                      {paramMode === "static" && (
+                        <div className="flex items-center gap-2 pt-0.5">
+                          <span className="text-[10px] text-muted-foreground shrink-0 font-mono">Value:</span>
+                          <LocalInput
+                            value={paramConfig.value || ""}
+                            onChange={(e) => handleUpdatePathParam(paramName, { value: e.target.value })}
+                            placeholder="e.g. new or 123"
+                            className="h-6 text-[10px] font-mono flex-1 bg-muted/20"
+                          />
                         </div>
                       )}
                     </div>
@@ -383,7 +667,8 @@ const SidebarStaticItemRow: React.FC<SidebarStaticItemRowProps> = React.memo(({
 
               <div className="space-y-1.5">
                 {currentQueryParams.map((q) => {
-                  const isQStoreMode = q.mode === "store_var";
+                  const qMode = q.mode || "static";
+
                   return (
                     <div key={q.id} className="p-1.5 rounded bg-background/80 border border-border/40 space-y-1">
                       <div className="flex items-center gap-1">
@@ -394,14 +679,42 @@ const SidebarStaticItemRow: React.FC<SidebarStaticItemRowProps> = React.memo(({
                           className="h-5 text-[10px] font-mono w-24 bg-muted/20"
                         />
                         <span className="text-[10px] text-muted-foreground font-mono">=</span>
-                        {!isQStoreMode ? (
+
+                        {/* Query value depending on mode */}
+                        {qMode === "static" && (
                           <LocalInput
                             value={q.value}
                             onChange={(e) => handleUpdateQueryParam(q.id, { value: e.target.value })}
                             placeholder="value (e.g. messages)"
                             className="h-5 text-[10px] font-mono flex-1 bg-muted/20"
                           />
-                        ) : (
+                        )}
+
+                        {qMode === "route_param" && (
+                          <div className="flex items-center gap-1 flex-1">
+                            <span className="text-[9px] font-mono text-primary font-medium shrink-0">params.</span>
+                            <LocalInput
+                              value={q.sourceParamName || q.key}
+                              onChange={(e) => handleUpdateQueryParam(q.id, { sourceParamName: e.target.value })}
+                              placeholder={q.key}
+                              className="h-5 text-[10px] font-mono flex-1 bg-muted/20"
+                            />
+                          </div>
+                        )}
+
+                        {qMode === "query_param" && (
+                          <div className="flex items-center gap-1 flex-1">
+                            <span className="text-[9px] font-mono text-primary font-medium shrink-0">searchParams.</span>
+                            <LocalInput
+                              value={q.sourceParamName || q.key}
+                              onChange={(e) => handleUpdateQueryParam(q.id, { sourceParamName: e.target.value })}
+                              placeholder={q.key}
+                              className="h-5 text-[10px] font-mono flex-1 bg-muted/20"
+                            />
+                          </div>
+                        )}
+
+                        {qMode === "store_var" && (
                           <Select
                             value={q.storeVar || ""}
                             onValueChange={(val) => handleUpdateQueryParam(q.id, { storeVar: val })}
@@ -415,19 +728,33 @@ const SidebarStaticItemRow: React.FC<SidebarStaticItemRowProps> = React.memo(({
                                   <SelectItem key={`${st.id}-${f.name}`} value={f.name} className="text-xs font-mono">
                                     {st.name}.{f.name}
                                   </SelectItem>
-                                ))
+                                )),
                               )}
                             </SelectContent>
                           </Select>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateQueryParam(q.id, { mode: isQStoreMode ? "static" : "store_var" })}
-                          className="h-5 px-1.5 rounded text-[9px] text-muted-foreground hover:text-foreground font-mono bg-muted/40 hover:bg-muted cursor-pointer shrink-0"
-                          title={isQStoreMode ? "Switch to Static Value" : "Switch to State Store"}
+
+                        {/* Mode switcher dropdown */}
+                        <Select
+                          value={qMode}
+                          onValueChange={(val) =>
+                            handleUpdateQueryParam(q.id, {
+                              mode: val as SidebarStaticItemQueryParam["mode"],
+                              sourceParamName: q.sourceParamName || q.key,
+                            })
+                          }
                         >
-                          {isQStoreMode ? "Store" : "Txt"}
-                        </button>
+                          <SelectTrigger className="h-5 w-16 px-1 text-[9px] font-mono bg-muted/40">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="static" className="text-xs font-mono">Static</SelectItem>
+                            <SelectItem value="route_param" className="text-xs font-mono">Route</SelectItem>
+                            <SelectItem value="query_param" className="text-xs font-mono">Query</SelectItem>
+                            <SelectItem value="store_var" className="text-xs font-mono">Store</SelectItem>
+                          </SelectContent>
+                        </Select>
+
                         <Button
                           type="button"
                           variant="ghost"
@@ -2102,6 +2429,178 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
                 </div>
               </div>
             )}
+          </div>
+        );
+      })()}
+
+      {currentComponent === "topbar" && (() => {
+        const navMode = propMappings.topbarNavMode || "static";
+        const staticItems = propMappings.topbarStaticItems ?? propMappings.sidebarStaticItems ?? [
+          { id: "nav-1", name: "Home", link: "/" },
+          { id: "nav-2", name: "Features", link: "/features" },
+          { id: "nav-3", name: "Pricing", link: "/pricing" },
+          { id: "nav-4", name: "About", link: "/about" },
+        ];
+        const isSticky = propMappings.topbarSticky ?? true;
+        const showAuthButtons = propMappings.showAuthButtons ?? true;
+
+        const handleAddStaticItem = () => {
+          const nextId = `nav-${Date.now()}`;
+          const newItem: SidebarStaticItem = {
+            id: nextId,
+            name: `Page ${staticItems.length + 1}`,
+            link: `/page-${staticItems.length + 1}`,
+          };
+          onUpdatePropMapping({
+            topbarStaticItems: [...staticItems, newItem],
+          });
+        };
+
+        const handleUpdateStaticItem = (id: string, patch: Partial<SidebarStaticItem>) => {
+          const updated = staticItems.map((item) =>
+            item.id === id ? { ...item, ...patch } : item
+          );
+          onUpdatePropMapping({ topbarStaticItems: updated });
+        };
+
+        const handleDeleteStaticItem = (id: string) => {
+          const updated = staticItems.filter((item) => item.id !== id);
+          onUpdatePropMapping({ topbarStaticItems: updated });
+        };
+
+        return (
+          <div className="flex flex-col gap-3.5 p-3.5 rounded-xl bg-muted/20 border border-border/50 text-xs">
+            {/* Header pill / status indicator */}
+            <div className="flex items-center justify-between pb-2 border-b border-border/40 text-[11px]">
+              <div className="flex items-center gap-1.5 font-medium text-foreground">
+                <PanelTop size={13} className="text-primary" />
+                <span>Top Bar Navigation Setup</span>
+              </div>
+              <Badge variant="outline" className="text-[9px] font-mono px-1.5 py-0 text-emerald-500 border-emerald-500/30">
+                Public Layout ({staticItems.length} links)
+              </Badge>
+            </div>
+
+            {/* Topbar Title / Brand */}
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-medium text-foreground flex items-center justify-between">
+                <span>Brand Logo / Header Title</span>
+                <span className="text-[9px] text-muted-foreground font-mono">topbarTitle</span>
+              </Label>
+              <LocalInput
+                value={propMappings.topbarTitle ?? "Dezign App"}
+                onChange={(e) => onUpdatePropMapping({ topbarTitle: e.target.value })}
+                placeholder="Dezign App"
+                className="h-8 text-xs bg-background"
+              />
+            </div>
+
+            {/* Sticky Header Toggle */}
+            <div className="flex items-center justify-between p-2 rounded-lg bg-background/60 border border-border/40">
+              <div className="space-y-0.5">
+                <Label className="text-xs font-medium text-foreground">Sticky Header</Label>
+                <div className="text-[10px] text-muted-foreground">Keep topbar fixed at the top on scroll</div>
+              </div>
+              <Switch
+                checked={isSticky}
+                onCheckedChange={(checked) => onUpdatePropMapping({ topbarSticky: checked })}
+              />
+            </div>
+
+            {/* Sign In & Register Auth Buttons Configuration */}
+            <div className="space-y-2.5 p-3 rounded-xl bg-muted/30 border border-border/40">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <span>Auth Action Buttons</span>
+                    <Badge variant="secondary" className="text-[9px] px-1 py-0">Public</Badge>
+                  </Label>
+                  <div className="text-[10px] text-muted-foreground">Show Sign In and Register CTA buttons on top right</div>
+                </div>
+                <Switch
+                  checked={showAuthButtons}
+                  onCheckedChange={(checked) => onUpdatePropMapping({ showAuthButtons: checked })}
+                />
+              </div>
+
+              {showAuthButtons && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1.5 border-t border-border/30">
+                  {/* Sign In button config */}
+                  <div className="space-y-1.5 p-2 rounded-lg bg-background/70 border border-border/40">
+                    <Label className="text-[10px] font-medium text-muted-foreground">Sign In Button</Label>
+                    <div className="space-y-1">
+                      <LocalInput
+                        value={propMappings.signInText ?? "Sign In"}
+                        onChange={(e) => onUpdatePropMapping({ signInText: e.target.value })}
+                        placeholder="Sign In"
+                        className="h-7 text-xs bg-background"
+                      />
+                      <LocalInput
+                        value={propMappings.signInLink ?? "/login"}
+                        onChange={(e) => onUpdatePropMapping({ signInLink: e.target.value })}
+                        placeholder="/login"
+                        className="h-7 text-[11px] font-mono bg-background text-muted-foreground"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Register button config */}
+                  <div className="space-y-1.5 p-2 rounded-lg bg-background/70 border border-border/40">
+                    <Label className="text-[10px] font-medium text-muted-foreground">Register Button</Label>
+                    <div className="space-y-1">
+                      <LocalInput
+                        value={propMappings.registerText ?? "Register"}
+                        onChange={(e) => onUpdatePropMapping({ registerText: e.target.value })}
+                        placeholder="Register"
+                        className="h-7 text-xs bg-background"
+                      />
+                      <LocalInput
+                        value={propMappings.registerLink ?? "/register"}
+                        onChange={(e) => onUpdatePropMapping({ registerLink: e.target.value })}
+                        placeholder="/register"
+                        className="h-7 text-[11px] font-mono bg-background text-muted-foreground"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Static Navigation Items */}
+            <div className="flex flex-col gap-2.5 pt-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-foreground">Navigation Links ({staticItems.length})</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddStaticItem}
+                  className="h-6 text-[10px] gap-1 px-2 cursor-pointer"
+                >
+                  <Plus size={10} />
+                  <span>Add Link</span>
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                {staticItems.map((item, idx) => (
+                  <SidebarStaticItemRow
+                    key={item.id || idx}
+                    item={item}
+                    idx={idx}
+                    stateStores={stateStores}
+                    onUpdate={(patch) => handleUpdateStaticItem(item.id, patch)}
+                    onDelete={() => handleDeleteStaticItem(item.id)}
+                  />
+                ))}
+
+                {staticItems.length === 0 && (
+                  <div className="p-4 text-center text-xs text-muted-foreground border border-dashed rounded-lg">
+                    No navigation links. Click "+ Add Link" to define your topbar menu.
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         );
       })()}

@@ -20,6 +20,7 @@ import {
   X,
   Pencil,
   PanelLeft,
+  PanelTop,
 } from "lucide-react";
 import {
   PageSection,
@@ -49,6 +50,7 @@ const COMPONENT_ICON_MAP: Record<string, React.ElementType> = {
   badge: BadgeAlert,
   select: ChevronDownSquare,
   sidebar: PanelLeft,
+  topbar: PanelTop,
 };
 
 export const SectionComponentBindingsList: React.FC<SectionComponentBindingsListProps> = ({

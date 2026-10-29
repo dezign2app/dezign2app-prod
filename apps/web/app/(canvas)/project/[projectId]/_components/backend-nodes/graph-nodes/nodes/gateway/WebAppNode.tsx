@@ -16,7 +16,7 @@ import {
 import { BackendNode } from "@/types/canvas";
 import { toast } from "sonner";
 import { WebAppZone } from "@workspace/canvas/types";
-import { normalizePageRoute } from "@workspace/canvas";
+import { normalizePageRoute, parseRouteWithQueryParams } from "@workspace/canvas";
 import {
   CANVAS_HANDLE_CLASS,
   CANVAS_HANDLE_LEFT_OFFSET_CLASS,
@@ -300,7 +300,26 @@ export const WebAppNode = ({
         const clean = raw.replace(/^\//, "");
         const name = clean ? clean.charAt(0).toUpperCase() + clean.slice(1) : "Home";
         const link = raw.startsWith("/") ? raw : `/${raw}`;
-        return { id: `nav-${idx + 1}`, name, link };
+        const { extractedPathParams, extractedQueryParams } = parseRouteWithQueryParams(link);
+        const pathParams = extractedPathParams.map((ep) => ({
+          name: ep.name,
+          value: "",
+          mode: "route_param" as const,
+          sourceParamName: ep.name,
+        }));
+        const queryParams = extractedQueryParams.map((eq) => ({
+          id: `q-${eq.name}`,
+          key: eq.name,
+          value: eq.defaultValue || "",
+          mode: "static" as const,
+        }));
+        return {
+          id: `nav-${idx + 1}`,
+          name,
+          link,
+          ...(pathParams.length > 0 ? { pathParams } : {}),
+          ...(queryParams.length > 0 ? { queryParams } : {}),
+        };
       });
     const sidebarNavItems =
       defaultNavItems.length > 0
@@ -308,6 +327,15 @@ export const WebAppNode = ({
         : [
             { id: "nav-1", name: "Dashboard", link: "/dashboard" },
             { id: "nav-2", name: "Settings", link: "/settings" },
+          ];
+    const topbarNavItems =
+      defaultNavItems.length > 0
+        ? defaultNavItems
+        : [
+            { id: "nav-1", name: "Home", link: "/" },
+            { id: "nav-2", name: "Features", link: "/features" },
+            { id: "nav-3", name: "Pricing", link: "/pricing" },
+            { id: "nav-4", name: "About", link: "/about" },
           ];
     const defaultDesc = isPublic
       ? "Public layout with top navigation bar, logo, and auth links"
@@ -324,6 +352,7 @@ export const WebAppNode = ({
         label: "layout",
         isLayout: true,
         layoutSidebarInitialized: true,
+        layoutTopbarInitialized: true,
         description: targetZone.layoutDescription || defaultDesc,
         useZoneDefault: true,
         zoneId: targetZone.id,
@@ -332,7 +361,26 @@ export const WebAppNode = ({
             id: `sec-nav-${Date.now()}`,
             name: isPublic ? "Header Navigation" : "App Sidebar Navigation",
             componentBindings: isPublic
-              ? []
+              ? [
+                  {
+                    id: `comp-topbar-${Date.now()}`,
+                    name: "AppTopbar",
+                    label: "AppTopbar",
+                    componentType: "topbar",
+                    variant: "default",
+                    propMappings: {
+                      topbarTitle: targetZone.name || "Dezign App",
+                      topbarNavMode: "static",
+                      topbarSticky: true,
+                      showAuthButtons: true,
+                      signInText: "Sign In",
+                      signInLink: "/login",
+                      registerText: "Register",
+                      registerLink: "/register",
+                      topbarStaticItems: topbarNavItems,
+                    },
+                  },
+                ]
               : [
                   {
                     id: `comp-sidebar-${Date.now()}`,

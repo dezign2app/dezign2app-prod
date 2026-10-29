@@ -63,6 +63,7 @@ const toStateRenderComponent = (val: string): StateRenderComponent => {
     case "code":
     case "text":
     case "sidebar":
+    case "topbar":
       return val;
     default:
       return "input";

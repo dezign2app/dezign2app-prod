@@ -13,6 +13,8 @@ import {
   Table,
   ChevronDownSquare,
   Sparkles,
+  PanelLeft,
+  PanelTop,
 } from "lucide-react";
 import { SectionComponentBinding } from "@workspace/canvas";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card";
@@ -35,6 +37,8 @@ const COMPONENT_ICONS: Record<string, React.ElementType> = {
   badge: BadgeAlert,
   table: Table,
   select: ChevronDownSquare,
+  sidebar: PanelLeft,
+  topbar: PanelTop,
 };
 
 export const ConnectedComponentsSection: React.FC<ConnectedComponentsSectionProps> = ({

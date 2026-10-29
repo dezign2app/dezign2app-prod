@@ -16,7 +16,7 @@ import { Switch } from "@workspace/ui/components/switch";
 import { Label } from "@workspace/ui/components/label";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { Button } from "@workspace/ui/components/button";
-import { WebAppZone, PageSection } from "@workspace/canvas";
+import { WebAppZone, PageSection, parseRouteWithQueryParams } from "@workspace/canvas";
 import { useRouter } from "next/navigation";
 import { ReferralImagesUploader } from "../../backend-nodes/graph-nodes/nodes/gateway/web-app";
 
@@ -83,6 +83,59 @@ export const ZoneLayoutSection = ({
   const isLayoutEnabled = Boolean(connectedLayoutNode);
 
   const handleCreateLayoutNode = () => {
+    const connectedPages = edges
+      .filter(
+        (e) =>
+          (e.source === webAppNodeId && e.sourceHandle === zoneHandleId) ||
+          (e.target === webAppNodeId && e.targetHandle === zoneHandleId),
+      )
+      .map((e) => nodes.find((n) => n.id === (e.source === webAppNodeId ? e.target : e.source)))
+      .filter((n): n is BackendNode =>
+        Boolean(
+          n &&
+            n.type === "webPage" &&
+            !n.data?.isLayout &&
+            n.data?.label?.trim().toLowerCase() !== "layout",
+        ),
+      );
+
+    const defaultNavItems = connectedPages.map((p, idx) => {
+      const raw = p.data?.label || p.data?.path || `Page ${idx + 1}`;
+      const clean = raw.replace(/^\//, "");
+      const name = clean ? clean.charAt(0).toUpperCase() + clean.slice(1) : "Home";
+      const link = raw.startsWith("/") ? raw : `/${raw}`;
+      const { extractedPathParams, extractedQueryParams } = parseRouteWithQueryParams(link);
+      const pathParams = extractedPathParams.map((ep) => ({
+        name: ep.name,
+        value: "",
+        mode: "route_param" as const,
+        sourceParamName: ep.name,
+      }));
+      const queryParams = extractedQueryParams.map((eq) => ({
+        id: `q-${eq.name}`,
+        key: eq.name,
+        value: eq.defaultValue || "",
+        mode: "static" as const,
+      }));
+      return {
+        id: `nav-${idx + 1}`,
+        name,
+        link,
+        ...(pathParams.length > 0 ? { pathParams } : {}),
+        ...(queryParams.length > 0 ? { queryParams } : {}),
+      };
+    });
+    const fallbackSidebarItems = defaultNavItems.length > 0 ? defaultNavItems : [
+      { id: "nav-1", name: "Dashboard", link: "/dashboard" },
+      { id: "nav-2", name: "Settings", link: "/settings" },
+    ];
+    const fallbackTopbarItems = defaultNavItems.length > 0 ? defaultNavItems : [
+      { id: "nav-1", name: "Home", link: "/" },
+      { id: "nav-2", name: "Features", link: "/features" },
+      { id: "nav-3", name: "Pricing", link: "/pricing" },
+      { id: "nav-4", name: "About", link: "/about" },
+    ];
+
     const isPublic = currentZone.accessType === "public" || currentZone.id === "zone-public";
     const newLayoutId = `webPage-layout-${Date.now()}`;
     const baseX = webAppNode?.position?.x ?? 100;
@@ -99,6 +152,7 @@ export const ZoneLayoutSection = ({
         label: "layout",
         isLayout: true,
         layoutSidebarInitialized: true,
+        layoutTopbarInitialized: true,
         description:
           currentZone.layoutDescription ||
           `Shared layout wrapper for ${currentZone.name} section (navigation, sidebar & session checks)`,
@@ -107,7 +161,26 @@ export const ZoneLayoutSection = ({
             id: `sec-header-${Date.now()}`,
             name: isPublic ? "Header Navigation" : "App Sidebar Navigation",
             componentBindings: isPublic
-              ? []
+              ? [
+                  {
+                    id: `comp-topbar-${Date.now()}`,
+                    name: "AppTopbar",
+                    label: "AppTopbar",
+                    componentType: "topbar",
+                    variant: "default",
+                    propMappings: {
+                      topbarTitle: currentZone.name || "Dezign App",
+                      topbarNavMode: "static",
+                      topbarSticky: true,
+                      showAuthButtons: true,
+                      signInText: "Sign In",
+                      signInLink: "/login",
+                      registerText: "Register",
+                      registerLink: "/register",
+                      topbarStaticItems: fallbackTopbarItems,
+                    },
+                  },
+                ]
               : [
                   {
                     id: `comp-sidebar-${Date.now()}`,
@@ -120,10 +193,7 @@ export const ZoneLayoutSection = ({
                       sidebarNavMode: "static",
                       sidebarCollapsible: "icon",
                       sidebarVariant: "sidebar",
-                      sidebarStaticItems: [
-                        { id: "nav-1", name: "Dashboard", link: "/dashboard" },
-                        { id: "nav-2", name: "Settings", link: "/settings" },
-                      ],
+                      sidebarStaticItems: fallbackSidebarItems,
                     },
                   },
                 ],

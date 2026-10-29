@@ -65,25 +65,28 @@ export type StateRenderComponent =
   | "table"
   | "code"
   | "text"
-  | "sidebar";
+  | "sidebar"
+  | "topbar";
 
 export interface SidebarStaticItemParam {
   name: string;
   value: string;
-  mode?: "static" | "store_var";
+  mode?: "static" | "store_var" | "route_param" | "query_param";
   storeName?: string;
   storeId?: string;
   storeVar?: string;
+  sourceParamName?: string;
 }
 
 export interface SidebarStaticItemQueryParam {
   id: string;
   key: string;
   value: string;
-  mode?: "static" | "store_var";
+  mode?: "static" | "store_var" | "route_param" | "query_param";
   storeName?: string;
   storeId?: string;
   storeVar?: string;
+  sourceParamName?: string;
 }
 
 export interface SidebarStaticItem {
@@ -95,6 +98,9 @@ export interface SidebarStaticItem {
   pathParams?: SidebarStaticItemParam[];
   queryParams?: SidebarStaticItemQueryParam[];
 }
+
+export type TopbarStaticItem = SidebarStaticItem;
+
 
 export interface ComponentPropMappings {
   // Input
@@ -216,6 +222,20 @@ export interface ComponentPropMappings {
   sidebarVariant?: "sidebar" | "floating" | "inset";
   sidebarSide?: "left" | "right";
 
+  // Topbar
+  topbarTitle?: string;
+  topbarNavMode?: "static" | "dynamic";
+  topbarNavBinding?: string;
+  topbarNavStoreId?: string;
+  topbarNavStoreName?: string;
+  topbarStaticItems?: Array<SidebarStaticItem>;
+  topbarSticky?: boolean;
+  showAuthButtons?: boolean;
+  signInText?: string;
+  signInLink?: string;
+  registerText?: string;
+  registerLink?: string;
+
   // Custom props
   customProps?: Record<string, string>;
 }
@@ -274,6 +294,7 @@ export type ComponentBindingType =
   | "form"
   | "select"
   | "sidebar"
+  | "topbar"
   | (string & {});
 
 export interface ComponentElementBinding {
