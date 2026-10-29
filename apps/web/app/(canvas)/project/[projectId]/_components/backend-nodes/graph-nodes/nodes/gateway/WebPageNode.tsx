@@ -600,11 +600,17 @@ export const WebPageNode = ({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
-        zIndex: selected ? 1000 : 1,
+        zIndex: isStacked
+          ? cardIndex === totalCards - 1 && selected
+            ? 1000
+            : 10 + cardIndex
+          : selected
+            ? 1000
+            : 1,
       }}
       className={cn(
         "shadow-md rounded-xl bg-card border-2 min-w-[240px] max-w-[320px] flex flex-col transition-all duration-200 relative",
-        isStacked && "shadow-lg backdrop-blur-sm",
+        isStacked && "w-[300px] shadow-lg backdrop-blur-sm",
         isStacked && (selected || isHovered) && "ring-2 ring-indigo-500/50 shadow-2xl scale-[1.01] border-indigo-500",
         isLocked
           ? "border-violet-500/80 ring-2 ring-violet-500/30"
