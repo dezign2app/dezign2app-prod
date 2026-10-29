@@ -14,6 +14,7 @@ import {
   KeyRound,
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
+import { toast } from "sonner";
 import { WebAppZone } from "@workspace/canvas/types";
 import { normalizePageRoute } from "@workspace/canvas";
 import {
@@ -53,7 +54,7 @@ const DEFAULT_ZONES: WebAppZone[] = [
     name: "Public Section",
     handleId: "public-in",
     accessType: "public",
-    hasLayout: true,
+    hasLayout: false,
     layoutDescription: "Public layout with top navigation bar, logo, and auth links",
     rule: {
       id: "rule-public",
@@ -67,7 +68,7 @@ const DEFAULT_ZONES: WebAppZone[] = [
     name: "Private Section",
     handleId: "private-in",
     accessType: "protected",
-    hasLayout: true,
+    hasLayout: false,
     layoutDescription: "Protected app layout with sidebar navigation, user profile, and session check",
     rule: {
       id: "rule-private",
@@ -93,7 +94,11 @@ export const WebAppNode = ({
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
   const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
+  const addNode = useBackendCanvasStore((s) => s.addNode);
+  const addEdge = useBackendCanvasStore((s) => s.addEdge);
+  const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
   const [zoneToDelete, setZoneToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [layoutToDelete, setLayoutToDelete] = useState<{ zoneId: string; zoneName: string; nodeId: string } | null>(null);
 
   const selectThisNode = () => {
     const store = useBackendCanvasStore.getState();
@@ -201,7 +206,7 @@ export const WebAppNode = ({
       name: zoneName,
       handleId: `${newZoneId}-in`,
       accessType: "protected",
-      hasLayout: true,
+      hasLayout: false,
       layoutDescription: parentZone
         ? `Nested sub-layout inheriting from ${parentZone.name}`
         : "Custom route group layout",
@@ -254,18 +259,6 @@ export const WebAppNode = ({
     return <Lock className="w-3.5 h-3.5 text-indigo-500 shrink-0" />;
   };
 
-  const handleToggleZoneLayout = (zoneId: string, enabled?: boolean) => {
-    const updatedZones = zones.map((z) => {
-      if (z.id !== zoneId) return z;
-      const nextVal = typeof enabled === "boolean" ? enabled : !(z.hasLayout ?? false);
-      return {
-        ...z,
-        hasLayout: nextVal,
-      };
-    });
-    updateNode(id, { data: { ...data, zones: updatedZones } });
-  };
-
   // Helper to find connected WebClient page nodes for a given section handle
   const getConnectedPages = (sectionHandleId: string) => {
     const incomingEdges = edges.filter(
@@ -278,6 +271,123 @@ export const WebAppNode = ({
         nodes.find((n) => n.id === (e.source === id ? e.target : e.source)),
       )
       .filter((n): n is BackendNode => Boolean(n));
+  };
+
+  const createLayoutNodeForZone = (targetZone: WebAppZone) => {
+    const newLayoutId = `webPage-layout-${Date.now()}`;
+    const thisNode = nodes.find((n) => n.id === id);
+    const baseX = thisNode?.position?.x ?? 100;
+    const baseY = thisNode?.position?.y ?? 100;
+
+    const connectedPages = getConnectedPages(targetZone.handleId);
+    let posX = baseX + 420;
+    let posY = baseY;
+
+    if (connectedPages.length > 0) {
+      const firstPage = connectedPages[0];
+      posX = firstPage?.position?.x ?? posX;
+      posY = (firstPage?.position?.y ?? baseY) - 90;
+    } else {
+      const zoneIdx = zones.findIndex((z) => z.id === targetZone.id);
+      posY = baseY + (zoneIdx >= 0 ? zoneIdx * 160 : 0);
+    }
+
+    const isPublic = targetZone.accessType === "public" || targetZone.id === "zone-public";
+    const defaultDesc = isPublic
+      ? "Public layout with top navigation bar, logo, and auth links"
+      : "Protected app layout with sidebar navigation, user profile, and session check";
+
+    const newLayoutNode: Omit<BackendNode, "fractionalIndex"> = {
+      id: newLayoutId,
+      type: "webPage",
+      position: {
+        x: posX,
+        y: posY,
+      },
+      data: {
+        label: "layout",
+        isLayout: true,
+        description: targetZone.layoutDescription || defaultDesc,
+        useZoneDefault: true,
+        zoneId: targetZone.id,
+        sections: [
+          {
+            id: `sec-nav-${Date.now()}`,
+            name: isPublic ? "Header Navigation" : "App Sidebar Navigation",
+            renderMode: "server",
+            loadStrategy: "eager",
+            actions: [],
+          },
+          {
+            id: `sec-children-${Date.now()}`,
+            name: "Page Content ({children})",
+            renderMode: "server",
+            loadStrategy: "eager",
+            actions: [],
+          },
+        ],
+      },
+    };
+
+    addNode(newLayoutNode);
+
+    const newEdgeId = `edge-${id}-${targetZone.handleId}-${newLayoutId}-page-in`;
+    addEdge({
+      id: newEdgeId,
+      source: id,
+      sourceHandle: targetZone.handleId,
+      target: newLayoutId,
+      targetHandle: "page-in",
+      type: "connection",
+    });
+
+    const updatedZones = zones.map((z) =>
+      z.id === targetZone.id ? { ...z, hasLayout: true } : z,
+    );
+    updateNode(id, { data: { ...data, zones: updatedZones } });
+
+    toast.success(`Layout node created for ${targetZone.name}`);
+  };
+
+  const handleToggleZoneLayout = (zoneId: string, enabled?: boolean) => {
+    const targetZone = zones.find((z) => z.id === zoneId);
+    if (!targetZone) return;
+
+    const connectedPages = getConnectedPages(targetZone.handleId);
+    const connectedLayoutNode = connectedPages.find(
+      (p) => Boolean(p.data?.isLayout) || p.data?.label?.trim().toLowerCase() === "layout",
+    );
+
+    const shouldEnable = typeof enabled === "boolean" ? enabled : !connectedLayoutNode;
+
+    if (shouldEnable) {
+      if (connectedLayoutNode) {
+        const updatedZones = zones.map((z) => (z.id === zoneId ? { ...z, hasLayout: true } : z));
+        updateNode(id, { data: { ...data, zones: updatedZones } });
+        return;
+      }
+
+      createLayoutNodeForZone(targetZone);
+    } else {
+      if (connectedLayoutNode) {
+        if (connectedLayoutNode.data?.pageSourceCode) {
+          setLayoutToDelete({
+            zoneId: targetZone.id,
+            zoneName: targetZone.name,
+            nodeId: connectedLayoutNode.id,
+          });
+          return;
+        }
+
+        deleteNode(connectedLayoutNode.id);
+      }
+
+      const updatedZones = zones.map((z) =>
+        z.id === targetZone.id ? { ...z, hasLayout: false } : z,
+      );
+      updateNode(id, { data: { ...data, zones: updatedZones } });
+      toast.info(`Layout disabled for ${targetZone.name}`);
+    }
   };
 
   // Find all connected WebPage nodes across all sections for duplicate route detection
@@ -451,7 +561,10 @@ export const WebAppNode = ({
         {buildZoneTree(zones).map(({ zone, depth }) => {
           const connectedPages = getConnectedPages(zone.handleId);
           const isPublic = zone.accessType === "public";
-          const isLayoutEnabled = Boolean(zone.hasLayout);
+          const connectedLayoutNode = connectedPages.find(
+            (p) => Boolean(p.data?.isLayout) || p.data?.label?.trim().toLowerCase() === "layout",
+          );
+          const isLayoutEnabled = Boolean(connectedLayoutNode);
 
           return (
             <div
@@ -520,8 +633,8 @@ export const WebAppNode = ({
                     )}
                     title={
                       isLayoutEnabled
-                        ? "Layout enabled for this section. Click to disable"
-                        : "Layout disabled for this section. Click to enable"
+                        ? `Layout enabled for ${zone.name}. Click to disable and remove layout node`
+                        : `Layout disabled for ${zone.name}. Click to enable and create layout node`
                     }
                   >
                     <LayoutTemplate
@@ -707,6 +820,47 @@ export const WebAppNode = ({
               className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
             >
               Delete Section
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Layout Confirmation Dialog */}
+      <AlertDialog open={!!layoutToDelete} onOpenChange={(open) => !open && setLayoutToDelete(null)}>
+        <AlertDialogContent
+          onClick={(e) => e.stopPropagation()}
+          className="bg-[#111216] border-zinc-800 text-zinc-100 max-w-md shadow-2xl ring-1 ring-white/10"
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-zinc-100 font-semibold">
+              Disable Layout for "{layoutToDelete?.zoneName}"?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400 text-xs leading-relaxed">
+              This layout node contains custom code or sections. Disabling it will remove the layout node from the canvas. Are you sure you want to proceed?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => setLayoutToDelete(null)}
+              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700 hover:text-zinc-100"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (layoutToDelete) {
+                  deleteNode(layoutToDelete.nodeId);
+                  const updatedZones = zones.map((z) =>
+                    z.id === layoutToDelete.zoneId ? { ...z, hasLayout: false } : z,
+                  );
+                  updateNode(id, { data: { ...data, zones: updatedZones } });
+                  toast.info(`Layout disabled for ${layoutToDelete.zoneName}`);
+                  setLayoutToDelete(null);
+                }
+              }}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
+            >
+              Disable Layout
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
