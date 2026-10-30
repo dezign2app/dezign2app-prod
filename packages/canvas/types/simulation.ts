@@ -248,6 +248,9 @@ export interface ComponentPropMappings {
   chatMessagesBinding?: string;
   chatMessagesStoreId?: string;
   chatMessagesStoreName?: string;
+  chatInputBinding?: string;
+  chatInputStoreId?: string;
+  chatInputStoreName?: string;
   chatOnSendActionId?: string;
 
   // Custom props

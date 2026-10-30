@@ -35,7 +35,7 @@ import { Button } from "@workspace/ui/components/button";
 import { Separator } from "@workspace/ui/components/separator";
 import { toast } from "sonner";
 import { toPascalCase } from "@/lib/utils";
-import { ensureNavItemTypeOnCanvas } from "../backend-nodes/graph-nodes/nodes/compute/TypesNode";
+import { ensureNavItemTypeOnCanvas, ensureChatMessageTypeOnCanvas } from "../backend-nodes/graph-nodes/nodes/compute/TypesNode";
 import { Badge } from "@workspace/ui/components/badge";
 import { Sparkles } from "lucide-react";
 
@@ -875,6 +875,200 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
     [parentNode, addNode, updateNode, handleUpdateActivePropMapping],
   );
 
+  const handleCreateChatMessageStateVariable = useCallback(
+    (preferredStoreId?: string) => {
+      const storeState = useBackendCanvasStore.getState();
+      const currentNodes = storeState.nodes;
+      const currentStores = currentNodes.filter((n) => n.type === "state_store");
+
+      let targetStore = preferredStoreId
+        ? currentStores.find((s) => s.id === preferredStoreId)
+        : currentStores[0];
+
+      const defaultMessages = [
+        { id: "msg-1", role: "assistant", content: "Hello! How can I assist you today?" },
+      ];
+
+      const parentPos = parentNode?.position || { x: 100, y: 100 };
+      const storePos = targetStore?.position || { x: parentPos.x + 380, y: parentPos.y };
+
+      // Ensure TypesNode exists on canvas with typed ChatMessage interface
+      const { typesNodeId, typeItem } = ensureChatMessageTypeOnCanvas({
+        x: storePos.x,
+        y: Math.max(20, storePos.y - 260),
+      });
+
+      let storeIdToUse = targetStore?.id;
+      let storeNameToUse = targetStore?.data?.label || targetStore?.data?.storeName || "ChatStore";
+      let msgFieldId = `f-msg-${Date.now()}`;
+      let inputFieldId = `f-input-${Date.now()}`;
+
+      if (!targetStore) {
+        const newStoreId = `store-${Date.now()}`;
+        storeIdToUse = newStoreId;
+        storeNameToUse = "ChatStore";
+
+        const newStoreNode = {
+          id: newStoreId,
+          type: "state_store" as const,
+          position: { x: storePos.x, y: storePos.y },
+          data: {
+            label: "ChatStore",
+            storeName: "ChatStore",
+            description: "State Store for AI Conversational Thread & Messages",
+            fields: [
+              {
+                id: msgFieldId,
+                name: "messages",
+                type: "ChatMessage[]",
+                isArray: true,
+                defaultValue: defaultMessages,
+                reducer: "messages_reducer",
+                actions: ["set", "append", "pop", "remove", "reset"],
+                description: "Conversation message history for AI chat thread",
+              },
+              {
+                id: inputFieldId,
+                name: "chatInput",
+                type: "string",
+                isArray: false,
+                defaultValue: "",
+                reducer: "chatInput_reducer",
+                actions: ["set", "reset"],
+                description: "Current message draft input for AI chat thread",
+              },
+            ],
+            actions: [],
+          },
+        };
+
+        addNode(newStoreNode);
+      } else {
+        const existingFields = targetStore.data?.fields || [];
+        const existingMsgField = existingFields.find((f: any) => f.name === "messages");
+        const existingInputField = existingFields.find((f: any) => f.name === "chatInput");
+
+        let fieldsToUpdate = [...existingFields];
+
+        if (!existingMsgField) {
+          fieldsToUpdate.push({
+            id: msgFieldId,
+            name: "messages",
+            type: "ChatMessage[]",
+            isArray: true,
+            defaultValue: defaultMessages,
+            reducer: "messages_reducer",
+            actions: ["set", "append", "pop", "remove", "reset"],
+            description: "Conversation message history for AI chat thread",
+          });
+        } else {
+          msgFieldId = existingMsgField.id;
+          fieldsToUpdate = fieldsToUpdate.map((f: any) => {
+            if (f.name === "messages") {
+              return {
+                ...f,
+                type: "ChatMessage[]",
+                isArray: true,
+                defaultValue:
+                  f.defaultValue && Array.isArray(f.defaultValue) && f.defaultValue.length > 0
+                    ? f.defaultValue
+                    : defaultMessages,
+                reducer: f.reducer || "messages_reducer",
+                actions: f.actions || ["set", "append", "pop", "remove", "reset"],
+              };
+            }
+            return f;
+          });
+        }
+
+        if (!existingInputField) {
+          fieldsToUpdate.push({
+            id: inputFieldId,
+            name: "chatInput",
+            type: "string",
+            isArray: false,
+            defaultValue: "",
+            reducer: "chatInput_reducer",
+            actions: ["set", "reset"],
+            description: "Current message draft input for AI chat thread",
+          });
+        }
+
+        updateNode(targetStore.id, {
+          data: {
+            ...targetStore.data,
+            fields: fieldsToUpdate,
+          },
+        });
+      }
+
+      // Auto-wire type-reference edge between TypesNode and StateStoreNode
+      if (typesNodeId && storeIdToUse && msgFieldId) {
+        const expectedSourceHandle = `type-out-${typeItem.id}`;
+        const expectedTargetHandle = `store-field-in-${msgFieldId}`;
+        const edgeId = `edge-type-${typesNodeId}-${typeItem.id}-${storeIdToUse}-${msgFieldId}`;
+        const currentEdges = storeState.edges;
+        const edgeExists = currentEdges.some(
+          (e) =>
+            e.source === typesNodeId &&
+            e.target === storeIdToUse &&
+            e.sourceHandle === expectedSourceHandle &&
+            e.targetHandle === expectedTargetHandle,
+        );
+        if (!edgeExists) {
+          storeState.addEdge({
+            id: edgeId,
+            source: typesNodeId,
+            target: storeIdToUse,
+            sourceHandle: expectedSourceHandle,
+            targetHandle: expectedTargetHandle,
+            type: "type-reference",
+            data: {
+              label: typeItem.name,
+              isTypeReference: true,
+              baseTypeName: typeItem.name,
+            },
+          });
+        }
+      }
+
+      // Auto-wire edge between StateStore and WebPageNode if not already connected
+      if (storeIdToUse && parentNode?.id) {
+        const currentEdges = storeState.edges;
+        const webPageEdgeExists = currentEdges.some(
+          (e) =>
+            (e.source === storeIdToUse && e.target === parentNode.id) ||
+            (e.source === parentNode.id && e.target === storeIdToUse),
+        );
+        if (!webPageEdgeExists) {
+          storeState.addEdge({
+            id: `edge-store-${storeIdToUse}-${parentNode.id}`,
+            source: storeIdToUse,
+            target: parentNode.id,
+            type: "connection",
+          });
+        }
+      }
+
+      handleUpdateActivePropMapping({
+        chatMessagesBinding: "messages",
+        chatMessagesStoreId: storeIdToUse,
+        chatMessagesStoreName: storeNameToUse,
+        chatInputBinding: "chatInput",
+        chatInputStoreId: storeIdToUse,
+        chatInputStoreName: storeNameToUse,
+        valueBinding: "messages",
+        valueStoreName: storeNameToUse,
+        valueStoreId: storeIdToUse,
+        valueMode: "store_var",
+      });
+
+      toast.success(`Provisioned ChatMessage[] and bound "messages" in ${storeNameToUse}!`);
+    },
+    [parentNode, addNode, updateNode, handleUpdateActivePropMapping],
+  );
+
+
   if (!parentNode || !targetSection || !componentBinding) {
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground gap-3">
@@ -1028,6 +1222,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         onOpenEventConfig={handleOpenActionFlow}
         onCreateAction={handleCreateActiveElementAction}
         onCreateNavStateVariable={handleCreateNavStateVariable}
+        onCreateChatMessageStateVariable={handleCreateChatMessageStateVariable}
       />
 
       <Separator className="bg-border/50" />

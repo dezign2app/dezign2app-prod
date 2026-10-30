@@ -445,6 +445,23 @@ export const NAV_ITEM_CUSTOM_TYPE: CustomTypeItem = {
 };
 
 /**
+ * Standard ChatMessage item type definition used for AI chat threads and messages.
+ */
+export const CHAT_MESSAGE_CUSTOM_TYPE: CustomTypeItem = {
+  id: "type-chat-message",
+  name: "ChatMessage",
+  kind: "interface",
+  description: "Chat message item definition for AI conversation threads",
+  fields: [
+    { id: "f-chat-id", name: "id", type: "string", required: true, isArray: false, description: "Unique message identifier" },
+    { id: "f-chat-role", name: "role", type: "string", required: true, isArray: false, description: "Role: 'user' | 'assistant' | 'system'" },
+    { id: "f-chat-content", name: "content", type: "string", required: true, isArray: false, description: "Message textual or markdown content" },
+    { id: "f-chat-created-at", name: "createdAt", type: "string", required: false, isArray: false, description: "Timestamp when message was created" },
+  ],
+};
+
+
+/**
  * Identifies if a TypesNode is reserved for specialized auto-synced schemas:
  * - Entity Types (generated from Database tables)
  * - Service Endpoint Types (generated from Backend endpoints)
@@ -573,3 +590,85 @@ export function ensureNavItemTypeOnCanvas(
   store.addNode(newTypesNode);
   return { typesNodeId: newTypesNodeId, typeItem: NAV_ITEM_CUSTOM_TYPE };
 }
+
+
+/**
+ * Ensures a dedicated general TypesNode (e.g. "App Types") exists on the canvas containing the ChatMessage interface.
+ * Strictly avoids entity schemas, service endpoint types, or package types.
+ * Automatically purges ChatMessage from Entity Types or any specialized nodes if it was erroneously placed there.
+ * Returns the TypesNode ID and the CustomTypeItem.
+ */
+export function ensureChatMessageTypeOnCanvas(
+  referencePosition?: { x: number; y: number },
+): { typesNodeId: string; typeItem: CustomTypeItem } {
+  const store = useBackendCanvasStore.getState();
+  const currentNodes = store.nodes;
+
+  // 1. Purge ChatMessage from any specialized types nodes (e.g. Entity Types) if present
+  currentNodes.forEach((n) => {
+    if (n.type === "types" && isSpecializedTypesNode(n)) {
+      const typesList = n.data?.types || [];
+      const hasBogusChatMessage = typesList.some(
+        (t: CustomTypeItem) => t.name === "ChatMessage" || t.id === "type-chat-message",
+      );
+      if (hasBogusChatMessage) {
+        const cleanedTypes = typesList.filter(
+          (t: CustomTypeItem) => t.name !== "ChatMessage" && t.id !== "type-chat-message",
+        );
+        store.updateNode(n.id, {
+          data: {
+            ...n.data,
+            types: cleanedTypes,
+          },
+        });
+        const edgesToRemove = store.edges.filter(
+          (e) =>
+            e.source === n.id &&
+            (e.sourceHandle === "type-out-type-chat-message" ||
+              e.data?.label === "ChatMessage" ||
+              e.data?.baseTypeName === "ChatMessage"),
+        );
+        edgesToRemove.forEach((e) => store.deleteEdge(e.id));
+      }
+    }
+  });
+
+  // 2. Find an existing general (non-specialized) TypesNode (such as "App Types")
+  const existingGeneralTypesNode = currentNodes.find(
+    (n) => n.type === "types" && !isSpecializedTypesNode(n),
+  );
+
+  if (existingGeneralTypesNode) {
+    const currentTypes: CustomTypeItem[] = existingGeneralTypesNode.data?.types || [];
+    const existingChatMessage = currentTypes.find((t) => t.name === "ChatMessage");
+    if (existingChatMessage) {
+      return { typesNodeId: existingGeneralTypesNode.id, typeItem: existingChatMessage };
+    }
+    const updatedTypes = [...currentTypes, CHAT_MESSAGE_CUSTOM_TYPE];
+    store.updateNode(existingGeneralTypesNode.id, {
+      data: {
+        ...existingGeneralTypesNode.data,
+        types: updatedTypes,
+      },
+    });
+    return { typesNodeId: existingGeneralTypesNode.id, typeItem: CHAT_MESSAGE_CUSTOM_TYPE };
+  }
+
+  // 3. Otherwise, create a brand-new dedicated "App Types" node (completely separate from Entity Types)
+  const newTypesNodeId = `types-app-${Date.now()}`;
+  const pos = referencePosition || { x: 480, y: 100 };
+  const newTypesNode: Omit<BackendNode, "fractionalIndex"> = {
+    id: newTypesNodeId,
+    type: "types",
+    position: { x: pos.x, y: pos.y },
+    selected: false,
+    data: {
+      label: "App Types",
+      scope: "global",
+      types: [CHAT_MESSAGE_CUSTOM_TYPE],
+    },
+  };
+  store.addNode(newTypesNode);
+  return { typesNodeId: newTypesNodeId, typeItem: CHAT_MESSAGE_CUSTOM_TYPE };
+}
+

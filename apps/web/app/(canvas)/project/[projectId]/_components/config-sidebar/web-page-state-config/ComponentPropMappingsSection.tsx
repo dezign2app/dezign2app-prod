@@ -76,6 +76,7 @@ export interface ComponentPropMappingsSectionProps {
   onOpenEventConfig?: (actionId: string) => void;
   onCreateAction?: (name?: string, eventType?: string) => void;
   onCreateNavStateVariable?: (preferredStoreId?: string) => void;
+  onCreateChatMessageStateVariable?: (preferredStoreId?: string) => void;
 }
 
 interface SidebarStaticItemRowProps {
@@ -807,6 +808,7 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
   onOpenEventConfig,
   onCreateAction,
   onCreateNavStateVariable,
+  onCreateChatMessageStateVariable,
 }) => {
   // Local optimistic state for prop mappings so all switches, selectors and inputs react instantaneously with 0ms lag
   const [optimisticProps, setOptimisticProps] = React.useState<ComponentPropMappings>(rawPropMappings);
@@ -2447,6 +2449,79 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
               AI Elements Chat
             </Badge>
           </div>
+
+          {/* 1-Click State Store Shortcut Banner for Chat Messages & Input */}
+          <div className="flex items-center justify-between p-3 rounded-xl bg-cyan-500/[0.08] border border-cyan-500/25">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 shrink-0">
+                <Zap size={14} />
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-foreground">
+                  ⚡ Quick-Create Chat State Store Variables
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  Auto-provisions ChatMessage[] messages history &amp; chatInput in your State Store &amp; TypesNode
+                </div>
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => onCreateChatMessageStateVariable?.(effectiveStoreId)}
+              className="h-7 text-xs font-medium bg-cyan-600 hover:bg-cyan-500 text-white cursor-pointer shrink-0 ml-2 shadow-xs"
+            >
+              <Zap size={11} className="mr-1" />
+              Create &amp; Bind
+            </Button>
+          </div>
+
+          {/* State Store Variable Picker for Chat Messages History */}
+          <StateStoreVariablePicker
+            label="Chat Messages State Variable"
+            propName="messages"
+            valueBinding={propMappings.chatMessagesBinding || propMappings.valueBinding || "messages"}
+            storeName={propMappings.chatMessagesStoreName || propMappings.valueStoreName || effectiveStoreName}
+            storeId={propMappings.chatMessagesStoreId || propMappings.valueStoreId || effectiveStoreId}
+            mode={propMappings.valueMode || "store_var"}
+            stateStores={stateStores}
+            expectedType="any"
+            placeholder="messages"
+            description="StateStore variable containing conversation history (ChatMessage[])."
+            onChange={(res) => {
+              onUpdatePropMapping({
+                chatMessagesBinding: res.valueBinding,
+                chatMessagesStoreName: res.storeName,
+                chatMessagesStoreId: res.storeId,
+                valueBinding: res.valueBinding,
+                valueStoreName: res.storeName,
+                valueStoreId: res.storeId,
+                valueMode: res.mode,
+              });
+            }}
+          />
+
+          {/* State Store Variable Picker for User Prompt Draft Input */}
+          <StateStoreVariablePicker
+            label="Draft Input State Variable (Optional)"
+            propName="chatInput"
+            valueBinding={propMappings.chatInputBinding || "chatInput"}
+            storeName={propMappings.chatInputStoreName || effectiveStoreName}
+            storeId={propMappings.chatInputStoreId || effectiveStoreId}
+            mode={propMappings.valueMode || "store_var"}
+            stateStores={stateStores}
+            expectedType="string"
+            placeholder="chatInput"
+            description="Optional StateStore variable holding current user-typed prompt draft."
+            onChange={(res) => {
+              onUpdatePropMapping({
+                chatInputBinding: res.valueBinding,
+                chatInputStoreName: res.storeName,
+                chatInputStoreId: res.storeId,
+              });
+            }}
+          />
+
 
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Chat Header Title</Label>

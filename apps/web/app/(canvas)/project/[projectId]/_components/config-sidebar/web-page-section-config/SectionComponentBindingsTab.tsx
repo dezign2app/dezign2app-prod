@@ -25,7 +25,6 @@ import {
   PanelLeft,
   PanelTop,
   MessageSquare,
-  Bot,
 } from "lucide-react";
 import {
   PageSection,
@@ -128,52 +127,6 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
     });
   }, [componentBindings, searchQuery, typeFilter]);
 
-  // When adding a new component, activate the name input field immediately
-  const handleAddChatComponent = () => {
-    if (!section || !onUpdateSection) return;
-    const newId = `comp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-
-    const realActions = (section.actions || []).filter(
-      (a) => a.name !== "pageLoad" && a.name !== "init",
-    );
-    const chosenAction = realActions[0];
-
-    const firstStateObj = section.stateObjects?.[0];
-    const firstVar = section.states?.[0];
-    const defaultStateName = firstStateObj?.name || firstVar?.name;
-    const defaultStoreName = firstStateObj?.storeName;
-    const isStore = typeof defaultStoreName === "string" && defaultStoreName.length > 0;
-
-    const newBinding: SectionComponentBinding = {
-      id: newId,
-      name: "AIChat",
-      componentType: "chat",
-      label: "AIChat",
-      variant: "default",
-      actionId: chosenAction?.id,
-      actionName: chosenAction?.name,
-      triggerEvent: "submit",
-      valueStateName: defaultStateName,
-      valueSourceType: isStore ? "store" : "local",
-      valueStoreName: defaultStoreName,
-      propMappings: {
-        chatTitle: "AI Assistant",
-        chatPlaceholder: "Type a prompt or message...",
-        chatAutoScroll: true,
-        chatShowScrollButton: true,
-        chatEmptyTitle: "No messages yet",
-        chatEmptyDescription: "Ask a question or enter a prompt to begin chatting.",
-        chatShowAvatars: true,
-      },
-    };
-
-    onUpdateSection({
-      componentBindings: [...componentBindings, newBinding],
-    });
-
-    setEditingCompId(newId);
-    setEditingText("AIChat");
-  };
 
   const handleAddComponent = () => {
     if (!section || !onUpdateSection) return;
@@ -356,17 +309,6 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
           <Button
             type="button"
             size="sm"
-            variant="outline"
-            onClick={handleAddChatComponent}
-            className="h-8 gap-1.5 border-cyan-500/30 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/10 font-medium cursor-pointer"
-            title="Add shadcn AI Elements Chat component"
-          >
-            <Bot size={12} />
-            <span>+ Chat</span>
-          </Button>
-          <Button
-            type="button"
-            size="sm"
             onClick={handleAddComponent}
             className="h-8 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white font-medium cursor-pointer shadow-xs"
           >
@@ -455,15 +397,6 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
             >
               <Sparkles size={12} />
               <span>Auto-Generate from Endpoint</span>
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleAddChatComponent}
-              className="h-8 gap-1.5 border-cyan-500/30 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/10 cursor-pointer font-medium"
-            >
-              <Bot size={12} />
-              <span>+ Chat Component</span>
             </Button>
             <Button
               size="sm"
