@@ -196,6 +196,92 @@ export const WebPageNode = ({
     });
   }, [data?.sections, id, nodes, edges, addEdge]);
 
+  // Auto-sync Chat component state variables ("messages") into section.stateObjects (Rendered Store State)
+  React.useEffect(() => {
+    if (!data?.sections || data.sections.length === 0) return;
+
+    let hasChanges = false;
+    const nextSections = data.sections.map((sec) => {
+      const chatBindings = (sec.componentBindings || []).filter(
+        (cb) =>
+          cb.componentType === "chat" ||
+          (cb.elements || []).some((el) => el.elementType === "chat") ||
+          cb.propMappings?.chatMessagesBinding ||
+          cb.valueStateName === "messages",
+      );
+
+      if (chatBindings.length === 0) return sec;
+
+      let currentStates = [...(sec.stateObjects || [])];
+      let secChanged = false;
+
+      chatBindings.forEach((cb) => {
+        const messagesVarName =
+          cb.propMappings?.chatMessagesBinding ||
+          cb.valueStateName ||
+          "messages";
+
+        const alreadyExists = currentStates.some((s) => s.name === messagesVarName);
+        if (alreadyExists) return;
+
+        const storeId = cb.propMappings?.chatMessagesStoreId || cb.propMappings?.valueStoreId;
+        const storeName = cb.propMappings?.chatMessagesStoreName || cb.propMappings?.valueStoreName || cb.valueStoreName;
+
+        let storeNode = nodes.find(
+          (n) =>
+            n.type === "state_store" &&
+            ((storeId && n.id === storeId) ||
+              (storeName && (n.data?.storeName === storeName || n.data?.label === storeName))),
+        );
+
+        if (!storeNode) {
+          storeNode = nodes.find((n) => {
+            if (n.type !== "state_store") return false;
+            return (n.data?.fields || []).some((f: any) => f.name === messagesVarName);
+          });
+        }
+
+        if (storeNode) {
+          const storeFields = storeNode.data?.fields || [];
+          const field = storeFields.find((f: any) => f.name === messagesVarName);
+          const fieldId = field?.id || `f-msg-${Date.now()}`;
+          const storeActualName = storeNode.data?.storeName || storeNode.data?.label || storeName || "ChatStore";
+
+          const newChatStateObj: PageStateObject = {
+            id: `state-${Date.now()}-${Math.random().toString(36).substring(2, 6)}-${fieldId}`,
+            name: messagesVarName,
+            type: field?.type || "ChatMessage[]",
+            defaultValue: field?.defaultValue || [
+              { id: "msg-1", role: "assistant", content: "Hello! How can I assist you today?" },
+            ],
+            storeId: storeNode.id,
+            storeName: storeActualName,
+            fieldId,
+            renderConfig: {
+              enabled: true,
+              component: "chat",
+            },
+          };
+
+          currentStates.push(newChatStateObj);
+          secChanged = true;
+          hasChanges = true;
+        }
+      });
+
+      return secChanged ? { ...sec, stateObjects: currentStates } : sec;
+    });
+
+    if (hasChanges) {
+      updateNode(id, {
+        data: {
+          ...data,
+          sections: nextSections,
+        },
+      });
+    }
+  }, [data?.sections, id, nodes, updateNode]);
+
   const {
     cardIndex,
     totalCards,
