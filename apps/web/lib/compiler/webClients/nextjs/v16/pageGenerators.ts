@@ -47,7 +47,7 @@ export function generatePageCode(
 
   const allActions = sectionsMeta.flatMap((s) => s.actions || []);
   const hasApiActions = allActions.some(
-    (a) => a.eventType !== "navigateToPage" && ((a.url && a.url !== "#") || a.name),
+    (a) => a.eventType !== "navigateToPage" && ((a.url && a.url !== "#") || Boolean(a.eventName)),
   );
 
   const sectionsJsx = sectionsMeta
