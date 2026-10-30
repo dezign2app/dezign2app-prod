@@ -327,7 +327,6 @@ export const SectionComponentBindingsList: React.FC<SectionComponentBindingsList
             title="Auto-generate form & state store from endpoint contract"
           >
             <Sparkles size={9} />
-            <span>From Endpoint</span>
           </button>
 
           <button
@@ -337,7 +336,6 @@ export const SectionComponentBindingsList: React.FC<SectionComponentBindingsList
             title="Add a UI component"
           >
             <Plus size={9} />
-            <span>Add Component</span>
           </button>
         </div>
       </div>

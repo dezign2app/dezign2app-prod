@@ -15,6 +15,7 @@ import {
   StateRenderComponent,
   StateRenderConfig,
   ComponentPropMappings,
+  PageStateObject,
 } from "@workspace/canvas";
 import {
   StateComponentPreview,
@@ -491,11 +492,28 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
   const handleChangeElementType = useCallback(
     (elId: string, type: StateRenderComponent) => {
       const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
-      handleUpdateElement(elId, {
-        elementType: type,
-        variant: type === "button" ? "default" : type === "badge" ? "secondary" : undefined,
-        triggerEvent: type === "button" ? "click" : "change",
-      });
+      if (type === "chat") {
+        handleUpdateElement(elId, {
+          elementType: "chat",
+          variant: "default",
+          triggerEvent: "submit",
+          valueStateName: "messages",
+          propMappings: {
+            chatTitle: "AI Assistant",
+            chatPlaceholder: "Type a message...",
+            chatMessagesBinding: "messages",
+            chatInputBinding: "chatInput",
+            chatAutoScroll: true,
+            chatShowAvatars: true,
+          },
+        });
+      } else {
+        handleUpdateElement(elId, {
+          elementType: type,
+          variant: type === "button" ? "default" : type === "badge" ? "secondary" : undefined,
+          triggerEvent: type === "button" ? "click" : "change",
+        });
+      }
       toast.success(`Changed to ${typeLabel}`);
     },
     [handleUpdateElement],
@@ -859,6 +877,60 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         }
       }
 
+      // Auto-add "navItems" StateStore variable to target section's stateObjects (Rendered Store State)
+      if (storeIdToUse && parentNode?.id && navFieldId) {
+        const freshParent = useBackendCanvasStore
+          .getState()
+          .nodes.find((n) => n.id === parentNode.id);
+
+        if (freshParent) {
+          const currentSections: PageSection[] = freshParent.data?.sections || [];
+          const currentSec =
+            currentSections.find((s) => s.id === targetSection?.id) ||
+            currentSections.find((s) => (s.componentBindings || []).some((c) => c.id === id)) ||
+            currentSections[0];
+
+          if (currentSec) {
+            const currentStates = currentSec.stateObjects || [];
+            const exists = currentStates.some(
+              (s) => s.name === "navItems" || (s.storeId === storeIdToUse && s.fieldId === navFieldId),
+            );
+
+            if (!exists) {
+              const navStateObj: PageStateObject = {
+                id: `state-${Date.now()}-${Math.random().toString(36).substring(2, 6)}-${navFieldId}`,
+                name: "navItems",
+                type: "NavItem[]",
+                defaultValue: defaultItems,
+                storeId: storeIdToUse,
+                storeName: storeNameToUse,
+                fieldId: navFieldId,
+                renderConfig: {
+                  enabled: true,
+                  component: "sidebar",
+                },
+              };
+
+              const updatedSections = currentSections.map((sec) =>
+                sec.id === currentSec.id
+                  ? {
+                      ...sec,
+                      stateObjects: [...currentStates, navStateObj],
+                    }
+                  : sec,
+              );
+
+              updateNode(parentNode.id, {
+                data: {
+                  ...freshParent.data,
+                  sections: updatedSections,
+                },
+              });
+            }
+          }
+        }
+      }
+
       handleUpdateActivePropMapping({
         sidebarNavMode: "dynamic",
         sidebarNavBinding: "navItems",
@@ -1047,6 +1119,60 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
             target: parentNode.id,
             type: "connection",
           });
+        }
+      }
+
+      // Auto-add "messages" StateStore variable to target section's stateObjects (Rendered Store State)
+      if (storeIdToUse && parentNode?.id) {
+        const freshParent = useBackendCanvasStore
+          .getState()
+          .nodes.find((n) => n.id === parentNode.id);
+
+        if (freshParent) {
+          const currentSections: PageSection[] = freshParent.data?.sections || [];
+          const currentSec =
+            currentSections.find((s) => s.id === targetSection?.id) ||
+            currentSections.find((s) => (s.componentBindings || []).some((c) => c.id === id)) ||
+            currentSections[0];
+
+          if (currentSec) {
+            const currentStates = currentSec.stateObjects || [];
+            const exists = currentStates.some(
+              (s) => s.name === "messages" || (s.storeId === storeIdToUse && s.fieldId === msgFieldId),
+            );
+
+            if (!exists) {
+              const chatStateObj: PageStateObject = {
+                id: `state-${Date.now()}-${Math.random().toString(36).substring(2, 6)}-${msgFieldId}`,
+                name: "messages",
+                type: "ChatMessage[]",
+                defaultValue: defaultMessages,
+                storeId: storeIdToUse,
+                storeName: storeNameToUse,
+                fieldId: msgFieldId,
+                renderConfig: {
+                  enabled: true,
+                  component: "chat",
+                },
+              };
+
+              const updatedSections = currentSections.map((sec) =>
+                sec.id === currentSec.id
+                  ? {
+                      ...sec,
+                      stateObjects: [...currentStates, chatStateObj],
+                    }
+                  : sec,
+              );
+
+              updateNode(parentNode.id, {
+                data: {
+                  ...freshParent.data,
+                  sections: updatedSections,
+                },
+              });
+            }
+          }
         }
       }
 
