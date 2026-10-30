@@ -458,10 +458,10 @@ export const CHAT_MESSAGE_CUSTOM_TYPE: CustomTypeItem = {
       id: "f-chat-role",
       name: "role",
       type: "enum",
-      enumValues: ["user", "assistant"],
+      enumValues: ["user", "assistant", "system"],
       required: true,
       isArray: false,
-      description: "Role: 'user' | 'assistant'",
+      description: "Role: 'user' | 'assistant' | 'system'",
     },
     { id: "f-chat-content", name: "content", type: "string", required: true, isArray: false, description: "Message textual or markdown content" },
     { id: "f-chat-created-at", name: "createdAt", type: "string", required: false, isArray: false, description: "Timestamp when message was created" },
@@ -651,15 +651,27 @@ export function ensureChatMessageTypeOnCanvas(
     const existingChatMessage = currentTypes.find((t) => t.name === "ChatMessage");
     if (existingChatMessage) {
       const roleField = existingChatMessage.fields?.find((f) => f.name === "role");
-      if (roleField && (roleField.type !== "enum" || !roleField.enumValues || roleField.enumValues.length === 0)) {
-        roleField.type = "enum";
-        roleField.enumValues = ["user", "assistant"];
-        store.updateNode(existingGeneralTypesNode.id, {
-          data: {
-            ...existingGeneralTypesNode.data,
-            types: [...currentTypes],
-          },
-        });
+      if (roleField) {
+        let changed = false;
+        if (roleField.type !== "enum") {
+          roleField.type = "enum";
+          changed = true;
+        }
+        if (!roleField.enumValues || roleField.enumValues.length === 0) {
+          roleField.enumValues = ["user", "assistant", "system"];
+          changed = true;
+        } else if (!roleField.enumValues.includes("system")) {
+          roleField.enumValues = [...roleField.enumValues, "system"];
+          changed = true;
+        }
+        if (changed) {
+          store.updateNode(existingGeneralTypesNode.id, {
+            data: {
+              ...existingGeneralTypesNode.data,
+              types: [...currentTypes],
+            },
+          });
+        }
       }
       return { typesNodeId: existingGeneralTypesNode.id, typeItem: existingChatMessage };
     }
