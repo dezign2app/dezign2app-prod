@@ -202,7 +202,7 @@ export function getNodeDimensions(node: LayoutNodeLike): {
       const actions = Array.isArray(data?.actions) ? data.actions.length : 0;
       const manipulatorsCount = 2 + fields.length + arrayFieldsCount * 2 + actions;
       const estHeight = Math.max(160, 75 + 24 + fields.length * 28 + 24 + manipulatorsCount * 24);
-      return { width: 260, height: estHeight };
+      return { width: 390, height: estHeight };
     }
     case "end":
     case "END":
@@ -293,7 +293,7 @@ export function getNodeDimensions(node: LayoutNodeLike): {
       const data = getLayoutNodeData(node);
       const zones = data?.zones || [];
       const estHeight = Math.max(240, 180 + zones.length * 70);
-      return { width: 330, height: estHeight };
+      return { width: 390, height: estHeight };
     }
     case "webPage": {
       const data = getLayoutNodeData(node);
