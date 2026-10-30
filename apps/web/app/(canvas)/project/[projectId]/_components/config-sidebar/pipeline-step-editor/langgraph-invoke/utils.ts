@@ -1,4 +1,5 @@
-import { AvailableSource, StepSource } from "../types";
+import { BackendNode, BackendEdge, Endpoint, Parameter } from "@workspace/canvas/types";
+import { AvailableSource, StepSource, StepBinding, PipelineStepDraft } from "../types";
 
 export function stepSourceToAccessor(
   source: StepSource,
@@ -128,4 +129,303 @@ export function isDedicatedChannel(
 
   if (hasDedicatedMessages && lower === "messages") return true;
   return false;
+}
+
+/**
+ * Determines whether an agent node has memory / checkpointer persistence configured.
+ */
+export function getAgentHasMemory(agentNode?: BackendNode): boolean {
+  if (!agentNode?.data) return false;
+  const rawMemoryConfig = agentNode.data.memoryConfig;
+  const memoryConfig = rawMemoryConfig ?? {
+    checkpointer: "memory",
+    enabled: true,
+  };
+  if (rawMemoryConfig && rawMemoryConfig.enabled === false) return false;
+  return Boolean(memoryConfig.checkpointer);
+}
+
+/**
+ * Resolves a StepBinding for a specific argument key, falling back to an accessor string if unmapped.
+ */
+export function getArgBinding(
+  step: PipelineStepDraft,
+  availableSources: AvailableSource[] | undefined,
+  argName: string,
+  fieldValue: string | undefined,
+  fallbackAccessor: string,
+): StepBinding {
+  if (argName !== "thread_id" && argName !== "threadId") {
+    const existing = (step.inputBindings || []).find((b) => b.argName === argName);
+    if (existing) return existing;
+  }
+  if (fieldValue !== undefined && fieldValue !== "") {
+    return {
+      argName,
+      source: accessorToStepSource(fieldValue, availableSources),
+    };
+  }
+  return {
+    argName,
+    source: accessorToStepSource(fallbackAccessor, availableSources),
+  };
+}
+
+/**
+ * Checks whether an endpoint contract already provides or maps a thread_id field.
+ */
+export function checkEndpointHasThreadId(
+  endpoint?: Endpoint,
+  threadIdSource?: string,
+  availableSources?: AvailableSource[],
+): boolean {
+  if (!endpoint) return true;
+
+  if (threadIdSource) {
+    const src = accessorToStepSource(threadIdSource, availableSources);
+    if (src.kind === "req_params" && src.field) {
+      const exists = (endpoint.pathParams || []).some((p: Parameter) => p.name === src.field);
+      if (exists) return true;
+    }
+    if (src.kind === "req_body" && src.field) {
+      const exists = (endpoint.requestBody?.fields || []).some(
+        (f: Parameter) => f.name === src.field,
+      );
+      if (exists) return true;
+    }
+    if (src.kind === "req_query" && src.field) {
+      const exists = (endpoint.queryParams || []).some(
+        (q: Parameter) => q.name === src.field,
+      );
+      if (exists) return true;
+    }
+    if (src.kind === "req_headers" && src.field) {
+      const exists = (endpoint.headers || []).some(
+        (h: Parameter) => h.name === src.field,
+      );
+      if (exists) return true;
+    }
+  }
+
+  // Fallback: check for canonical thread_id field names across all contract sections
+  const bodyFields = endpoint.requestBody?.fields || [];
+  const hasInBody = bodyFields.some(
+    (f: Parameter) =>
+      f.name?.toLowerCase() === "thread_id" ||
+      f.name?.toLowerCase() === "threadid" ||
+      f.name?.toLowerCase() === "sessionid" ||
+      f.name?.toLowerCase() === "session_id",
+  );
+  if (hasInBody) return true;
+
+  const headers = endpoint.headers || [];
+  const hasInHeaders = headers.some(
+    (h: Parameter) =>
+      h.name?.toLowerCase() === "x-thread-id" ||
+      h.name?.toLowerCase() === "thread_id",
+  );
+  if (hasInHeaders) return true;
+
+  const queryParams = endpoint.queryParams || [];
+  const hasInQuery = queryParams.some(
+    (q: Parameter) =>
+      q.name?.toLowerCase() === "thread_id" ||
+      q.name?.toLowerCase() === "threadid",
+  );
+  if (hasInQuery) return true;
+
+  const pathParams = endpoint.pathParams || [];
+  const hasInPath = pathParams.some(
+    (p: Parameter) =>
+      p.name?.toLowerCase() === "thread_id" ||
+      p.name?.toLowerCase() === "threadid",
+  );
+  return hasInPath;
+}
+
+/**
+ * Detects which WebPage node invokes/connects to a given endpoint/service.
+ */
+export function resolveInvokingPage(
+  allNodes: BackendNode[],
+  allEdges: BackendEdge[],
+  serviceNodeId?: string,
+  endpoint?: Endpoint,
+): BackendNode | undefined {
+  if (!serviceNodeId) return undefined;
+  const epId = endpoint?.id;
+
+  // 1. Direct edge from a webPage to this service/endpoint
+  for (const edge of allEdges) {
+    const isSrcPage = allNodes.some((n) => n.id === edge.source && n.type === "webPage");
+    const isTgtPage = allNodes.some((n) => n.id === edge.target && n.type === "webPage");
+    if (!isSrcPage && !isTgtPage) continue;
+
+    const pageId = isSrcPage ? edge.source : edge.target;
+    const otherId = isSrcPage ? edge.target : edge.source;
+    const otherHandle = isSrcPage ? (edge.targetHandle || "") : (edge.sourceHandle || "");
+
+    if (otherId === serviceNodeId) {
+      if (
+        epId &&
+        (otherHandle.includes(epId) ||
+          otherHandle === `endpoint-in-${epId}` ||
+          otherHandle === `endpoint-out-${epId}` ||
+          otherHandle === `endpoints-in-${epId}` ||
+          otherHandle === `routeEndpoints-in-${epId}`)
+      ) {
+        return allNodes.find((n) => n.id === pageId && n.type === "webPage");
+      }
+    }
+  }
+
+  // 2. Section actionSteps inside webPages targeting this endpoint
+  for (const node of allNodes) {
+    if (node.type !== "webPage") continue;
+    const sections = node.data?.sections || [];
+    for (const sec of sections) {
+      const actions = sec.actions || [];
+      for (const act of actions) {
+        const steps = act.actionSteps || [];
+        for (const s of steps) {
+          if (
+            (epId && s.endpointId === epId) ||
+            (s.serviceNodeId === serviceNodeId && (!s.endpointId || s.endpointId === epId))
+          ) {
+            return node;
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Fallback: Any direct edge between webPage and serviceNodeId
+  for (const edge of allEdges) {
+    if (edge.source === serviceNodeId) {
+      const p = allNodes.find((n) => n.id === edge.target && n.type === "webPage");
+      if (p) return p;
+    } else if (edge.target === serviceNodeId) {
+      const p = allNodes.find((n) => n.id === edge.source && n.type === "webPage");
+      if (p) return p;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Identifies connected push to client (page_ref) node on the canvas.
+ */
+export function resolveConnectedPageRefNode(
+  allNodes: BackendNode[],
+  allEdges: BackendEdge[],
+  serviceNodeId?: string,
+  endpoint?: Endpoint,
+  clientDeliveryPageRefNodeId?: string,
+): BackendNode | undefined {
+  if (!serviceNodeId) return undefined;
+  const epId = endpoint?.id;
+  for (const edge of allEdges) {
+    const isSrc = edge.source === serviceNodeId;
+    const isTgt = edge.target === serviceNodeId;
+    if (!isSrc && !isTgt) continue;
+
+    const otherId = isSrc ? edge.target : edge.source;
+    const handle = isSrc ? (edge.sourceHandle || "") : (edge.targetHandle || "");
+
+    const matchesHandle = epId ? (!handle || handle.includes(epId)) : true;
+    if (matchesHandle) {
+      const candidate = allNodes.find((n) => n.id === otherId && n.type === "page_ref");
+      if (candidate) return candidate;
+    }
+  }
+  if (clientDeliveryPageRefNodeId) {
+    const byId = allNodes.find(
+      (n) => n.id === clientDeliveryPageRefNodeId && n.type === "page_ref",
+    );
+    if (byId) return byId;
+  }
+  return undefined;
+}
+
+/**
+ * Searches availableSources for the closest match for a channel key.
+ */
+export function findMatchingSourceForChannel(
+  channelKey: string,
+  availableSources: AvailableSource[] = [],
+): StepSource {
+  const keyLower = channelKey.toLowerCase();
+  for (const src of availableSources) {
+    if (src.kind === "inline") continue;
+    const foundPath = src.paths.find((p) => {
+      const pLower = p.path.toLowerCase();
+      if (pLower === keyLower) return true;
+      if (
+        keyLower === "messages" &&
+        (pLower === "messages" || pLower === "message" || pLower === "prompt" || pLower === "query")
+      ) {
+        return true;
+      }
+      return false;
+    });
+    if (foundPath) {
+      if (src.kind === "step_output" && src.stepId) {
+        return { kind: "step_output", stepId: src.stepId, field: foundPath.path };
+      } else if (
+        src.kind === "req_body" ||
+        src.kind === "req_params" ||
+        src.kind === "req_query" ||
+        src.kind === "req_headers" ||
+        src.kind === "auth" ||
+        src.kind === "env"
+      ) {
+        return { kind: src.kind, field: foundPath.path };
+      }
+    }
+  }
+  return {
+    kind: "req_body",
+    field: channelKey === "messages" ? "message" : channelKey,
+  };
+}
+
+/**
+ * Searches availableSources for a candidate thread_id / session_id field.
+ */
+export function findMatchingSourceForThreadId(
+  availableSources: AvailableSource[] = [],
+): StepSource | null {
+  for (const src of availableSources) {
+    if (src.kind === "inline") continue;
+    const found = src.paths.find((p) => {
+      const l = p.path.toLowerCase();
+      return (
+        l === "thread_id" ||
+        l === "threadid" ||
+        l === "x-thread-id" ||
+        l === "conversation_id" ||
+        l === "session_id"
+      );
+    });
+    if (found) {
+      if (src.kind === "step_output" && src.stepId) {
+        return {
+          kind: "step_output",
+          stepId: src.stepId,
+          field: found.path,
+        };
+      } else if (
+        src.kind === "req_body" ||
+        src.kind === "req_params" ||
+        src.kind === "req_query" ||
+        src.kind === "req_headers" ||
+        src.kind === "auth" ||
+        src.kind === "env"
+      ) {
+        return { kind: src.kind, field: found.path };
+      }
+    }
+  }
+  return null;
 }
