@@ -491,6 +491,56 @@ export const ExternalEnvVarsDrawer: React.FC<ExternalEnvVarsDrawerProps> = ({
                   onSaveSecretValue={(val) => {
                     if (node && node.data) {
                       const clean = cleanEnvVarName(v.name);
+                      if (clean === "GROQ_API_KEY") {
+                        try {
+                          localStorage.setItem("dezign2app_lg_key_groq", val);
+                        } catch {}
+                      } else if (clean === "OPENAI_API_KEY") {
+                        try {
+                          localStorage.setItem("dezign2app_lg_key_openai", val);
+                        } catch {}
+                      } else if (clean === "ANTHROPIC_API_KEY") {
+                        try {
+                          localStorage.setItem("dezign2app_lg_key_anthropic", val);
+                        } catch {}
+                      } else if (clean === "GEMINI_API_KEY") {
+                        try {
+                          localStorage.setItem("dezign2app_lg_key_google", val);
+                        } catch {}
+                      }
+
+                      // Propagate to connected service or langgraph nodes
+                      const allCanvasNodes = useBackendCanvasStore.getState().nodes;
+                      const allEdges = useBackendCanvasStore.getState().edges;
+                      const isLg = node.type === "langgraph";
+                      const isSrv = node.type === "service";
+                      if (isLg || isSrv) {
+                        const targetType = isLg ? "service" : "langgraph";
+                        const connectedEdges = allEdges.filter(
+                          (e) =>
+                            (e.source === nodeId && allCanvasNodes.find((n) => n.id === e.target)?.type === targetType) ||
+                            (e.target === nodeId && allCanvasNodes.find((n) => n.id === e.source)?.type === targetType),
+                        );
+                        for (const edge of connectedEdges) {
+                          const partnerId = edge.source === nodeId ? edge.target : edge.source;
+                          const partnerNode = allCanvasNodes.find((n) => n.id === partnerId);
+                          if (partnerNode) {
+                            const partnerVars = partnerNode.data?.envVars || [];
+                            if (!partnerVars.some((pv: any) => pv.name === clean)) {
+                              updateNode(partnerNode.id, {
+                                data: {
+                                  ...partnerNode.data,
+                                  envVars: [
+                                    ...partnerVars,
+                                    { id: `env-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, name: clean },
+                                  ],
+                                },
+                              });
+                            }
+                          }
+                        }
+                      }
+
                       if (node.type === "database") {
                         const directKey = cleanEnvVarName(node.data.connectionStringEnv || "DATABASE_URL");
                         const pooledKey = cleanEnvVarName(node.data.connectionStringPooledEnv || "DATABASE_URL_POOLED");

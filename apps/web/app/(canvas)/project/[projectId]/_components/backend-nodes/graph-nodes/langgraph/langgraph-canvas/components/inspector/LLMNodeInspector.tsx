@@ -12,6 +12,13 @@ import {
 import type { LangGraphLLMNodeData } from "@workspace/canvas";
 import { LocalInput, LocalTextarea } from "../../../../common";
 import { LLM_PROVIDER_PRESETS } from "./constants";
+import {
+  saveLocalEnvVariable,
+  getLocalEnvVariable,
+  fetchLocalEnvVariable,
+} from "@/lib/utils/localEnvSync";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { toast } from "sonner";
 
 interface LLMNodeInspectorProps {
   selectedLLMData: LangGraphLLMNodeData;
@@ -28,6 +35,91 @@ export function LLMNodeInspector({
   const activePreset =
     LLM_PROVIDER_PRESETS[activeProviderKey] || LLM_PROVIDER_PRESETS.custom;
   const currentModels = activePreset?.models || [];
+
+  const handleApiKeyChange = (val: string) => {
+    onUpdateLLM?.({ apiKeyHeader: val });
+
+    const cleanVal = val.replace(/^Bearer\s+/i, "").trim();
+    if (!cleanVal) return;
+
+    const provider = (selectedLLMData.provider || "openai").toLowerCase();
+    const envVarName =
+      LLM_PROVIDER_PRESETS[provider]?.defaultApiKeyEnv ||
+      (provider === "groq" ? "GROQ_API_KEY" : `${provider.toUpperCase()}_API_KEY`);
+
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(`dezign2app_lg_key_${provider}`, cleanVal);
+        localStorage.setItem(`dezign2app_env_${envVarName}`, cleanVal);
+      } catch {}
+    }
+
+    saveLocalEnvVariable(envVarName, cleanVal)
+      .then((res) => {
+        if (res.success) {
+          toast.success(`Saved ${envVarName} to local .env`);
+        }
+      })
+      .catch(() => {});
+
+    const store = useBackendCanvasStore.getState();
+    const allCanvasNodes = store.nodes;
+    const parentLangGraphNode =
+      allCanvasNodes.find(
+        (n) =>
+          n.type === "langgraph" &&
+          (n.data?.customLlmNodes || []).some(
+            (llm: any) => llm.id === (selectedLLMData as any).id,
+          ),
+      ) || allCanvasNodes.find((n) => n.type === "langgraph");
+
+    if (parentLangGraphNode) {
+      const existingVars = parentLangGraphNode.data?.envVars || [];
+      if (!existingVars.some((v: any) => v.name === envVarName)) {
+        store.updateNode(parentLangGraphNode.id, {
+          data: {
+            ...parentLangGraphNode.data,
+            envVars: [
+              ...existingVars,
+              { id: `env-${Date.now()}`, name: envVarName },
+            ],
+          },
+        });
+      }
+
+      const allEdges = store.edges;
+      const connectedEdges = allEdges.filter(
+        (e) =>
+          (e.source === parentLangGraphNode.id &&
+            allCanvasNodes.find((n) => n.id === e.target)?.type === "service") ||
+          (e.target === parentLangGraphNode.id &&
+            allCanvasNodes.find((n) => n.id === e.source)?.type === "service"),
+      );
+
+      for (const edge of connectedEdges) {
+        const serviceNodeId =
+          edge.source === parentLangGraphNode.id ? edge.target : edge.source;
+        const serviceNode = allCanvasNodes.find((n) => n.id === serviceNodeId);
+        if (serviceNode && serviceNode.type === "service") {
+          const srvVars = serviceNode.data?.envVars || [];
+          if (!srvVars.some((v: any) => v.name === envVarName)) {
+            store.updateNode(serviceNode.id, {
+              data: {
+                ...serviceNode.data,
+                envVars: [
+                  ...srvVars,
+                  {
+                    id: `env-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                    name: envVarName,
+                  },
+                ],
+              },
+            });
+          }
+        }
+      }
+    }
+  };
 
   const defaultBody = JSON.stringify(
     {
@@ -206,7 +298,7 @@ export function LLMNodeInspector({
           className="h-8 text-xs bg-background/50 font-mono"
           placeholder="Bearer sk-... or secret token"
           value={selectedLLMData.apiKeyHeader || ""}
-          onChange={(e) => onUpdateLLM?.({ apiKeyHeader: e.target.value })}
+          onChange={(e) => handleApiKeyChange(e.target.value)}
         />
       </div>
 

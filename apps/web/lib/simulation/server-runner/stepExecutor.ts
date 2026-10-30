@@ -604,7 +604,15 @@ export async function executeStepNode(
         modelName ||
         (effectiveProvider === "groq" ? "openai/gpt-oss-120b" : "gpt-4o-mini");
 
-      const effectiveApiKey =
+      const rawStepApiKey =
+        stepData.modelConfig?.apiKeyHeader || llmData?.apiKeyHeader
+          ? String(
+              stepData.modelConfig?.apiKeyHeader || llmData?.apiKeyHeader,
+            )
+              .replace(/^Bearer\s+/i, "")
+              .trim()
+          : "";
+      const effectiveApiKey = rawStepApiKey ||
         apiKey ||
         (effectiveProvider === "groq"
           ? process.env.GROQ_API_KEY

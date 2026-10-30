@@ -404,8 +404,30 @@ export async function executeBrowserLangGraph(
             ? "gpt-4o-mini"
             : "claude-3-5-sonnet-20241022");
 
-        // Prefer passed apiKey, then localStorage, then NEXT_PUBLIC env
-        let effectiveApiKey = apiKey;
+        // Prefer passed apiKey, then LLM node apiKeyHeader, then localStorage, then NEXT_PUBLIC env
+        const rawApiKeyHeader = llmData?.apiKeyHeader
+          ? String(llmData.apiKeyHeader).replace(/^Bearer\s+/i, "").trim()
+          : "";
+        let effectiveApiKey = apiKey || rawApiKeyHeader || undefined;
+        if (!effectiveApiKey && typeof window !== "undefined") {
+          const envKey =
+            effectiveProvider === "groq"
+              ? "GROQ_API_KEY"
+              : effectiveProvider === "openai"
+              ? "OPENAI_API_KEY"
+              : effectiveProvider === "anthropic"
+              ? "ANTHROPIC_API_KEY"
+              : effectiveProvider === "google"
+              ? "GEMINI_API_KEY"
+              : "CUSTOM_API_KEY";
+
+          effectiveApiKey =
+            localStorage.getItem(`dezign2app_lg_key_${effectiveProvider}`) ||
+            localStorage.getItem(`dezign2app_env_${envKey}`) ||
+            undefined;
+        }
+
+
         if (!effectiveApiKey && typeof window !== "undefined") {
           effectiveApiKey =
             localStorage.getItem(`dezign2app_lg_key_${effectiveProvider}`) || undefined;
@@ -890,10 +912,29 @@ export async function executeBrowserLangGraph(
               ? "gpt-4o-mini"
               : "claude-3-5-sonnet-20241022");
 
-          let effectiveApiKey = apiKey;
+  
           if (!effectiveApiKey && typeof window !== "undefined") {
             effectiveApiKey =
-              localStorage.getItem(`dezign2app_lg_key_${effectiveProvider}`) || undefined;
+              (stepData.modelConfig?.apiKeyHeader
+                ? String(stepData.modelConfig.apiKeyHeader)
+                    .replace(/^Bearer\s+/i, "")
+                    .trim()
+                : "") ||
+              localStorage.getItem(`dezign2app_lg_key_${effectiveProvider}`) ||
+              localStorage.getItem(
+                `dezign2app_env_${
+                  effectiveProvider === "groq"
+                    ? "GROQ_API_KEY"
+                    : effectiveProvider === "openai"
+                    ? "OPENAI_API_KEY"
+                    : effectiveProvider === "anthropic"
+                    ? "ANTHROPIC_API_KEY"
+                    : effectiveProvider === "google"
+                    ? "GEMINI_API_KEY"
+                    : "CUSTOM_API_KEY"
+                }`,
+              ) ||
+              undefined;
           }
           if (!effectiveApiKey && effectiveProvider === "groq") {
             effectiveApiKey = process.env.NEXT_PUBLIC_GROQ_API_KEY;
