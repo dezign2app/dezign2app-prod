@@ -880,17 +880,39 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
         })()}
 
         {currentComponent === "topbar" && (() => {
+          const navMode = propMappings.topbarNavMode || "static";
           const title = propMappings.topbarTitle || "Dezign App";
           const isSticky = propMappings.topbarSticky ?? true;
           const showAuth = propMappings.showAuthButtons ?? true;
           const signIn = propMappings.signInText || "Sign In";
           const register = propMappings.registerText || "Register";
-          const items = propMappings.topbarStaticItems || [
+
+          const parseSidebarItem = (val: JSONValue): SidebarPreviewItem | null => {
+            if (typeof val === "object" && val !== null && !Array.isArray(val)) {
+              const id = typeof val.id === "string" ? val.id : undefined;
+              const name = typeof val.name === "string" ? val.name : (typeof val.label === "string" ? val.label : (typeof val.title === "string" ? val.title : undefined));
+              const link = typeof val.link === "string" ? val.link : (typeof val.href === "string" ? val.href : (typeof val.url === "string" ? val.url : undefined));
+              const icon = typeof val.icon === "string" ? val.icon : undefined;
+              const badge = typeof val.badge === "string" ? val.badge : undefined;
+              return { id, name, link, icon, badge };
+            }
+            return null;
+          };
+
+          const dynamicItems: SidebarPreviewItem[] = Array.isArray(sampleValue)
+            ? sampleValue.map(parseSidebarItem).filter((i): i is SidebarPreviewItem => i !== null)
+            : [];
+
+          const staticItems: SidebarPreviewItem[] = propMappings.topbarStaticItems || [
             { id: "nav-1", name: "Home", link: "/" },
             { id: "nav-2", name: "Features", link: "/features" },
             { id: "nav-3", name: "Pricing", link: "/pricing" },
             { id: "nav-4", name: "About", link: "/about" },
           ];
+
+          const items = navMode === "dynamic"
+            ? (dynamicItems.length > 0 ? dynamicItems : staticItems)
+            : staticItems;
 
           return (
             <div className="w-full max-w-sm rounded-xl border border-border/80 bg-card text-card-foreground shadow-sm overflow-hidden flex flex-col text-xs">
@@ -937,8 +959,8 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
 
               <div className="px-3 py-1.5 bg-muted/20 text-[9px] text-muted-foreground flex items-center justify-between font-mono">
                 <span className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                  Top Bar Navigation ({isSticky ? "Sticky" : "Static"})
+                  <span className={`w-1.5 h-1.5 rounded-full ${navMode === "dynamic" ? "bg-sky-500" : "bg-emerald-500"} inline-block`} />
+                  Top Bar Navigation ({isSticky ? "Sticky" : "Static"}) • {navMode === "dynamic" ? "Dynamic Store" : "Static Mode"}
                 </span>
                 <span>{items.length} links</span>
               </div>

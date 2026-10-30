@@ -134,7 +134,7 @@ export const COMPONENT_OPTIONS: ComponentOption[] = [
   {
     id: "topbar",
     label: "Top Bar Navigation",
-    description: "Header navigation bar with brand logo, links, and auth buttons",
+    description: "Header navigation bar with brand logo, static or dynamic links, and auth buttons",
     icon: PanelTop,
     recommendedFor: ["array", "object"],
   },

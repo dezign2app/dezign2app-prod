@@ -2647,9 +2647,19 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
                 <PanelTop size={13} className="text-primary" />
                 <span>Top Bar Navigation Setup</span>
               </div>
-              <Badge variant="outline" className="text-[9px] font-mono px-1.5 py-0 text-emerald-500 border-emerald-500/30">
-                Public Layout ({staticItems.length} links)
-              </Badge>
+              {navMode === "dynamic" && (propMappings.topbarNavStoreName || effectiveStoreName) ? (
+                <Badge variant="secondary" className="text-[9px] font-mono px-1.5 py-0 bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                  Store: {(propMappings.topbarNavStoreName || effectiveStoreName || "").endsWith("Store") ? (propMappings.topbarNavStoreName || effectiveStoreName) : `${propMappings.topbarNavStoreName || effectiveStoreName}Store`}
+                </Badge>
+              ) : navMode === "dynamic" ? (
+                <Badge variant="outline" className="text-[9px] font-mono px-1.5 py-0 text-amber-500 border-amber-500/30">
+                  Store Unbound
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-[9px] font-mono px-1.5 py-0 text-emerald-500 border-emerald-500/30">
+                  Static Mode ({staticItems.length} links)
+                </Badge>
+              )}
             </div>
 
             {/* Topbar Title / Brand */}
@@ -2737,41 +2747,146 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
               )}
             </div>
 
-            {/* Static Navigation Items */}
-            <div className="flex flex-col gap-2.5 pt-1">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-foreground">Navigation Links ({staticItems.length})</span>
-                <Button
+            {/* Navigation Mode Switcher: Dynamic vs Static */}
+            <div className="space-y-2 pt-1 border-t border-border/40">
+              <Label className="text-[11px] font-semibold text-foreground flex items-center justify-between">
+                <span>Navigation Items Source</span>
+                <span className="text-[9px] text-muted-foreground font-mono">
+                  {navMode === "dynamic" ? "Dynamic (Zustand Store)" : "Static (Inline List)"}
+                </span>
+              </Label>
+              <div className="flex items-center gap-1.5 p-1 rounded-lg bg-muted/40 border border-border/50 text-xs">
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddStaticItem}
-                  className="h-6 text-[10px] gap-1 px-2 cursor-pointer"
+                  onClick={() => onUpdatePropMapping({ topbarNavMode: "dynamic" })}
+                  className={`flex-1 py-1 px-2.5 rounded-md text-center text-xs font-medium transition-colors cursor-pointer ${
+                    navMode === "dynamic"
+                      ? "bg-background text-foreground shadow-2xs font-semibold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
                 >
-                  <Plus size={10} />
-                  <span>Add Link</span>
-                </Button>
-              </div>
-
-              <div className="space-y-2">
-                {staticItems.map((item, idx) => (
-                  <SidebarStaticItemRow
-                    key={item.id || idx}
-                    item={item}
-                    idx={idx}
-                    stateStores={stateStores}
-                    onUpdate={(patch) => handleUpdateStaticItem(item.id, patch)}
-                    onDelete={() => handleDeleteStaticItem(item.id)}
-                  />
-                ))}
-
-                {staticItems.length === 0 && (
-                  <div className="p-4 text-center text-xs text-muted-foreground border border-dashed rounded-lg">
-                    No navigation links. Click "+ Add Link" to define your topbar menu.
-                  </div>
-                )}
+                  ⚡ Dynamic (State Store)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onUpdatePropMapping({ topbarNavMode: "static" })}
+                  className={`flex-1 py-1 px-2.5 rounded-md text-center text-xs font-medium transition-colors cursor-pointer ${
+                    navMode === "static"
+                      ? "bg-background text-foreground shadow-2xs font-semibold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Static Navigation
+                </button>
               </div>
             </div>
+
+            {/* Dynamic Navigation Mode */}
+            {navMode === "dynamic" && (
+              <div className="flex flex-col gap-3 pt-1">
+                {/* 1-Click State Store Shortcut Banner */}
+                <div className="flex items-center justify-between p-3 rounded-xl bg-sky-500/[0.08] border border-sky-500/25">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 rounded-lg bg-sky-500/20 text-sky-600 dark:text-sky-400 shrink-0">
+                      <Zap size={14} />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-foreground">
+                        ⚡ Quick-Create "navItems" Variable
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Auto-provisions NavItem[] typed schema with sample routes in your State Store & TypesNode
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => onCreateNavStateVariable?.(propMappings.topbarNavStoreId || effectiveStoreId)}
+                    className="h-7 text-xs font-medium bg-sky-600 hover:bg-sky-500 text-white cursor-pointer shrink-0 ml-2 shadow-xs"
+                  >
+                    <Zap size={11} className="mr-1" />
+                    Create & Bind
+                  </Button>
+                </div>
+
+                {/* State Store Variable Picker */}
+                <StateStoreVariablePicker
+                  label="Navigation Items State Variable"
+                  propName="navItems"
+                  valueBinding={propMappings.topbarNavBinding || propMappings.valueBinding || "navItems"}
+                  storeName={propMappings.topbarNavStoreName || effectiveStoreName}
+                  storeId={propMappings.topbarNavStoreId || effectiveStoreId}
+                  mode={propMappings.valueMode || "store_var"}
+                  stateStores={stateStores}
+                  expectedType="any"
+                  placeholder="navItems"
+                  description="StateStore variable containing navigation items (NavItem[])."
+                  onChange={(res) => {
+                    onUpdatePropMapping({
+                      topbarNavBinding: res.valueBinding,
+                      topbarNavStoreName: res.storeName,
+                      topbarNavStoreId: res.storeId,
+                      valueBinding: res.valueBinding,
+                      valueStoreName: res.storeName,
+                      valueStoreId: res.storeId,
+                      valueMode: res.mode,
+                    });
+                  }}
+                />
+
+                {/* Field contract hint */}
+                <div className="p-2.5 rounded-lg bg-background/80 border border-border/40 text-[11px] space-y-1">
+                  <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    Expected Item Fields
+                  </div>
+                  <div className="font-mono text-[10px] text-muted-foreground space-y-0.5">
+                    <div>• <span className="text-foreground font-semibold">id</span>: string <span className="text-[9px] text-muted-foreground">(unique item key)</span></div>
+                    <div>• <span className="text-foreground font-semibold">name</span>: string <span className="text-[9px] text-muted-foreground">(menu label)</span></div>
+                    <div>• <span className="text-foreground font-semibold">link</span>: string <span className="text-[9px] text-muted-foreground">(route URL path)</span></div>
+                    <div>• <span className="text-foreground font-semibold">icon</span>?: string <span className="text-[9px] text-muted-foreground">(Lucide icon name)</span></div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Static Navigation Mode */}
+            {navMode === "static" && (
+              <div className="flex flex-col gap-2.5 pt-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-foreground">Navigation Links ({staticItems.length})</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddStaticItem}
+                    className="h-6 text-[10px] gap-1 px-2 cursor-pointer"
+                  >
+                    <Plus size={10} />
+                    <span>Add Link</span>
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  {staticItems.map((item, idx) => (
+                    <SidebarStaticItemRow
+                      key={item.id || idx}
+                      item={item}
+                      idx={idx}
+                      stateStores={stateStores}
+                      onUpdate={(patch) => handleUpdateStaticItem(item.id, patch)}
+                      onDelete={() => handleDeleteStaticItem(item.id)}
+                    />
+                  ))}
+
+                  {staticItems.length === 0 && (
+                    <div className="p-4 text-center text-xs text-muted-foreground border border-dashed rounded-lg">
+                      No navigation links. Click "+ Add Link" to define your topbar menu.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         );
       })()}

@@ -907,7 +907,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
                 fieldId: navFieldId,
                 renderConfig: {
                   enabled: true,
-                  component: "sidebar",
+                  component: activeRenderComponent === "topbar" ? "topbar" : "sidebar",
                 },
               };
 
@@ -936,6 +936,10 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         sidebarNavBinding: "navItems",
         sidebarNavStoreId: storeIdToUse,
         sidebarNavStoreName: storeNameToUse,
+        topbarNavMode: "dynamic",
+        topbarNavBinding: "navItems",
+        topbarNavStoreId: storeIdToUse,
+        topbarNavStoreName: storeNameToUse,
         valueBinding: "navItems",
         valueStoreName: storeNameToUse,
         valueStoreId: storeIdToUse,
@@ -944,7 +948,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
 
       toast.success(`Provisioned NavItem[] type and bound "navItems" state in ${storeNameToUse}!`);
     },
-    [parentNode, addNode, updateNode, handleUpdateActivePropMapping],
+    [parentNode, addNode, updateNode, handleUpdateActivePropMapping, activeRenderComponent],
   );
 
   const handleCreateChatMessageStateVariable = useCallback(
@@ -1215,10 +1219,19 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
     );
   }
 
+  const targetNavBinding =
+    activePropMappings?.topbarNavBinding ||
+    activePropMappings?.sidebarNavBinding ||
+    activePropMappings?.valueBinding ||
+    componentBinding?.valueStateName;
+
   const boundStateObj = targetSection?.stateObjects?.find(
-    (s) => s.name === componentBinding?.valueStateName,
+    (s) => s.name === targetNavBinding || s.name === componentBinding?.valueStateName,
   );
-  const sampleValue: JSONValue | undefined = boundStateObj?.defaultValue;
+  const storeField = activeSelectedStore?.data?.fields?.find(
+    (f: any) => f.name === targetNavBinding || f.name === componentBinding?.valueStateName,
+  );
+  const sampleValue: JSONValue | undefined = boundStateObj?.defaultValue ?? storeField?.defaultValue;
 
   const stateName = componentBinding.valueStateName || displayLabel || "value";
 
