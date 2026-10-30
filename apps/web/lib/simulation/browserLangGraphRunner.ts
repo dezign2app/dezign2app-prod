@@ -1,15 +1,17 @@
-import type {
-  LangGraphCanvasNode,
-  LangGraphCanvasEdge,
-  LangGraphStateChannel,
-  LangGraphInputChannel,
-  LangGraphMemoryConfig,
-  StepNodeData,
-  LangGraphLLMNodeData,
-  ToolNodeData,
-  AgentNodeData,
-  MiddlewareNodeData,
-  LangGraphAgentResponseFormatConfig,
+import {
+  LANGGRAPH_CANVAS_NODE_LLM,
+  type LangGraphCanvasNode,
+  type LangGraphCanvasEdge,
+  type LangGraphStateChannel,
+  type LangGraphInputChannel,
+  type LangGraphMemoryConfig,
+  type StepNodeData,
+  type LangGraphLLMNode,
+  type LangGraphLLMNodeData,
+  type ToolNodeData,
+  type AgentNodeData,
+  type MiddlewareNodeData,
+  type LangGraphAgentResponseFormatConfig,
 } from "@workspace/canvas";
 import {
   evaluateRouterBranch,
@@ -25,6 +27,27 @@ import {
 import type { SimulationTraceEntry, SimulationStepLogEntry } from "./types";
 import { formatStreamingBatch, type StreamBatchItem } from "./streamFormatter";
 
+export type LangGraphSimulationProvider = NonNullable<LangGraphLLMNodeData["provider"]>;
+
+function isLangGraphLLMNode(node: LangGraphCanvasNode | null | undefined): node is LangGraphLLMNode {
+  return node?.type === LANGGRAPH_CANVAS_NODE_LLM;
+}
+
+function getEnvKeyForProvider(providerName: LangGraphSimulationProvider): string {
+  switch (providerName) {
+    case "groq":
+      return "GROQ_API_KEY";
+    case "openai":
+      return "OPENAI_API_KEY";
+    case "anthropic":
+      return "ANTHROPIC_API_KEY";
+    case "google":
+      return "GEMINI_API_KEY";
+    default:
+      return "CUSTOM_API_KEY";
+  }
+}
+
 export interface BrowserExecutionParams {
   nodes: LangGraphCanvasNode[];
   edges: LangGraphCanvasEdge[];
@@ -33,7 +56,7 @@ export interface BrowserExecutionParams {
   memoryConfig?: LangGraphMemoryConfig;
   inputValues: Record<string, unknown>;
   threadId: string;
-  provider?: "groq" | "openai" | "anthropic" | "custom";
+  provider?: LangGraphSimulationProvider;
   apiKey?: string;
   modelName?: string;
   onStepStart?: (nodeId: string, nodeName: string, state: Record<string, unknown>) => void;
@@ -352,7 +375,7 @@ export async function executeBrowserLangGraph(
           (e) => e.target === node.id && e.targetHandle === "llm_in",
         );
         const llmNode = llmEdge ? nodes.find((n) => n.id === llmEdge.source) : null;
-        const llmData = llmNode?.data as LangGraphLLMNodeData | undefined;
+        const llmData = isLangGraphLLMNode(llmNode) ? llmNode.data : undefined;
 
         // Is LLM actually enabled/configured for this node?
         const isExplicitlyDisabled = agentData.llmConfig?.enabled === false;
@@ -372,8 +395,9 @@ export async function executeBrowserLangGraph(
         if (messages.length === 0) {
           const candidateKeys = ["input", "prompt", "query", "question", "text", "message"];
           for (const key of candidateKeys) {
-            if (typeof state[key] === "string" && (state[key] as string).trim()) {
-              messages = [{ role: "user", content: (state[key] as string).trim() }];
+            const val = state[key];
+            if (typeof val === "string" && val.trim()) {
+              messages = [{ role: "user", content: val.trim() }];
               break;
             }
           }
@@ -393,8 +417,8 @@ export async function executeBrowserLangGraph(
           );
         }
 
-        const effectiveProvider =
-          (llmData?.provider as typeof provider) || provider || "groq";
+        const effectiveProvider: LangGraphSimulationProvider =
+          llmData?.provider || provider || "groq";
         const effectiveModel =
           llmData?.model ||
           modelName ||
@@ -405,33 +429,18 @@ export async function executeBrowserLangGraph(
             : "claude-3-5-sonnet-20241022");
 
         // Prefer passed apiKey, then LLM node apiKeyHeader, then localStorage, then NEXT_PUBLIC env
-        const rawApiKeyHeader = llmData?.apiKeyHeader
-          ? String(llmData.apiKeyHeader).replace(/^Bearer\s+/i, "").trim()
+        const rawApiKeyHeader = typeof llmData?.apiKeyHeader === "string"
+          ? llmData.apiKeyHeader.replace(/^Bearer\s+/i, "").trim()
           : "";
         let effectiveApiKey = apiKey || rawApiKeyHeader || undefined;
         if (!effectiveApiKey && typeof window !== "undefined") {
-          const envKey =
-            effectiveProvider === "groq"
-              ? "GROQ_API_KEY"
-              : effectiveProvider === "openai"
-              ? "OPENAI_API_KEY"
-              : effectiveProvider === "anthropic"
-              ? "ANTHROPIC_API_KEY"
-              : effectiveProvider === "google"
-              ? "GEMINI_API_KEY"
-              : "CUSTOM_API_KEY";
-
+          const envKey = getEnvKeyForProvider(effectiveProvider);
           effectiveApiKey =
             localStorage.getItem(`dezign2app_lg_key_${effectiveProvider}`) ||
             localStorage.getItem(`dezign2app_env_${envKey}`) ||
             undefined;
         }
 
-
-        if (!effectiveApiKey && typeof window !== "undefined") {
-          effectiveApiKey =
-            localStorage.getItem(`dezign2app_lg_key_${effectiveProvider}`) || undefined;
-        }
         if (!effectiveApiKey && effectiveProvider === "groq") {
           effectiveApiKey = process.env.NEXT_PUBLIC_GROQ_API_KEY;
         }
@@ -898,10 +907,10 @@ export async function executeBrowserLangGraph(
             (e) => e.target === node.id && e.targetHandle === "llm_in",
           );
           const llmNode = llmEdge ? nodes.find((n) => n.id === llmEdge.source) : null;
-          const llmData = llmNode?.data as LangGraphLLMNodeData | undefined;
+          const llmData = isLangGraphLLMNode(llmNode) ? llmNode.data : undefined;
 
-          const effectiveProvider =
-            (llmData?.provider as typeof provider) || provider || "groq";
+          const effectiveProvider: LangGraphSimulationProvider =
+            llmData?.provider || provider || "groq";
           const effectiveModel =
             llmData?.model ||
             stepData.modelConfig?.model ||
@@ -912,28 +921,19 @@ export async function executeBrowserLangGraph(
               ? "gpt-4o-mini"
               : "claude-3-5-sonnet-20241022");
 
-  
+          const rawStepApiKey = typeof stepData.modelConfig?.apiKeyHeader === "string"
+            ? stepData.modelConfig.apiKeyHeader.replace(/^Bearer\s+/i, "").trim()
+            : "";
+          const rawNodeApiKey = typeof llmData?.apiKeyHeader === "string"
+            ? llmData.apiKeyHeader.replace(/^Bearer\s+/i, "").trim()
+            : "";
+          let effectiveApiKey = apiKey || rawStepApiKey || rawNodeApiKey || undefined;
+
           if (!effectiveApiKey && typeof window !== "undefined") {
+            const envKey = getEnvKeyForProvider(effectiveProvider);
             effectiveApiKey =
-              (stepData.modelConfig?.apiKeyHeader
-                ? String(stepData.modelConfig.apiKeyHeader)
-                    .replace(/^Bearer\s+/i, "")
-                    .trim()
-                : "") ||
               localStorage.getItem(`dezign2app_lg_key_${effectiveProvider}`) ||
-              localStorage.getItem(
-                `dezign2app_env_${
-                  effectiveProvider === "groq"
-                    ? "GROQ_API_KEY"
-                    : effectiveProvider === "openai"
-                    ? "OPENAI_API_KEY"
-                    : effectiveProvider === "anthropic"
-                    ? "ANTHROPIC_API_KEY"
-                    : effectiveProvider === "google"
-                    ? "GEMINI_API_KEY"
-                    : "CUSTOM_API_KEY"
-                }`,
-              ) ||
+              localStorage.getItem(`dezign2app_env_${envKey}`) ||
               undefined;
           }
           if (!effectiveApiKey && effectiveProvider === "groq") {
@@ -1503,7 +1503,7 @@ export async function executeBrowserLangGraph(
  * Zero mocked strings.
  */
 async function callBrowserLLM(args: {
-  provider: "openai" | "groq" | "anthropic" | "custom";
+  provider: LangGraphSimulationProvider;
   apiKey?: string;
   modelName: string;
   systemPrompt: string;
