@@ -16,12 +16,20 @@ export function sanitizeCustomTypeString(rawType: string): string {
   return trimmed;
 }
 
-export function formatFieldType(rawType: string, isArray?: boolean): string {
+export function formatFieldType(rawType: string, isArray?: boolean, enumValues?: string[]): string {
   const isArr = Boolean(isArray || rawType?.endsWith("[]"));
-  const base = sanitizeCustomTypeString((rawType || "string").replace(/\[\]$/, ""));
-  if (!isArr) return base;
-  const needsParens = (base.includes("|") || base.includes("&")) && !base.startsWith("(");
-  return needsParens ? `(${base})[]` : `${base}[]`;
+  const base = (rawType || "string").replace(/\[\]$/, "").trim();
+  if (base === "enum") {
+    const vals =
+      enumValues && enumValues.length > 0
+        ? enumValues.map((v) => `"${v}"`).join(" | ")
+        : "string";
+    return isArr ? `(${vals})[]` : vals;
+  }
+  const sanitized = sanitizeCustomTypeString(base);
+  if (!isArr) return sanitized;
+  const needsParens = (sanitized.includes("|") || sanitized.includes("&")) && !sanitized.startsWith("(");
+  return needsParens ? `(${sanitized})[]` : `${sanitized}[]`;
 }
 
 export interface CustomTypesModuleResult {
@@ -131,7 +139,7 @@ export function generateCustomTypesModule(
           const omittedFields = inheritedFields.filter((f) => f.isOmitted);
 
           const bodyLines = addedFields.map((f) => {
-            let finalType = formatFieldType(f.type, f.isArray);
+            let finalType = formatFieldType(f.type, f.isArray, f.enumValues);
                 if (itemName === "ChatMessage" && f.name === "role" && (f.type === "string" || !f.type)) {
                   finalType = '"user" | "assistant" | "system"';
                 }
@@ -180,12 +188,12 @@ export function generateCustomTypesModule(
             const fields = item.fields || [];
             const allUnnamed = fields.length > 0 && fields.every((f) => !f.name || !f.name.trim());
             if (allUnnamed) {
-              const parts = fields.map((f) => formatFieldType(f.type, f.isArray));
+              const parts = fields.map((f) => formatFieldType(f.type, f.isArray, f.enumValues));
               customTypesCode += `export type ${itemName} = ${parts.join(" | ")};\n\n`;
             } else {
               const fieldLines = fields
                 .map((f) => {
-                  let finalType = formatFieldType(f.type, f.isArray);
+                  let finalType = formatFieldType(f.type, f.isArray, f.enumValues);
                 if (itemName === "ChatMessage" && f.name === "role" && (f.type === "string" || !f.type)) {
                   finalType = '"user" | "assistant" | "system"';
                 }
@@ -198,7 +206,7 @@ export function generateCustomTypesModule(
         } else if (item.kind === "function") {
           const params = (item.fields || [])
             .map((f) => {
-              let finalType = formatFieldType(f.type, f.isArray);
+              let finalType = formatFieldType(f.type, f.isArray, f.enumValues);
                 if (itemName === "ChatMessage" && f.name === "role" && (f.type === "string" || !f.type)) {
                   finalType = '"user" | "assistant" | "system"';
                 }
@@ -216,7 +224,7 @@ export function generateCustomTypesModule(
           } else {
             const fieldLines = fields
               .map((f) => {
-                let finalType = formatFieldType(f.type, f.isArray);
+                let finalType = formatFieldType(f.type, f.isArray, f.enumValues);
                 if (itemName === "ChatMessage" && f.name === "role" && (f.type === "string" || !f.type)) {
                   finalType = '"user" | "assistant" | "system"';
                 }

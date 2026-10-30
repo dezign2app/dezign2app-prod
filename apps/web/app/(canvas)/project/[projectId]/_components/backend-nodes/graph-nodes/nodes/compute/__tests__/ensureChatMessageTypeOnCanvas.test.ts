@@ -77,5 +77,39 @@ describe("ensureChatMessageTypeOnCanvas", () => {
     const node = useBackendCanvasStore.getState().nodes.find((n) => n.id === "types-general-1");
     expect((node?.data?.types || []).filter((t: any) => t.name === "ChatMessage")).toHaveLength(1);
   });
+
+  it("upgrades existing ChatMessage role field from string to enum with user and assistant", () => {
+    useBackendCanvasStore.setState({
+      nodes: [
+        {
+          id: "types-general-1",
+          type: "types",
+          position: { x: 100, y: 100 },
+          data: {
+            label: "App Types",
+            scope: "global",
+            types: [
+              {
+                id: "type-chat-message",
+                name: "ChatMessage",
+                kind: "interface",
+                fields: [
+                  { id: "f-chat-id", name: "id", type: "string" },
+                  { id: "f-chat-role", name: "role", type: "string" },
+                  { id: "f-chat-content", name: "content", type: "string" },
+                ],
+              },
+            ],
+          },
+        } as any,
+      ],
+      edges: [],
+    });
+
+    const { typeItem } = ensureChatMessageTypeOnCanvas();
+    const roleField = typeItem.fields?.find((f) => f.name === "role");
+    expect(roleField?.type).toBe("enum");
+    expect(roleField?.enumValues).toEqual(["user", "assistant"]);
+  });
 });
 

@@ -834,7 +834,7 @@ ${descriptionComment}export interface ${interfaceName} {
 ${allSignatures.join("\n")}
 }
 
-const initialState = {
+const initialState: Pick<${interfaceName}, ${fields.map((f) => `"${toCamelCase(f.name)}"`).join(" | ") || "never"}> = {
 ${initialStateLines.join("\n")}
 };
 
