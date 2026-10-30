@@ -368,7 +368,7 @@ export const StateStoreNode = ({
   return (
     <div
       className={cn(
-        "group relative flex flex-col rounded-xl bg-card/95 backdrop-blur-md border-2 w-[300px] shadow-lg transition-all duration-200 cursor-pointer select-none",
+        "group relative flex flex-col rounded-xl bg-card/95 backdrop-blur-md border-2 w-[390px] shadow-lg transition-all duration-200 cursor-pointer select-none",
         selected
           ? hasErrors
             ? "border-destructive shadow-destructive/20 ring-4 ring-destructive/20 scale-[1.02]"
@@ -692,7 +692,7 @@ export const StateStoreNode = ({
                   >
                     <span
                       className={cn(
-                        "font-bold truncate max-w-[95px]",
+                        "font-bold truncate max-w-[150px]",
                         isDupe
                           ? "text-destructive font-bold"
                           : !f.name
