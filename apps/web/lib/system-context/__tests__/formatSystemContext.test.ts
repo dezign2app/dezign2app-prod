@@ -533,4 +533,286 @@ describe("formatSystemContext", () => {
     const jsonOutput = JSON.stringify(input, null, 2);
     expect(toonOutput.length).toBeLessThan(jsonOutput.length);
   });
+
+  it("safely sanitizes live database passwords, Groq API keys, and JWT session tokens in TOON", () => {
+    const dbWithSecret: BackendNode = {
+      id: "node-db-secret",
+      type: "database",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Prod DB",
+        dbEngine: "postgres",
+        connectionString: "postgresql://postgres:SuperSecretP@ssword123!@db.supabase.co:5432/postgres",
+      },
+    };
+
+    const aiWithSecret: BackendNode = {
+      id: "node-ai-secret",
+      type: "llm",
+      position: { x: 100, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "Groq LLM",
+        apiKey: "gsk_live_1234567890abcdef123456",
+      },
+    };
+
+    const input: ProjectSystemContextInput = {
+      project: { id: "p-sec", name: "Security Check" },
+      nodes: [dbWithSecret, aiWithSecret],
+      edges: [],
+      testUsers: [
+        {
+          id: "usr-admin",
+          name: "Admin User",
+          createdAt: new Date().toISOString(),
+          records: [],
+          activeAuthToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.doNotLeakThisSignature",
+        },
+      ],
+    };
+
+    const toonOutput = formatSystemContextAsToon(input);
+
+    // Live secrets MUST NOT be present
+    expect(toonOutput).not.toContain("SuperSecretP@ssword123!");
+    expect(toonOutput).not.toContain("gsk_live_1234567890abcdef123456");
+    expect(toonOutput).not.toContain("doNotLeakThisSignature");
+
+    // Redacted placeholders MUST be present
+    expect(toonOutput).toContain("***REDACTED***");
+    expect(toonOutput).toContain("gsk_***REDACTED***");
+    expect(toonOutput).toContain("[REDACTED_JWT_TOKEN]");
+  });
+
+  it("formats Section 6 (Client State Stores & Custom TypeScript Types) with field reducers, defaults, and type definitions", () => {
+    const storeNode: BackendNode = {
+      id: "node-app-store",
+      type: "state_store",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "AppStore",
+        storage: "memory",
+        fields: [
+          {
+            id: "f-msg",
+            name: "message",
+            type: "string",
+            defaultValue: "",
+            reducer: "message_reducer",
+          },
+          {
+            id: "f-nav",
+            name: "navItems",
+            type: "array",
+            defaultValue: ["Dashboard", "Chat"],
+          },
+        ],
+        actions: [
+          {
+            id: "act-append",
+            name: "appendMessage",
+            actionType: "setter" as any,
+            targetFieldName: "message",
+            defaultManipulatorType: "append",
+          },
+        ],
+      },
+    };
+
+    const typesNode: BackendNode = {
+      id: "node-custom-types",
+      type: "types",
+      position: { x: 100, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "Conversations Types",
+        scope: "global",
+        types: [
+          {
+            id: "t-msg",
+            name: "ConversationMessage",
+            kind: "interface",
+            fields: [
+              { id: "f-id", name: "id", type: "string", required: true },
+              { id: "f-content", name: "content", type: "string", required: true },
+            ],
+          },
+          {
+            id: "t-status",
+            name: "MessageStatus",
+            kind: "enum",
+            enumValues: ["pending", "sent", "failed"],
+          },
+        ],
+      },
+    };
+
+    const input: ProjectSystemContextInput = {
+      project: { id: "p-types", name: "Types App" },
+      nodes: [storeNode, typesNode],
+      edges: [],
+    };
+
+    const result = formatSystemContext(input);
+
+    expect(result).toContain("## 6. Client State Stores & Custom TypeScript Types");
+    expect(result).toContain("State Store: `AppStore`");
+    expect(result).toContain("- `message`: `string` [Default: \"\"] [Reducer: message_reducer]");
+    expect(result).toContain("- `navItems`: `array` [Default: [\"Dashboard\",\"Chat\"]]");
+    expect(result).toContain("Action `appendMessage` (append) -> updates `message`");
+    expect(result).toContain("Custom Types: `Conversations Types` (Scope: `global`)");
+    expect(result).toContain("interface `ConversationMessage`: { id: string; content: string }");
+    expect(result).toContain("enum `MessageStatus`: pending | sent | failed");
+  });
+
+  it("formats frontend details including pathParams, SSE realtime connections, state mutations, and zone redirect mappings", () => {
+    const webAppNode: BackendNode = {
+      id: "node-app",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Portal",
+        appSlug: "portal",
+        zones: [
+          {
+            id: "z-protected",
+            handleId: "h-protected",
+            name: "Dashboard Zone",
+            accessType: "protected",
+            rule: {
+              id: "r-1",
+              scope: "zone",
+              conditions: { kind: "leaf", condition: { type: "auth" } } as any,
+              redirects: {
+                default: "/login",
+                "no-auth": "/login",
+                "no-org": "/select-org",
+                "wrong-plan": "/pricing",
+                "wrong-role": "/unauthorized",
+              },
+            },
+          },
+        ],
+      },
+    };
+
+    const chatPage: BackendNode = {
+      id: "node-chat-page",
+      type: "webPage",
+      position: { x: 100, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "/chat/[id]",
+        appSlug: "portal",
+        pathParams: [{ id: "p-id", name: "id", type: "string", required: true }],
+        realtimeConnections: [
+          {
+            id: "rc-1",
+            protocol: "SSE" as any,
+            eventName: "chat_chunk",
+            streamUrl: "/api/send-message/:id",
+            sourceServiceNodeId: "node-chat-svc",
+            storeActionBinding: {
+              storeNodeId: "node-app-store",
+              targetFieldName: "message",
+            },
+            isLangGraph: true,
+            langGraphStreamModes: ["messages"],
+          },
+        ],
+        sections: [
+          {
+            id: "sec-chat",
+            name: "Chat Section",
+            actions: [
+              {
+                id: "act-submit",
+                name: "send message",
+                event: "onSubmit",
+                actionSteps: [
+                  {
+                    id: "step-mut",
+                    order: 1,
+                    type: "state_mutation",
+                    name: "Append message",
+                    stateKey: "message",
+                    stateUpdateType: "append",
+                    stateStoreNodeId: "node-app-store",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "node-chat-svc",
+      type: "service",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a2",
+      data: {
+        label: "Chat Service",
+        customDependencies: [{ name: "ws", version: "^8.18.0" }, { name: "@types/ws" }] as any,
+      },
+    };
+
+    const endpoint: EndpointWithNode = {
+      id: "ep-send-msg",
+      nodeId: "node-chat-svc",
+      name: "/send-message/:id",
+      type: "POST",
+      streamingConfig: {
+        streamMode: "messages",
+        enableSubgraphs: true,
+        outputMode: "full_state",
+      },
+      pipelineSteps: [
+        {
+          id: "step-push",
+          name: "Push SSE",
+          type: "push_to_client",
+          eventName: "chat_chunk",
+          pushProtocol: "sse",
+          ...({ pageRefNodeId: "node-chat-page" } as any),
+        },
+      ],
+    } as any;
+
+    const input: ProjectSystemContextInput = {
+      project: { id: "p-chat", name: "Realtime Chat" },
+      nodes: [webAppNode, chatPage, serviceNode],
+      edges: [],
+      endpoints: [endpoint],
+    };
+
+    const result = formatSystemContext(input);
+
+    // Zone redirects map
+    expect(result).toContain("no-auth -> `/login`");
+    expect(result).toContain("no-org -> `/select-org`");
+    expect(result).toContain("wrong-plan -> `/pricing`");
+    expect(result).toContain("wrong-role -> `/unauthorized`");
+
+    // Route path params
+    expect(result).toContain("Path Parameters: id: string (required)");
+
+    // Realtime connection & store update
+    expect(result).toContain("Realtime Subscription (SSE from `Chat Service`, Event: `chat_chunk`, Stream: `/api/send-message/:id` [LangGraph Modes: messages]) -> Updates Store `node-app-store.message`");
+
+    // Action step mutation
+    expect(result).toContain("Mutates State: `message` (append) on `node-app-store`");
+
+    // Service dependencies
+    expect(result).toContain("- **Custom Dependencies**: `ws@^8.18.0`, `@types/ws`");
+
+    // Endpoint streaming config & push step
+    expect(result).toContain("Streaming Config: Protocol: `SSE`, Stream Mode: `messages`, Subgraphs: `on`, Output Mode: `full_state`");
+    expect(result).toContain("`push_to_client`: Delivers to \"/chat/[id]\" (Protocol: `SSE`, Event: `chat_chunk`)");
+  });
 });

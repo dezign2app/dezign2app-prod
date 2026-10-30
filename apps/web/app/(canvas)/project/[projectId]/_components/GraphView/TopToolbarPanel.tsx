@@ -54,7 +54,10 @@ export const TopToolbarPanel: React.FC<TopToolbarPanelProps> = ({
         testUsers: personas,
       };
 
-      const plainText = formatSystemContextForAi(projectPayload, { includeNodeIds: true });
+      const plainText = formatSystemContextForAi(projectPayload, {
+        includeNodeIds: true,
+        includeDiagnostics: true,
+      });
 
       // Log to browser console so user can directly inspect and explore the clean text
       console.log("[AI System Context (Plain Text)]\n" + plainText);

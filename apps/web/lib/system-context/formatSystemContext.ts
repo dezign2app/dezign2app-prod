@@ -11,6 +11,10 @@ import type {
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
 import type { TestUserPersona } from "@/app/(canvas)/project/[projectId]/_components/test-users/types";
 import { encode as encodeToon } from "@toon-format/toon";
+import {
+  validateArchitectureCompleteness,
+  formatArchitectureDiagnostic,
+} from "./architectureCompletenessValidator";
 
 export interface ProjectMetadata {
   id?: string;
@@ -19,6 +23,7 @@ export interface ProjectMetadata {
 
 export interface FormatSystemContextOptions {
   includeNodeIds?: boolean;
+  includeDiagnostics?: boolean;
 }
 
 export interface ProjectSystemContextInput {
@@ -279,6 +284,7 @@ export function formatSystemContext(input: ProjectSystemContextInput, options: F
   if (workerNodes.length > 0) lines.push(`- **Workers & Serverless**: ${workerNodes.length}`);
   if (paymentsNodes.length > 0) lines.push(`- **Payments Integrations**: ${paymentsNodes.length}`);
   if (stateStoreNodes.length > 0) lines.push(`- **Client State Stores**: ${stateStoreNodes.length}`);
+  if (typesNodes.length > 0) lines.push(`- **Custom TypeScript Types Nodes**: ${typesNodes.length}`);
   if (externalNodes.length > 0) lines.push(`- **External APIs**: ${externalNodes.length}`);
   if (aiNodes.length > 0) lines.push(`- **AI & MCP Servers**: ${aiNodes.length}`);
   let totalActiveDbOps = 0;
@@ -302,10 +308,12 @@ export function formatSystemContext(input: ProjectSystemContextInput, options: F
   lines.push("");
 
   // 2. Web Applications (Frontend)
-  if (webAppNodes.length > 0) {
+  if (webAppNodes.length > 0 || webPageNodes.length > 0) {
     lines.push("---");
     lines.push("");
     lines.push("## 2. Web Applications (Frontend)");
+
+    const renderedPageIds = new Set<string>();
 
     for (const app of webAppNodes) {
       const appName = app.data.appSlug || app.data.label;
@@ -332,43 +340,109 @@ export function formatSystemContext(input: ProjectSystemContextInput, options: F
           } else if (conditions && conditions.kind === "group") {
             ruleCond = ` [Rule: ${conditions.op}]`;
           }
-          const redirects = zone.rule?.redirects?.default ? ` -> Redirects to ${zone.rule.redirects.default}` : "";
+          const redirectMap = zone.rule?.redirects;
+          const redirectParts: string[] = [];
+          if (redirectMap && typeof redirectMap === "object") {
+            for (const [reason, target] of Object.entries(redirectMap)) {
+              if (target) redirectParts.push(`${reason} -> \`${target}\``);
+            }
+          }
+          const redirectsStr = redirectParts.length > 0 ? ` [Redirects: ${redirectParts.join(", ")}]` : "";
           const zoneIdStr = includeNodeIds ? ` [Zone ID: ${zone.id}${zone.handleId ? `, Handle: ${zone.handleId}` : ""}]` : "";
-          lines.push(`  - \`${zone.name}\`${zoneIdStr} (${zone.accessType})${ruleCond}: ${zone.layoutDescription || ""}${redirects}`);
+          lines.push(`  - \`${zone.name}\`${zoneIdStr} (${zone.accessType})${ruleCond}: ${zone.layoutDescription || ""}${redirectsStr}`);
         }
       }
 
-      const appPages = webPageNodes.filter(
-        (p) => p.data.appSlug === app.data.appSlug || p.data.appSlug === app.data.label || p.data.appSlug === "web"
-      );
+      const appPages = webPageNodes.filter((p) => {
+        if (webAppNodes.length === 1) return true;
+        return (
+          p.data.appSlug === app.data.appSlug ||
+          p.data.appSlug === app.data.label ||
+          p.data.appSlug === "web" ||
+          p.data.targetWebAppId === app.id ||
+          p.parentId === app.id
+        );
+      });
 
       if (appPages.length > 0) {
         lines.push(`- **Pages & Routes**:`);
         for (const page of appPages) {
-          const route = page.data.label || page.data.path || "/";
+          renderedPageIds.add(page.id);
+          const isLayout = page.data.isLayout === true || (page.type as string) === "webLayout" || (page.data.label && page.data.label.toLowerCase().includes("layout"));
+          const route = page.data.label || page.data.path || (isLayout ? "Layout" : "/");
+          const layoutType = page.data.layoutTopbarInitialized
+            ? " [Layout: Topbar]"
+            : page.data.layoutSidebarInitialized
+            ? " [Layout: Sidebar]"
+            : isLayout
+            ? " [Layout]"
+            : "";
           const isRoot = page.data.isRoot ? " [Root]" : "";
           const desc = page.data.description ? ` - ${page.data.description}` : "";
           const pageIdStr = includeNodeIds ? ` [Node ID: ${page.id}]` : "";
-          lines.push(`  - \`${route}\`${pageIdStr}${isRoot}${desc}`);
+          lines.push(`  - \`${route}\`${pageIdStr}${layoutType}${isRoot}${desc}`);
 
+          if (page.data.pathParams && page.data.pathParams.length > 0) {
+            const pStr = page.data.pathParams.map((p: any) => `${p.name}: ${p.type || "string"}${p.required ? " (required)" : ""}`).join(", ");
+            lines.push(`    - Path Parameters: ${pStr}`);
+          }
+
+          if (page.data.realtimeConnections && page.data.realtimeConnections.length > 0) {
+            for (const rc of page.data.realtimeConnections) {
+              const proto = (rc.protocol || "sse").toUpperCase();
+              const evtStr = rc.eventName ? `, Event: \`${rc.eventName}\`` : "";
+              const streamStr = rc.streamUrl ? `, Stream: \`${rc.streamUrl}\`` : "";
+              const srcStr = rc.sourceServiceNodeId ? ` from \`${lookup.getLabel(rc.sourceServiceNodeId)}\`` : "";
+              const storeTarget = rc.storeActionBinding
+                ? ` -> Updates Store \`${lookup.getLabel(rc.storeActionBinding.storeNodeId || "")}.${rc.storeActionBinding.targetFieldName || ""}\``
+                : "";
+              const lgMode = rc.isLangGraph && rc.langGraphStreamModes ? ` [LangGraph Modes: ${rc.langGraphStreamModes.join(", ")}]` : "";
+              lines.push(`    - Realtime Subscription (${proto}${srcStr}${evtStr}${streamStr}${lgMode})${storeTarget}`);
+            }
+          }
+
+          const allActions: Array<{ name: string; event?: string; actionSteps?: any[] }> = [];
           if (page.data.sections && page.data.sections.length > 0) {
             for (const section of page.data.sections) {
               if (section.actions && section.actions.length > 0) {
                 for (const act of section.actions) {
-                  lines.push(`    - Action "${act.name}" (Trigger: \`${act.event}\`)`);
-                  if (act.actionSteps && act.actionSteps.length > 0) {
-                    for (const step of act.actionSteps) {
-                      if (step.type === "api_call") {
-                        const targetService = step.serviceNodeId ? lookup.getLabel(step.serviceNodeId) : "Backend";
-                        const bindings = step.requestBindings && step.requestBindings.length > 0
-                          ? ` [Bindings: ${step.requestBindings.map((b) => `${b.slot} ${b.targetField} <- ${b.source.kind}`).join(", ")}]`
-                          : "";
-                        const svcIdStr = includeNodeIds && step.serviceNodeId ? ` [Node ID: ${step.serviceNodeId}]` : "";
-                        lines.push(`      - Calls API: \`${step.name}\` on \`${targetService}\`${svcIdStr}${bindings}`);
-                      } else if (step.type === "navigation") {
-                        lines.push(`      - Navigates to: \`${step.targetRoute || "/"}\``);
-                      }
-                    }
+                  allActions.push(act);
+                }
+              }
+            }
+          }
+          if (page.data.events && page.data.events.length > 0) {
+            for (const ev of page.data.events) {
+              if ((ev as any).actions && (ev as any).actions.length > 0) {
+                for (const act of (ev as any).actions) {
+                  allActions.push({ name: act.name || ev.name, event: (ev as any).trigger || "event", actionSteps: act.actionSteps });
+                }
+              }
+            }
+          }
+
+          if (allActions.length > 0) {
+            for (const act of allActions) {
+              lines.push(`    - Action "${act.name}" (Trigger: \`${act.event}\`)`);
+              if (act.actionSteps && act.actionSteps.length > 0) {
+                for (const step of act.actionSteps) {
+                  if (step.type === "api_call") {
+                    const targetService = step.serviceNodeId ? lookup.getLabel(step.serviceNodeId) : "Backend";
+                    const bindings = step.requestBindings && step.requestBindings.length > 0
+                      ? ` [Bindings: ${step.requestBindings.map((b: any) => `${b.slot} ${b.targetField} <- ${b.source?.kind || ""}`).join(", ")}]`
+                      : "";
+                    const svcIdStr = includeNodeIds && step.serviceNodeId ? ` [Node ID: ${step.serviceNodeId}]` : "";
+                    lines.push(`      - Calls API: \`${step.name}\` on \`${targetService}\`${svcIdStr}${bindings}`);
+                  } else if (step.type === "state_mutation") {
+                    const storeName = step.stateStoreNodeId ? lookup.getLabel(step.stateStoreNodeId) : "AppStore";
+                    const updateType = step.stateUpdateType ? ` (${step.stateUpdateType})` : "";
+                    lines.push(`      - Mutates State: \`${step.stateKey || "field"}\`${updateType} on \`${storeName}\``);
+                  } else if (step.type === "navigation") {
+                    lines.push(`      - Navigates to: \`${step.targetRoute || "/"}\``);
+                  } else if (step.type === "custom_code") {
+                    lines.push(`      - Custom Code: ${step.name || "Execute logic"}`);
+                  } else {
+                    lines.push(`      - ${step.type}: ${step.name || ""}`);
                   }
                 }
               }
@@ -385,6 +459,27 @@ export function formatSystemContext(input: ProjectSystemContextInput, options: F
         lines.push(`- **CORS Allowed Origins**: \`${app.data.corsOrigins}\``);
       }
 
+      lines.push("");
+    }
+
+    const unassignedPages = webPageNodes.filter((p) => !renderedPageIds.has(p.id));
+    if (unassignedPages.length > 0) {
+      lines.push(`### Additional Routes & Standalone Pages`);
+      for (const page of unassignedPages) {
+        const isLayout = page.data.isLayout === true || (page.type as string) === "webLayout" || (page.data.label && page.data.label.toLowerCase().includes("layout"));
+        const route = page.data.label || page.data.path || (isLayout ? "Layout" : "/");
+        const layoutType = page.data.layoutTopbarInitialized
+          ? " [Layout: Topbar]"
+          : page.data.layoutSidebarInitialized
+          ? " [Layout: Sidebar]"
+          : isLayout
+          ? " [Layout]"
+          : "";
+        const isRoot = page.data.isRoot ? " [Root]" : "";
+        const desc = page.data.description ? ` - ${page.data.description}` : "";
+        const pageIdStr = includeNodeIds ? ` [Node ID: ${page.id}]` : "";
+        lines.push(`- \`${route}\`${pageIdStr}${layoutType}${isRoot}${desc}`);
+      }
       lines.push("");
     }
   }
@@ -409,6 +504,13 @@ export function formatSystemContext(input: ProjectSystemContextInput, options: F
       const svcIdStr = includeNodeIds ? ` [Node ID: ${service.id}]` : "";
       lines.push(`### Service: \`${service.data.label}\`${svcIdStr}${techStackStr}`);
       lines.push(`- **Network Protocols**: HTTP Port: \`${port}\` | gRPC: ${grpcStatus}`);
+
+      if (service.data.customDependencies && service.data.customDependencies.length > 0) {
+        const deps = service.data.customDependencies
+          .map((d: any) => (typeof d === "string" ? `\`${d}\`` : `\`${d.name}${d.version ? `@${d.version}` : ""}\``))
+          .join(", ");
+        lines.push(`- **Custom Dependencies**: ${deps}`);
+      }
 
       if (service.data.interServiceProtocol) {
         lines.push(`- **Inter-Service Protocol**: \`${service.data.interServiceProtocol.toUpperCase()}\``);
@@ -486,6 +588,14 @@ export function formatSystemContext(input: ProjectSystemContextInput, options: F
             lines.push(`    - Response Body: { ${rStr} }`);
           }
 
+          if ((ep as any).isStreaming || (ep as any).streamingConfig) {
+            const sc = (ep as any).streamingConfig || {};
+            const sMode = sc.streamMode || (ep as any).streamMode || "messages";
+            const subg = (sc.enableSubgraphs ?? sc.subgraphs ?? true) ? "on" : "off";
+            const outMode = sc.outputMode || "full_state";
+            lines.push(`    - Streaming Config: Protocol: \`SSE\`, Stream Mode: \`${sMode}\`, Subgraphs: \`${subg}\`, Output Mode: \`${outMode}\``);
+          }
+
           if (ep.pipelineSteps && ep.pipelineSteps.length > 0) {
             lines.push(`    - Pipeline Execution Steps:`);
             let stepIdx = 1;
@@ -495,7 +605,19 @@ export function formatSystemContext(input: ProjectSystemContextInput, options: F
                 const mapping = step.langGraphStateMapping ? JSON.stringify(step.langGraphStateMapping) : "{}";
                 const threadSrc = step.langGraphThreadIdSource ? `threadId from ${step.langGraphThreadIdSource}` : "";
                 const targetIdStr = includeNodeIds && step.langGraphTargetNodeId ? ` [Node ID: ${step.langGraphTargetNodeId}]` : "";
-                lines.push(`      ${stepIdx}. \`langgraph_invoke\`: Invokes "${targetName}"${targetIdStr} (${threadSrc}, stateMapping: ${mapping})`);
+                const streamInfo = step.langGraphStreamingEnabled
+                  ? `, streaming: ${step.langGraphStreamingProtocol || "sse"} (modes: ${step.langGraphStreamModes?.join(", ") || "messages"}, subgraphs: ${step.langGraphStreamSubgraphs !== false ? "on" : "off"}, output: ${step.langGraphOutputMode || "full_state"})`
+                  : "";
+                lines.push(`      ${stepIdx}. \`langgraph_invoke\`: Invokes "${targetName}"${targetIdStr} (${threadSrc}, stateMapping: ${mapping}${streamInfo})`);
+              } else if (step.type === "push_to_client" || (step as any).pageRefNodeId || (step as any).targetPageId) {
+                const targetPage = (step as any).pageRefNodeId
+                  ? lookup.getLabel((step as any).pageRefNodeId)
+                  : (step as any).targetPageId
+                  ? lookup.getLabel((step as any).targetPageId)
+                  : "Client Page";
+                const proto = ((step as any).pushProtocol || "SSE").toUpperCase();
+                const evt = (step as any).eventName || "message";
+                lines.push(`      ${stepIdx}. \`push_to_client\`: Delivers to "${targetPage}" (Protocol: \`${proto}\`, Event: \`${evt}\`)`);
               } else if (step.type === "db_operation") {
                 const tblName = step.tableNodeId ? lookup.getLabel(step.tableNodeId) : "Database Table";
                 const opName = step.functionRef?.name || step.operationId || step.name;
@@ -537,8 +659,24 @@ export function formatSystemContext(input: ProjectSystemContextInput, options: F
         lines.push("- **State Channels**:");
         for (const sc of lg.data.stateChannels) {
           const redStr = sc.reducer ? `, reducer: \`${sc.reducer}\`` : "";
-          lines.push(`  - \`${sc.key}\`: type \`${sc.type}\`${redStr}`);
+          const customCodeNote = (sc as any).customReducerCode ? ` [Custom Reducer Code Attached]` : "";
+          lines.push(`  - \`${sc.key}\`: type \`${sc.type}\`${redStr}${customCodeNote}`);
         }
+      }
+
+      const connectedLlms: string[] = [];
+      for (const edge of input.edges) {
+        if (edge.target === lg.id) {
+          const src = lookup.getNode(edge.source);
+          if (src && (src.type === "llm" || src.type === "mcp_server")) {
+            const model = src.data.model ? ` (${src.data.model})` : "";
+            const prov = src.data.provider ? ` via ${src.data.provider}` : "";
+            connectedLlms.push(`\`${src.data.label || src.id}\`${model}${prov}`);
+          }
+        }
+      }
+      if (connectedLlms.length > 0) {
+        lines.push(`- **Connected LLM Models / Endpoints**: ${connectedLlms.join(", ")}`);
       }
 
       if (lg.data.inputChannels && lg.data.inputChannels.length > 0) {
@@ -563,6 +701,18 @@ export function formatSystemContext(input: ProjectSystemContextInput, options: F
           const llmStr = llm ? `${llm.provider} / ${llm.model} (temperature: ${llm.temperature})` : "Manual Logic";
           const agIdStr = includeNodeIds ? ` [Agent ID: ${ag.agentId || ag.id}]` : "";
           lines.push(`  - **${ag.name}**${agIdStr} (\`${ag.agentId}\`): LLM: ${llmStr}`);
+          if (ag.systemPrompt) {
+            lines.push(`    - System Prompt: "${ag.systemPrompt.trim()}"`);
+          }
+          if ((ag as any).streamConfig) {
+            const cfg = (ag as any).streamConfig;
+            lines.push(`    - Stream Config: version \`${cfg.version || "v3"}\`, mode: \`${cfg.mode || "standard_sse"}\`${cfg.eventTypes ? `, eventTypes: [${cfg.eventTypes.join(", ")}]` : ""}`);
+          }
+          if ((ag as any).responseFormat) {
+            const rf = (ag as any).responseFormat;
+            const schemaStr = rf.schema ? JSON.stringify(rf.schema) : JSON.stringify(rf);
+            lines.push(`    - Response Format (Schema): \`${schemaStr}\``);
+          }
           if (ag.stateUpdates && ag.stateUpdates.length > 0) {
             for (const su of ag.stateUpdates) {
               lines.push(`    - State Update: channel=\`${su.channelKey}\`, reducer=\`${su.reducer}\`, value="${su.value || ""}"`);
@@ -604,45 +754,6 @@ export function formatSystemContext(input: ProjectSystemContextInput, options: F
         if (envStr) lines.push(`- **Environment Variables**: ${envStr}`);
       }
 
-      lines.push("");
-    }
-  }
-
-  // Compute & Data Transformers
-  if (transformerNodes.length > 0) {
-    lines.push("---");
-    lines.push("");
-    lines.push("## Compute & Data Transformers");
-
-    for (const tf of transformerNodes) {
-      const fnName = tf.data.functionName || tf.data.label || "Transformer";
-      const scope = (tf.data.scope || "global").toUpperCase();
-      const asyncStr = tf.data.isAsync ? " [Async]" : "";
-      const tfIdStr = includeNodeIds ? ` [Node ID: ${tf.id}]` : "";
-      lines.push(`### Transformer: \`${fnName}\`${tfIdStr} (${scope}${asyncStr})`);
-
-      if (tf.data.description) lines.push(`- **Description**: ${tf.data.description}`);
-
-      if (tf.data.packageImports && tf.data.packageImports.length > 0) {
-        const pkgs = tf.data.packageImports.map((p) => p.packageName).filter(Boolean).join(", ");
-        if (pkgs) lines.push(`- **External Packages**: \`${pkgs}\``);
-      }
-
-      if (tf.data.inputSchema && tf.data.inputSchema.length > 0) {
-        const inStr = tf.data.inputSchema.map((i) => `${i.name}: ${i.type}${i.required ? " (required)" : ""}`).join(", ");
-        lines.push(`- **Input Schema**: \`(${inStr})\``);
-      }
-
-      if (tf.data.returnSchema && tf.data.returnSchema.length > 0) {
-        const retStr = tf.data.returnSchema.map((r) => `${r.name}: ${r.type}`).join(", ");
-        lines.push(`- **Return Schema**: \`{ ${retStr} }\``);
-      }
-
-      if (tf.data.logicMode === "natural_language" && tf.data.prompt) {
-        lines.push(`- **Logic Mode**: Natural Language ("${tf.data.prompt}")`);
-      } else if (tf.data.code) {
-        lines.push(`- **Logic Mode**: Custom Code Implementation`);
-      }
       lines.push("");
     }
   }
@@ -741,152 +852,208 @@ export function formatSystemContext(input: ProjectSystemContextInput, options: F
     }
   }
 
-  // Messaging & Event Streaming
-  if (messagingNodes.length > 0) {
+  // 6. Client State Stores & Custom TypeScript Types
+  if (stateStoreNodes.length > 0 || typesNodes.length > 0) {
     lines.push("---");
     lines.push("");
-    lines.push("## Messaging & Event Streaming");
-    for (const msg of messagingNodes) {
-      const msgIdStr = includeNodeIds ? ` [Node ID: ${msg.id}]` : "";
-      lines.push(`### Stream / Queue: \`${msg.data.label}\`${msgIdStr} (Type: ${msg.type})`);
-      if (msg.data.description) lines.push(`- **Description**: ${msg.data.description}`);
-      if (msg.data.techStack) lines.push(`- **Engine**: ${msg.data.techStack}`);
-      lines.push("");
-    }
-  }
+    lines.push("## 6. Client State Stores & Custom TypeScript Types");
 
-  // Object Storage & File Buckets
-  if (storageNodes.length > 0) {
-    lines.push("---");
-    lines.push("");
-    lines.push("## Object Storage & File Buckets");
-    for (const st of storageNodes) {
-      const stIdStr = includeNodeIds ? ` [Node ID: ${st.id}]` : "";
-      lines.push(`### Storage: \`${st.data.label}\`${stIdStr} (Provider: ${st.data.storageProvider || "S3 Compatible"})`);
-      if (st.data.description) lines.push(`- **Description**: ${st.data.description}`);
-      if (st.data.bucketName) lines.push(`- **Bucket**: \`${st.data.bucketName}\``);
-      if (st.data.buckets && st.data.buckets.length > 0) {
-        lines.push(`- **Configured Buckets**: ${st.data.buckets.map((b) => b.name).join(", ")}`);
+    for (const store of stateStoreNodes) {
+      const storeIdStr = includeNodeIds ? ` [Node ID: ${store.id}]` : "";
+      const storageType = store.data.storage ? ` (Storage: \`${store.data.storage}\`)` : "";
+      lines.push(`### State Store: \`${store.data.label || store.data.name || store.data.storeName}\`${storeIdStr}${storageType}`);
+      if (store.data.fields && store.data.fields.length > 0) {
+        lines.push("- **State Fields**:");
+        for (const f of store.data.fields) {
+          const defVal = f.defaultValue !== undefined && f.defaultValue !== null ? ` [Default: ${JSON.stringify(f.defaultValue)}]` : "";
+          const red = f.reducer || (f as any).customReducerCode ? ` [Reducer: ${f.reducer || "custom"}]` : "";
+          lines.push(`  - \`${f.name}\`: \`${f.type}\`${defVal}${red}`);
+        }
       }
-      lines.push("");
-    }
-  }
-
-  // Background Workers & Serverless Functions
-  if (workerNodes.length > 0) {
-    lines.push("---");
-    lines.push("");
-    lines.push("## Background Workers & Serverless Functions");
-    for (const wk of workerNodes) {
-      const kind = wk.type === "serverless" ? "Serverless Function" : "Background Worker";
-      const wkIdStr = includeNodeIds ? ` [Node ID: ${wk.id}]` : "";
-      lines.push(`### ${kind}: \`${wk.data.label}\`${wkIdStr}`);
-      if (wk.data.description) lines.push(`- **Description**: ${wk.data.description}`);
-      if (wk.data.runtime) lines.push(`- **Runtime**: ${wk.data.runtime}`);
-      if (wk.data.triggerType) lines.push(`- **Trigger**: ${wk.data.triggerType}`);
-      if (wk.data.concurrency) lines.push(`- **Concurrency**: ${wk.data.concurrency}`);
-      lines.push("");
-    }
-  }
-
-  // Payments & Subscriptions
-  if (paymentsNodes.length > 0) {
-    lines.push("---");
-    lines.push("");
-    lines.push("## Payments & Subscriptions");
-    for (const pay of paymentsNodes) {
-      const payIdStr = includeNodeIds ? ` [Node ID: ${pay.id}]` : "";
-      lines.push(`### Payments: \`${pay.data.label}\`${payIdStr} (Provider: ${pay.data.provider || "Creem"})`);
-      if (pay.data.plans && pay.data.plans.length > 0) {
-        lines.push("- **Plans**:");
-        for (const plan of pay.data.plans) {
-          lines.push(`  - \`${plan.name}\`: $${plan.price}/${plan.interval || "month"}`);
+      if (store.data.actions && store.data.actions.length > 0) {
+        lines.push("- **Store Actions**:");
+        for (const act of store.data.actions) {
+          const target = (act as any).targetFieldName ? ` -> updates \`${(act as any).targetFieldName}\`` : "";
+          const manip = (act as any).defaultManipulatorType ? ` (${(act as any).defaultManipulatorType})` : "";
+          lines.push(`  - Action \`${act.name}\`${manip}${target}`);
         }
       }
       lines.push("");
     }
-  }
 
-  // Client State Stores & Hooks
-  if (stateStoreNodes.length > 0) {
-    lines.push("---");
-    lines.push("");
-    lines.push("## Client State Stores (Zustand & Hooks)");
-    for (const store of stateStoreNodes) {
-      const storeIdStr = includeNodeIds ? ` [Node ID: ${store.id}]` : "";
-      lines.push(`### State Store: \`${store.data.label || store.data.name}\`${storeIdStr}`);
-      if (store.data.fields && store.data.fields.length > 0) {
-        const fieldsStr = store.data.fields.map((f) => `${f.name}: ${f.type}`).join(", ");
-        lines.push(`- **State Fields**: \`{ ${fieldsStr} }\``);
+    for (const tn of typesNodes) {
+      const tnIdStr = includeNodeIds ? ` [Node ID: ${tn.id}]` : "";
+      const scopeStr = tn.data.scope ? ` (Scope: \`${tn.data.scope}\`)` : "";
+      lines.push(`### Custom Types: \`${tn.data.label || "Types"}\`${tnIdStr}${scopeStr}`);
+      if (tn.data.description) lines.push(`- **Description**: ${tn.data.description}`);
+      if (tn.data.types && tn.data.types.length > 0) {
+        lines.push(`- **Defined Types (${tn.data.types.length})**:`);
+        for (const t of tn.data.types) {
+          if (t.kind === "enum") {
+            const vals = t.enumValues ? t.enumValues.join(" | ") : "";
+            lines.push(`  - enum \`${t.name}\`: ${vals}`);
+          } else if (t.fields && t.fields.length > 0) {
+            const fStr = t.fields.map((f: any) => `${f.name}${f.required === false ? "?" : ""}: ${f.type}`).join("; ");
+            lines.push(`  - ${t.kind} \`${t.name}\`: { ${fStr} }`);
+          } else if (t.typeAliasValue) {
+            lines.push(`  - type \`${t.name}\` = \`${t.typeAliasValue}\``);
+          } else {
+            lines.push(`  - ${t.kind} \`${t.name}\``);
+          }
+        }
+      } else if (tn.data.rawTypeScript) {
+        lines.push(`- **Raw TypeScript**: Attached definition`);
       }
-      if (store.data.actions && store.data.actions.length > 0) {
-        const actsStr = store.data.actions.map((a) => a.name).join(", ");
-        lines.push(`- **Actions**: ${actsStr}`);
+      lines.push("");
+    }
+  }
+
+  // 7. Compute Transformers & Infrastructure Services
+  const hasInfra =
+    transformerNodes.length > 0 ||
+    messagingNodes.length > 0 ||
+    storageNodes.length > 0 ||
+    workerNodes.length > 0 ||
+    paymentsNodes.length > 0 ||
+    externalNodes.length > 0 ||
+    aiNodes.length > 0 ||
+    referenceNodes.length > 0 ||
+    otherNodes.length > 0;
+
+  if (hasInfra) {
+    lines.push("---");
+    lines.push("");
+    lines.push("## 7. Compute Transformers & Infrastructure Services");
+
+    if (transformerNodes.length > 0) {
+      for (const tf of transformerNodes) {
+        const fnName = tf.data.functionName || tf.data.label || "Transformer";
+        const scope = (tf.data.scope || "global").toUpperCase();
+        const asyncStr = tf.data.isAsync ? " [Async]" : "";
+        const tfIdStr = includeNodeIds ? ` [Node ID: ${tf.id}]` : "";
+        lines.push(`### Transformer: \`${fnName}\`${tfIdStr} (${scope}${asyncStr})`);
+
+        if (tf.data.description) lines.push(`- **Description**: ${tf.data.description}`);
+
+        if (tf.data.packageImports && tf.data.packageImports.length > 0) {
+          const pkgs = tf.data.packageImports.map((p) => p.packageName).filter(Boolean).join(", ");
+          if (pkgs) lines.push(`- **External Packages**: \`${pkgs}\``);
+        }
+
+        if (tf.data.inputSchema && tf.data.inputSchema.length > 0) {
+          const inStr = tf.data.inputSchema.map((i) => `${i.name}: ${i.type}${i.required ? " (required)" : ""}`).join(", ");
+          lines.push(`- **Input Schema**: \`(${inStr})\``);
+        }
+
+        if (tf.data.returnSchema && tf.data.returnSchema.length > 0) {
+          const retStr = tf.data.returnSchema.map((r) => `${r.name}: ${r.type}`).join(", ");
+          lines.push(`- **Return Schema**: \`{ ${retStr} }\``);
+        }
+
+        if (tf.data.logicMode === "natural_language" && tf.data.prompt) {
+          lines.push(`- **Logic Mode**: Natural Language ("${tf.data.prompt}")`);
+        } else if (tf.data.code) {
+          lines.push(`- **Logic Mode**: Custom Code Implementation`);
+        }
+        lines.push("");
+      }
+    }
+
+    if (messagingNodes.length > 0) {
+      for (const msg of messagingNodes) {
+        const msgIdStr = includeNodeIds ? ` [Node ID: ${msg.id}]` : "";
+        lines.push(`### Stream / Queue: \`${msg.data.label}\`${msgIdStr} (Type: ${msg.type})`);
+        if (msg.data.description) lines.push(`- **Description**: ${msg.data.description}`);
+        if (msg.data.techStack) lines.push(`- **Engine**: ${msg.data.techStack}`);
+        lines.push("");
+      }
+    }
+
+    if (storageNodes.length > 0) {
+      for (const st of storageNodes) {
+        const stIdStr = includeNodeIds ? ` [Node ID: ${st.id}]` : "";
+        lines.push(`### Storage: \`${st.data.label}\`${stIdStr} (Provider: ${st.data.storageProvider || "S3 Compatible"})`);
+        if (st.data.description) lines.push(`- **Description**: ${st.data.description}`);
+        if (st.data.bucketName) lines.push(`- **Bucket**: \`${st.data.bucketName}\``);
+        if (st.data.buckets && st.data.buckets.length > 0) {
+          lines.push(`- **Configured Buckets**: ${st.data.buckets.map((b) => b.name).join(", ")}`);
+        }
+        lines.push("");
+      }
+    }
+
+    if (workerNodes.length > 0) {
+      for (const wk of workerNodes) {
+        const kind = wk.type === "serverless" ? "Serverless Function" : "Background Worker";
+        const wkIdStr = includeNodeIds ? ` [Node ID: ${wk.id}]` : "";
+        lines.push(`### ${kind}: \`${wk.data.label}\`${wkIdStr}`);
+        if (wk.data.description) lines.push(`- **Description**: ${wk.data.description}`);
+        if (wk.data.runtime) lines.push(`- **Runtime**: ${wk.data.runtime}`);
+        if (wk.data.triggerType) lines.push(`- **Trigger**: ${wk.data.triggerType}`);
+        if (wk.data.concurrency) lines.push(`- **Concurrency**: ${wk.data.concurrency}`);
+        lines.push("");
+      }
+    }
+
+    if (paymentsNodes.length > 0) {
+      for (const pay of paymentsNodes) {
+        const payIdStr = includeNodeIds ? ` [Node ID: ${pay.id}]` : "";
+        lines.push(`### Payments: \`${pay.data.label}\`${payIdStr} (Provider: ${pay.data.provider || "Creem"})`);
+        if (pay.data.plans && pay.data.plans.length > 0) {
+          lines.push("- **Plans**:");
+          for (const plan of pay.data.plans) {
+            lines.push(`  - \`${plan.name}\`: $${plan.price}/${plan.interval || "month"}`);
+          }
+        }
+        lines.push("");
+      }
+    }
+
+    if (externalNodes.length > 0) {
+      for (const ext of externalNodes) {
+        const url = ext.data.baseUrl || ext.data.url || "";
+        const extIdStr = includeNodeIds ? ` [Node ID: ${ext.id}]` : "";
+        lines.push(`### External API: \`${ext.data.label || ext.data.functionName}\`${extIdStr}${url ? ` (${url})` : ""}`);
+        if (ext.data.description) lines.push(`- **Description**: ${ext.data.description}`);
+        if (ext.data.authType) lines.push(`- **Auth Type**: ${ext.data.authType}`);
+        lines.push("");
+      }
+    }
+
+    if (aiNodes.length > 0) {
+      for (const ai of aiNodes) {
+        const kind = ai.type === "mcp_server" ? "MCP Server" : "LLM Model";
+        const aiIdStr = includeNodeIds ? ` [Node ID: ${ai.id}]` : "";
+        lines.push(`### ${kind}: \`${ai.data.label}\`${aiIdStr}`);
+        if (ai.data.model) lines.push(`- **Model**: ${ai.data.model}`);
+        if (ai.data.connectionType) lines.push(`- **Connection**: ${ai.data.connectionType}`);
+        lines.push("");
+      }
+    }
+
+    if (referenceNodes.length > 0) {
+      for (const ref of referenceNodes) {
+        const target = ref.data.targetServiceId || ref.data.targetEndpointId || ref.data.tableRef || ref.data.transformerRef || "";
+        const refIdStr = includeNodeIds ? ` [Node ID: ${ref.id}]` : "";
+        lines.push(`- **${ref.data.label || ref.id}**${refIdStr} (\`${ref.type}\`)${target ? ` -> References \`${target}\`` : ""}`);
+      }
+      lines.push("");
+    }
+
+    if (otherNodes.length > 0) {
+      for (const ot of otherNodes) {
+        const otIdStr = includeNodeIds ? ` [Node ID: ${ot.id}]` : "";
+        lines.push(`- **${ot.data.label || ot.id}**${otIdStr} (Type: \`${ot.type}\`)${ot.data.description ? ` - ${ot.data.description}` : ""}`);
       }
       lines.push("");
     }
   }
 
-  // External APIs & 3rd Party Integrations
-  if (externalNodes.length > 0) {
-    lines.push("---");
-    lines.push("");
-    lines.push("## External APIs & 3rd-Party Integrations");
-    for (const ext of externalNodes) {
-      const url = ext.data.baseUrl || ext.data.url || "";
-      const extIdStr = includeNodeIds ? ` [Node ID: ${ext.id}]` : "";
-      lines.push(`### External API: \`${ext.data.label || ext.data.functionName}\`${extIdStr}${url ? ` (${url})` : ""}`);
-      if (ext.data.description) lines.push(`- **Description**: ${ext.data.description}`);
-      if (ext.data.authType) lines.push(`- **Auth Type**: ${ext.data.authType}`);
-      lines.push("");
-    }
-  }
-
-  // AI Models & MCP Servers
-  if (aiNodes.length > 0) {
-    lines.push("---");
-    lines.push("");
-    lines.push("## AI Models & MCP Servers");
-    for (const ai of aiNodes) {
-      const kind = ai.type === "mcp_server" ? "MCP Server" : "LLM Model";
-      const aiIdStr = includeNodeIds ? ` [Node ID: ${ai.id}]` : "";
-      lines.push(`### ${kind}: \`${ai.data.label}\`${aiIdStr}`);
-      if (ai.data.model) lines.push(`- **Model**: ${ai.data.model}`);
-      if (ai.data.connectionType) lines.push(`- **Connection**: ${ai.data.connectionType}`);
-      lines.push("");
-    }
-  }
-
-  // Canvas Resource References
-  if (referenceNodes.length > 0) {
-    lines.push("---");
-    lines.push("");
-    lines.push("## Canvas Resource References");
-    for (const ref of referenceNodes) {
-      const target = ref.data.targetServiceId || ref.data.targetEndpointId || ref.data.tableRef || ref.data.transformerRef || "";
-      const refIdStr = includeNodeIds ? ` [Node ID: ${ref.id}]` : "";
-      lines.push(`- **${ref.data.label || ref.id}**${refIdStr} (\`${ref.type}\`)${target ? ` -> References \`${target}\`` : ""}`);
-    }
-    lines.push("");
-  }
-
-  // Other Canvas Nodes
-  if (otherNodes.length > 0) {
-    lines.push("---");
-    lines.push("");
-    lines.push("## Additional Canvas Nodes");
-    for (const ot of otherNodes) {
-      const otIdStr = includeNodeIds ? ` [Node ID: ${ot.id}]` : "";
-      lines.push(`- **${ot.data.label || ot.id}**${otIdStr} (Type: \`${ot.type}\`)${ot.data.description ? ` - ${ot.data.description}` : ""}`);
-    }
-    lines.push("");
-  }
-
-  // 6. Connections & System Flows (Edges Explanation)
+  // 8. Relationships & System Data Flow (Connections)
   if (input.edges.length > 0) {
     lines.push("---");
     lines.push("");
-    lines.push("## Relationships & System Data Flow (Connections)");
+    lines.push("## 8. Relationships & System Data Flow (Connections)");
 
     const clientToServiceFlows: string[] = [];
     const serviceToLangGraphFlows: string[] = [];
@@ -1028,7 +1195,8 @@ export function formatSystemContext(input: ProjectSystemContextInput, options: F
 
     if (typeReferenceFlows.length > 0) {
       lines.push("### TypeScript Entity Schema Generation");
-      lines.push(`- Total entity types generated: ${typeReferenceFlows.length}`);
+      lines.push(`- Total entity type bindings: ${typeReferenceFlows.length}`);
+      for (const flow of typeReferenceFlows) lines.push(flow);
       lines.push("");
     }
 
@@ -1039,11 +1207,11 @@ export function formatSystemContext(input: ProjectSystemContextInput, options: F
     }
   }
 
-  // 7. Security & Test Personas
+  // 9. Security, Auth & Test Personas
   if (authNodes.length > 0 || (input.testUsers && input.testUsers.length > 0)) {
     lines.push("---");
     lines.push("");
-    lines.push("## 7. Security, Auth & Test Personas");
+    lines.push("## 9. Security, Auth & Test Personas");
 
     for (const auth of authNodes) {
       const authIdStr = includeNodeIds ? ` [Node ID: ${auth.id}]` : "";
@@ -1090,6 +1258,15 @@ export function formatSystemContext(input: ProjectSystemContextInput, options: F
       }
       lines.push("");
     }
+  }
+
+  if (options.includeDiagnostics) {
+    const report = validateArchitectureCompleteness(input);
+    lines.push("---");
+    lines.push("");
+    lines.push("## 10. Architecture Runtime Readiness & Completeness Diagnostic");
+    lines.push("");
+    lines.push(formatArchitectureDiagnostic(report));
   }
 
   return lines.join("\n");
@@ -1150,10 +1327,82 @@ export function formatSystemContextForAi(
 }
 
 /**
+ * Recursively sanitizes live credentials, connection string passwords, Groq / OpenAI API keys,
+ * and JWT auth tokens from raw project context payloads to protect user credentials
+ * before prompt injection or export.
+ */
+export function sanitizeProjectSecrets<T>(val: T): T {
+  if (val === null || val === undefined) return val;
+  if (typeof val === "string") {
+    // Redact database passwords in connection strings: postgres://user:pass@host:port/db
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^:]+:[^@]+@/i.test(val)) {
+      return val.replace(/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^:]+:)([^@]+)(@)/, "$1***REDACTED***$3") as unknown as T;
+    }
+    // Redact Groq API keys (gsk_...)
+    if (/^gsk_[a-zA-Z0-9_-]{10,}/i.test(val)) {
+      return "gsk_***REDACTED***" as unknown as T;
+    }
+    // Redact OpenAI / generic sk- keys
+    if (/^sk-[a-zA-Z0-9_-]{20,}/i.test(val)) {
+      return "sk-***REDACTED***" as unknown as T;
+    }
+    // Redact JWT tokens (header.payload.signature)
+    if (/^ey[a-zA-Z0-9_-]{15,}\.ey[a-zA-Z0-9_-]{15,}\.[a-zA-Z0-9_-]{15,}/.test(val)) {
+      return "[REDACTED_JWT_TOKEN]" as unknown as T;
+    }
+    return val;
+  }
+  if (Array.isArray(val)) {
+    return val.map((item) => sanitizeProjectSecrets(item)) as unknown as T;
+  }
+  if (typeof val === "object") {
+    const res: Record<string, any> = {};
+    for (const [k, v] of Object.entries(val as Record<string, any>)) {
+      const lower = k.toLowerCase();
+      if (
+        (lower.includes("password") ||
+          lower === "apikey" ||
+          lower === "api_key" ||
+          lower === "secret" ||
+          lower === "webhooksecret" ||
+          lower === "webhook_secret" ||
+          lower === "activeauthtoken") &&
+        typeof v === "string" &&
+        v.length > 0
+      ) {
+        if (lower === "activeauthtoken") {
+          res[k] = "[REDACTED_JWT_TOKEN]";
+        } else if (v.startsWith("gsk_")) {
+          res[k] = "gsk_***REDACTED***";
+        } else {
+          res[k] = "***REDACTED***";
+        }
+      } else {
+        res[k] = sanitizeProjectSecrets(v);
+      }
+    }
+    return res as unknown as T;
+  }
+  return val;
+}
+
+/**
  * Serializes the project payload into TOON (Token-Oriented Object Notation) format
  * (https://github.com/toon-format/toon), significantly reducing token usage in LLM prompts
- * while preserving full structural fidelity.
+ * while preserving full structural fidelity and sanitizing sensitive live credentials.
  */
 export function formatSystemContextAsToon(input: ProjectSystemContextInput): string {
-  return encodeToon(input);
+  const sanitized = sanitizeProjectSecrets(input);
+  return encodeToon(sanitized);
 }
+
+export {
+  validateArchitectureCompleteness,
+  formatArchitectureDiagnostic,
+};
+export type {
+  ArchitectureCompletenessReport,
+  ArchitectureIssue,
+  IssueSeverity,
+  IssueCategory,
+} from "./architectureCompletenessValidator";
