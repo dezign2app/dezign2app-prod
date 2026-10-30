@@ -14,6 +14,7 @@ import {
   Table as TableIcon,
   PanelLeft,
   PanelTop,
+  MessageSquare,
 } from "lucide-react";
 import {
   StateRenderComponent,
@@ -135,6 +136,13 @@ export const COMPONENT_OPTIONS: ComponentOption[] = [
     label: "Top Bar Navigation",
     description: "Header navigation bar with brand logo, links, and auth buttons",
     icon: PanelTop,
+    recommendedFor: ["array", "object"],
+  },
+  {
+    id: "chat",
+    label: "AI Chat Thread",
+    description: "AI Elements Chat thread with MessageScroller, Bubble, and prompt input",
+    icon: MessageSquare,
     recommendedFor: ["array", "object"],
   },
 ];

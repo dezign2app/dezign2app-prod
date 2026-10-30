@@ -53,6 +53,7 @@ export function compileUiManifests(): CompiledFile[] {
         "./lib/*": "./src/lib/*.ts",
         "./components/*": "./src/components/*.tsx",
         "./hooks/*": "./src/hooks/*.ts",
+        "./components/ai-elements/*": "./src/components/ai-elements/*.tsx",
       },
     },
     null,

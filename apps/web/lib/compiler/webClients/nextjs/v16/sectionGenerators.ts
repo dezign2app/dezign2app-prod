@@ -273,6 +273,7 @@ export function generateSectionComponent(
   const componentStoreNames = (section.componentBindings || []).flatMap((comp) => {
     const list: string[] = [];
     const valStore =
+      comp.propMappings?.chatMessagesStoreName ||
       comp.propMappings?.sidebarNavStoreName ||
       comp.valueStoreName ||
       findStoreNameForState(comp.valueStateName, comp.valueStateId);
@@ -284,7 +285,7 @@ export function generateSectionComponent(
 
     if (comp.elements) {
       comp.elements.forEach((el) => {
-        const elValStore = el.valueStoreName || findStoreNameForState(el.valueStateName, el.valueStateId);
+        const elValStore = el.propMappings?.chatMessagesStoreName || comp.propMappings?.chatMessagesStoreName || el.valueStoreName || findStoreNameForState(el.valueStateName, el.valueStateId);
         if (elValStore) list.push(elValStore);
         const elDisStore = el.disabledStoreName || findStoreNameForState(el.disabledStateName);
         if (elDisStore) list.push(elDisStore);
@@ -396,7 +397,7 @@ export function generateSectionComponent(
     // Check if this state is used by an interactive component in componentBindings
     const isBoundToInteractiveComponent = (section.componentBindings || []).some((comp) => {
       const matchComp = (comp.valueStateName && toCamelCase(comp.valueStateName) === varName) || comp.valueStateId === st.id;
-      if (matchComp && ["input", "switch", "checkbox", "textarea", "select"].includes(comp.componentType || "")) return true;
+      if (matchComp && ["input", "switch", "checkbox", "textarea", "select", "chat"].includes(comp.componentType || "")) return true;
       return (comp.elements || []).some((el) => {
         const matchEl = (el.valueStateName && toCamelCase(el.valueStateName) === varName) || el.valueStateId === st.id;
         return matchEl && ["input", "switch", "checkbox", "textarea", "select"].includes(el.elementType || "");
@@ -592,8 +593,8 @@ export function generateSectionComponent(
   };
 
   (section.componentBindings || []).forEach((comp) => {
-    const valState = comp.propMappings?.sidebarNavBinding || comp.valueStateName;
-    const valStore = comp.propMappings?.sidebarNavStoreName || comp.valueStoreName;
+    const valState = comp.propMappings?.chatMessagesBinding || comp.propMappings?.sidebarNavBinding || comp.valueStateName;
+    const valStore = comp.propMappings?.chatMessagesStoreName || comp.propMappings?.sidebarNavStoreName || comp.valueStoreName;
     processComponentBindingState({
       valueStateName: valState,
       valueStateId: comp.valueStateId,
@@ -607,9 +608,9 @@ export function generateSectionComponent(
     if (comp.elements) {
       comp.elements.forEach((el) => {
         processComponentBindingState({
-          valueStateName: el.valueStateName,
+          valueStateName: el.propMappings?.chatMessagesBinding || comp.propMappings?.chatMessagesBinding || el.valueStateName,
           valueStateId: el.valueStateId,
-          valueStoreName: el.valueStoreName,
+          valueStoreName: el.propMappings?.chatMessagesStoreName || comp.propMappings?.chatMessagesStoreName || el.valueStoreName,
           disabledStateName: el.disabledStateName,
           disabledStoreName: el.disabledStoreName,
           loadingStateName: el.loadingStateName,
@@ -938,7 +939,8 @@ export default ${sectionCompName};
       ? ` disabled={Boolean(${toCamelCase(item.disabledStateName)})}`
       : "";
 
-    const valVar = item.valueStateName ? toCamelCase(item.valueStateName) : "";
+    const rawValName = item.valueStateName || item.propMappings?.chatMessagesBinding || item.propMappings?.valueBinding;
+    const valVar = rawValName ? toCamelCase(rawValName) : "";
     const setterVar = item.valueStateName ? `set${toPascalCase(item.valueStateName)}` : "";
     const hasSetter = valVar && declaredSetters.has(setterVar);
 
@@ -1442,6 +1444,34 @@ ${authButtonsJsx}
         </ToggleGroup>`;
     }
 
+
+    if (item.type === "chat") {
+      neededShadcnImports.add('import { Chat } from "@workspace/ui/components/chat";');
+      const chatTitle = item.propMappings?.chatTitle || labelText || "AI Assistant";
+      const placeholder = item.propMappings?.chatPlaceholder || "Type a message...";
+      const emptyTitle = item.propMappings?.chatEmptyTitle || "No messages yet";
+      const emptyDesc = item.propMappings?.chatEmptyDescription || "Start a conversation to see messages here";
+      const autoScroll = item.propMappings?.chatAutoScroll !== false ? "true" : "false";
+      const showAvatars = item.propMappings?.chatShowAvatars !== false ? "true" : "false";
+
+      const onSendProp = item.actionName
+        ? `\n          onSendMessage={async (text) => {\n            if (typeof onTrigger === "function") {\n              await onTrigger("${item.actionName}", "submit", "", "POST", false, {}, {}, { message: text });\n            }\n          }}`
+        : "";
+
+      const messagesProp = valVar ? `\n          messages={Array.isArray(${valVar}) ? ${valVar} : undefined}` : "";
+
+      return `<Chat
+          key="${item.id}"
+          title="${chatTitle}"
+          placeholder="${placeholder}"
+          emptyTitle="${emptyTitle}"
+          emptyDescription="${emptyDesc}"
+          autoScroll={${autoScroll}}
+          showAvatars={${showAvatars}}${messagesProp}${onSendProp}
+          className="w-full max-w-2xl h-[420px]"
+        />`;
+    }
+
     if (item.type === "table") {
       neededShadcnImports.add('import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@workspace/ui/components/table";');
       return `<Table key="${item.id}" className="text-xs">
@@ -1515,17 +1545,17 @@ ${authButtonsJsx}
                 {
                   id: el.id,
                   name: el.name,
-                  type: el.elementType || "input",
-                  label: el.label,
+                  type: el.elementType || comp.componentType || "input",
+                  label: el.label || comp.label,
                   placeholder: el.placeholder,
-                  variant: el.variant,
-                  valueStateName: el.valueStateName,
-                  disabledStateName: el.disabledStateName,
-                  actionId: el.actionId,
-                  actionName: el.actionName,
-                  triggerEvent: el.triggerEvent,
-                  description: el.description,
-                  propMappings: el.propMappings,
+                  variant: el.variant || comp.variant,
+                  valueStateName: el.valueStateName || comp.valueStateName,
+                  disabledStateName: el.disabledStateName || comp.disabledStateName,
+                  actionId: el.actionId || comp.actionId,
+                  actionName: el.actionName || comp.actionName,
+                  triggerEvent: el.triggerEvent || comp.triggerEvent,
+                  description: el.description || comp.description,
+                  propMappings: { ...(comp.propMappings || {}), ...(el.propMappings || {}) },
                 },
                 true,
               ),

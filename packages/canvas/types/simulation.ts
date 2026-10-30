@@ -66,7 +66,8 @@ export type StateRenderComponent =
   | "code"
   | "text"
   | "sidebar"
-  | "topbar";
+  | "topbar"
+  | "chat";
 
 export interface SidebarStaticItemParam {
   name: string;
@@ -236,6 +237,22 @@ export interface ComponentPropMappings {
   registerText?: string;
   registerLink?: string;
 
+  // Chat (AI Elements)
+  chatTitle?: string;
+  chatPlaceholder?: string;
+  chatAutoScroll?: boolean;
+  chatShowScrollButton?: boolean;
+  chatEmptyTitle?: string;
+  chatEmptyDescription?: string;
+  chatShowAvatars?: boolean;
+  chatMessagesBinding?: string;
+  chatMessagesStoreId?: string;
+  chatMessagesStoreName?: string;
+  chatInputBinding?: string;
+  chatInputStoreId?: string;
+  chatInputStoreName?: string;
+  chatOnSendActionId?: string;
+
   // Custom props
   customProps?: Record<string, string>;
 }
@@ -295,6 +312,7 @@ export type ComponentBindingType =
   | "select"
   | "sidebar"
   | "topbar"
+  | "chat"
   | (string & {});
 
 export interface ComponentElementBinding {

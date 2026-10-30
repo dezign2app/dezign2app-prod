@@ -24,6 +24,7 @@ import {
   Pencil,
   PanelLeft,
   PanelTop,
+  MessageSquare,
 } from "lucide-react";
 import {
   PageSection,
@@ -60,6 +61,7 @@ const COMPONENT_TYPES: Array<{
   { id: "select", label: "Select Dropdown", icon: ChevronDownSquare },
   { id: "sidebar", label: "Sidebar", icon: PanelLeft },
   { id: "topbar", label: "Top Bar Navigation", icon: PanelTop },
+  { id: "chat", label: "AI Chat Thread", icon: MessageSquare },
 ];
 
 export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabProps> = ({
@@ -125,7 +127,7 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
     });
   }, [componentBindings, searchQuery, typeFilter]);
 
-  // When adding a new component, activate the name input field immediately
+
   const handleAddComponent = () => {
     if (!section || !onUpdateSection) return;
     const newId = `comp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
@@ -352,6 +354,7 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
               { id: "badge", label: "Badges" },
               { id: "table", label: "Tables" },
               { id: "select", label: "Selects" },
+              { id: "chat", label: "Chats" },
             ].map((tab) => {
               const isActive = typeFilter === tab.id;
               return (
