@@ -1,4 +1,5 @@
 import { PipelineStep, Parameter } from "@workspace/canvas/types";
+import { getDefaultNodeEnvVars } from "@workspace/canvas";
 import { toVarName } from "@/lib/compiler/utils";
 import { ConnectionContext } from "../types";
 
@@ -264,6 +265,32 @@ export function handleLangGraphConnect({
         pipelineSteps: [...existingSteps, newLangGraphStep],
       });
     }
+  }
+
+  // 4. Automatically propagate environment variables from LangGraph to the connected ServiceNode
+  const lgEnvVars = langGraphNode.data?.envVars || [];
+  const defaultLgVars = getDefaultNodeEnvVars("langgraph", langGraphNode.data);
+  const allLgVars = [...lgEnvVars, ...defaultLgVars];
+
+  const currentSrvVars = serviceNode.data?.envVars || [];
+  const existingNames = new Set(currentSrvVars.map((v: any) => v.name));
+  const missingFromSrv = allLgVars.filter((v: any) => v.name && !existingNames.has(v.name));
+
+  if (missingFromSrv.length > 0) {
+    const updatedSrvVars = [
+      ...currentSrvVars,
+      ...missingFromSrv.map((v: any) => ({
+        id: `env-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        name: v.name,
+        description: v.description,
+      })),
+    ];
+    get().updateNode(serviceNode.id, {
+      data: {
+        ...serviceNode.data,
+        envVars: updatedSrvVars,
+      },
+    });
   }
 
   return false;

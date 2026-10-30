@@ -36,6 +36,13 @@ import {
 } from "../constants";
 import { LLM_PROVIDER_PRESETS } from "../components/inspector/constants";
 import { LocalInput, LocalTextarea } from "../../../common";
+import {
+  saveLocalEnvVariable,
+  getLocalEnvVariable,
+  fetchLocalEnvVariable,
+} from "@/lib/utils/localEnvSync";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { toast } from "sonner";
 
 export const LangGraphCanvasLLMNode = ({
   id,
@@ -58,6 +65,119 @@ export const LangGraphCanvasLLMNode = ({
           : n,
       ),
     );
+  };
+
+  // Auto-populate API key from localStorage or .env if empty on mount
+  useEffect(() => {
+    if (!data.apiKeyHeader) {
+      const provider = (data.provider || "openai").toLowerCase();
+      const envVarName =
+        LLM_PROVIDER_PRESETS[provider]?.defaultApiKeyEnv ||
+        (provider === "groq" ? "GROQ_API_KEY" : `${provider.toUpperCase()}_API_KEY`);
+
+      const cached =
+        (typeof window !== "undefined"
+          ? localStorage.getItem(`dezign2app_lg_key_${provider}`) ||
+            localStorage.getItem(`dezign2app_env_${envVarName}`)
+          : "") || "";
+
+      if (cached) {
+        updateLLMData({ apiKeyHeader: cached });
+      } else {
+        fetchLocalEnvVariable(envVarName).then((val) => {
+          if (val) {
+            updateLLMData({ apiKeyHeader: val });
+          }
+        });
+      }
+    }
+  }, [data.provider]);
+
+  const handleApiKeyChange = (val: string) => {
+    updateLLMData({ apiKeyHeader: val });
+
+    const cleanVal = val.replace(/^Bearer\s+/i, "").trim();
+    if (!cleanVal) return;
+
+    const provider = (data.provider || "openai").toLowerCase();
+    const envVarName =
+      LLM_PROVIDER_PRESETS[provider]?.defaultApiKeyEnv ||
+      (provider === "groq" ? "GROQ_API_KEY" : `${provider.toUpperCase()}_API_KEY`);
+
+    // 1. Immediately cache in localStorage for browser simulation
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(`dezign2app_lg_key_${provider}`, cleanVal);
+        localStorage.setItem(`dezign2app_env_${envVarName}`, cleanVal);
+      } catch {}
+    }
+
+    // 2. Automatically sync to local .env file on disk via /api/env
+    saveLocalEnvVariable(envVarName, cleanVal)
+      .then((res) => {
+        if (res.success) {
+          toast.success(`Saved ${envVarName} to local .env`);
+        }
+      })
+      .catch(() => {});
+
+    // 3. Ensure parent LangGraphNode has this env var in data.envVars
+    const store = useBackendCanvasStore.getState();
+    const allCanvasNodes = store.nodes;
+    const parentLangGraphNode =
+      allCanvasNodes.find(
+        (n) =>
+          n.type === "langgraph" &&
+          (n.data?.customLlmNodes || []).some((llm: any) => llm.id === id),
+      ) || allCanvasNodes.find((n) => n.type === "langgraph");
+
+    if (parentLangGraphNode) {
+      const existingVars = parentLangGraphNode.data?.envVars || [];
+      if (!existingVars.some((v: any) => v.name === envVarName)) {
+        store.updateNode(parentLangGraphNode.id, {
+          data: {
+            ...parentLangGraphNode.data,
+            envVars: [
+              ...existingVars,
+              { id: `env-${Date.now()}`, name: envVarName },
+            ],
+          },
+        });
+      }
+
+      // 4. Also propagate to any connected Service nodes
+      const allEdges = store.edges;
+      const connectedEdges = allEdges.filter(
+        (e) =>
+          (e.source === parentLangGraphNode.id &&
+            allCanvasNodes.find((n) => n.id === e.target)?.type === "service") ||
+          (e.target === parentLangGraphNode.id &&
+            allCanvasNodes.find((n) => n.id === e.source)?.type === "service"),
+      );
+
+      for (const edge of connectedEdges) {
+        const serviceNodeId =
+          edge.source === parentLangGraphNode.id ? edge.target : edge.source;
+        const serviceNode = allCanvasNodes.find((n) => n.id === serviceNodeId);
+        if (serviceNode && serviceNode.type === "service") {
+          const srvVars = serviceNode.data?.envVars || [];
+          if (!srvVars.some((v: any) => v.name === envVarName)) {
+            store.updateNode(serviceNode.id, {
+              data: {
+                ...serviceNode.data,
+                envVars: [
+                  ...srvVars,
+                  {
+                    id: `env-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                    name: envVarName,
+                  },
+                ],
+              },
+            });
+          }
+        }
+      }
+    }
   };
 
   const handleNameSave = () => {
@@ -405,7 +525,7 @@ export const LangGraphCanvasLLMNode = ({
               className="h-6 text-[10px] bg-background border border-border/60 rounded px-1.5 font-mono text-foreground nodrag"
               placeholder="Bearer sk-... or secret token"
               value={data.apiKeyHeader || ""}
-              onChange={(e) => updateLLMData({ apiKeyHeader: e.target.value })}
+              onChange={(e) => handleApiKeyChange(e.target.value)}
             />
           </div>
         </div>

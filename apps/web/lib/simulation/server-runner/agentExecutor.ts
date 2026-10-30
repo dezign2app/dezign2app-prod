@@ -144,7 +144,10 @@ export async function executeAgentNode(
         ? "gpt-4o-mini"
         : "claude-3-5-sonnet-20241022");
 
-  const effectiveApiKey =
+  const rawApiKey = llmData?.apiKeyHeader
+    ? String(llmData.apiKeyHeader).replace(/^Bearer\s+/i, "").trim()
+    : "";
+  const effectiveApiKey = rawApiKey ||
     apiKey ||
     (effectiveProvider === "groq"
       ? process.env.GROQ_API_KEY
