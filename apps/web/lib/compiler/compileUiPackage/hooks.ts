@@ -36,5 +36,11 @@ export function useIsMobile() {
     content: useMobileCode,
   });
 
+  files.push({
+    filename: "src/hooks/index.ts",
+    language: "typescript",
+    content: `export * from "./use-mobile";\n`,
+  });
+
   return files;
 }

@@ -92,7 +92,7 @@ export function createChat() {
 
 export interface ChatMessage {
   id: string;
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant" | "system" | string;
   content: string;
   createdAt?: string;
 }

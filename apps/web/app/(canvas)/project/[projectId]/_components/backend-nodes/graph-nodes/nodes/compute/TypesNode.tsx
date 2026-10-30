@@ -454,7 +454,7 @@ export const CHAT_MESSAGE_CUSTOM_TYPE: CustomTypeItem = {
   description: "Chat message item definition for AI conversation threads",
   fields: [
     { id: "f-chat-id", name: "id", type: "string", required: true, isArray: false, description: "Unique message identifier" },
-    { id: "f-chat-role", name: "role", type: "string", required: true, isArray: false, description: "Role: 'user' | 'assistant' | 'system'" },
+    { id: "f-chat-role", name: "role", type: '"user" | "assistant" | "system"', required: true, isArray: false, description: "Role: 'user' | 'assistant' | 'system'" },
     { id: "f-chat-content", name: "content", type: "string", required: true, isArray: false, description: "Message textual or markdown content" },
     { id: "f-chat-created-at", name: "createdAt", type: "string", required: false, isArray: false, description: "Timestamp when message was created" },
   ],
@@ -642,6 +642,16 @@ export function ensureChatMessageTypeOnCanvas(
     const currentTypes: CustomTypeItem[] = existingGeneralTypesNode.data?.types || [];
     const existingChatMessage = currentTypes.find((t) => t.name === "ChatMessage");
     if (existingChatMessage) {
+      const roleField = existingChatMessage.fields?.find((f) => f.name === "role");
+      if (roleField && roleField.type === "string") {
+        roleField.type = '"user" | "assistant" | "system"';
+        store.updateNode(existingGeneralTypesNode.id, {
+          data: {
+            ...existingGeneralTypesNode.data,
+            types: [...currentTypes],
+          },
+        });
+      }
       return { typesNodeId: existingGeneralTypesNode.id, typeItem: existingChatMessage };
     }
     const updatedTypes = [...currentTypes, CHAT_MESSAGE_CUSTOM_TYPE];
