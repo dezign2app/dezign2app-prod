@@ -546,7 +546,6 @@ export const SectionBlock = ({
                 title="Add action to this section"
               >
                 <Plus size={9} />
-                <span>Add Action</span>
               </button>
             </div>
 

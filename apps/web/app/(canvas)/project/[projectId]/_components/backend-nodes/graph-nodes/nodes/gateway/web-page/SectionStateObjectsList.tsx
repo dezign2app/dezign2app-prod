@@ -563,7 +563,6 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
           title="Select Zustand store fields to render in this section"
         >
           <Plus size={9} />
-          <span>Add State</span>
         </button>
       </div>
 
