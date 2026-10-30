@@ -6,12 +6,12 @@ import { Blockchain04Icon } from "@hugeicons/core-free-icons";
 import Link from "next/link";
 import { Monitor, ArrowRight } from "lucide-react";
 
-const navLinks = [
+const navLinks: { name: string; href: string; external?: boolean; badge?: string }[] = [
   { name: "Perspectives", href: "/#studio-views" },
   { name: "Compiler", href: "/#compiler" },
   { name: "Why Visual", href: "/#why-visual" },
   { name: "Pricing", href: "/#pricing" },
-  { name: "Docs", href: "https://docs.dezign2app.com", external: true },
+  { name: "dpm", href: "/dpm", badge: "Upcoming" },
 ];
 
 export const Header: React.FC = () => {
@@ -40,17 +40,27 @@ export const Header: React.FC = () => {
                 href={link.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-zinc-400 hover:text-white transition-colors"
+                className="text-xs text-zinc-400 hover:text-white transition-colors flex items-center gap-1.5"
               >
-                {link.name}
+                <span>{link.name}</span>
+                {link.badge && (
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                    {link.badge}
+                  </span>
+                )}
               </a>
             ) : (
               <Link
                 key={link.name}
                 href={link.href}
-                className="text-xs text-zinc-400 hover:text-white transition-colors"
+                className="text-xs text-zinc-400 hover:text-white transition-colors flex items-center gap-1.5"
               >
-                {link.name}
+                <span>{link.name}</span>
+                {link.badge && (
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                    {link.badge}
+                  </span>
+                )}
               </Link>
             )
           )}
