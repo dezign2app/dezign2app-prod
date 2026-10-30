@@ -396,7 +396,7 @@ export function generateSectionComponent(
     // Check if this state is used by an interactive component in componentBindings
     const isBoundToInteractiveComponent = (section.componentBindings || []).some((comp) => {
       const matchComp = (comp.valueStateName && toCamelCase(comp.valueStateName) === varName) || comp.valueStateId === st.id;
-      if (matchComp && ["input", "switch", "checkbox", "textarea", "select"].includes(comp.componentType || "")) return true;
+      if (matchComp && ["input", "switch", "checkbox", "textarea", "select", "chat"].includes(comp.componentType || "")) return true;
       return (comp.elements || []).some((el) => {
         const matchEl = (el.valueStateName && toCamelCase(el.valueStateName) === varName) || el.valueStateId === st.id;
         return matchEl && ["input", "switch", "checkbox", "textarea", "select"].includes(el.elementType || "");
@@ -1440,6 +1440,34 @@ ${authButtonsJsx}
           <ToggleGroupItem value="item-1" className="text-xs">${labelText}</ToggleGroupItem>
           <ToggleGroupItem value="item-2" className="text-xs">Option 2</ToggleGroupItem>
         </ToggleGroup>`;
+    }
+
+
+    if (item.type === "chat") {
+      neededShadcnImports.add('import { Chat } from "@workspace/ui/components/chat";');
+      const chatTitle = item.propMappings?.chatTitle || labelText || "AI Assistant";
+      const placeholder = item.propMappings?.chatPlaceholder || "Type a message...";
+      const emptyTitle = item.propMappings?.chatEmptyTitle || "No messages yet";
+      const emptyDesc = item.propMappings?.chatEmptyDescription || "Start a conversation to see messages here";
+      const autoScroll = item.propMappings?.chatAutoScroll !== false ? "true" : "false";
+      const showAvatars = item.propMappings?.chatShowAvatars !== false ? "true" : "false";
+
+      const onSendProp = item.actionName
+        ? `\n          onSendMessage={async (text) => {\n            if (typeof onTrigger === "function") {\n              await onTrigger("${item.actionName}", "submit", "", "POST", false, {}, {}, { message: text });\n            }\n          }}`
+        : "";
+
+      const messagesProp = valVar ? `\n          messages={Array.isArray(${valVar}) ? ${valVar} : undefined}` : "";
+
+      return `<Chat
+          key="${item.id}"
+          title="${chatTitle}"
+          placeholder="${placeholder}"
+          emptyTitle="${emptyTitle}"
+          emptyDescription="${emptyDesc}"
+          autoScroll={${autoScroll}}
+          showAvatars={${showAvatars}}${messagesProp}${onSendProp}
+          className="w-full max-w-2xl h-[420px]"
+        />`;
     }
 
     if (item.type === "table") {

@@ -64,6 +64,7 @@ const toStateRenderComponent = (val: string): StateRenderComponent => {
     case "text":
     case "sidebar":
     case "topbar":
+    case "chat":
       return val;
     default:
       return "input";
@@ -344,9 +345,17 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
     (changes: Partial<ComponentPropMappings>) => {
       if (!componentBinding) return;
       const currentProps = componentBinding.propMappings || {};
+      const sanitizedChanges: Record<string, any> = {};
+      for (const [k, v] of Object.entries(changes)) {
+        if (v && typeof v === "object" && "target" in (v as any) && typeof (v as any).target === "object") {
+          sanitizedChanges[k] = (v as any).target.value;
+        } else {
+          sanitizedChanges[k] = v;
+        }
+      }
       const updatedProps: ComponentPropMappings = {
         ...currentProps,
-        ...changes,
+        ...sanitizedChanges,
       };
 
       const topLevelUpdates: Partial<SectionComponentBinding> = {

@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { toast } from "sonner";
+import { Chat, ChatMessage } from "@workspace/ui/components/chat";
 
 export interface ComponentBindingLivePreviewProps {
   componentType: ComponentBindingType;
@@ -494,6 +495,43 @@ export const ComponentBindingLivePreview: React.FC<ComponentBindingLivePreviewPr
             })()}
 
             {/* 14. TOPBAR */}
+
+            {componentType === "chat" && (() => {
+              const sampleMessages: ChatMessage[] = Array.isArray(sampleValue)
+                ? (sampleValue as any[]).map((m, idx) => ({
+                    id: m?.id || `msg-${idx + 1}`,
+                    role: m?.role === "user" ? "user" : "assistant",
+                    content: typeof m?.content === "string" ? m.content : (typeof m === "string" ? m : JSON.stringify(m)),
+                  }))
+                : [
+                    {
+                      id: "msg-1",
+                      role: "user",
+                      content: "How does the AI Elements Chat work?",
+                    },
+                    {
+                      id: "msg-2",
+                      role: "assistant",
+                      content: "It uses MessageScrollerProvider, Message, and Bubble turns with live auto-scrolling!",
+                    },
+                  ];
+
+              return (
+                <div className="w-full max-w-sm">
+                  <Chat
+                    title={displayLabel}
+                    placeholder="Type a message..."
+                    messages={sampleMessages}
+                    className="h-[280px]"
+                    onSendMessage={(text) => {
+                      toast.info(`Sent message: "${text}"`);
+                      if (onSimulateAction) onSimulateAction();
+                    }}
+                  />
+                </div>
+              );
+            })()}
+
             {componentType === "topbar" && (() => {
               const items = Array.isArray(sampleValue) && sampleValue.length > 0
                 ? sampleValue

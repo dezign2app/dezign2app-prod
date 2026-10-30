@@ -33,6 +33,7 @@ import {
   SidebarMenuButton,
 } from "@workspace/ui/components/sidebar";
 import { toast } from "sonner";
+import { Chat, ChatMessage } from "@workspace/ui/components/chat";
 
 const toValidButtonVariant = (
   val?: string,
@@ -826,6 +827,54 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
                   </SidebarProvider>
                 )}
               </div>
+            </div>
+          );
+        })()}
+
+
+        {currentComponent === "chat" && (() => {
+          const rawTitle = propMappings.chatTitle;
+          const title = typeof rawTitle === "string" ? rawTitle : (rawTitle && typeof (rawTitle as any)?.target?.value === "string" ? (rawTitle as any).target.value : labelToRender || "AI Assistant");
+          const placeholder = propMappings.chatPlaceholder || "Type a message...";
+          const emptyTitle = propMappings.chatEmptyTitle || "No messages yet";
+          const emptyDescription = propMappings.chatEmptyDescription || "Start a conversation to see messages here";
+          const autoScroll = propMappings.chatAutoScroll ?? true;
+          const showAvatars = propMappings.chatShowAvatars ?? true;
+
+          const sampleMessages: ChatMessage[] = Array.isArray(sampleValue)
+            ? (sampleValue as any[]).map((m, idx) => ({
+                id: m?.id || `msg-${idx + 1}`,
+                role: m?.role === "user" ? "user" : "assistant",
+                content: typeof m?.content === "string" ? m.content : (typeof m === "string" ? m : JSON.stringify(m)),
+              }))
+            : [
+                {
+                  id: "msg-1",
+                  role: "user",
+                  content: "Add a dark mode toggle to the settings page.",
+                },
+                {
+                  id: "msg-2",
+                  role: "assistant",
+                  content: "I've checked the project. Next-themes is configured, so I added the ModeToggle component to settings.",
+                },
+              ];
+
+          return (
+            <div className="w-full max-w-sm">
+              <Chat
+                title={title}
+                placeholder={placeholder}
+                emptyTitle={emptyTitle}
+                emptyDescription={emptyDescription}
+                autoScroll={autoScroll}
+                showAvatars={showAvatars}
+                messages={sampleMessages}
+                className="h-[300px]"
+                onSendMessage={(text) => {
+                  toast.info(`Simulated prompt: "${text}"`);
+                }}
+              />
             </div>
           );
         })()}

@@ -20,6 +20,7 @@ import {
   Loader2,
   PanelLeft,
   PanelTop,
+  MessageSquare,
 } from "lucide-react";
 import { ComponentBindingType } from "@workspace/canvas";
 import { cn } from "@workspace/ui/lib/utils";
@@ -137,6 +138,13 @@ export const COMPONENT_BINDING_OPTIONS: ComponentTypeOption[] = [
     description: "Header navigation bar with brand logo, links, and auth buttons",
     icon: PanelTop,
     recommendedFor: ["array", "object[]"],
+  },
+  {
+    id: "chat",
+    label: "AI Chat Thread",
+    description: "AI Elements Chat thread with MessageScroller, Message, and Bubble turns",
+    icon: MessageSquare,
+    recommendedFor: ["array", "object[]", "chat"],
   },
 ];
 

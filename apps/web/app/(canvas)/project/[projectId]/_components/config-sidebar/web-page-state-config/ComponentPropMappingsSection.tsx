@@ -29,6 +29,8 @@ import {
   Braces,
   ChevronDown,
   ChevronRight,
+  Bot,
+  MessageSquare,
 } from "lucide-react";
 import { StateRenderComponent, ComponentPropMappings, UIEventItem, BackendNode, SidebarStaticItem, SidebarStaticItemParam, SidebarStaticItemQueryParam } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
@@ -2432,6 +2434,100 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
           </div>
         );
       })()}
+
+
+      {currentComponent === "chat" && (
+        <div className="flex flex-col gap-3.5 p-3.5 rounded-xl bg-muted/20 border border-border/50 text-xs">
+          <div className="flex items-center justify-between pb-2 border-b border-border/40 text-[11px]">
+            <div className="flex items-center gap-1.5 font-medium text-foreground">
+              <Bot size={13} className="text-cyan-500" />
+              <span>AI Chat Thread Configuration</span>
+            </div>
+            <Badge variant="outline" className="text-[9px] font-mono px-1.5 py-0 bg-cyan-500/10 text-cyan-500 border-cyan-500/20">
+              AI Elements Chat
+            </Badge>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Chat Header Title</Label>
+            <LocalInput
+              value={typeof propMappings.chatTitle === "string" ? propMappings.chatTitle : (propMappings.chatTitle ? String((propMappings.chatTitle as any).target?.value ?? "") : "AI Assistant")}
+              onChange={(e) => onUpdatePropMapping({ chatTitle: e.target.value })}
+              placeholder="e.g. AI Assistant, Support Bot"
+              className="h-8 text-xs font-mono"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Prompt Input Placeholder</Label>
+            <LocalInput
+              value={typeof propMappings.chatPlaceholder === "string" ? propMappings.chatPlaceholder : (propMappings.chatPlaceholder ? String((propMappings.chatPlaceholder as any).target?.value ?? "") : "Type a message...")}
+              onChange={(e) => onUpdatePropMapping({ chatPlaceholder: e.target.value })}
+              placeholder="e.g. Type a message or question..."
+              className="h-8 text-xs font-mono"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Empty State Heading</Label>
+            <LocalInput
+              value={typeof propMappings.chatEmptyTitle === "string" ? propMappings.chatEmptyTitle : (propMappings.chatEmptyTitle ? String((propMappings.chatEmptyTitle as any).target?.value ?? "") : "No messages yet")}
+              onChange={(e) => onUpdatePropMapping({ chatEmptyTitle: e.target.value })}
+              placeholder="e.g. No messages yet"
+              className="h-8 text-xs font-mono"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Empty State Description</Label>
+            <LocalInput
+              value={typeof propMappings.chatEmptyDescription === "string" ? propMappings.chatEmptyDescription : (propMappings.chatEmptyDescription ? String((propMappings.chatEmptyDescription as any).target?.value ?? "") : "Start a conversation to see messages here")}
+              onChange={(e) => onUpdatePropMapping({ chatEmptyDescription: e.target.value })}
+              placeholder="e.g. Ask a question to start chatting"
+              className="h-8 text-xs font-mono"
+            />
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <div className="space-y-0.5">
+              <Label className="text-xs">Live Edge Auto-Scroll</Label>
+              <p className="text-[10px] text-muted-foreground">
+                Automatically scrolls down as assistant responses stream in
+              </p>
+            </div>
+            <Switch
+              checked={propMappings.chatAutoScroll ?? true}
+              onCheckedChange={(val) => onUpdatePropMapping({ chatAutoScroll: val })}
+            />
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <div className="space-y-0.5">
+              <Label className="text-xs">Floating Scroll Button</Label>
+              <p className="text-[10px] text-muted-foreground">
+                Shows jump-to-latest button when scrolled up into history
+              </p>
+            </div>
+            <Switch
+              checked={propMappings.chatShowScrollButton ?? true}
+              onCheckedChange={(val) => onUpdatePropMapping({ chatShowScrollButton: val })}
+            />
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <div className="space-y-0.5">
+              <Label className="text-xs">Show Avatars</Label>
+              <p className="text-[10px] text-muted-foreground">
+                Displays user and assistant avatar badges beside message bubbles
+              </p>
+            </div>
+            <Switch
+              checked={propMappings.chatShowAvatars ?? true}
+              onCheckedChange={(val) => onUpdatePropMapping({ chatShowAvatars: val })}
+            />
+          </div>
+        </div>
+      )}
 
       {currentComponent === "topbar" && (() => {
         const navMode = propMappings.topbarNavMode || "static";

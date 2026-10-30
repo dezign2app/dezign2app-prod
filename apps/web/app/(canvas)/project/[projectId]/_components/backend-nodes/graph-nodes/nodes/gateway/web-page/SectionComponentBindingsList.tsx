@@ -21,6 +21,7 @@ import {
   Pencil,
   PanelLeft,
   PanelTop,
+  MessageSquare
 } from "lucide-react";
 import {
   PageSection,
@@ -51,6 +52,7 @@ const COMPONENT_ICON_MAP: Record<string, React.ElementType> = {
   select: ChevronDownSquare,
   sidebar: PanelLeft,
   topbar: PanelTop,
+  chat: MessageSquare,
 };
 
 export const SectionComponentBindingsList: React.FC<SectionComponentBindingsListProps> = ({
