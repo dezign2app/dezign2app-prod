@@ -15,7 +15,7 @@ import {
   resizeTerminal,
   killTerminal,
 } from "../services/terminal";
-import { isPortOpen } from "../services/network";
+import { isPortOpen, killProcessOnPort } from "../services/network";
 import {
   executeDbOperation,
   checkDbConnection,
@@ -179,6 +179,10 @@ export function registerIpcHandlers(): void {
   // ── Network Reachability ───────────────────
   ipcMain.handle("network:isPortOpen", async (_event, port: number) => {
     return isPortOpen(port);
+  });
+
+  ipcMain.handle("network:kill-port", async (_event, port: number) => {
+    return killProcessOnPort(port);
   });
 
   // ── Database Operations ───────────────────

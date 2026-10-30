@@ -30,6 +30,7 @@
     "@langchain/langgraph-checkpoint-redis": "^1.0.11",
     "@monaco-editor/react": "^4.7.0",
     "@stackblitz/sdk": "^1.11.1",
+    "@toon-format/toon": "^4.4.0",
     "@types/dagre": "^0.7.54",
     "@types/jszip": "^3.4.1",
     "@upstash/realtime": "latest",
