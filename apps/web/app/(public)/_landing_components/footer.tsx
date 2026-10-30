@@ -87,6 +87,10 @@ export const Footer = () => {
                 <Link href="/#why-visual" className="hover:text-white transition-colors">
                   Why Visual
                 </Link>
+                <Link href="/dpm" className="hover:text-white transition-colors flex items-center gap-1.5">
+                  <span>dpm</span>
+                  <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Upcoming</span>
+                </Link>
                 <Link href="/#pricing" className="hover:text-white transition-colors">
                   Pricing
                 </Link>
