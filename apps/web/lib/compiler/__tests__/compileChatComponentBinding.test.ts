@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { compileWebPageNodes } from "../compileWebPageNode";
+import { generateCustomTypesModule } from "../generators/typesGenerator";
+import { CHAT_MESSAGE_CUSTOM_TYPE } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/nodes/compute/TypesNode";
 import { BackendNode } from "@/types/canvas";
 
 describe("Chat component binding compilation (shadcn AI Elements)", () => {
@@ -87,7 +89,7 @@ describe("Chat component binding compilation (shadcn AI Elements)", () => {
     expect(code).toContain('showAvatars={true}');
 
     // 3. Verify messages binding to state
-    expect(code).toContain('messages={Array.isArray(messages) ? (messages as any) : undefined}');
+    expect(code).toContain('messages={Array.isArray(messages) ? messages : undefined}');
 
     // 4. Verify onSendMessage handler dispatching onTrigger
     expect(code).toContain('onSendMessage={async (text) => {');
@@ -155,8 +157,34 @@ describe("Chat component binding compilation (shadcn AI Elements)", () => {
     // Verify Zustand store hook call for messages
     expect(code).toContain("const messages = useChatStore((s) => s.messages);");
 
-    // Verify safe typecast avoiding TS2322 on ChatMessage role incompatibility
-    expect(code).toContain("messages={Array.isArray(messages) ? (messages as any) : undefined}");
+    // Verify clean, strongly-typed prop passing without any 'as' type casts
+    expect(code).toContain("messages={Array.isArray(messages) ? messages : undefined}");
+    expect(code).not.toContain("as any");
+    expect(code).not.toContain("as unknown");
+  });
+
+  it("generates strict ChatMessage interface from TypesNode with canonical union role and zero any/unknown", () => {
+    const typesNode: BackendNode = {
+      id: "node-types-app",
+      type: "types",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "App Types",
+        types: [CHAT_MESSAGE_CUSTOM_TYPE],
+      },
+    };
+
+    const res = generateCustomTypesModule([typesNode]);
+    expect(res.file).toBeDefined();
+
+    const content = res.file!.content;
+    // Canonical role union
+    expect(content).toContain('role: "user" | "assistant" | "system";');
+    expect(content).toContain('export interface ChatMessage {');
+    // Ensure strict typing with 0 any and 0 unknown in custom types definition
+    expect(content).not.toContain("role: any");
+    expect(content).not.toContain("role: unknown");
+    expect(content).not.toContain("role: string;");
   });
 });
-

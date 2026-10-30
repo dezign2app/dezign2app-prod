@@ -1458,7 +1458,7 @@ ${authButtonsJsx}
         ? `\n          onSendMessage={async (text) => {\n            if (typeof onTrigger === "function") {\n              await onTrigger("${item.actionName}", "submit", "", "POST", false, {}, {}, { message: text });\n            }\n          }}`
         : "";
 
-      const messagesProp = valVar ? `\n          messages={Array.isArray(${valVar}) ? (${valVar} as any) : undefined}` : "";
+      const messagesProp = valVar ? `\n          messages={Array.isArray(${valVar}) ? ${valVar} : undefined}` : "";
 
       return `<Chat
           key="${item.id}"

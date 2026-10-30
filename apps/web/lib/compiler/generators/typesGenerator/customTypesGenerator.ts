@@ -131,7 +131,10 @@ export function generateCustomTypesModule(
           const omittedFields = inheritedFields.filter((f) => f.isOmitted);
 
           const bodyLines = addedFields.map((f) => {
-            const finalType = formatFieldType(f.type, f.isArray);
+            let finalType = formatFieldType(f.type, f.isArray);
+                if (itemName === "ChatMessage" && f.name === "role" && (f.type === "string" || !f.type)) {
+                  finalType = '"user" | "assistant" | "system"';
+                }
             return `  ${f.name}${f.required === false ? "?" : ""}: ${finalType};`;
           });
 
@@ -182,7 +185,10 @@ export function generateCustomTypesModule(
             } else {
               const fieldLines = fields
                 .map((f) => {
-                  const finalType = formatFieldType(f.type, f.isArray);
+                  let finalType = formatFieldType(f.type, f.isArray);
+                if (itemName === "ChatMessage" && f.name === "role" && (f.type === "string" || !f.type)) {
+                  finalType = '"user" | "assistant" | "system"';
+                }
                   return `  ${f.name}${f.required === false ? "?" : ""}: ${finalType};`;
                 })
                 .join("\n");
@@ -192,7 +198,10 @@ export function generateCustomTypesModule(
         } else if (item.kind === "function") {
           const params = (item.fields || [])
             .map((f) => {
-              const finalType = formatFieldType(f.type, f.isArray);
+              let finalType = formatFieldType(f.type, f.isArray);
+                if (itemName === "ChatMessage" && f.name === "role" && (f.type === "string" || !f.type)) {
+                  finalType = '"user" | "assistant" | "system"';
+                }
               const opt = f.required === false ? "?" : "";
               return `${f.name || "arg"}${opt}: ${finalType}`;
             })
@@ -207,7 +216,10 @@ export function generateCustomTypesModule(
           } else {
             const fieldLines = fields
               .map((f) => {
-                const finalType = formatFieldType(f.type, f.isArray);
+                let finalType = formatFieldType(f.type, f.isArray);
+                if (itemName === "ChatMessage" && f.name === "role" && (f.type === "string" || !f.type)) {
+                  finalType = '"user" | "assistant" | "system"';
+                }
                 return `  ${f.name}${f.required === false ? "?" : ""}: ${finalType};`;
               })
               .join("\n");
