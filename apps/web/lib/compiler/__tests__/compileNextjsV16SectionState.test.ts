@@ -1654,6 +1654,70 @@ describe("compileNextjsV16SectionState", () => {
     expect(pageFile!.content).toContain('<div className="min-h-screen bg-background text-foreground flex w-full">');
     expect(pageFile!.content).toContain('<MainSection');
   });
+
+  it("compiles topbar with dynamic navigation items bound to a zustand state store variable", () => {
+    const topbarWebPageNode: BackendNode = {
+      id: "node-topbar-page",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/portal",
+        name: "PortalPage",
+        appSlug: "portal-app",
+        sections: [
+          {
+            id: "sec-topbar",
+            name: "Portal Navigation",
+            actions: [],
+            stateObjects: [
+              {
+                id: "st-nav",
+                name: "navItems",
+                type: "NavItem[]",
+                storeName: "PortalStore",
+                storeId: "store-portal",
+                defaultValue: [
+                  { id: "1", name: "Home", link: "/" },
+                  { id: "2", name: "Docs", link: "/docs" },
+                ],
+              },
+            ],
+            componentBindings: [
+              {
+                id: "comp-topbar",
+                name: "PortalTopbar",
+                label: "Portal Topbar",
+                componentType: "topbar",
+                propMappings: {
+                  topbarTitle: "Developer Portal",
+                  topbarNavMode: "dynamic",
+                  topbarNavBinding: "navItems",
+                  topbarNavStoreName: "PortalStore",
+                  topbarSticky: true,
+                  showAuthButtons: true,
+                  signInText: "Log In",
+                  signInLink: "/auth/login",
+                  registerText: "Join",
+                  registerLink: "/auth/register",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([topbarWebPageNode]);
+    const secFile = result.files.find((f) => f.filename.includes("PortalNavigationSection.tsx"));
+    expect(secFile).toBeDefined();
+    expect(secFile!.content).toContain("usePortalStore");
+    expect(secFile!.content).toContain("const navItems = usePortalStore((s) => s.navItems);");
+    expect(secFile!.content).toContain("(navItems || []).map((navItem, idx: number)");
+    expect(secFile!.content).toContain("Developer Portal");
+    expect(secFile!.content).toContain("Log In");
+    expect(secFile!.content).toContain("Join");
+  });
 });
 
 

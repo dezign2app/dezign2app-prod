@@ -201,6 +201,9 @@ export function generateSectionComponent(
       if (comp.valueStateName) boundStateVarNames.add(toCamelCase(comp.valueStateName));
       if (comp.disabledStateName) boundStateVarNames.add(toCamelCase(comp.disabledStateName));
       if (comp.loadingStateName) boundStateVarNames.add(toCamelCase(comp.loadingStateName));
+      if (comp.propMappings?.sidebarNavBinding) boundStateVarNames.add(toCamelCase(comp.propMappings.sidebarNavBinding));
+      if (comp.propMappings?.topbarNavBinding) boundStateVarNames.add(toCamelCase(comp.propMappings.topbarNavBinding));
+      if (comp.propMappings?.valueBinding) boundStateVarNames.add(toCamelCase(comp.propMappings.valueBinding));
       if (comp.elements) {
         comp.elements.forEach((el) => {
           if (el.valueStateId) boundStateIds.add(el.valueStateId);
@@ -1164,24 +1167,42 @@ ${staticItemsJsx}
       const registerText = item.propMappings?.registerText || "Register";
       const registerLink = item.propMappings?.registerLink || "/register";
 
-      const staticItems =
-        item.propMappings?.topbarStaticItems && item.propMappings.topbarStaticItems.length > 0
-          ? item.propMappings.topbarStaticItems
-          : item.propMappings?.sidebarStaticItems && item.propMappings.sidebarStaticItems.length > 0
-          ? item.propMappings.sidebarStaticItems
-          : [
-              { id: "nav-1", name: "Home", link: "/" },
-              { id: "nav-2", name: "Features", link: "/features" },
-              { id: "nav-3", name: "Pricing", link: "/pricing" },
-              { id: "nav-4", name: "About", link: "/about" },
-            ];
+      const navMode = item.propMappings?.topbarNavMode || "static";
+      const activeNavVar = item.propMappings?.topbarNavBinding
+        ? toCamelCase(item.propMappings.topbarNavBinding)
+        : valVar;
 
-      const navLinksJsx = staticItems
-        .map((sItem) => {
-          const resolvedHref = resolveSidebarItemHref(sItem);
-          return `            <Link key="${sItem.id}" href="${resolvedHref}" className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">${sItem.name}</Link>`;
-        })
-        .join("\n");
+      let navLinksJsx = "";
+      if (navMode === "dynamic" && activeNavVar) {
+        navLinksJsx = `            {(${activeNavVar} || []).map((navItem, idx: number) => (
+              <Link
+                key={navItem?.id || idx}
+                href={navItem?.link || "#"}
+                className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {navItem?.name || "Nav"}
+              </Link>
+            ))}`;
+      } else {
+        const staticItems =
+          item.propMappings?.topbarStaticItems && item.propMappings.topbarStaticItems.length > 0
+            ? item.propMappings.topbarStaticItems
+            : item.propMappings?.sidebarStaticItems && item.propMappings.sidebarStaticItems.length > 0
+            ? item.propMappings.sidebarStaticItems
+            : [
+                { id: "nav-1", name: "Home", link: "/" },
+                { id: "nav-2", name: "Features", link: "/features" },
+                { id: "nav-3", name: "Pricing", link: "/pricing" },
+                { id: "nav-4", name: "About", link: "/about" },
+              ];
+
+        navLinksJsx = staticItems
+          .map((sItem) => {
+            const resolvedHref = resolveSidebarItemHref(sItem);
+            return `            <Link key="${sItem.id}" href="${resolvedHref}" className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">${sItem.name}</Link>`;
+          })
+          .join("\n");
+      }
 
       const authButtonsJsx = showAuth
         ? `          <div className="flex items-center gap-2">

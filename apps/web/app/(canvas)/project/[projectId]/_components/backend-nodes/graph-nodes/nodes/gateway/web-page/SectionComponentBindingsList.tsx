@@ -514,7 +514,7 @@ export const SectionComponentBindingsList: React.FC<SectionComponentBindingsList
                 </div>
 
                 {/* Bottom Row: State & Action Mapping Badges (wrapping cleanly without overflowing) */}
-                {(comp.actionId || comp.valueStateName || comp.disabledStateName) && (
+                {(comp.actionId || comp.valueStateName || comp.disabledStateName || comp.propMappings?.sidebarNavBinding || comp.propMappings?.topbarNavBinding || comp.propMappings?.sidebarNavMode || comp.propMappings?.topbarNavMode) && (
                   <div className="flex items-center gap-1 text-[8.5px] font-mono flex-wrap pl-4 w-full">
                     {/* Bound Action */}
                     {comp.actionId ? (
@@ -529,8 +529,33 @@ export const SectionComponentBindingsList: React.FC<SectionComponentBindingsList
                       </span>
                     ) : null}
 
+                    {/* Bound Nav State for Sidebar / Topbar */}
+                    {(comp.componentType === "sidebar" || comp.componentType === "topbar") && (
+                      (() => {
+                        const isTopbar = comp.componentType === "topbar";
+                        const navMode = isTopbar ? (comp.propMappings?.topbarNavMode || "static") : (comp.propMappings?.sidebarNavMode || "dynamic");
+                        const navBinding = isTopbar ? comp.propMappings?.topbarNavBinding : comp.propMappings?.sidebarNavBinding;
+                        const linksCount = isTopbar ? (comp.propMappings?.topbarStaticItems?.length ?? 4) : (comp.propMappings?.sidebarStaticItems?.length ?? 2);
+                        return (
+                          <span
+                            title={navMode === "dynamic" ? `Dynamic Nav (${navBinding || comp.valueStateName || "navItems"})` : `Static Nav (${linksCount} links)`}
+                            className={`inline-flex items-center gap-0.5 px-1 py-0.2 rounded border max-w-[130px] truncate ${
+                              navMode === "dynamic"
+                                ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30"
+                                : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                            }`}
+                          >
+                            <span className="text-[7.5px] text-muted-foreground">nav:</span>
+                            <span className="font-semibold truncate">
+                              {navMode === "dynamic" ? (navBinding || comp.valueStateName || "dynamic") : `${linksCount} links`}
+                            </span>
+                          </span>
+                        );
+                      })()
+                    )}
+
                     {/* Bound State Variable */}
-                    {comp.valueStateName ? (
+                    {comp.valueStateName && comp.componentType !== "sidebar" && comp.componentType !== "topbar" ? (
                       <span
                         title={`Bound to state: ${comp.valueStateName}`}
                         className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 max-w-[130px] truncate"
