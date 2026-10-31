@@ -402,6 +402,8 @@ export function useBetterAuthTableSync({
     const pluginToAdd =
       def.key === BETTER_AUTH_TABLE_KEYS.TWO_FACTOR
         ? BETTER_AUTH_PLUGINS.TWO_FACTOR
+        : def.key === BETTER_AUTH_TABLE_KEYS.PASSKEY
+        ? BETTER_AUTH_PLUGINS.PASSKEY
         : undefined;
 
     const currentPlugins = data.plugins || ["bearer", "admin", "organization", "jwt"];
@@ -514,12 +516,20 @@ export function useBetterAuthTableSync({
     let syncedCount = 0;
     let createdCount = 0;
 
+    const nextPlugins = Array.from(
+      new Set([
+        ...enabledPlugins,
+        BETTER_AUTH_PLUGINS.PASSKEY,
+        BETTER_AUTH_PLUGINS.TWO_FACTOR,
+      ]),
+    );
+
     // Only Better Auth tables that are required for this configuration
     const targetDefs = BETTER_AUTH_TABLE_DEFINITIONS.filter((def) =>
       isBetterAuthTableRequired(def, {
         isOrgEnabled,
         teamsEnabled: Boolean(data.organization?.teams),
-        enabledPlugins,
+        enabledPlugins: nextPlugins,
         tableMappings: activeMappings,
         providers: data.providers,
       }),
@@ -587,14 +597,6 @@ export function useBetterAuthTableSync({
         activeMappings[def.key] = newEntityId;
       }
     });
-
-    const nextPlugins = Array.from(
-      new Set([
-        ...enabledPlugins,
-        BETTER_AUTH_PLUGINS.PASSKEY,
-        BETTER_AUTH_PLUGINS.TWO_FACTOR,
-      ]),
-    );
 
     updateData({
       tableMappings: activeMappings,
@@ -673,6 +675,8 @@ export function useBetterAuthTableSync({
     const pluginToAdd =
       nextEntityId && def.key === BETTER_AUTH_TABLE_KEYS.TWO_FACTOR
         ? BETTER_AUTH_PLUGINS.TWO_FACTOR
+        : nextEntityId && def.key === BETTER_AUTH_TABLE_KEYS.PASSKEY
+        ? BETTER_AUTH_PLUGINS.PASSKEY
         : undefined;
     const currentPlugins = data.plugins || ["bearer", "admin", "organization", "jwt"];
     const nextPlugins =
