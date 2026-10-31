@@ -2,7 +2,7 @@ import React from "react";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
 import { Table, GitFork, Wand2 } from "lucide-react";
-import { BETTER_AUTH_TABLE_DEFINITIONS } from "@workspace/canvas";
+import { BETTER_AUTH_TABLE_DEFINITIONS, BETTER_AUTH_CATEGORIES } from "@workspace/canvas";
 import { BetterAuthTableMappingSectionProps } from "./types";
 import { BetterAuthCategoryCard } from "./BetterAuthCategoryCard";
 import { BetterAuthTableRow } from "./BetterAuthTableRow";
@@ -58,7 +58,10 @@ export const BetterAuthTableMappingSection: React.FC<
       {/* Category Groups */}
       <div className="flex flex-col gap-5 pt-1">
         {categories.map((cat) => {
-          const availableDefs = targetDefs || BETTER_AUTH_TABLE_DEFINITIONS;
+          const availableDefs =
+            cat.id === BETTER_AUTH_CATEGORIES.PLUGIN
+              ? BETTER_AUTH_TABLE_DEFINITIONS
+              : targetDefs || BETTER_AUTH_TABLE_DEFINITIONS;
           const catTables = availableDefs.filter(
             (def) => def.category === cat.id,
           );
