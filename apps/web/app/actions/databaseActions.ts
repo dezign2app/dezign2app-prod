@@ -250,7 +250,8 @@ export async function testDbOperationAction(
     }
 
     // 4. LIVE POSTGRES EXECUTION
-    if (engine === "postgres" || engine === "postgresql" || engine === "pg" || engine === "cockroachdb") {
+    const normalizedEngine = (engine || "").trim().toLowerCase();
+    if (normalizedEngine === "postgres" || normalizedEngine === "postgresql" || normalizedEngine === "pg" || normalizedEngine === "cockroachdb") {
       const pgResult = await executePostgresLiveOperation({
         connection: {
           host,
@@ -406,7 +407,8 @@ export async function checkDbConnectionAction(
     }
 
     // 3. POSTGRES ENGINE — full credential check
-    if (engine === "postgres" || engine === "postgresql" || engine === "pg" || engine === "cockroachdb") {
+    const normalizedEngineCheck = (engine || "").trim().toLowerCase();
+    if (normalizedEngineCheck === "postgres" || normalizedEngineCheck === "postgresql" || normalizedEngineCheck === "pg" || normalizedEngineCheck === "cockroachdb") {
       return await checkPostgresConnection({
         host,
         port,

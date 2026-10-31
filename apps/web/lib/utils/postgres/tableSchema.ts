@@ -1,5 +1,5 @@
 import { normalizeToPostgresType } from "@/lib/schema/columnTypes";
-import { resolveConnectionString, resolveTableAndSchema } from "./connection";
+import { resolveConnectionString, resolveTableAndSchema, isSslRequiredForConfig } from "./connection";
 import { PostgresConnectionConfig } from "./types";
 
 export interface PostgresDropTableResult {
@@ -145,13 +145,9 @@ export async function dropPostgresTable(
     connectionString,
     max: 1,
     connectionTimeoutMillis: 6000,
-    ssl:
-      connectionString.includes("sslmode=require") ||
-      connectionString.includes("neon.tech") ||
-      connectionString.includes("supabase.co") ||
-      process.env.NODE_ENV === "production"
-        ? { rejectUnauthorized: false }
-        : undefined,
+    ssl: isSslRequiredForConfig(connection, connectionString)
+      ? { rejectUnauthorized: false }
+      : undefined,
   });
 
   let client: import("pg").PoolClient | undefined;
@@ -201,13 +197,9 @@ export async function renamePostgresTable(
     connectionString,
     max: 1,
     connectionTimeoutMillis: 6000,
-    ssl:
-      connectionString.includes("sslmode=require") ||
-      connectionString.includes("neon.tech") ||
-      connectionString.includes("supabase.co") ||
-      process.env.NODE_ENV === "production"
-        ? { rejectUnauthorized: false }
-        : undefined,
+    ssl: isSslRequiredForConfig(connection, connectionString)
+      ? { rejectUnauthorized: false }
+      : undefined,
   });
 
   let client: import("pg").PoolClient | undefined;
@@ -262,13 +254,9 @@ export async function renamePostgresColumn(
     connectionString,
     max: 1,
     connectionTimeoutMillis: 6000,
-    ssl:
-      connectionString.includes("sslmode=require") ||
-      connectionString.includes("neon.tech") ||
-      connectionString.includes("supabase.co") ||
-      process.env.NODE_ENV === "production"
-        ? { rejectUnauthorized: false }
-        : undefined,
+    ssl: isSslRequiredForConfig(connection, connectionString)
+      ? { rejectUnauthorized: false }
+      : undefined,
   });
 
   let client: import("pg").PoolClient | undefined;

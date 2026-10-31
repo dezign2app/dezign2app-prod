@@ -1,5 +1,5 @@
 import { normalizePostgresDbType, arePostgresTypesEquivalent, normalizeToPostgresType } from "@/lib/schema/columnTypes";
-import { resolveConnectionString, resolveTableAndSchema } from "./connection";
+import { resolveConnectionString, resolveTableAndSchema, isSslRequiredForConfig } from "./connection";
 import { AlteredColumnDefinition, CanvasForeignKey, PostgresConnectionConfig, PostgresTableSyncResult } from "./types";
 
 /**
@@ -68,13 +68,9 @@ export async function checkPostgresTableSync(
     connectionString,
     max: 1,
     connectionTimeoutMillis: 5000,
-    ssl:
-      connectionString.includes("sslmode=require") ||
-      connectionString.includes("neon.tech") ||
-      connectionString.includes("supabase.co") ||
-      process.env.NODE_ENV === "production"
-        ? { rejectUnauthorized: false }
-        : undefined,
+    ssl: isSslRequiredForConfig(connection, connectionString)
+      ? { rejectUnauthorized: false }
+      : undefined,
   });
 
   let client: import("pg").PoolClient | undefined;
