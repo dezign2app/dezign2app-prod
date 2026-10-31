@@ -20,6 +20,7 @@ const socialSvgIcons: Record<string, string> = {
 export function generateAuthFormComponent(
   pageMeta: PageInfo,
   authNodeData?: AuthCompilerNodeData,
+  allPages?: PageInfo[],
 ): string {
   const isRegister = isAuthRegisterPage(pageMeta, authNodeData);
   const showSocial = shouldGenerateSocialProviders(pageMeta, authNodeData);
@@ -27,14 +28,25 @@ export function generateAuthFormComponent(
   const providers = authNodeData?.providers || {};
   const redirects = authNodeData?.redirects || {};
 
-  const signInRedirectUrl = redirects.signInRedirectUrl || (pageMeta.redirectTo && pageMeta.redirectTo !== pageMeta.routePath ? pageMeta.redirectTo : "/");
-  const signUpRedirectUrl = redirects.signUpRedirectUrl || signInRedirectUrl;
+  const resolveRedirect = (nodeId?: string, fallbackUrl?: string, defaultFallback: string = "/") => {
+    if (nodeId && allPages) {
+      const matched = allPages.find((p) => p.nodeId === nodeId);
+      if (matched) return matched.routePath;
+    }
+    if (fallbackUrl) {
+      return fallbackUrl.startsWith("/") ? fallbackUrl : `/${fallbackUrl}`;
+    }
+    return defaultFallback;
+  };
 
-  const rawSignInPage = redirects.signInPageUrl || "/login";
-  const signInPageUrl = rawSignInPage.startsWith("/") ? rawSignInPage : `/${rawSignInPage}`;
+  const resolvedSignInRedirect = resolveRedirect(redirects.signInRedirectNodeId, redirects.signInRedirectUrl, "");
+  const signInRedirectUrl = resolvedSignInRedirect || (pageMeta.redirectTo && pageMeta.redirectTo !== pageMeta.routePath ? pageMeta.redirectTo : "/");
 
-  const rawSignUpPage = redirects.signUpPageUrl || "/register";
-  const signUpPageUrl = rawSignUpPage.startsWith("/") ? rawSignUpPage : `/${rawSignUpPage}`;
+  const resolvedSignUpRedirect = resolveRedirect(redirects.signUpRedirectNodeId, redirects.signUpRedirectUrl, "");
+  const signUpRedirectUrl = resolvedSignUpRedirect || signInRedirectUrl;
+
+  const signInPageUrl = resolveRedirect(redirects.signInPageNodeId, redirects.signInPageUrl, "/login");
+  const signUpPageUrl = resolveRedirect(redirects.signUpPageNodeId, redirects.signUpPageUrl, "/register");
 
   // Resolve OAuth social providers matching Better Auth config
   const oauthList: OAuthProviderConfig[] = showSocial

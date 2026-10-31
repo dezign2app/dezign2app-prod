@@ -532,8 +532,8 @@ export async function applyPostgresTableSync(
     }
 
     // Table exists, query existing columns from the configured schema
-    const infoRes = await client.query<{ column_name: string; data_type: string; udt_name: string }>(
-      `SELECT column_name, data_type, udt_name FROM information_schema.columns 
+    const infoRes = await client.query<{ column_name: string; data_type: string; udt_name: string; is_nullable: string }>(
+      `SELECT column_name, data_type, udt_name, is_nullable FROM information_schema.columns 
        WHERE LOWER(table_name) = LOWER($1)
          AND table_schema = $2`,
       [safeTable, targetSchema],
@@ -545,6 +545,7 @@ export async function applyPostgresTableSync(
           name: r.column_name,
           dataType: r.data_type,
           udtName: r.udt_name,
+          isNullable: r.is_nullable,
           normalizedType: normalizePostgresDbType(r.data_type, r.udt_name),
         },
       ]),
@@ -644,12 +645,24 @@ export async function applyPostgresTableSync(
           `ALTER TABLE "${targetSchema}"."${safeTable}" ADD COLUMN IF NOT EXISTS "${colName}" ${pgType}${defaultClause}`,
         );
         appliedColumns.push(colName);
-      } else if (isPk && pgType === "UUID") {
-        try {
-          await client.query(
-            `ALTER TABLE "${targetSchema}"."${safeTable}" ALTER COLUMN "${colName}" SET DEFAULT gen_random_uuid()`,
-          );
-        } catch {}
+      } else {
+        if (isPk && pgType === "UUID") {
+          try {
+            await client.query(
+              `ALTER TABLE "${targetSchema}"."${safeTable}" ALTER COLUMN "${colName}" SET DEFAULT gen_random_uuid()`,
+            );
+          } catch {}
+        }
+        // If column should be nullable but is currently NOT NULL in PostgreSQL, drop NOT NULL constraint
+        const existing = existingColMap.get(colName.toLowerCase());
+        const shouldBeNotNull = Boolean(isPk || (col as any).isNotNull);
+        if (!shouldBeNotNull && existing?.isNullable === "NO" && !isPk) {
+          try {
+            await client.query(
+              `ALTER TABLE "${targetSchema}"."${safeTable}" ALTER COLUMN "${colName}" DROP NOT NULL`,
+            );
+          } catch {}
+        }
       }
     }
 

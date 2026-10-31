@@ -1,4 +1,5 @@
 import { PageSection, UIEventItem } from "@workspace/canvas/types";
+import { pageRouteToUrl, pageRouteToFolderPath, arePageRoutesEqual } from "@workspace/canvas";
 import {
   DeletionPageRenameTarget,
   NodeArchitectureImpact,
@@ -15,6 +16,9 @@ export function handlePageRename(
   const parentNode = nodes.find((n) => n.id === target.nodeId);
   const oldLabel = target.oldLabel || parentNode?.data?.label || "Page";
   const newLabel = target.newLabel;
+  const oldPath = pageRouteToUrl(oldLabel);
+  const newPath = pageRouteToUrl(newLabel);
+  const newSlug = pageRouteToFolderPath(newLabel);
 
   const targetNodes: NodeArchitectureImpact["targetNodes"] = [
     {
@@ -25,7 +29,10 @@ export function handlePageRename(
     },
   ];
 
-  // 1. Simulate canvas modification: update page label to newLabel
+  const cascadeElements: CascadeElementInfo[] = [];
+  const brokenReferences: BrokenReferenceInfo[] = [];
+
+  // 1. Simulate canvas modification: update page label, path, pageSlug, route
   const nextNodes = nodes.map((n) => {
     if (n.id === target.nodeId) {
       return {
@@ -33,14 +40,73 @@ export function handlePageRename(
         data: {
           ...n.data,
           label: newLabel,
+          path: newPath,
+          pageSlug: newSlug,
+          route: newPath,
         },
       };
     }
+
+    // Cascade to Auth nodes referencing this page via nodeId or old route path
+    if (n.type === "auth" && n.data?.redirects) {
+      const r = { ...n.data.redirects };
+      let changed = false;
+      if (r.signInPageNodeId === target.nodeId || (oldPath && arePageRoutesEqual(r.signInPageUrl || "", oldPath))) {
+        r.signInPageUrl = newPath;
+        r.signInPageNodeId = target.nodeId;
+        changed = true;
+      }
+      if (r.signUpPageNodeId === target.nodeId || (oldPath && arePageRoutesEqual(r.signUpPageUrl || "", oldPath))) {
+        r.signUpPageUrl = newPath;
+        r.signUpPageNodeId = target.nodeId;
+        changed = true;
+      }
+      if (r.signInRedirectNodeId === target.nodeId || (oldPath && arePageRoutesEqual(r.signInRedirectUrl || "", oldPath))) {
+        r.signInRedirectUrl = newPath;
+        r.signInRedirectNodeId = target.nodeId;
+        changed = true;
+      }
+      if (r.signUpRedirectNodeId === target.nodeId || (oldPath && arePageRoutesEqual(r.signUpRedirectUrl || "", oldPath))) {
+        r.signUpRedirectUrl = newPath;
+        r.signUpRedirectNodeId = target.nodeId;
+        changed = true;
+      }
+      if (r.signOutRedirectNodeId === target.nodeId || (oldPath && arePageRoutesEqual(r.signOutRedirectUrl || "", oldPath))) {
+        r.signOutRedirectUrl = newPath;
+        r.signOutRedirectNodeId = target.nodeId;
+        changed = true;
+      }
+      if (r.unauthorizedNodeId === target.nodeId || (oldPath && arePageRoutesEqual(r.unauthorizedUrl || "", oldPath))) {
+        r.unauthorizedUrl = newPath;
+        r.unauthorizedNodeId = target.nodeId;
+        changed = true;
+      }
+      if (r.pricingNodeId === target.nodeId || (oldPath && arePageRoutesEqual(r.pricingUrl || "", oldPath))) {
+        r.pricingUrl = newPath;
+        r.pricingNodeId = target.nodeId;
+        changed = true;
+      }
+
+      if (changed) {
+        cascadeElements.push({
+          id: n.id,
+          label: `${n.data?.label || "Auth"} → Redirects`,
+          type: "auth",
+          category: "ref",
+          description: `Auth redirect updated from "${oldPath}" to "${newPath}"`,
+        });
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            redirects: r,
+          },
+        };
+      }
+    }
+
     return n;
   });
-
-  const cascadeElements: CascadeElementInfo[] = [];
-  const brokenReferences: BrokenReferenceInfo[] = [];
 
   // 2. Cascade check: page references connected to this page
   edges.forEach((e) => {

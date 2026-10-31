@@ -1,5 +1,6 @@
 import { BackendNode } from "@/types/canvas";
 import { applyNodeChanges, NodeChange } from "@xyflow/react";
+import { pageRouteToUrl, pageRouteToFolderPath, arePageRoutesEqual } from "@workspace/canvas";
 import { BackendCanvasState, SyncServiceTypesSummary } from "../types";
 import {
   isSchemaNodeType,
@@ -177,17 +178,109 @@ export const createNodeSlice = (
     const isSchema = isSchemaNodeType(updatedNode.type);
     get().pushHistorySnapshot(isSchema ? "schema" : "graph");
 
+    let effectiveChanges = changes;
+
+    // When renaming a WebPage node, keep data.path, data.pageSlug, and data.route in sync
+    const isWebPageRename =
+      updatedNode.type === "webPage" &&
+      changes.data &&
+      "label" in changes.data &&
+      changes.data.label &&
+      changes.data.label !== updatedNode.data?.label;
+
+    let modifiedAuthNodes: BackendNode[] = [];
+
+    if (isWebPageRename) {
+      const newLabel = changes.data!.label!;
+      const newPath = pageRouteToUrl(newLabel);
+      const newSlug = pageRouteToFolderPath(newLabel);
+      const oldPath = pageRouteToUrl(updatedNode.data?.label || updatedNode.data?.path || "");
+
+      effectiveChanges = {
+        ...changes,
+        data: {
+          ...updatedNode.data,
+          ...changes.data,
+          label: newLabel,
+          path: newPath,
+          pageSlug: newSlug,
+          route: newPath,
+        },
+      };
+
+      // Cascade updated path to all auth nodes that reference this webPage (by nodeId or by oldPath)
+      const currentNodes = get().nodes;
+      currentNodes.forEach((n) => {
+        if (n.type === "auth" && n.data?.redirects) {
+          const r = { ...n.data.redirects };
+          let changed = false;
+          if (r.signInPageNodeId === id || (oldPath && arePageRoutesEqual(r.signInPageUrl || "", oldPath))) {
+            r.signInPageUrl = newPath;
+            r.signInPageNodeId = id;
+            changed = true;
+          }
+          if (r.signUpPageNodeId === id || (oldPath && arePageRoutesEqual(r.signUpPageUrl || "", oldPath))) {
+            r.signUpPageUrl = newPath;
+            r.signUpPageNodeId = id;
+            changed = true;
+          }
+          if (r.signInRedirectNodeId === id || (oldPath && arePageRoutesEqual(r.signInRedirectUrl || "", oldPath))) {
+            r.signInRedirectUrl = newPath;
+            r.signInRedirectNodeId = id;
+            changed = true;
+          }
+          if (r.signUpRedirectNodeId === id || (oldPath && arePageRoutesEqual(r.signUpRedirectUrl || "", oldPath))) {
+            r.signUpRedirectUrl = newPath;
+            r.signUpRedirectNodeId = id;
+            changed = true;
+          }
+          if (r.signOutRedirectNodeId === id || (oldPath && arePageRoutesEqual(r.signOutRedirectUrl || "", oldPath))) {
+            r.signOutRedirectUrl = newPath;
+            r.signOutRedirectNodeId = id;
+            changed = true;
+          }
+          if (r.unauthorizedNodeId === id || (oldPath && arePageRoutesEqual(r.unauthorizedUrl || "", oldPath))) {
+            r.unauthorizedUrl = newPath;
+            r.unauthorizedNodeId = id;
+            changed = true;
+          }
+          if (r.pricingNodeId === id || (oldPath && arePageRoutesEqual(r.pricingUrl || "", oldPath))) {
+            r.pricingUrl = newPath;
+            r.pricingNodeId = id;
+            changed = true;
+          }
+          if (changed) {
+            modifiedAuthNodes.push({
+              ...n,
+              data: {
+                ...n.data,
+                redirects: r,
+              },
+            });
+          }
+        }
+      });
+    }
+
     // 1. Sync entity table rename references across referencing columns
     const currentNodes = syncEntityRenameReferences(
       get().nodes,
       id,
       updatedNode,
-      changes,
+      effectiveChanges,
     );
 
-    let nextNodes = currentNodes.map((n) =>
-      n.id === id ? { ...n, ...changes } : n,
-    );
+    let nextNodes = currentNodes.map((n) => {
+      if (n.id === id) {
+        return { ...n, ...effectiveChanges };
+      }
+      const matchedAuth = modifiedAuthNodes.find((a) => a.id === n.id);
+      if (matchedAuth) {
+        return matchedAuth;
+      }
+      return n;
+    });
+
     const updated = nextNodes.find((n) => n.id === id);
     if (!updated) return;
 
@@ -195,7 +288,7 @@ export const createNodeSlice = (
     const edgeSync = syncNodeDropdownEdges(
       id,
       updatedNode,
-      changes,
+      effectiveChanges,
       get().edges,
       nextNodes,
     );
@@ -205,6 +298,7 @@ export const createNodeSlice = (
       pendingNodeUpserts: [
         ...get().pendingNodeUpserts,
         updated,
+        ...modifiedAuthNodes,
       ],
       ...(edgeSync.edgesChanged ? { edges: edgeSync.nextEdges } : {}),
       ...(edgeSync.newPendingEdgeRemovals.length > 0
@@ -228,10 +322,10 @@ export const createNodeSlice = (
     // 3. Synchronize service label changes to companion TypesNode
     if (
       updated.type === "service" &&
-      changes.data &&
-      "label" in changes.data &&
-      changes.data.label &&
-      changes.data.label !== updatedNode.data?.label
+      effectiveChanges.data &&
+      "label" in effectiveChanges.data &&
+      effectiveChanges.data.label &&
+      effectiveChanges.data.label !== updatedNode.data?.label
     ) {
       const companionNode = nextNodes.find(
         (n) => n.type === "types" && isNodeDerivedFromService(n, id),

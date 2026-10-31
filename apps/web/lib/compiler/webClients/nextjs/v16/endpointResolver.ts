@@ -1,5 +1,6 @@
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { Endpoint } from "@workspace/canvas/types";
+import { pageRouteToUrl } from "@workspace/canvas";
 import { LinkedEndpointInfo } from "./types";
 
 export function getServicePort(targetNode: BackendNode): string {
@@ -400,7 +401,7 @@ export function resolvePageRefLink(
         cleanLabel === "/";
       const slug = isRoot
         ? "/"
-        : `/${cleanLabel.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`;
+        : pageRouteToUrl(pageLabel);
 
       return {
         targetNodeId: targetPageNode.id,
