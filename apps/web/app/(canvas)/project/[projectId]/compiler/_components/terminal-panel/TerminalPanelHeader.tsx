@@ -3,8 +3,6 @@
 import React from "react";
 import {
   Terminal,
-  Copy,
-  Check,
   Maximize2,
   Minimize2,
   Trash,
@@ -16,6 +14,7 @@ import {
   AlertTriangle,
   Zap,
   X,
+  Eraser,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { TerminalPanelTab } from "@workspace/canvas/types";
@@ -31,8 +30,8 @@ export interface TerminalPanelHeaderProps {
   isMaximized: boolean;
   onToggleMaximize: () => void;
   onToggleOpen: () => void;
-  onCopy: () => void;
-  copied: boolean;
+  onCopy?: () => void;
+  copied?: boolean;
   onClear: () => void;
   hasProjectId: boolean;
   // Optional desktop / sync props
@@ -54,8 +53,6 @@ export function TerminalPanelHeader({
   isMaximized,
   onToggleMaximize,
   onToggleOpen,
-  onCopy,
-  copied,
   onClear,
   hasProjectId,
   inElectron = false,
@@ -252,21 +249,6 @@ export function TerminalPanelHeader({
           </Button>
         ) : null}
 
-        {/* Copy Output Button */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onCopy}
-          title="Copy Output"
-          className="h-6 px-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-        >
-          {copied ? (
-            <Check className="w-3.5 h-3.5 text-emerald-400" />
-          ) : (
-            <Copy className="w-3.5 h-3.5" />
-          )}
-        </Button>
-
         {/* Clear Buffer Button */}
         <Button
           variant="ghost"
@@ -275,7 +257,7 @@ export function TerminalPanelHeader({
           title="Clear Console / Terminal Buffer"
           className="h-6 px-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800"
         >
-          <Trash className="w-3.5 h-3.5" />
+          <Eraser className="w-3.5 h-3.5" />
         </Button>
 
         {/* Maximize / Minimize Button */}
