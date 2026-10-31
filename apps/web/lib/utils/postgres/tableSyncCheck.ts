@@ -75,7 +75,9 @@ export async function checkPostgresTableSync(
 
   let client: import("pg").PoolClient | undefined;
   try {
+    console.log(`[checkPostgresTableSync] Connecting to database for table "${safeTable}" (targetSchema: "${targetSchema}", URI: ${connectionString.replace(/:([^:@]+)@/, ":***@")})...`);
     client = await pool.connect();
+    console.log(`[checkPostgresTableSync] Successfully connected! Querying information_schema for table "${safeTable}"...`);
 
     // Check if table exists in the configured schema
     const checkRes = await client.query<{ exists: boolean }>(
@@ -430,6 +432,7 @@ export async function checkPostgresTableSync(
       missingPrerequisiteTables,
     };
   } catch (error) {
+    console.error(`[checkPostgresTableSync] Error during table sync check for table "${safeTable}":`, error);
     return {
       success: false,
       serverReachable: false,
