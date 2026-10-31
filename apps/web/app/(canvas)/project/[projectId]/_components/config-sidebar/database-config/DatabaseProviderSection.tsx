@@ -18,7 +18,7 @@ import {
   Lock,
 } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../backend-nodes/graph-nodes/common";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 import { Textarea } from "@workspace/ui/components/textarea";
@@ -311,7 +311,7 @@ export function DatabaseProviderSection({
             </div>
 
             <div className="relative">
-              <Input
+              <LocalInput
                 type={showPassword ? "text" : "password"}
                 value={data.connectionString || ""}
                 onChange={(e) => {
@@ -367,7 +367,7 @@ export function DatabaseProviderSection({
               )}
             </div>
 
-            <Input
+            <LocalInput
               type={showPassword ? "text" : "password"}
               value={data.connectionStringPooled || ""}
               onChange={(e) => onUpdateField("connectionStringPooled", e.target.value)}
