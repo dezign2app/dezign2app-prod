@@ -248,11 +248,11 @@ export const PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION: PaymentsTableDefinition = {
     { name: "creemCustomerId", type: DB_COLUMN_TYPES.TEXT },
     { name: "plan", type: DB_COLUMN_TYPES.TEXT, isNotNull: true, },
     { name: "status", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
-    { name: "currentPeriodStart", type: DB_COLUMN_TYPES.TEXT },
-    { name: "currentPeriodEnd", type: DB_COLUMN_TYPES.TEXT },
+    { name: "currentPeriodStart", type: DB_COLUMN_TYPES.TIMESTAMPTZ },
+    { name: "currentPeriodEnd", type: DB_COLUMN_TYPES.TIMESTAMPTZ },
     { name: "cancelAtPeriodEnd", type: DB_COLUMN_TYPES.BOOLEAN },
-    { name: "createdAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
-    { name: "updatedAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
+    { name: "createdAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
+    { name: "updatedAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
   ],
   defaultIndexes: [
     { name: "idx_subscription_userId", columns: "userId" },
@@ -350,12 +350,12 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "email", type: DB_COLUMN_TYPES.TEXT, isUnique: true, isNotNull: true },
       { name: "emailVerified", type: DB_COLUMN_TYPES.BOOLEAN, isNotNull: true },
       { name: "image", type: DB_COLUMN_TYPES.TEXT },
-      { name: "createdAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
-      { name: "updatedAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
+      { name: "createdAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
+      { name: "updatedAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
       { name: "role", type: DB_COLUMN_TYPES.TEXT },
       { name: "banned", type: DB_COLUMN_TYPES.BOOLEAN },
       { name: "banReason", type: DB_COLUMN_TYPES.TEXT },
-      { name: "banExpires", type: DB_COLUMN_TYPES.TEXT },
+      { name: "banExpires", type: DB_COLUMN_TYPES.TIMESTAMPTZ },
       { name: "twoFactorEnabled", type: DB_COLUMN_TYPES.BOOLEAN },
       { name: "plan", type: DB_COLUMN_TYPES.TEXT },
       { name: "creemCustomerId", type: DB_COLUMN_TYPES.TEXT },
@@ -373,7 +373,7 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
       { name: "userId", type: DB_COLUMN_TYPES.UUID, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" }, isNotNull: true },
       { name: "token", type: DB_COLUMN_TYPES.TEXT, isUnique: true, isNotNull: true },
-      { name: "expiresAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
+      { name: "expiresAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
       { name: "ipAddress", type: DB_COLUMN_TYPES.TEXT },
       { name: "userAgent", type: DB_COLUMN_TYPES.TEXT },
       { name: "createdAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
@@ -401,12 +401,12 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "password", type: DB_COLUMN_TYPES.TEXT },
       { name: "accessToken", type: DB_COLUMN_TYPES.TEXT },
       { name: "refreshToken", type: DB_COLUMN_TYPES.TEXT },
-      { name: "accessTokenExpiresAt", type: DB_COLUMN_TYPES.TEXT },
-      { name: "refreshTokenExpiresAt", type: DB_COLUMN_TYPES.TEXT },
+      { name: "accessTokenExpiresAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ },
+      { name: "refreshTokenExpiresAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ },
       { name: "scope", type: DB_COLUMN_TYPES.TEXT },
       { name: "idToken", type: DB_COLUMN_TYPES.TEXT },
-      { name: "createdAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
-      { name: "updatedAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
+      { name: "createdAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
+      { name: "updatedAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
     ],
     defaultIndexes: [
       { name: "idx_account_userId", columns: "userId" },
@@ -422,9 +422,9 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
       { name: "identifier", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "value", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
-      { name: "expiresAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
-      { name: "createdAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
-      { name: "updatedAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
+      { name: "expiresAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
+      { name: "createdAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
+      { name: "updatedAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
     ],
     defaultIndexes: [
       { name: "idx_verification_identifier", columns: "identifier" },
@@ -441,7 +441,7 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "slug", type: DB_COLUMN_TYPES.TEXT, isUnique: true, isNotNull: true },
       { name: "logo", type: DB_COLUMN_TYPES.TEXT },
       { name: "metadata", type: DB_COLUMN_TYPES.TEXT },
-      { name: "createdAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
+      { name: "createdAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
     ],
     defaultIndexes: [
       { name: "idx_organization_slug", columns: "slug", isUnique: true },
@@ -457,7 +457,7 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "organizationId", type: DB_COLUMN_TYPES.UUID, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.ORG, column: "id" }, isNotNull: true },
       { name: "userId", type: DB_COLUMN_TYPES.UUID, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" }, isNotNull: true },
       { name: "role", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
-      { name: "createdAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
+      { name: "createdAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
     ],
     defaultIndexes: [
       { name: "idx_member_organizationId", columns: "organizationId" },
@@ -477,8 +477,8 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "role", type: DB_COLUMN_TYPES.TEXT },
       { name: "teamId", type: DB_COLUMN_TYPES.UUID },
       { name: "status", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
-      { name: "expiresAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
-      { name: "createdAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
+      { name: "expiresAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
+      { name: "createdAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
       { name: "inviterId", type: DB_COLUMN_TYPES.UUID, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" }, isNotNull: true },
     ],
     defaultIndexes: [
@@ -495,7 +495,7 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
       { name: "organizationId", type: DB_COLUMN_TYPES.UUID, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.ORG, column: "id" }, isNotNull: true },
       { name: "name", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
-      { name: "createdAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
+      { name: "createdAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
     ],
     defaultIndexes: [
       { name: "idx_team_organizationId", columns: "organizationId" },
@@ -511,7 +511,7 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "teamId", type: DB_COLUMN_TYPES.UUID, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.TEAM, column: "id" }, isNotNull: true },
       { name: "userId", type: DB_COLUMN_TYPES.UUID, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" }, isNotNull: true },
       { name: "role", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
-      { name: "createdAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
+      { name: "createdAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
     ],
     defaultIndexes: [
       { name: "idx_teamMember_teamId", columns: "teamId" },
@@ -534,7 +534,7 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "deviceType", type: DB_COLUMN_TYPES.TEXT },
       { name: "backedUp", type: DB_COLUMN_TYPES.BOOLEAN },
       { name: "transports", type: DB_COLUMN_TYPES.TEXT },
-      { name: "createdAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
+      { name: "createdAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
       { name: "aaguid", type: DB_COLUMN_TYPES.TEXT },
     ],
     defaultIndexes: [
@@ -554,7 +554,7 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "backupCodes", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "verified", type: DB_COLUMN_TYPES.BOOLEAN },
       { name: "failedVerificationCount", type: DB_COLUMN_TYPES.INTEGER },
-      { name: "lockedUntil", type: DB_COLUMN_TYPES.TEXT },
+      { name: "lockedUntil", type: DB_COLUMN_TYPES.TIMESTAMPTZ },
     ],
     defaultIndexes: [
       { name: "idx_twoFactor_userId", columns: "userId" },
@@ -569,8 +569,8 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
       { name: "publicKey", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "privateKey", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
-      { name: "createdAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
-      { name: "expiresAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
+      { name: "createdAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
+      { name: "expiresAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ },
       { name: "alg", type: DB_COLUMN_TYPES.TEXT },
       { name: "crv", type: DB_COLUMN_TYPES.TEXT },
     ],
@@ -667,7 +667,12 @@ export function resolveBetterAuthTableColumns(
 ): CanvasEntityColumn[] {
   const isSqlite = (engine || "").toLowerCase() === "sqlite";
   return columns.map((col) => {
-    if (isSqlite && col.type === DB_COLUMN_TYPES.UUID) {
+    if (
+      isSqlite &&
+      (col.type === DB_COLUMN_TYPES.UUID ||
+        col.type === DB_COLUMN_TYPES.TIMESTAMPTZ ||
+        col.type === DB_COLUMN_TYPES.TIMESTAMP)
+    ) {
       const { defaultValue, ...rest } = col;
       return { ...rest, type: DB_COLUMN_TYPES.TEXT };
     }

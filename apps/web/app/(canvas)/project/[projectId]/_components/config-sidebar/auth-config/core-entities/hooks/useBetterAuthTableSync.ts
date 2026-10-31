@@ -18,6 +18,7 @@ import {
   isBetterAuthTableRequired,
   resolveBetterAuthTableColumns,
   CanvasEntityColumn,
+  DB_COLUMN_TYPES,
 } from "@workspace/canvas";
 import { BackendNode, BackendNodeData } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -72,6 +73,10 @@ export function repairEntityColumns(
       patched.isNotNull = true;
       colChanged = true;
     }
+    if (!defCol.isNotNull && !defCol.isPrimaryKey && patched.isNotNull) {
+      delete patched.isNotNull;
+      colChanged = true;
+    }
     if (defCol.isUnique && !patched.isUnique) {
       patched.isUnique = true;
       colChanged = true;
@@ -85,7 +90,12 @@ export function repairEntityColumns(
     if (
       defCol.type &&
       patched.type !== defCol.type &&
-      (defCol.isPrimaryKey || defCol.isForeignKey || defCol.name.toLowerCase() === "id" || defCol.name.toLowerCase().endsWith("id"))
+      (defCol.isPrimaryKey ||
+        defCol.isForeignKey ||
+        defCol.name.toLowerCase() === "id" ||
+        defCol.name.toLowerCase().endsWith("id") ||
+        defCol.type === DB_COLUMN_TYPES.TIMESTAMPTZ ||
+        defCol.type === DB_COLUMN_TYPES.UUID)
     ) {
       patched.type = defCol.type;
       colChanged = true;
@@ -172,11 +182,17 @@ export function checkEntitySchemaDiscrepancies(
     if (!existing) return false;
     if (reqCol.isPrimaryKey && !existing.isPrimaryKey) return true;
     if (reqCol.isNotNull && !existing.isNotNull) return true;
+    if (!reqCol.isNotNull && !reqCol.isPrimaryKey && existing.isNotNull) return true;
     if (reqCol.isUnique && !existing.isUnique) return true;
     if (
       reqCol.type &&
       existing.type !== reqCol.type &&
-      (reqCol.isPrimaryKey || reqCol.isForeignKey || reqCol.name.toLowerCase() === "id" || reqCol.name.toLowerCase().endsWith("id"))
+      (reqCol.isPrimaryKey ||
+        reqCol.isForeignKey ||
+        reqCol.name.toLowerCase() === "id" ||
+        reqCol.name.toLowerCase().endsWith("id") ||
+        reqCol.type === DB_COLUMN_TYPES.TIMESTAMPTZ ||
+        reqCol.type === DB_COLUMN_TYPES.UUID)
     ) {
       return true;
     }
