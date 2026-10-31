@@ -6,29 +6,17 @@ import { PostgresConnectionConfig } from "./types";
  */
 export function resolveConnectionString(config: PostgresConnectionConfig): string {
   // 1. Explicit connection string takes highest precedence
-  if (config.connectionString) {
-    console.log("[resolveConnectionString] Using config.connectionString:", config.connectionString.replace(/:([^:@]+)@/, ":***@"));
-    return config.connectionString;
-  }
-  if (config.connectionStringPooled) {
-    console.log("[resolveConnectionString] Using config.connectionStringPooled:", config.connectionStringPooled.replace(/:([^:@]+)@/, ":***@"));
-    return config.connectionStringPooled;
-  }
+  if (config.connectionString) return config.connectionString;
+  if (config.connectionStringPooled) return config.connectionStringPooled;
 
   // 2. From node's explicit env var if set (checks process.env then .env file on disk)
   if (config.connectionStringEnv) {
     const envVal = process.env[config.connectionStringEnv] || resolveEnvValue(config.connectionStringEnv);
-    if (envVal) {
-      console.log(`[resolveConnectionString] Resolved from ${config.connectionStringEnv}:`, envVal.replace(/:([^:@]+)@/, ":***@"));
-      return envVal;
-    }
+    if (envVal) return envVal;
   }
   if (config.connectionStringPooledEnv) {
     const envVal = process.env[config.connectionStringPooledEnv] || resolveEnvValue(config.connectionStringPooledEnv);
-    if (envVal) {
-      console.log(`[resolveConnectionString] Resolved from pooled ${config.connectionStringPooledEnv}:`, envVal.replace(/:([^:@]+)@/, ":***@"));
-      return envVal;
-    }
+    if (envVal) return envVal;
   }
 
   // 3. Fallback to DATABASE_URL if no explicit credentials were given
@@ -37,10 +25,7 @@ export function resolveConnectionString(config: PostgresConnectionConfig): strin
   );
   if (!hasExplicitCredentials) {
     const dbUrl = process.env.DATABASE_URL || resolveEnvValue("DATABASE_URL");
-    if (dbUrl) {
-      console.log("[resolveConnectionString] Resolved from default DATABASE_URL:", dbUrl.replace(/:([^:@]+)@/, ":***@"));
-      return dbUrl;
-    }
+    if (dbUrl) return dbUrl;
   }
 
   // 4. Build from parts
@@ -62,7 +47,6 @@ export function resolveConnectionString(config: PostgresConnectionConfig): strin
   ) {
     url += "?sslmode=require";
   }
-  console.log(`[resolveConnectionString] Built fallback URL from constituent parts (host: ${host}, port: ${port}, db: ${db}, user: ${user}):`, url.replace(/:([^:@]+)@/, ":***@"));
   return url;
 }
 
