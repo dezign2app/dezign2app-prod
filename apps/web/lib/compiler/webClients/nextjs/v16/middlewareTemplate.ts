@@ -11,11 +11,22 @@ export function generateProxy(pagesInfo: PageInfo[], authNodeData?: BackendNodeD
   );
 
   const redirects = authNodeData?.redirects || {};
-  const signInPageUrl = redirects.signInPageUrl || "/login";
-  const signUpPageUrl = redirects.signUpPageUrl || "/register";
-  const signInRedirectUrl = redirects.signInRedirectUrl || "/";
-  const unauthorizedUrl = redirects.unauthorizedUrl || "/unauthorized";
-  const pricingUrl = redirects.pricingUrl || "/pricing";
+  const resolveRedirect = (nodeId?: string, fallbackUrl?: string, defaultFallback: string = "/") => {
+    if (nodeId) {
+      const matched = pagesInfo.find((p) => p.nodeId === nodeId);
+      if (matched) return matched.routePath;
+    }
+    if (fallbackUrl) {
+      return fallbackUrl.startsWith("/") ? fallbackUrl : `/${fallbackUrl}`;
+    }
+    return defaultFallback;
+  };
+
+  const signInPageUrl = resolveRedirect(redirects.signInPageNodeId, redirects.signInPageUrl, "/login");
+  const signUpPageUrl = resolveRedirect(redirects.signUpPageNodeId, redirects.signUpPageUrl, "/register");
+  const signInRedirectUrl = resolveRedirect(redirects.signInRedirectNodeId, redirects.signInRedirectUrl, "/");
+  const unauthorizedUrl = resolveRedirect(redirects.unauthorizedNodeId, redirects.unauthorizedUrl, "/unauthorized");
+  const pricingUrl = resolveRedirect(redirects.pricingNodeId, redirects.pricingUrl, "/pricing");
 
   if (!authNodeData) {
     return `import { NextResponse } from "next/server";

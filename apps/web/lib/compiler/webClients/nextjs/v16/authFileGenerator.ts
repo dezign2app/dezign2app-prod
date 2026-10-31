@@ -213,9 +213,20 @@ export const { POST, GET } = toNextJsHandler(auth);
     });
 
     const redirects = authNode.data?.redirects || {};
-    const defaultSignIn = redirects.signInPageUrl || "/login";
-    const defaultUnauthorized = redirects.unauthorizedUrl || "/unauthorized";
-    const defaultPricing = redirects.pricingUrl || "/pricing";
+    const resolveRedirect = (nodeId?: string, fallbackUrl?: string, defaultFallback: string = "/") => {
+      if (nodeId && pagesInfo) {
+        const matched = pagesInfo.find((p) => p.nodeId === nodeId);
+        if (matched) return matched.routePath;
+      }
+      if (fallbackUrl) {
+        return fallbackUrl.startsWith("/") ? fallbackUrl : `/${fallbackUrl}`;
+      }
+      return defaultFallback;
+    };
+
+    const defaultSignIn = resolveRedirect(redirects.signInPageNodeId, redirects.signInPageUrl, "/login");
+    const defaultUnauthorized = resolveRedirect(redirects.unauthorizedNodeId, redirects.unauthorizedUrl, "/unauthorized");
+    const defaultPricing = resolveRedirect(redirects.pricingNodeId, redirects.pricingUrl, "/pricing");
 
     // Reusable Server Authorization Helpers under lib/auth/
     files.push({

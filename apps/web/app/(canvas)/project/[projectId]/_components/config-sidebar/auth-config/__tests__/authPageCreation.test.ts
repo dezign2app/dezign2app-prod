@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { getConfiguredPages } from "../security/securityUtils";
+import { handlePageRename } from "@/app/(canvas)/project/[projectId]/_components/node-deletion-dialog/subitem-handlers/handlePageRename";
 
 describe("AuthConfig On-Demand WebPage Creation & Route Linking", () => {
   it("creates a WebPageNode with sign-in form boilerplate and links to WebApp public zone", () => {
@@ -172,5 +174,137 @@ describe("AuthConfig On-Demand WebPage Creation & Route Linking", () => {
     expect(createdEdge).toBeDefined();
     expect(createdEdge?.sourceHandle).toBe("private-in");
     expect(createdEdge?.targetHandle).toBe("page-in");
+  });
+
+  it("getConfiguredPages derives path from label and ignores stale legacy path", () => {
+    // When a page had path: "/dashboard", but was renamed to label: "/c"
+    const nodes: BackendNode[] = [
+      {
+        id: "webPage-renamed",
+        type: "webPage",
+        fractionalIndex: "a1",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "/c",
+          path: "/dashboard", // Legacy stale path
+        },
+      },
+    ];
+
+    const pages = getConfiguredPages(nodes);
+    expect(pages).toHaveLength(1);
+    expect(pages[0]?.id).toBe("webPage-renamed");
+    expect(pages[0]?.label).toBe("/c");
+    expect(pages[0]?.path).toBe("/c"); // Must be /c, NOT /dashboard!
+  });
+
+  it("store.updateNode synchronizes path and cascades to referencing auth redirects on page rename", () => {
+    const pageId = "webPage-dash-to-c";
+    const authId = "auth-server-test";
+
+    useBackendCanvasStore.setState({
+      nodes: [
+        {
+          id: pageId,
+          type: "webPage",
+          fractionalIndex: "a1",
+          position: { x: 0, y: 0 },
+          data: {
+            label: "/dashboard",
+            path: "/dashboard",
+          },
+        },
+        {
+          id: authId,
+          type: "auth",
+          fractionalIndex: "a2",
+          position: { x: 100, y: 100 },
+          data: {
+            label: "Auth Server",
+            redirects: {
+              signInRedirectUrl: "/dashboard",
+              signInRedirectNodeId: pageId,
+            },
+          },
+        },
+      ],
+      edges: [],
+    });
+
+    const store = useBackendCanvasStore.getState();
+
+    // Rename page from /dashboard to /c
+    store.updateNode(pageId, {
+      data: {
+        ...store.nodes.find((n) => n.id === pageId)!.data,
+        label: "/c",
+      },
+    });
+
+    const updatedNodes = useBackendCanvasStore.getState().nodes;
+    const updatedPage = updatedNodes.find((n) => n.id === pageId);
+    const updatedAuth = updatedNodes.find((n) => n.id === authId);
+
+    // Page node paths should be updated
+    expect(updatedPage?.data?.label).toBe("/c");
+    expect(updatedPage?.data?.path).toBe("/c");
+    expect(updatedPage?.data?.route).toBe("/c");
+    expect(updatedPage?.data?.pageSlug).toBe("c");
+
+    // Auth node redirects should be updated to new path
+    expect(updatedAuth?.data?.redirects?.signInRedirectUrl).toBe("/c");
+    expect(updatedAuth?.data?.redirects?.signInRedirectNodeId).toBe(pageId);
+  });
+
+  it("handlePageRename simulation updates node data and cascades auth redirects", () => {
+    const pageId = "page-123";
+    const authId = "auth-123";
+    const ctx = {
+      nodes: [
+        {
+          id: pageId,
+          type: "webPage" as const,
+          fractionalIndex: "a1",
+          position: { x: 0, y: 0 },
+          data: {
+            label: "/dashboard",
+            path: "/dashboard",
+          },
+        },
+        {
+          id: authId,
+          type: "auth" as const,
+          fractionalIndex: "a2",
+          position: { x: 0, y: 0 },
+          data: {
+            label: "Auth",
+            redirects: {
+              signInRedirectUrl: "/dashboard",
+              signInRedirectNodeId: pageId,
+            },
+          },
+        },
+      ],
+      endpoints: [],
+      events: [],
+      edges: [],
+    };
+
+    const res = handlePageRename(ctx, {
+      type: "pageRename",
+      nodeId: pageId,
+      oldLabel: "/dashboard",
+      newLabel: "/c",
+      onConfirm: () => {},
+    });
+
+    const simPage = res.nextNodes.find((n) => n.id === pageId);
+    const simAuth = res.nextNodes.find((n) => n.id === authId);
+
+    expect(simPage?.data?.label).toBe("/c");
+    expect(simPage?.data?.path).toBe("/c");
+    expect(simPage?.data?.pageSlug).toBe("c");
+    expect(simAuth?.data?.redirects?.signInRedirectUrl).toBe("/c");
+    expect(res.cascadeElements.some((e) => e.type === "auth")).toBe(true);
   });
 });

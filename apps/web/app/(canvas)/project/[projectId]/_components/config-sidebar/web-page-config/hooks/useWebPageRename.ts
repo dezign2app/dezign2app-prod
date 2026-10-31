@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { parseRouteWithQueryParams, parsePageRoute, normalizePageRoute, arePageRoutesEqual } from "@workspace/canvas";
+import {
+  parseRouteWithQueryParams,
+  parsePageRoute,
+  normalizePageRoute,
+  arePageRoutesEqual,
+  pageRouteToUrl,
+  pageRouteToFolderPath,
+} from "@workspace/canvas";
 import { toast } from "sonner";
 import { BackendNode, BackendEdge } from "@/types/canvas";
 
@@ -83,9 +90,15 @@ export function useWebPageRename({
     if (pathParamsChanged) additionalChanges.pathParams = mergedPathParams;
     if (queryParamsChanged) additionalChanges.queryParams = mergedQueryParams;
 
-    // If oldLabel and cleanNew point to the exact same route (e.g. "/login" vs "login"), update label directly
+    // If oldLabel and cleanNew point to the exact same route (e.g. "/login" vs "login"), update label and path directly
     if (arePageRoutesEqual(oldLabel, cleanNew)) {
-      updateData({ label: cleanNew, ...additionalChanges });
+      updateData({
+        label: cleanNew,
+        path: pageRouteToUrl(cleanNew),
+        pageSlug: pageRouteToFolderPath(cleanNew),
+        route: pageRouteToUrl(cleanNew),
+        ...additionalChanges,
+      });
       return;
     }
 
@@ -96,7 +109,13 @@ export function useWebPageRename({
       oldLabel === "Untitled" ||
       oldLabel === "Page"
     ) {
-      updateData({ label: cleanNew, ...additionalChanges });
+      updateData({
+        label: cleanNew,
+        path: pageRouteToUrl(cleanNew),
+        pageSlug: pageRouteToFolderPath(cleanNew),
+        route: pageRouteToUrl(cleanNew),
+        ...additionalChanges,
+      });
       return;
     }
 
@@ -110,7 +129,13 @@ export function useWebPageRename({
     }
 
     if (!cleanOld || cleanOld === "page-server" || cleanOld === "Untitled" || cleanOld === "Page") {
-      updateData({ label: cleanNew, ...additionalChanges });
+      updateData({
+        label: cleanNew,
+        path: pageRouteToUrl(cleanNew),
+        pageSlug: pageRouteToFolderPath(cleanNew),
+        route: pageRouteToUrl(cleanNew),
+        ...additionalChanges,
+      });
       return;
     }
 
@@ -122,6 +147,9 @@ export function useWebPageRename({
     if (pendingRename) {
       updateData({
         label: pendingRename.newLabel,
+        path: pageRouteToUrl(pendingRename.newLabel),
+        pageSlug: pageRouteToFolderPath(pendingRename.newLabel),
+        route: pageRouteToUrl(pendingRename.newLabel),
         ...(pendingRename.additionalChanges || {}),
       });
       setPendingRename(null);

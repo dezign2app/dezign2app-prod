@@ -29,7 +29,15 @@ import {
   getSimulationNodeBorderClass,
   LocalTextarea,
 } from "../../common";
-import { parseRouteWithQueryParams, parsePageRoute, normalizePageRoute, arePageRoutesEqual, WebAppZone } from "@workspace/canvas";
+import {
+  parseRouteWithQueryParams,
+  parsePageRoute,
+  normalizePageRoute,
+  arePageRoutesEqual,
+  pageRouteToUrl,
+  pageRouteToFolderPath,
+  WebAppZone,
+} from "@workspace/canvas";
 import { RealtimeConnection, ClientDeliveryProtocol, Endpoint, PageStateObject, PageSection, StoreActionBinding, SectionComponentBinding } from "@workspace/canvas/types";
 import { SectionList, RealtimeConnectionList, useZoneHandLayout } from "./web-page";
 import { NodeDeletionDialog } from "@/app/(canvas)/project/[projectId]/_components/NodeDeletionDialog";
@@ -521,7 +529,17 @@ export const WebPageNode = ({
 
       // If oldLabel and cleanNew point to the exact same route (e.g. "/login" vs "login"), update label directly
       if (arePageRoutesEqual(oldLabel, cleanNew)) {
-        updateNode(id, { data: { ...data, label: cleanNew, isLayout: nextIsLayout, ...additionalChanges } });
+        updateNode(id, {
+          data: {
+            ...data,
+            label: cleanNew,
+            path: pageRouteToUrl(cleanNew),
+            pageSlug: pageRouteToFolderPath(cleanNew),
+            route: pageRouteToUrl(cleanNew),
+            isLayout: nextIsLayout,
+            ...additionalChanges,
+          },
+        });
         return;
       }
 
@@ -532,7 +550,17 @@ export const WebPageNode = ({
         oldLabel === "Untitled" ||
         oldLabel === "Page"
       ) {
-        updateNode(id, { data: { ...data, label: cleanNew, isLayout: nextIsLayout, ...additionalChanges } });
+        updateNode(id, {
+          data: {
+            ...data,
+            label: cleanNew,
+            path: pageRouteToUrl(cleanNew),
+            pageSlug: pageRouteToFolderPath(cleanNew),
+            route: pageRouteToUrl(cleanNew),
+            isLayout: nextIsLayout,
+            ...additionalChanges,
+          },
+        });
         return;
       }
 
@@ -546,7 +574,17 @@ export const WebPageNode = ({
       }
 
       if (!cleanOld || cleanOld === "page-server" || cleanOld === "Untitled" || cleanOld === "Page") {
-        updateNode(id, { data: { ...data, label: cleanNew, isLayout: nextIsLayout, ...additionalChanges } });
+        updateNode(id, {
+          data: {
+            ...data,
+            label: cleanNew,
+            path: pageRouteToUrl(cleanNew),
+            pageSlug: pageRouteToFolderPath(cleanNew),
+            route: pageRouteToUrl(cleanNew),
+            isLayout: nextIsLayout,
+            ...additionalChanges,
+          },
+        });
         return;
       }
 
@@ -576,7 +614,15 @@ export const WebPageNode = ({
     if (data.label && data.label.toLowerCase() !== "layout" && (data.label.includes(" ") || data.label !== parsePageRoute(data.label))) {
       const parsed = parsePageRoute(data.label);
       if (parsed !== data.label) {
-        updateNode(id, { data: { ...data, label: parsed } });
+        updateNode(id, {
+          data: {
+            ...data,
+            label: parsed,
+            path: pageRouteToUrl(parsed),
+            pageSlug: pageRouteToFolderPath(parsed),
+            route: pageRouteToUrl(parsed),
+          },
+        });
       }
     }
   }, [id, data.label, updateNode]);
@@ -697,6 +743,24 @@ export const WebPageNode = ({
   const normalizedLabel = parsePageRoute(rawLabel);
   const cleanLabel = normalizedLabel.toLowerCase();
   const isLayout = Boolean(data.isLayout) || cleanLabel === "layout" || rawLabel.trim().toLowerCase() === "layout";
+
+  // Auto-heal legacy / mismatched data.path, data.pageSlug, and data.route to match data.label
+  React.useEffect(() => {
+    if (data.label && !isLayout && data.label.toLowerCase() !== "layout") {
+      const canonicalPath = pageRouteToUrl(data.label);
+      const canonicalSlug = pageRouteToFolderPath(data.label);
+      if (data.path && !arePageRoutesEqual(data.path, canonicalPath)) {
+        updateNode(id, {
+          data: {
+            ...data,
+            path: canonicalPath,
+            pageSlug: canonicalSlug,
+            route: canonicalPath,
+          },
+        });
+      }
+    }
+  }, [id, data.label, data.path, isLayout, updateNode]);
   const isLandingPage =
     !isLayout && (data.isRoot === true || cleanLabel === "/");
 
@@ -1340,7 +1404,16 @@ export const WebPageNode = ({
             oldLabel: pendingRename.oldLabel,
             newLabel: pendingRename.newLabel,
             onConfirm: () => {
-              updateNode(id, { data: { ...data, label: pendingRename.newLabel } });
+              const newL = pendingRename.newLabel;
+              updateNode(id, {
+                data: {
+                  ...data,
+                  label: newL,
+                  path: pageRouteToUrl(newL),
+                  pageSlug: pageRouteToFolderPath(newL),
+                  route: pageRouteToUrl(newL),
+                },
+              });
               setPendingRename(null);
             },
           }}

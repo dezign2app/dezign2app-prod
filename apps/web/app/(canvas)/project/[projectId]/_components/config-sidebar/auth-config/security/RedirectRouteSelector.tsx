@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { CheckCircle2, AlertCircle, Pencil, Plus } from "lucide-react";
+import { arePageRoutesEqual } from "@workspace/canvas";
 import { RedirectRouteSelectorProps } from "./types";
 
 export const RedirectRouteSelector: React.FC<RedirectRouteSelectorProps> = ({
@@ -133,9 +134,11 @@ export const RedirectRouteSelector: React.FC<RedirectRouteSelectorProps> = ({
                     <span className="font-sans font-medium text-foreground truncate">
                       {matchedPage.label}
                     </span>
-                    <span className="text-[10px] text-muted-foreground font-mono truncate">
-                      ({matchedPage.path})
-                    </span>
+                    {!arePageRoutesEqual(matchedPage.label, matchedPage.path) && (
+                      <span className="text-[10px] text-muted-foreground font-mono truncate">
+                        ({matchedPage.path})
+                      </span>
+                    )}
                   </div>
                 ) : (
                   effectivePath || placeholder
@@ -148,14 +151,19 @@ export const RedirectRouteSelector: React.FC<RedirectRouteSelectorProps> = ({
                   <SelectLabel className="text-[10px] uppercase font-bold tracking-wider">
                     Configured Canvas Pages
                   </SelectLabel>
-                  {configuredPages.map((p) => (
-                    <SelectItem key={p.id} value={p.id} className="text-xs font-mono">
-                      <div className="flex items-center justify-between w-full gap-2">
-                        <span className="font-sans font-medium text-foreground">{p.label}</span>
-                        <span className="text-[10px] text-muted-foreground font-mono">({p.path})</span>
-                      </div>
-                    </SelectItem>
-                  ))}
+                  {configuredPages.map((p) => {
+                    const isSame = arePageRoutesEqual(p.label, p.path);
+                    return (
+                      <SelectItem key={p.id} value={p.id} className="text-xs font-mono">
+                        <div className="flex items-center justify-between w-full gap-2">
+                          <span className="font-sans font-medium text-foreground">{p.label}</span>
+                          {!isSame && (
+                            <span className="text-[10px] text-muted-foreground font-mono">({p.path})</span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectGroup>
               )}
 

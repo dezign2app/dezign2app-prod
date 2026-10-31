@@ -184,12 +184,14 @@ export function compileNextjsV16WebClient(
     }
 
     if (scope === "local" && targetPage) {
-      const pagePath = (targetPage.data?.path || targetPage.data?.label || "page")
-        .replace(/^\//, "")
-        .trim();
+      const matchedPageInfo = pagesInfo.find((p) => p.nodeId === targetPage?.id);
+      const rawPagePath = matchedPageInfo
+        ? (matchedPageInfo.isRoot ? "" : matchedPageInfo.slug)
+        : (targetPage.data?.label || targetPage.data?.path || "page");
+      const pagePath = rawPagePath.replace(/^\//, "").trim();
       const baseName = toPascalCase(storeName);
       const storeCompName = baseName.endsWith("Store") ? baseName : `${baseName}Store`;
-      localStorePaths[sn.id] = `app/${pagePath}/_stores/use${storeCompName}.ts`;
+      localStorePaths[sn.id] = pagePath ? `app/${pagePath}/_stores/use${storeCompName}.ts` : `app/_stores/use${storeCompName}.ts`;
     }
 
     return {

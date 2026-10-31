@@ -1,5 +1,6 @@
 import { BackendNode } from "@/types/canvas";
 import { labelToSlug } from "@/lib/compiler/webClients/nextjs/v16/slugUtils";
+import { computeCompiledPageRoute } from "@workspace/canvas";
 import { ConfiguredPage } from "./types";
 
 export const getConfiguredPages = (allNodes: BackendNode[]): ConfiguredPage[] => {
@@ -10,13 +11,27 @@ export const getConfiguredPages = (allNodes: BackendNode[]): ConfiguredPage[] =>
   const webPageNodes = (allNodes || []).filter((n) => n.type === "webPage");
 
   webPageNodes.forEach((node, idx) => {
-    const rawLabel = node.data?.label || `Page ${idx + 1}`;
+    const rawLabel = node.data?.label || node.data?.path || `Page ${idx + 1}`;
     const cleanLabel = rawLabel.trim().toLowerCase();
-    let path: string | undefined = node.data?.path || node.data?.pageSlug || node.data?.route;
-    if (!path || cleanLabel === "/") {
-      const slug = cleanLabel === "/" ? "home" : labelToSlug(rawLabel, idx);
-      path = slug === "home" ? "/" : `/${slug}`;
+
+    // Layouts are structural and cannot be redirect destinations
+    const isLayout = Boolean(node.data?.isLayout) || cleanLabel === "layout";
+    if (isLayout) return;
+
+    // Use current label as primary source of truth, deriving canonical URL path
+    let path: string;
+    if (cleanLabel === "/" || cleanLabel === "home" || cleanLabel === "index") {
+      path = "/";
+    } else if (node.data?.label && node.data.label.trim()) {
+      path = computeCompiledPageRoute({
+        label: rawLabel,
+        pathParams: node.data?.pathParams,
+        isLayout: false,
+      });
+    } else {
+      path = node.data?.path || node.data?.pageSlug || node.data?.route || `/${labelToSlug(rawLabel, idx)}`;
     }
+
     if (!path.startsWith("/")) path = `/${path}`;
     if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
 

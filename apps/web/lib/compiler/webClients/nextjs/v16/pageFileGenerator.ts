@@ -875,7 +875,7 @@ export function generatePageAndComponentFiles({
       pageFiles.push({
         filename: formFilePath,
         language: "typescript",
-        content: generateAuthFormComponent(pageMeta, effectiveAuthNode?.data),
+        content: generateAuthFormComponent(pageMeta, effectiveAuthNode?.data, pagesInfo),
       });
     }
 
@@ -929,8 +929,15 @@ export function generatePageAndComponentFiles({
     const hasSignUp = pagesInfo.some((p) => isAuthRegisterPage(p, authNode.data));
 
     const redirects = authNode.data?.redirects || {};
-    const rawSignIn = (redirects.signInPageUrl || "/login").replace(/^\/+/, "");
-    const rawSignUp = (redirects.signUpPageUrl || "/register").replace(/^\/+/, "");
+    const rawSignInNode = redirects.signInPageNodeId
+      ? pagesInfo.find((p) => p.nodeId === redirects.signInPageNodeId)
+      : undefined;
+    const rawSignUpNode = redirects.signUpPageNodeId
+      ? pagesInfo.find((p) => p.nodeId === redirects.signUpPageNodeId)
+      : undefined;
+
+    const rawSignIn = (rawSignInNode ? rawSignInNode.routePath : (redirects.signInPageUrl || "/login")).replace(/^\/+/, "");
+    const rawSignUp = (rawSignUpNode ? rawSignUpNode.routePath : (redirects.signUpPageUrl || "/register")).replace(/^\/+/, "");
 
     if (!hasSignIn) {
       const signInSlug = rawSignIn || "login";
@@ -950,7 +957,7 @@ export function generatePageAndComponentFiles({
       pageFiles.push({
         filename: `app/(public)/${signInSlug}/_components/${formCompName}.tsx`,
         language: "typescript",
-        content: generateAuthFormComponent(pageMeta, authNode.data),
+        content: generateAuthFormComponent(pageMeta, authNode.data, pagesInfo),
       });
 
       pageFiles.push({
@@ -978,7 +985,7 @@ export function generatePageAndComponentFiles({
       pageFiles.push({
         filename: `app/(public)/${signUpSlug}/_components/${formCompName}.tsx`,
         language: "typescript",
-        content: generateAuthFormComponent(pageMeta, authNode.data),
+        content: generateAuthFormComponent(pageMeta, authNode.data, pagesInfo),
       });
 
       pageFiles.push({
