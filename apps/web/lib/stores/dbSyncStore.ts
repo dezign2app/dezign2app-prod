@@ -156,7 +156,11 @@ export const useDbSyncStore = create<DbSyncStore>((set, get) => ({
 
     const tableName =
       entityNode.data?.tableName || entityNode.data?.label || "";
-    if (!tableName) return null;
+    if (!tableName) {
+      console.warn(`[dbSyncStore:validateEntity] Table name is empty for entity ${entityId}`);
+      return null;
+    }
+    console.log(`[dbSyncStore:validateEntity] Calling checkDbTableSync for table "${tableName}" with engine "${dbInfo.engine}", provider "${dbInfo.connection.provider}"`);
 
     set((state) => ({
       entitySyncStatus: {
@@ -240,6 +244,8 @@ export const useDbSyncStore = create<DbSyncStore>((set, get) => ({
         n.data?.dbType !== "redis",
     );
 
+    console.log(`[dbSyncStore:validateDatabase] Validating DB "${dbLabel}" (id: ${databaseId}). Attached tables: ${attachedTables.length}`);
+
     if (attachedTables.length === 0) {
       toast.info(`No tables connected to ${dbLabel}`);
       return { total: 0, inSync: 0, outOfSync: 0, errors: 0 };
@@ -257,7 +263,9 @@ export const useDbSyncStore = create<DbSyncStore>((set, get) => ({
     let errors = 0;
 
     for (const table of attachedTables) {
+      console.log(`[dbSyncStore:validateDatabase] Validating entity "${table.data?.label || table.data?.tableName || table.id}"...`);
       const res = await get().validateEntity(table.id);
+      console.log(`[dbSyncStore:validateDatabase] Entity "${table.data?.label || table.id}" result:`, res);
       if (!res || !res.success || !res.serverReachable) {
         errors++;
       } else if (res.inSync) {
