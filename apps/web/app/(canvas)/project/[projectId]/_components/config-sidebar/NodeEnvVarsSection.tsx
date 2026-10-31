@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
 import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../backend-nodes/graph-nodes/common";
 import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -144,7 +145,7 @@ const EnvVarRow: React.FC<EnvVarRowProps> = ({
             onBlur={handleNameBlur}
           />
           {/* Optional description */}
-          <Input
+          <LocalInput
             className="h-7 text-xs bg-background text-muted-foreground"
             placeholder="Description (optional)"
             value={entry.description ?? ""}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Database, Key, Server, Plus, Table2, Trash, CheckCircle2, DatabaseZap, HardDrive, Radio, AlertTriangle, Eye, EyeOff, Lock } from "lucide-react";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../backend-nodes/graph-nodes/common";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
@@ -308,7 +308,7 @@ function DatabaseConfigContent({
 
         <div className="space-y-1.5">
           <Label className="text-xs font-semibold">Database Label</Label>
-          <Input
+          <LocalInput
             value={label}
             onChange={(e) => handleUpdateField("label", e.target.value)}
             placeholder="e.g. Primary Redis Cache"
@@ -444,7 +444,7 @@ function DatabaseConfigContent({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">Max Memory Limit (maxmemory)</Label>
-              <Input
+              <LocalInput
                 value={data.maxmemory || "2gb"}
                 onChange={(e) => handleUpdateField("maxmemory", e.target.value)}
                 placeholder="e.g. 2gb or 512mb"
@@ -524,7 +524,7 @@ function DatabaseConfigContent({
           <div className="space-y-2.5">
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">Database File Path</Label>
-              <Input
+              <LocalInput
                 value={dbFilePath}
                 onChange={(e) => handleUpdateField("dbFilePath", e.target.value)}
                 placeholder="dev.db"
@@ -569,7 +569,7 @@ function DatabaseConfigContent({
                   {/* Host */}
                   <div className="col-span-2 space-y-1.5">
                     <Label className="text-xs font-semibold">Host / Hostname</Label>
-                    <Input
+                    <LocalInput
                       value={data.host || "localhost"}
                       onChange={(e) => handleUpdateField("host", e.target.value)}
                       placeholder="localhost or 127.0.0.1"
@@ -590,7 +590,7 @@ function DatabaseConfigContent({
                         </span>
                       )}
                     </div>
-                    <Input
+                    <LocalInput
                       type="number"
                       value={data.port ?? (isRedis ? "6379" : "5432")}
                       onChange={(e) => {
@@ -615,7 +615,7 @@ function DatabaseConfigContent({
                     {/* Database Name */}
                     <div className="space-y-1.5">
                       <Label className="text-xs font-semibold">Database Name</Label>
-                      <Input
+                      <LocalInput
                         value={data.database ?? (isPostgres ? "postgres" : "")}
                         onChange={(e) => handleUpdateField("database", e.target.value)}
                         placeholder={isPostgres ? "postgres" : "my_database"}
@@ -630,7 +630,7 @@ function DatabaseConfigContent({
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <Label className="text-xs font-semibold">Username</Label>
-                        <Input
+                        <LocalInput
                           value={data.user ?? data.username ?? (isPostgres ? "postgres" : "root")}
                           onChange={(e) => handleUpdateField("user", e.target.value)}
                           placeholder={isPostgres ? "postgres" : "root"}
@@ -644,7 +644,7 @@ function DatabaseConfigContent({
                       <div className="space-y-1.5">
                         <Label className="text-xs font-semibold">Password</Label>
                         <div className="relative">
-                          <Input
+                          <LocalInput
                             type={showPassword ? "text" : "password"}
                             value={data.password || ""}
                             onChange={(e) => handleUpdateField("password", e.target.value)}
@@ -776,7 +776,7 @@ function DatabaseConfigContent({
 
         <div className="space-y-1.5">
           <Label className="text-xs font-semibold">Connection String ENV Key</Label>
-          <Input
+          <LocalInput
             value={connStringEnv}
             onChange={(e) => handleUpdateField("connectionStringEnv", e.target.value)}
             placeholder="e.g. REDIS_URL or DATABASE_URL"
@@ -808,7 +808,7 @@ function DatabaseConfigContent({
                 </Button>
               )}
             </div>
-            <Input
+            <LocalInput
               value={data.connectionStringPooledEnv || "DATABASE_URL_POOLED"}
               onChange={(e) => handleUpdateField("connectionStringPooledEnv", e.target.value)}
               placeholder="DATABASE_URL_POOLED or DIRECT_URL"
@@ -823,7 +823,7 @@ function DatabaseConfigContent({
         {engine === "sqlite" && (
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold">DB File Path ENV Key</Label>
-            <Input
+            <LocalInput
               value={dbFilePathEnv}
               onChange={(e) => handleUpdateField("dbFilePathEnv", e.target.value)}
               placeholder="e.g. DB_FILE_PATH"
